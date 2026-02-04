@@ -194,12 +194,14 @@ StemHub is a **dual-component system**:
 
 This repository and all its contents (concept, architecture, specifications, features) are the collective intellectual property of the **StemHub Team**:
 
-- Erwan SEYTOR
-- Gabin RUDIGOZ
-- Dryss MARGUERITTE
-- Hubert TOURAINE
-- Raphaël CHANLIONGCO
-- Jean-Baptiste BOSHRA
+| Member | GitHub |
+|--------|--------|
+| Erwan SEYTOR | [@aernw1](https://github.com/aernw1) |
+| Gabin RUDIGOZ | [@Metchee](https://github.com/Metchee) |
+| Dryss MARGUERITTE | [@Dryss10](https://github.com/Dryss10) |
+| Hubert TOURAINE | [@HubertTouraine](https://github.com/HubertTouraine) |
+| Raphaël CHANLIONGCO | [@raprapchh](https://github.com/raprapchh) |
+| Jean Baptiste BOSHRA | [@JeanBsh](https://github.com/JeanBsh) |
 
 **Usage Restrictions:**
 - **No reproduction** without written permission from the team
