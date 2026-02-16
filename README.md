@@ -8,7 +8,7 @@ StemHub brings Git/GitHub workflows to music production, enabling producers to v
 
 ---
 
-## 🚀 What is StemHub?
+## What is StemHub?
 
 StemHub solves the version control problem that has plagued music production for decades. No more `project_final_v2_FINAL_real_THISONE.wav` — just clean commits, branches, and merge workflows that developers have enjoyed for 20 years.
 
@@ -18,7 +18,7 @@ StemHub solves the version control problem that has plagued music production for
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 - 🔄 **Git-like version control** — Commits, branches, merge, rollback
 - ☁️ **Cloud-first** — Zero local file management, stream playback
@@ -29,7 +29,7 @@ StemHub solves the version control problem that has plagued music production for
 
 ---
 
-## 🏗 Tech Stack
+## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
@@ -41,7 +41,7 @@ StemHub solves the version control problem that has plagued music production for
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 Comprehensive documentation is available in our [Wiki](../../wiki):
 
@@ -54,7 +54,7 @@ Comprehensive documentation is available in our [Wiki](../../wiki):
 
 ---
 
-## 🎯 Project Status
+## Project Status
 
 **Current Phase:** Development (EPITECH Innovation Track 2024-2026)
 
@@ -64,7 +64,7 @@ See [DAW Support & Roadmap](../../wiki/DAW-Support-&-Roadmap) for technical feas
 
 ---
 
-## 👥 Team
+## Team
 
 **StemHub Team:**
 
@@ -79,7 +79,7 @@ See [DAW Support & Roadmap](../../wiki/DAW-Support-&-Roadmap) for technical feas
 
 ---
 
-## ⚖️ License
+## License
 
 **© 2026 StemHub Team. All Rights Reserved.**
 
