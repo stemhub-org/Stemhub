@@ -1,0 +1,44 @@
+name: Feature
+description: Propose a new feature or improvement for StemHub
+title: "[FEATURE] "
+labels: ["enhancement", "plugin", "frontend", "backend"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe your idea clearly so we can evaluate it efficiently.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: Describe the current limitation or frustration.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution
+      description: How should this feature work?
+      placeholder: Explain the expected behavior and workflow.
+    validations:
+      required: true
+
+  - type: textarea
+    id: user_story
+    attributes:
+      label: User Story
+      description: Describe the feature from a user perspective.
+      placeholder: "As a producer, I want to..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      o
