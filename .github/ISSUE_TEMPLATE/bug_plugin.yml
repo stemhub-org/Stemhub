@@ -1,4 +1,4 @@
-name: 🐛 Plugin Bug Report
+name: Plugin bug report
 description: Report a bug related to the DAW plugin
 title: "[PLUGIN BUG] "
 labels: ["bug", "plugin"]
@@ -14,15 +14,15 @@ body:
     id: daw
     attributes:
       label: DAW
-      description: Which DAW are you using?
-      placeholder: Reaper / Ableton / Bitwig
+      description: On which DAW ?
+      placeholder: Reaper / Ableton / Bitwig / FL Studio
     validations:
       required: true
 
   - type: input
     id: os
     attributes:
-      label: Operating System
+      label: Operating system
       placeholder: Windows 11 / macOS Sonoma / Linux
     validations:
       required: true
@@ -30,7 +30,7 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: Bug Description
+      label: Bug description
       description: What happened?
     validations:
       required: true
@@ -38,7 +38,7 @@ body:
   - type: textarea
     id: steps
     attributes:
-      label: Steps to Reproduce
+      label: Steps to reproduce
       description: Provide step-by-step instructions
     validations:
       required: true
