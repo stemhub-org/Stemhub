@@ -1,4 +1,4 @@
-name: Feature
+name: "Feature Proposal"
 description: Propose a new feature or improvement for StemHub
 title: "[FEATURE] "
 labels: ["enhancement", "plugin", "frontend", "backend"]
@@ -8,6 +8,7 @@ body:
   - type: markdown
     attributes:
       value: |
+        Thank you for helping improve StemHub 🚀
         Please describe your idea clearly so we can evaluate it efficiently.
 
   - type: textarea
@@ -37,7 +38,21 @@ body:
     validations:
       required: false
 
-- type: dropdown
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      options:
+        - "Plugin (C++ / JUCE)"
+        - "Backend (FastAPI)"
+        - "Frontend (Next.js)"
+        - "Infrastructure"
+        - "Documentation"
+        - "Multiple Components"
+    validations:
+      required: true
+
+  - type: dropdown
     id: priority
     attributes:
       label: Priority Level
