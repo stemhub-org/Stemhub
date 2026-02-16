@@ -54,16 +54,6 @@ Comprehensive documentation is available in our [Wiki](../../wiki):
 
 ---
 
-## Project Status
-
-**Current Phase:** Development (EPITECH Innovation Track 2024-2026)
-
-Target DAWs for initial release: Reaper → Ableton Live → Bitwig Studio
-
-See [DAW Support & Roadmap](../../wiki/DAW-Support-&-Roadmap) for technical feasibility analysis.
-
----
-
 ## Team
 
 **StemHub Team:**
