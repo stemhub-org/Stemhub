@@ -1,0 +1,50 @@
+name: 🐛 Plugin Bug Report
+description: Report a bug related to the DAW plugin
+title: "[PLUGIN BUG] "
+labels: ["bug", "plugin"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug in StemHub Plugin.
+
+  - type: input
+    id: daw
+    attributes:
+      label: DAW
+      description: Which DAW are you using?
+      placeholder: Reaper / Ableton / Bitwig
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: Windows 11 / macOS Sonoma / Linux
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: What happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Provide step-by-step instructions
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Screenshots
+      description: Attach logs or screenshots if available
