@@ -1,11 +1,11 @@
-# 📋 Product Backlog
+# Product Backlog
 
 This document lists the features identified for the StemHub project. They are prioritized using the MoSCOW method to clearly define the scope of the MVP (Minimum Viable Product).
 
 ---
 
-## 🔴 M - MUST HAVE (The MVP)
-*Non-negotiable features. If one is missing, the product is not viable[cite: 62].*
+## M - MUST HAVE (The MVP)
+*Non-negotiable features. [cite_start]If one is missing, the product is not viable [cite: 62-63].*
 
 | ID | Title | User Story (As a... I want... So that...) | Status |
 |:---|:---|:---|:---|
@@ -16,8 +16,8 @@ This document lists the features identified for the StemHub project. They are pr
 
 ---
 
-## 🟡 S - SHOULD HAVE
-*Important features but not vital for launch. The product works without them, but they add significant value[cite: 64].*
+## S - SHOULD HAVE
+*Important features but not vital for launch. [cite_start]The product works without them, but they add significant value [cite: 64-65].*
 
 - [ ] **US-05 : DAW Plugin Integration**
   > As a **Beatmaker**, I want **access to version control directly inside FL Studio/Ableton** so that **I don't break my creative flow by switching windows**.
@@ -27,8 +27,8 @@ This document lists the features identified for the StemHub project. They are pr
 
 ---
 
-## 🟢 C - COULD HAVE
-*Nice-to-have features. Included only if there is extra time and budget[cite: 66].*
+## C - COULD HAVE
+*Nice-to-have features. [cite_start]Included only if there is extra time and budget[cite: 66].*
 
 - [ ] **US-07 : Audio Comparison (Diff)**
   > As a **Producer**, I want **to listen to two versions simultaneously** so that **I can compare mixing differences**.
@@ -38,7 +38,7 @@ This document lists the features identified for the StemHub project. They are pr
 
 ---
 
-## ⚪ W - WON'T HAVE (Out of Scope)
+## W - WON'T HAVE (Out of Scope)
 [cite_start]*Features explicitly excluded from the current scope/MVP[cite: 67].*
 
 * **US-99 : Real-time Collaboration** (Postponed to V2 - Too complex for MVP).
