@@ -3,14 +3,16 @@ name: plugin-build
 on:
   pull_request:
     paths:
-      - 'plugin/stemhub/**'
-      - '.github/workflows/plugin-build.yml'
+      - "Plugin/stemhub/Source/**"
+      - "Plugin/stemhub/CMakeLists.txt"
+      - ".github/workflows/plugin-build.yml"
   push:
     branches:
       - main
     paths:
-      - 'plugin/stemhub/**'
-      - '.github/workflows/plugin-build.yml'
+      - "Plugin/stemhub/Source/**"
+      - "Plugin/stemhub/CMakeLists.txt"
+      - ".github/workflows/plugin-build.yml"
   workflow_dispatch:
 
 jobs:
@@ -20,8 +22,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: Fetch JUCE
+        run: git clone --depth 1 https://github.com/juce-framework/JUCE.git build/juce
+
+      - name: Ensure Projucer-generated files are not tracked
+        run: |
+          test ! -e Plugin/stemhub/Builds/LinuxMakefile/Makefile
+          test ! -e Plugin/stemhub/JuceLibraryCode/JuceHeader.h
 
       - name: Install JUCE Linux dependencies
         run: |
@@ -32,6 +40,8 @@ jobs:
             WEBKIT_PACKAGE="libwebkit2gtk-4.0-dev"
           fi
           sudo apt-get install -y \
+            cmake \
+            ninja-build \
             build-essential \
             pkg-config \
             libasound2-dev \
@@ -50,16 +60,11 @@ jobs:
             libglu1-mesa-dev \
             mesa-common-dev
 
-      - name: Expose JUCE in expected location
-        run: |
-          test -d "$GITHUB_WORKSPACE/plugin_poc/JUCE/modules"
-          ln -sfn "$GITHUB_WORKSPACE/plugin_poc/JUCE" "$HOME/JUCE"
+      - name: Configure CMake
+        run: cmake -S Plugin/stemhub -B build/plugin-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
 
-      - name: Build plugin (Release)
-        run: make CONFIG=Release -C plugin/stemhub/Builds/LinuxMakefile
+      - name: Build plugin
+        run: cmake --build build/plugin-linux --parallel
 
-      - name: Verify build artifacts exist
-        run: |
-          test -f plugin/stemhub/Builds/LinuxMakefile/build/stemhub
-          test -f plugin/stemhub/Builds/LinuxMakefile/build/juce_vst3_helper
-          test -f plugin/stemhub/Builds/LinuxMakefile/build/stemhub.vst3/Contents/Resources/moduleinfo.json
+      - name: Verify VST3 artifact exists
+        run: test -n "$(find build/plugin-linux -type d -name 'stemhub.vst3' -print -quit)"
