@@ -1,0 +1,71 @@
+name: plugin-build
+
+on:
+  pull_request:
+    paths:
+      - "Plugin/stemhub/Source/**"
+      - "Plugin/stemhub/CMakeLists.txt"
+      - ".github/workflows/plugin-build.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "Plugin/stemhub/Source/**"
+      - "Plugin/stemhub/CMakeLists.txt"
+      - ".github/workflows/plugin-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch JUCE
+        run: git clone --depth 1 https://github.com/juce-framework/JUCE.git build/juce
+
+      - name: Ensure Projucer-generated files are not tracked
+        run: |
+          test ! -e Plugin/stemhub/Builds/LinuxMakefile/Makefile
+          test ! -e Plugin/stemhub/JuceLibraryCode/JuceHeader.h
+
+      - name: Install JUCE Linux dependencies
+        run: |
+          sudo apt-get update
+          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
+            WEBKIT_PACKAGE="libwebkit2gtk-4.1-dev"
+          else
+            WEBKIT_PACKAGE="libwebkit2gtk-4.0-dev"
+          fi
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            build-essential \
+            pkg-config \
+            libasound2-dev \
+            libjack-jackd2-dev \
+            ladspa-sdk \
+            libcurl4-openssl-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            libxcomposite-dev \
+            libxcursor-dev \
+            libxext-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libxrender-dev \
+            libgtk-3-dev \
+            "$WEBKIT_PACKAGE" \
+            libglu1-mesa-dev \
+            mesa-common-dev
+
+      - name: Configure CMake
+        run: cmake -S Plugin/stemhub -B build/plugin-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
+
+      - name: Build plugin
+        run: cmake --build build/plugin-linux --parallel
+
+      - name: Verify VST3 artifact exists
+        run: test -n "$(find build/plugin-linux -type d -name 'stemhub.vst3' -print -quit)"
