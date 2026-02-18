@@ -2,3 +2,6 @@
 	path = backend/vendor/PyFLP_enhanced
 	url = https://github.com/aernw1/PyFLP_enhanced.git
 	branch = master
+[submodule "plugin_poc/JUCE"]
+	path = plugin_poc/JUCE
+	url = https://github.com/juce-framework/JUCE.git
