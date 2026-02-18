@@ -1,21 +1,24 @@
 __pycache__
 .DS_Store
 
-# JUCE plugin generated build artifacts
-plugin/stemhub/Builds/**/build/
-plugin/stemhub/Builds/**/Debug/
-plugin/stemhub/Builds/**/Release/
-plugin/stemhub/Builds/**/.vs/
-plugin/stemhub/Builds/**/.idea/
-plugin/stemhub/Builds/**/CMakeFiles/
-plugin/stemhub/Builds/**/cmake_install.cmake
-plugin/stemhub/Builds/**/CMakeCache.txt
-plugin/stemhub/Builds/**/compile_commands.json
+# JUCE plugin generated folders (keep Source + CMakeLists in git)
+Plugin/stemhub/Builds/
+Plugin/stemhub/JuceLibraryCode/
+plugin/stemhub/Builds/
+plugin/stemhub/JuceLibraryCode/
 
 # JUCE binary outputs
+Plugin/stemhub/**/*.vst3/
+Plugin/stemhub/**/*.component/
+Plugin/stemhub/**/*.app/
 plugin/stemhub/**/*.vst3/
 plugin/stemhub/**/*.component/
 plugin/stemhub/**/*.app/
 
-# JUCE library files
-plugin/stemhub/JUCE/**
+# Local JUCE copies inside plugin folder
+Plugin/stemhub/JUCE/
+plugin/stemhub/JUCE/
+
+# Projucer project files (CMake-only workflow)
+Plugin/stemhub/*.jucer
+plugin/stemhub/*.jucer
