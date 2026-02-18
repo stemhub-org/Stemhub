@@ -1,33 +1,17 @@
-/*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin editor.
-
-  ==============================================================================
-*/
-
 #pragma once
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-//==============================================================================
-/**
-*/
-class StemhubAudioProcessorEditor  : public juce::AudioProcessorEditor
+class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
-    StemhubAudioProcessorEditor (StemhubAudioProcessor&);
-    ~StemhubAudioProcessorEditor() override;
+    explicit StemhubAudioProcessorEditor (StemhubAudioProcessor&);
+    ~StemhubAudioProcessorEditor() override = default;
 
-    //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    // This reference is provided as a quick way for your editor to
-    // access the processor object that created it.
-    StemhubAudioProcessor& audioProcessor;
-
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemhubAudioProcessorEditor)
 };
