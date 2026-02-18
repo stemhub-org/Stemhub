@@ -5,6 +5,8 @@ project(stemhub VERSION 1.0.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(JUCE_WEB_BROWSER 0 CACHE STRING "Disable JUCE web browser support" FORCE)
+
 set(JUCE_DIR "" CACHE PATH "Path to JUCE repository root")
 
 if(JUCE_DIR STREQUAL "")
@@ -22,6 +24,8 @@ juce_add_plugin(stemhub
     COMPANY_NAME "yourcompany"
     BUNDLE_ID "com.yourcompany.stemhub"
     IS_SYNTH FALSE
+    NEEDS_CURL FALSE
+    NEEDS_WEB_BROWSER FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
@@ -41,6 +45,8 @@ target_sources(stemhub
 
 target_compile_definitions(stemhub
     PRIVATE
+        JUCE_USE_CURL=0
+        JUCE_WEB_BROWSER=0
         JUCE_STRICT_REFCOUNTEDPOINTER=1
         JUCE_VST3_CAN_REPLACE_VST2=0)
 
