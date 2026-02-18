@@ -1,0 +1,4 @@
+[submodule "backend/vendor/PyFLP_enhanced"]
+	path = backend/vendor/PyFLP_enhanced
+	url = https://github.com/aernw1/PyFLP_enhanced.git
+	branch = master
