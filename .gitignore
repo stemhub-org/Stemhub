@@ -1,1 +1,21 @@
 __pycache__
+.DS_Store
+
+# JUCE plugin generated build artifacts
+plugin/stemhub/Builds/**/build/
+plugin/stemhub/Builds/**/Debug/
+plugin/stemhub/Builds/**/Release/
+plugin/stemhub/Builds/**/.vs/
+plugin/stemhub/Builds/**/.idea/
+plugin/stemhub/Builds/**/CMakeFiles/
+plugin/stemhub/Builds/**/cmake_install.cmake
+plugin/stemhub/Builds/**/CMakeCache.txt
+plugin/stemhub/Builds/**/compile_commands.json
+
+# JUCE binary outputs
+plugin/stemhub/**/*.vst3/
+plugin/stemhub/**/*.component/
+plugin/stemhub/**/*.app/
+
+# JUCE library files
+plugin/stemhub/JUCE/**

@@ -1,0 +1,65 @@
+name: plugin-build
+
+on:
+  pull_request:
+    paths:
+      - 'plugin/stemhub/**'
+      - '.github/workflows/plugin-build.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'plugin/stemhub/**'
+      - '.github/workflows/plugin-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install JUCE Linux dependencies
+        run: |
+          sudo apt-get update
+          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
+            WEBKIT_PACKAGE="libwebkit2gtk-4.1-dev"
+          else
+            WEBKIT_PACKAGE="libwebkit2gtk-4.0-dev"
+          fi
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libasound2-dev \
+            libjack-jackd2-dev \
+            ladspa-sdk \
+            libcurl4-openssl-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            libxcomposite-dev \
+            libxcursor-dev \
+            libxext-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libxrender-dev \
+            "$WEBKIT_PACKAGE" \
+            libglu1-mesa-dev \
+            mesa-common-dev
+
+      - name: Expose JUCE in expected location
+        run: |
+          test -d "$GITHUB_WORKSPACE/plugin_poc/JUCE/modules"
+          ln -sfn "$GITHUB_WORKSPACE/plugin_poc/JUCE" "$HOME/JUCE"
+
+      - name: Build plugin (Release)
+        run: make CONFIG=Release -C plugin/stemhub/Builds/LinuxMakefile
+
+      - name: Verify build artifacts exist
+        run: |
+          test -f plugin/stemhub/Builds/LinuxMakefile/build/stemhub
+          test -f plugin/stemhub/Builds/LinuxMakefile/build/juce_vst3_helper
+          test -f plugin/stemhub/Builds/LinuxMakefile/build/stemhub.vst3/Contents/Resources/moduleinfo.json
