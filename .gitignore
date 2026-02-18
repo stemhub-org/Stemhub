@@ -6,23 +6,16 @@ __pycache__
 .cmake-tmp-plugin-ninja/
 
 # JUCE plugin generated folders (keep Source + CMakeLists in git)
-Plugin/stemhub/Builds/
-Plugin/stemhub/JuceLibraryCode/
 plugin/stemhub/Builds/
 plugin/stemhub/JuceLibraryCode/
 
 # JUCE binary outputs
-Plugin/stemhub/**/*.vst3/
-Plugin/stemhub/**/*.component/
-Plugin/stemhub/**/*.app/
 plugin/stemhub/**/*.vst3/
 plugin/stemhub/**/*.component/
 plugin/stemhub/**/*.app/
 
 # Local JUCE copies inside plugin folder
-Plugin/stemhub/JUCE/
 plugin/stemhub/JUCE/
 
-# Projucer project files (CMake-only workflow)
-Plugin/stemhub/*.jucer
-plugin/stemhub/*.jucer
+# Environment
+.env
