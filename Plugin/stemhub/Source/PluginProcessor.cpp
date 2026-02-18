@@ -108,16 +108,28 @@ bool StemhubAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
 }
 #endif
 
+template <typename SampleType>
+static void clearExtraOutputChannels (juce::AudioProcessor& processor, juce::AudioBuffer<SampleType>& buffer)
+{
+    const auto totalNumInputChannels = processor.getTotalNumInputChannels();
+    const auto totalNumOutputChannels = processor.getTotalNumOutputChannels();
+
+    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
+        buffer.clear (i, 0, buffer.getNumSamples());
+}
+
 void StemhubAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
     juce::ignoreUnused (midiMessages);
+    clearExtraOutputChannels (*this, buffer);
+}
 
-    const auto totalNumInputChannels = getTotalNumInputChannels();
-    const auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
+void StemhubAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midiMessages)
+{
+    juce::ScopedNoDenormals noDenormals;
+    juce::ignoreUnused (midiMessages);
+    clearExtraOutputChannels (*this, buffer);
 }
 
 bool StemhubAudioProcessor::hasEditor() const
