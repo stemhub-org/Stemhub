@@ -1,6 +1,13 @@
 __pycache__
 .DS_Store
 
+# Local CMake build artifacts
+.cmake-tmp-plugin/
+.cmake-tmp-plugin-ninja/
+
+# Local lowercase plugin scratch directory
+plugin/
+
 # JUCE plugin generated folders (keep Source + CMakeLists in git)
 Plugin/stemhub/Builds/
 Plugin/stemhub/JuceLibraryCode/
