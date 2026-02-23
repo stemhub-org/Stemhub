@@ -61,7 +61,7 @@ Comprehensive documentation is available in our [Wiki](../../wiki):
 
 | Member | GitHub |
 |--------|--------|
-| Erwan SEYTOR | [@aernw](https://github.com/aernw) |
+| Erwan SEYTOR (project leader) | [@aernw](https://github.com/aernw) |
 | Gabin RUDIGOZ | [@Metchee](https://github.com/Metchee) |
 | Dryss MARGUERITTE | [@Dryss10](https://github.com/Dryss10) |
 | Hubert TOURAINE | [@HubertTouraine](https://github.com/HubertTouraine) |
