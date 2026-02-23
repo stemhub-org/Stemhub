@@ -48,6 +48,7 @@ Comprehensive documentation is available in our [Wiki](../../wiki):
 - 📊 [Problem & Market Analysis](../../wiki/Problem-&-Market-Analysis)
 - ✨ [Features & Capabilities](../../wiki/Features-&-Capabilities)
 - 🏗️ [Technical Architecture](../../wiki/Technical-Architecture)
+- 📊 [Data & API Modeling](./docs/DATA_API_MODELING.md)
 - 🏆 [Competitive Analysis](../../wiki/Competitive-Analysis)
 - 🎹 [DAW Support & Roadmap](../../wiki/DAW-Support-&-Roadmap)
 - 🚀 [Deployment & Resilience](../../wiki/Deployment-&-Resilience)

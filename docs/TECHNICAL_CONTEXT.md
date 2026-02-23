@@ -49,6 +49,8 @@
 
 # Architecture & Data
 
+For a detailed visual representation and API contract, see the [Data & API Modeling](./DATA_API_MODELING.md).
+
 ## Database (Metadata): PostgreSQL
 - **Why?** Need for strict relations (A Project has multiple Versions, a Version has multiple Tracks). NoSQL (Mongo) would be too messy to manage precise versioning history (Git-like).
 
