@@ -12,8 +12,9 @@ StemHub uses a relational model (PostgreSQL) to ensure data integrity and track 
 erDiagram
     USER ||--o{ PROJECT : owns
     USER ||--o{ COLLABORATOR : "is assigned to"
-    PROJECT ||--o{ VERSION : contains
+    PROJECT ||--o{ BRANCH : has
     PROJECT ||--o{ COLLABORATOR : has
+    BRANCH ||--o{ VERSION : contains
     VERSION ||--o{ TRACK : "consists of"
     
     USER {
@@ -41,12 +42,19 @@ erDiagram
         string role "Admin, Editor, Viewer"
     }
 
-    VERSION {
+    BRANCH {
         uuid id PK
         uuid project_id FK
-        int version_number
+        string name "e.g. main, feature-fast-tempo"
+        datetime created_at
+    }
+
+    VERSION {
+        uuid id PK
+        uuid branch_id FK
+        uuid parent_version_id FK "For Git-like history"
         string commit_message
-        string s3_project_file_path ".als, .flp pointer"
+        string storage_path ".als, .flp pointer"
         datetime created_at
     }
 
@@ -54,9 +62,8 @@ erDiagram
         uuid id PK
         uuid version_id FK
         string name "e.g. Kick, Lead Synth"
-        string file_type ".wav, .mp3"
-        string s3_audio_path
-        float duration_seconds
+        string file_type ".json"
+        string storage_path
     }
 ```
 
@@ -106,19 +113,21 @@ Endpoints for CRUD operations on projects.
 
 ---
 
-### C. Versioning & Files
-The core engine of StemHub for DAW project synchronization.
+### C. Versioning, Branches & Files
+The core engine of StemHub for DAW project synchronization (Git-like workflow).
 
 | Endpoint | Method | Params | Description |
 | :--- | :--- | :--- | :--- |
-| `/projects/{id}/versions` | `GET` | `id` | Get history of versions. |
-| `/files/upload-url` | `POST` | `filename`, `type` | **Get pre-signed S3 URL.** |
+| `/projects/{id}/branches` | `GET` | `id` | List branches (e.g., `main`, `feature`). |
+| `/branches/{id}/versions` | `GET` | `id` | Get history of versions for a branch. |
+| `/files/upload-url` | `POST` | `filename` | **Get pre-signed Cloudflare R2 upload URL.** |
+| `/files/download-url` | `GET` | `file_path` | **Get pre-signed url for restoration.** |
 
-**Flow for New Version:**
+**Flow for New Version (Push):**
 1. Client calls `/files/upload-url` with metadata.
-2. Server returns a Signed URL (AWS S3).
-3. Client uploads file directly to S3.
-4. Client calls `POST /projects/{id}/versions` to confirm the commit.
+2. Server returns a Signed URL (Cloudflare R2).
+3. Client uploads file directly to R2.
+4. Client calls `POST /branches/{id}/versions` to confirm the commit.
 
 **Example Request (`POST /files/upload-url`):**
 ```json
@@ -132,7 +141,7 @@ The core engine of StemHub for DAW project synchronization.
 **Example Response:**
 ```json
 {
-  "upload_url": "https://s3.eu-west-3.amazonaws.com/stemhub/temp-upload-id?X-Amz-Signature=...",
+  "upload_url": "https://pub-<id>.r2.dev/stemhub/temp-upload-id?X-Amz-Signature=...",
   "file_id": "file_8872"
 }
 ```
