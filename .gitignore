@@ -29,3 +29,6 @@ plugin/stemhub/JUCE/
 # Projucer project files (CMake-only workflow)
 Plugin/stemhub/*.jucer
 plugin/stemhub/*.jucer
+
+# Environment
+.env
