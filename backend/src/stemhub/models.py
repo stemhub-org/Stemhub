@@ -1,8 +1,10 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, DateTime
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from .database import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -14,3 +16,21 @@ class User(Base):
     avatar_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)
+
+    # ── Relationships ──
+    projects = relationship("Project", back_populates="owner")
+
+
+class Project(Base):
+    __tablename__ = "project"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    category = Column(String(100), default="General")
+    is_public = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # ── Relationships ──
+    owner = relationship("User", back_populates="projects")
