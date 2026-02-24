@@ -4,13 +4,41 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const router = useRouter();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    try {
+      const response = await fetch("http://localhost:8000/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ username: email, password: password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Identifiants incorrects");
+      }
+
+      const data = await response.json();
+      localStorage.setItem("token", data.access_token);
+      router.push("/dashboard");
+    } catch (err: any) {
+      setError(err.message || "Une erreur est survenue");
+    }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
-      {/* Background orb */}
       <div className="pointer-events-none fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <div
           className="h-[800px] w-[800px] rounded-full opacity-20 blur-[150px]"
@@ -27,7 +55,6 @@ export default function LoginPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* Logo */}
         <Link href="/" className="mb-12 block text-center">
           <span
             className="text-2xl font-medium tracking-tight"
@@ -37,7 +64,6 @@ export default function LoginPage() {
           </span>
         </Link>
 
-        {/* Header */}
         <div className="mb-10 text-center">
           <h1
             className="mb-3 text-3xl font-extralight tracking-tight"
@@ -53,7 +79,12 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Google Button */}
+        {error && (
+          <p className="mb-4 text-center text-sm font-light text-red-500">
+            {error}
+          </p>
+        )}
+
         <button
           className="flex w-full items-center justify-center gap-3 rounded-xl border border-foreground/[0.08] bg-background-secondary/50 px-6 py-3.5 text-sm font-light transition-all duration-300 hover:border-foreground/20 hover:bg-background-secondary"
           style={{ fontFamily: "var(--font-jakarta)" }}
@@ -79,7 +110,6 @@ export default function LoginPage() {
           Connexion avec Google
         </button>
 
-        {/* Divider */}
         <div className="my-8 flex items-center gap-4">
           <div className="h-[1px] flex-1 bg-foreground/[0.06]" />
           <span
@@ -91,9 +121,7 @@ export default function LoginPage() {
           <div className="h-[1px] flex-1 bg-foreground/[0.06]" />
         </div>
 
-        {/* Form */}
-        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-          {/* Email */}
+        <form className="space-y-4" onSubmit={handleLogin}>
           <div className="relative">
             <Mail
               size={16}
@@ -102,13 +130,14 @@ export default function LoginPage() {
             />
             <input
               type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
               className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3.5 pr-4 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
               style={{ fontFamily: "var(--font-jakarta)" }}
             />
           </div>
 
-          {/* Password */}
           <div className="relative">
             <Lock
               size={16}
@@ -117,6 +146,8 @@ export default function LoginPage() {
             />
             <input
               type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Mot de passe"
               className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3.5 pr-11 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
               style={{ fontFamily: "var(--font-jakarta)" }}
@@ -134,7 +165,6 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Forgot password */}
           <div className="text-right">
             <a
               href="#"
@@ -145,7 +175,6 @@ export default function LoginPage() {
             </a>
           </div>
 
-          {/* Submit */}
           <button
             type="submit"
             className="w-full rounded-xl bg-foreground py-3.5 text-sm font-light tracking-wide text-background transition-all duration-300 hover:bg-accent"
@@ -155,7 +184,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Register link */}
         <p
           className="mt-8 text-center text-sm font-light text-foreground/40"
           style={{ fontFamily: "var(--font-jakarta)" }}
