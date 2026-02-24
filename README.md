@@ -27,20 +27,6 @@ StemHub solves the version control problem that has plagued music production for
 - 🎨 **Portfolio & showcase** — Public profiles to display your work
 - 🌍 **Open source projects** — Share, fork, and remix public musical projects
 
----
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| **DAW Plugin** | C++ / JUCE |
-| **Backend** | Python / FastAPI |
-| **Frontend** | Next.js / TypeScript |
-| **Database** | PostgreSQL / Prisma |
-| **Storage** | Cloudflare R2 |
-
----
-
 ## Documentation
 
 Comprehensive documentation is available in our [Wiki](../../wiki):
