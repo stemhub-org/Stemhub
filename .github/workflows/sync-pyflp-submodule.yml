@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   bump-submodule:
-    if: github.repository == 'aernw1/StemHub'
+    if: github.repository == 'aernw/StemHub'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
