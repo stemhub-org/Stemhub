@@ -4,6 +4,7 @@ project(stemhub VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(COPY_PLUGIN "Copy plugin bundles to local plugin folders after build" ON)
 
 set(JUCE_WEB_BROWSER 0 CACHE STRING "Disable JUCE web browser support" FORCE)
 
@@ -21,8 +22,8 @@ endif()
 add_subdirectory(${JUCE_DIR} JUCE)
 
 juce_add_plugin(stemhub
-    COMPANY_NAME "yourcompany"
-    BUNDLE_ID "com.yourcompany.stemhub"
+    COMPANY_NAME "Stemhub"
+    BUNDLE_ID "com.stemhub.session"
     IS_SYNTH FALSE
     NEEDS_CURL FALSE
     NEEDS_WEB_BROWSER FALSE
@@ -30,11 +31,12 @@ juce_add_plugin(stemhub
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    COPY_PLUGIN_AFTER_BUILD FALSE
+    COPY_PLUGIN_AFTER_BUILD ${COPY_PLUGIN}
     PLUGIN_MANUFACTURER_CODE Manu
     PLUGIN_CODE Wbcr
+    VST3_CATEGORIES Fx Tools
     FORMATS VST3 Standalone
-    PRODUCT_NAME "stemhub")
+    PRODUCT_NAME "Stemhub Session")
 
 juce_generate_juce_header(stemhub)
 
