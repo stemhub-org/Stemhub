@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f1f1f1;
+  --background-secondary: #e1e1e1;
+  --accent: #9c57df;
+  --foreground: #1a1a1a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-accent: var(--accent);
+  --color-foreground: var(--foreground);
+}
+
+html {
+  scroll-behavior: auto;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(156, 87, 223, 0.2);
+  color: var(--foreground);
+}
+
+html.lenis, html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent) 0%, #c084fc 50%, var(--accent) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
