@@ -27,30 +27,9 @@ StemHub solves the version control problem that has plagued music production for
 - 🎨 **Portfolio & showcase** — Public profiles to display your work
 - 🌍 **Open source projects** — Share, fork, and remix public musical projects
 
----
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| **DAW Plugin** | C++ / JUCE |
-| **Backend** | Python / FastAPI |
-| **Frontend** | Next.js / TypeScript |
-| **Database** | PostgreSQL / Prisma |
-| **Storage** | Cloudflare R2 |
-
----
-
 ## Documentation
 
 Comprehensive documentation is available in our [Wiki](../../wiki):
-
-- 📊 [Problem & Market Analysis](../../wiki/Problem-&-Market-Analysis)
-- ✨ [Features & Capabilities](../../wiki/Features-&-Capabilities)
-- 🏗️ [Technical Architecture](../../wiki/Technical-Architecture)
-- 🏆 [Competitive Analysis](../../wiki/Competitive-Analysis)
-- 🎹 [DAW Support & Roadmap](../../wiki/DAW-Support-&-Roadmap)
-- 🚀 [Deployment & Resilience](../../wiki/Deployment-&-Resilience)
 
 ---
 
@@ -60,7 +39,7 @@ Comprehensive documentation is available in our [Wiki](../../wiki):
 
 | Member | GitHub |
 |--------|--------|
-| Erwan SEYTOR | [@aernw1](https://github.com/aernw) |
+| Erwan SEYTOR (project leader) | [@aernw](https://github.com/aernw) |
 | Gabin RUDIGOZ | [@Metchee](https://github.com/Metchee) |
 | Dryss MARGUERITTE | [@Dryss10](https://github.com/Dryss10) |
 | Hubert TOURAINE | [@HubertTouraine](https://github.com/HubertTouraine) |
