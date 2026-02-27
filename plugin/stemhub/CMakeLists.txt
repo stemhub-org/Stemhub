@@ -23,7 +23,7 @@ add_subdirectory(${JUCE_DIR} JUCE)
 
 juce_add_plugin(stemhub
     COMPANY_NAME "Stemhub"
-    BUNDLE_ID "com.yourcompany.stemhub"
+    BUNDLE_ID "com.stemhub.session"
     IS_SYNTH FALSE
     NEEDS_CURL FALSE
     NEEDS_WEB_BROWSER FALSE
@@ -34,6 +34,7 @@ juce_add_plugin(stemhub
     COPY_PLUGIN_AFTER_BUILD ${COPY_PLUGIN}
     PLUGIN_MANUFACTURER_CODE Manu
     PLUGIN_CODE Wbcr
+    VST3_CATEGORIES Fx Tools
     FORMATS VST3 Standalone
     PRODUCT_NAME "Stemhub Session")
 

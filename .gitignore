@@ -18,7 +18,3 @@ plugin/stemhub/**/*.app/
 # Local JUCE copies inside plugin folder
 Plugin/stemhub/JUCE/
 plugin/stemhub/JUCE/
-
-# Projucer project files (CMake-only workflow)
-Plugin/stemhub/*.jucer
-plugin/stemhub/*.jucer
