@@ -19,6 +19,7 @@ class User(Base):
 
     # ── Relationships ──
     projects = relationship("Project", back_populates="owner")
+    collaborations = relationship("Collaborator", back_populates="user")
 
 
 class Project(Base):
@@ -34,3 +35,16 @@ class Project(Base):
 
     # ── Relationships ──
     owner = relationship("User", back_populates="projects")
+    collaborators = relationship("Collaborator", back_populates="project")
+
+
+class Collaborator(Base):
+    __tablename__ = "collaborator"
+
+    project_id = Column(UUID(as_uuid=True), ForeignKey("project.id"), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    role = Column(String(50), nullable=False, default="Viewer")  # Admin, Editor, Viewer
+
+    # ── Relationships ──
+    project = relationship("Project", back_populates="collaborators")
+    user = relationship("User", back_populates="collaborations")
