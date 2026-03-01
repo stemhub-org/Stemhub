@@ -62,10 +62,13 @@ jobs:
             mesa-common-dev
 
       - name: Configure CMake
-        run: cmake -S plugin/stemhub -B build/plugin-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
+        run: cmake -S plugin/stemhub -B build/plugin-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCOPY_PLUGIN=OFF -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
 
       - name: Build plugin
         run: cmake --build build/plugin-linux --parallel
 
       - name: Verify VST3 artifact exists
-        run: test -n "$(find build/plugin-linux -type d -name 'stemhub.vst3' -print -quit)"
+        run: |
+          artifact="$(find build/plugin-linux/stemhub_artefacts/Release/VST3 -maxdepth 1 -type d -name '*.vst3' -print -quit)"
+          test -n "$artifact"
+          echo "Found VST3 artifact at: $artifact"
