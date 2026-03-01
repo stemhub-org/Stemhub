@@ -36,6 +36,7 @@ class Project(Base):
     # ── Relationships ──
     owner = relationship("User", back_populates="projects")
     collaborators = relationship("Collaborator", back_populates="project")
+    branches = relationship("Branch", back_populates="project")
 
 
 class Collaborator(Base):
@@ -48,3 +49,45 @@ class Collaborator(Base):
     # ── Relationships ──
     project = relationship("Project", back_populates="collaborators")
     user = relationship("User", back_populates="collaborations")
+
+
+class Branch(Base):
+    __tablename__ = "branch"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("project.id"), nullable=False)
+    name = Column(String(255), nullable=False)  # e.g. main, feature-fast-tempo
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # ── Relationships ──
+    project = relationship("Project", back_populates="branches")
+    versions = relationship("Version", back_populates="branch")
+
+
+class Version(Base):
+    __tablename__ = "version"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branch.id"), nullable=False)
+    parent_version_id = Column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=True)  # Git-like history
+    commit_message = Column(String(500), nullable=True)
+    storage_path = Column(String, nullable=True)  # .als, .flp pointer
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # ── Relationships ──
+    branch = relationship("Branch", back_populates="versions")
+    parent = relationship("Version", remote_side="Version.id", backref="children")
+    tracks = relationship("Track", back_populates="version")
+
+
+class Track(Base):
+    __tablename__ = "track"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    version_id = Column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=False)
+    name = Column(String(255), nullable=False)  # e.g. Kick, Lead Synth
+    file_type = Column(String(50), default=".json")
+    storage_path = Column(String, nullable=True)
+
+    # ── Relationships ──
+    version = relationship("Version", back_populates="tracks")

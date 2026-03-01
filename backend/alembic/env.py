@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 
 # Import your models' MetaData
 from stemhub.database import Base
-from stemhub.models import User, Project  # noqa: F401 — ensure models are registered
+from stemhub import models  # noqa: F401 — ensure all models are registered
 
 target_metadata = Base.metadata
 
