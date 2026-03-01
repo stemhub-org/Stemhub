@@ -20,5 +20,3 @@ plugin/stemhub/JUCE/
 # Environment
 .env
 
-# Cursor
-.cursor/.cursorrules
