@@ -5,6 +5,9 @@ __pycache__
 .cmake-tmp-plugin/
 .cmake-tmp-plugin-ninja/
 
+# Local lowercase plugin scratch directory
+plugin/
+
 # JUCE plugin generated folders (keep Source + CMakeLists in git)
 plugin/stemhub/Builds/
 plugin/stemhub/JuceLibraryCode/
