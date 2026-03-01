@@ -1,0 +1,29 @@
+name: Notify Discord on PR
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Discord payload
+        id: payload
+        run: |
+          payload=$(cat <<EOF
+          {
+            "content": "@everyone 📣 A new pull request has been opened on **${GITHUB_REPOSITORY}**!\n**Title:** ${{ github.event.pull_request.title }}\n**Author:** ${{ github.event.pull_request.user.login }}\n**Link:** ${{ github.event.pull_request.html_url }}"
+          }
+          EOF
+          )
+          echo "payload<<EOF" >> $GITHUB_OUTPUT
+          echo "$payload" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Discord notification
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '${{ steps.payload.outputs.payload }}' \
+            "${{ secrets.DISCORD_WEBHOOK }}"
