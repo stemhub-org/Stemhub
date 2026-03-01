@@ -3,15 +3,15 @@ name: plugin-build
 on:
   pull_request:
     paths:
-      - "Plugin/stemhub/Source/**"
-      - "Plugin/stemhub/CMakeLists.txt"
+      - "plugin/stemhub/Source/**"
+      - "plugin/stemhub/CMakeLists.txt"
       - ".github/workflows/plugin-build.yml"
   push:
     branches:
       - main
     paths:
-      - "Plugin/stemhub/Source/**"
-      - "Plugin/stemhub/CMakeLists.txt"
+      - "plugin/stemhub/Source/**"
+      - "plugin/stemhub/CMakeLists.txt"
       - ".github/workflows/plugin-build.yml"
   workflow_dispatch:
 
@@ -28,8 +28,8 @@ jobs:
 
       - name: Ensure Projucer-generated files are not tracked
         run: |
-          test ! -e Plugin/stemhub/Builds/LinuxMakefile/Makefile
-          test ! -e Plugin/stemhub/JuceLibraryCode/JuceHeader.h
+          test ! -e plugin/stemhub/Builds/LinuxMakefile/Makefile
+          test ! -e plugin/stemhub/JuceLibraryCode/JuceHeader.h
 
       - name: Install JUCE Linux dependencies
         run: |
@@ -62,7 +62,7 @@ jobs:
             mesa-common-dev
 
       - name: Configure CMake
-        run: cmake -S Plugin/stemhub -B build/plugin-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
+        run: cmake -S plugin/stemhub -B build/plugin-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
 
       - name: Build plugin
         run: cmake --build build/plugin-linux --parallel
