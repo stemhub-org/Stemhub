@@ -5,14 +5,14 @@
 
 class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor
 {
-public:
-    explicit StemhubAudioProcessorEditor (StemhubAudioProcessor&);
-    ~StemhubAudioProcessorEditor() override = default;
-
-    void paint (juce::Graphics&) override;
-    void resized() override;
-
-private:
-    StemhubAudioProcessor& processor;
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemhubAudioProcessorEditor)
+    public:
+        explicit StemhubAudioProcessorEditor (StemhubAudioProcessor& processorToEdit);
+        ~StemhubAudioProcessorEditor() override = default;
+    
+        void paint (juce::Graphics&) override;
+        void resized() override;
+    
+    private:
+        StemhubAudioProcessor& audioProcessor;
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemhubAudioProcessorEditor)
 };
