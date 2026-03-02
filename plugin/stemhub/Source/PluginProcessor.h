@@ -1,43 +1,59 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <optional>
+#include "User.hpp"
+#include "States.hpp"
 
 class StemhubAudioProcessor : public juce::AudioProcessor
 {
-public:
-    StemhubAudioProcessor();
-    ~StemhubAudioProcessor() override = default;
+    public:
+        StemhubAudioProcessor();
+        ~StemhubAudioProcessor() override = default;
 
-    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override;
+        void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+        void releaseResources() override;
 
-#ifndef JucePlugin_PreferredChannelConfigurations
-    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
-#endif
+    #ifndef JucePlugin_PreferredChannelConfigurations
+        bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    #endif
 
-    using AudioProcessor::processBlock;
-    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-    void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
+        using AudioProcessor::processBlock;
+        void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+        void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
 
-    juce::AudioProcessorEditor* createEditor() override;
-    bool hasEditor() const override;
+        juce::AudioProcessorEditor* createEditor() override;
+        bool hasEditor() const override;
 
-    const juce::String getName() const override;
+        const juce::String getName() const override;
 
-    bool acceptsMidi() const override;
-    bool producesMidi() const override;
-    bool isMidiEffect() const override;
-    double getTailLengthSeconds() const override;
+        bool acceptsMidi() const override;
+        bool producesMidi() const override;
+        bool isMidiEffect() const override;
+        double getTailLengthSeconds() const override;
 
-    int getNumPrograms() override;
-    int getCurrentProgram() override;
-    void setCurrentProgram (int index) override;
-    const juce::String getProgramName (int index) override;
-    void changeProgramName (int index, const juce::String& newName) override;
+        int getNumPrograms() override;
+        int getCurrentProgram() override;
+        void setCurrentProgram (int index) override;
+        const juce::String getProgramName (int index) override;
+        void changeProgramName (int index, const juce::String& newName) override;
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+        void getStateInformation (juce::MemoryBlock& destData) override;
+        void setStateInformation (const void* data, int sizeInBytes) override;
 
-private:
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemhubAudioProcessor)
+        [[nodiscard]] AuthState getAuthState() const noexcept;
+        [[nodiscard]] SyncState getSyncState() const noexcept;
+        [[nodiscard]] std::optional<User>& getCurrentUser() const noexcept;
+
+        void setAuthState(AuthState newState) noexcept;
+        void setSyncState(SyncState newState) noexcept;
+        void setCurrentUser(std::optional<User> newUser) noexcept;
+        void clearSession() noexcept;
+
+    private:
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemhubAudioProcessor)
+
+        std::optional<User> currentUser;
+        AuthState authState { AuthState::signedOut };
+        SyncState syncState { SyncState::idle };
 };
