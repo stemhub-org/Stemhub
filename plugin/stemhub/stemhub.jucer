@@ -14,10 +14,10 @@
               splashScreenColour="Dark">
   <MAINGROUP id="mainGroup001" name="stemhub">
     <GROUP id="srcGroup001" name="Source">
-      <FILE id="f001" name="PluginProcessor.h" compile="0" resource="0" file="Source/PluginProcessor.h"/>
+      <FILE id="f001" name="PluginProcessor.hpp" compile="0" resource="0" file="Source/PluginProcessor.hpp"/>
       <FILE id="f002" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>
-      <FILE id="f003" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
+      <FILE id="f003" name="PluginEditor.hpp" compile="0" resource="0" file="Source/PluginEditor.hpp"/>
       <FILE id="f004" name="PluginEditor.cpp" compile="1" resource="0" file="Source/PluginEditor.cpp"/>
     </GROUP>
   </MAINGROUP>

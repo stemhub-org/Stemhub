@@ -43,7 +43,7 @@ class StemhubAudioProcessor : public juce::AudioProcessor
 
         [[nodiscard]] AuthState getAuthState() const noexcept;
         [[nodiscard]] SyncState getSyncState() const noexcept;
-        [[nodiscard]] std::optional<User>& getCurrentUser() const noexcept;
+        [[nodiscard]] const std::optional<User>& getCurrentUser() noexcept;
 
         void setAuthState(AuthState newState) noexcept;
         void setSyncState(SyncState newState) noexcept;
