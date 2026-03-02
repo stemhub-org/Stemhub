@@ -49,3 +49,22 @@ class ProjectResponse(ProjectBase):
 
     class Config:
         from_attributes = True
+
+# ── Branch Schemas ──
+
+class BranchBase(BaseModel):
+    name: str
+
+class BranchCreate(BranchBase):
+    pass
+
+class BranchUpdate(BaseModel):
+    name: Optional[str] = None
+
+class BranchResponse(BranchBase):
+    id: UUID
+    project_id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
