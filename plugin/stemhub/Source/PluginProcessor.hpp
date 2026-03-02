@@ -56,4 +56,5 @@ class StemhubAudioProcessor : public juce::AudioProcessor
         std::optional<User> currentUser;
         AuthState authState { AuthState::signedOut };
         SyncState syncState { SyncState::idle };
+        juce::String JucePlugin_Name;
 };
