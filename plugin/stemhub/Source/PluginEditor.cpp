@@ -1,6 +1,15 @@
 #include "PluginProcessor.hpp"
 #include "PluginEditor.hpp"
 
+void StemhubAudioProcessorEditor::refreshComponentVisibility()
+{
+    const bool showLoginControls = audioProcessor.getAuthState() != AuthState::signedIn;
+
+    usernameInput.setVisible(showLoginControls);
+    passwordInput.setVisible(showLoginControls);
+    signInButton.setVisible(showLoginControls);
+}
+
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
     : AudioProcessorEditor(&processorToEdit), audioProcessor(processorToEdit)
 {
@@ -30,6 +39,8 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
         {
             audioProcessor.setAuthState(AuthState::authError);
             refreshAuthStateLabel();
+            refreshComponentVisibility();
+            resized();
             repaint();
             return;
         }
@@ -41,12 +52,14 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
 
         audioProcessor.setCurrentUser(user);
         audioProcessor.setAuthState(AuthState::signedIn);
-        passwordInput.clear();
         refreshAuthStateLabel();
+        refreshComponentVisibility();
+        resized();
         repaint();
     };
 
     refreshAuthStateLabel();
+    refreshComponentVisibility();
 }
 
 void StemhubAudioProcessorEditor::paint(juce::Graphics& g)
@@ -56,29 +69,36 @@ void StemhubAudioProcessorEditor::paint(juce::Graphics& g)
 
 void StemhubAudioProcessorEditor::resized()
 {
+    const bool showLoginControls = audioProcessor.getAuthState() != AuthState::signedIn;
     auto area = getLocalBounds().reduced(20);
     const int fieldWidth = 220;
     const int x = (getWidth() - fieldWidth) / 2;
 
-    area.removeFromTop(64);
+    if (showLoginControls)
+    {
+        area.removeFromTop(64);
 
-    auto usernameRow = area.removeFromTop(32);
-    usernameInput.setBounds(x, usernameRow.getY(), fieldWidth, usernameRow.getHeight());
+        auto usernameRow = area.removeFromTop(32);
+        usernameInput.setBounds(x, usernameRow.getY(), fieldWidth, usernameRow.getHeight());
 
-    area.removeFromTop(8);
+        area.removeFromTop(8);
 
-    auto passwordRow = area.removeFromTop(32);
-    passwordInput.setBounds(x, passwordRow.getY(), fieldWidth, passwordRow.getHeight());
+        auto passwordRow = area.removeFromTop(32);
+        passwordInput.setBounds(x, passwordRow.getY(), fieldWidth, passwordRow.getHeight());
 
-    area.removeFromTop(12);
+        area.removeFromTop(12);
 
-    auto buttonRow = area.removeFromTop(32);
-    signInButton.setBounds(x, buttonRow.getY(), fieldWidth, buttonRow.getHeight());
+        auto buttonRow = area.removeFromTop(32);
+        signInButton.setBounds(x, buttonRow.getY(), fieldWidth, buttonRow.getHeight());
 
-    area.removeFromTop(24);
+        area.removeFromTop(24);
 
-    auto labelRow = area.removeFromTop(56);
-    authStateLabel.setBounds(labelRow);
+        auto labelRow = area.removeFromTop(56);
+        authStateLabel.setBounds(labelRow);
+    } else {
+        auto labelArea = getLocalBounds().reduced(40).withSizeKeepingCentre(400, 60);
+        authStateLabel.setBounds(labelArea);
+    }
 }
 
 void StemhubAudioProcessorEditor::refreshAuthStateLabel()

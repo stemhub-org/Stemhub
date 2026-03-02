@@ -14,6 +14,7 @@ public:
 
 private:
     void refreshAuthStateLabel();
+    void refreshComponentVisibility();
 
     juce::TextEditor usernameInput;
     juce::TextEditor passwordInput;
