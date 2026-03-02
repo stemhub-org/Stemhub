@@ -68,3 +68,25 @@ class BranchResponse(BranchBase):
 
     class Config:
         from_attributes = True
+
+# ── Version Schemas ──
+
+class VersionBase(BaseModel):
+    commit_message: Optional[str] = None
+    storage_path: Optional[str] = None
+    parent_version_id: Optional[UUID] = None
+
+class VersionCreate(VersionBase):
+    pass
+
+class VersionUpdate(BaseModel):
+    commit_message: Optional[str] = None
+    storage_path: Optional[str] = None
+
+class VersionResponse(VersionBase):
+    id: UUID
+    branch_id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
