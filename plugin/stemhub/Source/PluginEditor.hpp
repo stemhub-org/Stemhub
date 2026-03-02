@@ -1,7 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "PluginProcessor.h"
+#include "PluginProcessor.hpp"
 
 class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor
 {
@@ -13,5 +13,6 @@ public:
     void resized() override;
 
 private:
+    StemhubAudioProcessor& processor;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemhubAudioProcessorEditor)
 };

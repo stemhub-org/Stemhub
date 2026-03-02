@@ -1,8 +1,8 @@
-#include "PluginProcessor.h"
-#include "PluginEditor.h"
+#include "PluginProcessor.hpp"
+#include "PluginEditor.hpp"
 
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor (StemhubAudioProcessor& audioProcessor)
-    : AudioProcessorEditor (&audioProcessor)
+    : AudioProcessorEditor (&audioProcessor), processor (audioProcessor)
 {
     setSize (400, 300);
 }
