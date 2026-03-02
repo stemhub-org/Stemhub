@@ -1,8 +1,28 @@
 #include "PluginProcessor.hpp"
 #include "PluginEditor.hpp"
 
-StemhubAudioProcessorEditor::StemhubAudioProcessorEditor (StemhubAudioProcessor& audioProcessor)
-    : AudioProcessorEditor (&audioProcessor), processor (audioProcessor)
+namespace
+{
+    void drawCenteredMessage (juce::Graphics& g, const juce::String& message) {
+        g.setFont (juce::FontOptions (20.0f, juce::Font::bold));
+        g.drawFittedText (message, g.getClipBounds(), juce::Justification::centred, 2);
+    }
+
+    void drawSignedOutDisplay (juce::Graphics& g) {
+        drawCenteredMessage (g, "Please sign in to your Stemhub account to access your projects.");
+    }
+
+    void drawSignedInDisplay (juce::Graphics& g, const StemhubAudioProcessor& audioProcessor) {
+        drawCenteredMessage (g, "Welcome back " + audioProcessor.getUsername() + "!");
+    }
+
+    void drawAuthErrorDisplay (juce::Graphics& g) {
+        drawCenteredMessage (g, "An error occurred during authentication. Please try again.");
+    }
+}
+
+StemhubAudioProcessorEditor::StemhubAudioProcessorEditor (StemhubAudioProcessor& processorToEdit)
+    : AudioProcessorEditor (&processorToEdit), audioProcessor (processorToEdit)
 {
     setSize (400, 300);
 }
@@ -11,8 +31,24 @@ void StemhubAudioProcessorEditor::paint (juce::Graphics& g)
 {
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
     g.setColour (juce::Colours::white);
-    g.setFont (juce::FontOptions (15.0f));
-    g.drawFittedText ("Hello World!", getLocalBounds(), juce::Justification::centred, 1);
+
+    switch (audioProcessor.getAuthState()) {
+        case AuthState::signedOut:
+            drawSignedOutDisplay (g);
+            return;
+
+        case AuthState::signingIn:
+            drawCenteredMessage (g, "Connecting to Stemhub...");
+            return;
+
+        case AuthState::signedIn:
+            drawSignedInDisplay (g, audioProcessor);
+            return;
+
+        case AuthState::authError:
+            drawAuthErrorDisplay (g);
+            return;
+    }
 }
 
 void StemhubAudioProcessorEditor::resized()

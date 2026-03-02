@@ -1,15 +1,9 @@
 #pragma once
 
-#include <functional>
-#include <string>
-#include <utility>
-#include <vector>
-#include "States.hpp"
-#pragma once
-
 #include <JuceHeader.h>
 
-struct User {
+struct User
+{
     juce::String id;
     juce::String email;
     juce::String username;

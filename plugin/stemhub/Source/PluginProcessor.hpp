@@ -41,14 +41,22 @@ class StemhubAudioProcessor : public juce::AudioProcessor
         void getStateInformation (juce::MemoryBlock& destData) override;
         void setStateInformation (const void* data, int sizeInBytes) override;
 
-        [[nodiscard]] AuthState getAuthState() const noexcept { return authState; };
-        [[nodiscard]] SyncState getSyncState() const noexcept { return syncState; };
-        [[nodiscard]] const std::optional<User>& getCurrentUser()  noexcept { return currentUser; };
+        [[nodiscard]] AuthState getAuthState() const noexcept { return authState; }
+        [[nodiscard]] SyncState getSyncState() const noexcept { return syncState; }
+        [[nodiscard]] const std::optional<User>& getCurrentUser() const noexcept { return currentUser; }
 
-        void setAuthState(AuthState newState) noexcept { authState = newState; };
-        void setSyncState(SyncState newState) noexcept { syncState = newState; };
-        void setCurrentUser(std::optional<User> newUser) noexcept { currentUser = newUser; };
-        void clearSession() noexcept { currentUser.reset(); authState = AuthState::signedOut; syncState = SyncState::idle; };
+        void setAuthState (AuthState newState) noexcept { authState = newState; }
+        void setSyncState (SyncState newState) noexcept { syncState = newState; }
+        void setCurrentUser (std::optional<User> newUser) noexcept { currentUser = std::move (newUser); }
+        void clearSession() noexcept {
+            currentUser.reset();
+            authState = AuthState::signedOut;
+            syncState = SyncState::idle;
+        }
+
+        [[nodiscard]] juce::String getUsername() const noexcept {
+            return currentUser ? currentUser->username : juce::String();
+        }
 
     private:
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemhubAudioProcessor)
@@ -56,5 +64,4 @@ class StemhubAudioProcessor : public juce::AudioProcessor
         std::optional<User> currentUser;
         AuthState authState { AuthState::signedOut };
         SyncState syncState { SyncState::idle };
-        juce::String JucePlugin_Name;
 };
