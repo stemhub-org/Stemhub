@@ -3,15 +3,31 @@
 enum class AuthState
 {
     signedOut,
-    signingIn,
     signedIn,
     authError
 };
 
-enum class SyncState
+enum class UIState
+{
+    login,
+    dashboard,
+    commit,
+    history,
+    settings
+};
+
+enum class OperationState
 {
     idle,
-    syncing,
-    syncSuccess,
-    syncError
+    loadingProjects,
+    committing,
+    pulling,
+    error
+};
+
+struct SessionState
+{
+    AuthState authState { AuthState::signedOut };
+    UIState uiState { UIState::login };
+    OperationState operationState { OperationState::idle };
 };

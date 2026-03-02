@@ -13,12 +13,22 @@ public:
     void resized() override;
 
 private:
+    void refreshSessionUi();
     void refreshAuthStateLabel();
     void refreshComponentVisibility();
+    void handleSignInClick();
+    void handleSignOutClick();
+    void handleSaveChangesClick();
+    void handleSyncClick();
+    void handleChangeBranchClick();
 
     juce::TextEditor usernameInput;
     juce::TextEditor passwordInput;
     juce::Label authStateLabel;
+
+    juce::TextButton saveChanges { "Save" }; // Commit button
+    juce::TextButton syncButton { "Sync" }; // pull / merge button
+    juce::TextButton changeBranch { "view other branches" }; // branch management button
 
     juce::TextButton signInButton { "Sign In" };
     juce::TextButton signOutButton { "Sign Out" };

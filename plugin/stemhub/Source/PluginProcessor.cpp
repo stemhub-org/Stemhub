@@ -15,6 +15,42 @@ StemhubAudioProcessor::StemhubAudioProcessor()
 {
 }
 
+void StemhubAudioProcessor::signIn(User newUser) noexcept
+{
+    currentUser = std::move(newUser);
+    sessionState.authState = AuthState::signedIn;
+    sessionState.uiState = UIState::dashboard;
+    sessionState.operationState = OperationState::idle;
+}
+
+void StemhubAudioProcessor::signOut() noexcept
+{
+    currentUser.reset();
+    sessionState = {};
+}
+
+void StemhubAudioProcessor::setAuthState(AuthState newAuthState) noexcept
+{
+    sessionState.authState = newAuthState;
+
+    if (newAuthState != AuthState::signedIn)
+    {
+        sessionState.uiState = UIState::login;
+        sessionState.operationState = OperationState::idle;
+    }
+}
+
+void StemhubAudioProcessor::setUIState(UIState newUIState) noexcept
+{
+    sessionState.uiState = sessionState.authState == AuthState::signedIn ? newUIState : UIState::login;
+}
+
+void StemhubAudioProcessor::setOperationState(OperationState newOperationState) noexcept
+{
+    sessionState.operationState = sessionState.authState == AuthState::signedIn ? newOperationState
+                                                                                : OperationState::idle;
+}
+
 const juce::String StemhubAudioProcessor::getName() const
 {
     return JucePlugin_Name;

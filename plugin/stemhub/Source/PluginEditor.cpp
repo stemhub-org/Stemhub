@@ -1,14 +1,105 @@
+#include <map>
+
 #include "PluginProcessor.hpp"
 #include "PluginEditor.hpp"
 
+template<typename Map, typename Key>
+juce::String findMappedMessage(const Map& messageMap, const Key& key, const juce::String& defaultMessage = "")
+{
+    auto it = messageMap.find(key);
+    return (it != messageMap.end()) ? it->second : defaultMessage;
+}
+
+const std::map<AuthState, juce::String> authMessages {
+    { AuthState::signedOut, "Please sign in to your Stemhub account to access your projects." },
+    { AuthState::authError, "An error occurred during authentication. Please try again." },
+};
+
+const std::map<UIState, juce::String> signedInMessages {
+    { UIState::login, "Please sign in to your Stemhub account to access your projects." },
+    { UIState::commit, "Commit view" },
+    { UIState::history, "History and sync view" },
+    { UIState::settings, "Branch management view" },
+};
+
+const std::map<OperationState, juce::String> operationMessages {
+    { OperationState::loadingProjects, "Loading projects..." },
+    { OperationState::committing, "Committing..." },
+    { OperationState::pulling, "Syncing..." },
+    { OperationState::error, "An operation error occurred." },
+};
+
+void StemhubAudioProcessorEditor::refreshSessionUi()
+{
+    refreshAuthStateLabel();
+    refreshComponentVisibility();
+    resized();
+    repaint();
+}
+
 void StemhubAudioProcessorEditor::refreshComponentVisibility()
 {
-    const bool showLoginControls = audioProcessor.getAuthState() != AuthState::signedIn;
+    const bool isSignedIn = audioProcessor.getAuthState() == AuthState::signedIn;
 
-    usernameInput.setVisible(showLoginControls);
-    passwordInput.setVisible(showLoginControls);
-    signInButton.setVisible(showLoginControls);
-    signOutButton.setVisible(!showLoginControls);
+    usernameInput.setVisible(!isSignedIn);
+    passwordInput.setVisible(!isSignedIn);
+    signInButton.setVisible(!isSignedIn);
+
+    signOutButton.setVisible(isSignedIn);
+    saveChanges.setVisible(isSignedIn);
+    syncButton.setVisible(isSignedIn);
+    changeBranch.setVisible(isSignedIn);
+}
+
+void StemhubAudioProcessorEditor::handleSignInClick()
+{
+    const auto username = usernameInput.getText().trim();
+    const auto password = passwordInput.getText();
+
+    if (username.isEmpty() || password.isEmpty())
+    {
+        audioProcessor.setAuthState(AuthState::authError);
+        refreshSessionUi();
+        return;
+    }
+
+    User user;
+    user.id = "local-user";
+    user.email = "";
+    user.username = username;
+
+    audioProcessor.signIn(std::move(user));
+    passwordInput.clear();
+    refreshSessionUi();
+}
+
+void StemhubAudioProcessorEditor::handleSignOutClick()
+{
+    audioProcessor.signOut();
+    usernameInput.clear();
+    passwordInput.clear();
+    refreshSessionUi();
+}
+
+void StemhubAudioProcessorEditor::handleSaveChangesClick()
+{
+    audioProcessor.setUIState(UIState::commit);
+    audioProcessor.setOperationState(OperationState::idle);
+    refreshSessionUi();
+}
+
+void StemhubAudioProcessorEditor::handleSyncClick()
+{
+    audioProcessor.setUIState(UIState::history);
+    audioProcessor.setOperationState(OperationState::idle);
+    refreshSessionUi();
+}
+
+void StemhubAudioProcessorEditor::handleChangeBranchClick()
+{
+    audioProcessor.setUIState(UIState::settings);
+    audioProcessor.setOperationState(OperationState::idle);
+    refreshSessionUi();
 }
 
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
@@ -31,46 +122,17 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
 
     addAndMakeVisible(signInButton);
     addAndMakeVisible(signOutButton);
+    addAndMakeVisible(saveChanges);
+    addAndMakeVisible(syncButton);
+    addAndMakeVisible(changeBranch);
 
-    signInButton.onClick = [this]
-    {
-        const auto username = usernameInput.getText().trim();
-        const auto password = passwordInput.getText();
+    signInButton.onClick = [this] { handleSignInClick(); };
+    signOutButton.onClick = [this] { handleSignOutClick(); };
+    saveChanges.onClick = [this] { handleSaveChangesClick(); };
+    syncButton.onClick = [this] { handleSyncClick(); };
+    changeBranch.onClick = [this] { handleChangeBranchClick(); };
 
-        if (username.isEmpty() || password.isEmpty())
-        {
-            audioProcessor.setAuthState(AuthState::authError);
-            refreshAuthStateLabel();
-            refreshComponentVisibility();
-            resized();
-            repaint();
-            return;
-        }
-
-        User user;
-        user.id = "local-user";
-        user.email = "";
-        user.username = username;
-
-        audioProcessor.setCurrentUser(user);
-        audioProcessor.setAuthState(AuthState::signedIn);
-        refreshAuthStateLabel();
-        refreshComponentVisibility();
-        resized();
-        repaint();
-    };
-
-    signOutButton.onClick = [this]
-    {
-        audioProcessor.clearSession();
-        refreshAuthStateLabel();
-        refreshComponentVisibility();
-        resized();
-        repaint();
-    };
-
-    refreshAuthStateLabel();
-    refreshComponentVisibility();
+    refreshSessionUi();
 }
 
 void StemhubAudioProcessorEditor::paint(juce::Graphics& g)
@@ -106,37 +168,52 @@ void StemhubAudioProcessorEditor::resized()
 
         auto labelRow = area.removeFromTop(56);
         authStateLabel.setBounds(labelRow);
-    } else {
-        auto buttonRow = area.removeFromTop(32);
-        signOutButton.setBounds(x, buttonRow.getY(), fieldWidth, buttonRow.getHeight());
+    }
+    else
+    {
+        auto labelRow = area.removeFromTop(56);
+        authStateLabel.setBounds(labelRow);
 
-        auto labelArea = getLocalBounds().reduced(40).withSizeKeepingCentre(400, 60);
-        authStateLabel.setBounds(labelArea);
+        area.removeFromTop(24);
+
+        auto saveRow = area.removeFromTop(32);
+        saveChanges.setBounds(x, saveRow.getY(), fieldWidth, saveRow.getHeight());
+
+        area.removeFromTop(8);
+
+        auto syncRow = area.removeFromTop(32);
+        syncButton.setBounds(x, syncRow.getY(), fieldWidth, syncRow.getHeight());
+
+        area.removeFromTop(8);
+
+        auto branchRow = area.removeFromTop(32);
+        changeBranch.setBounds(x, branchRow.getY(), fieldWidth, branchRow.getHeight());
+
+        area.removeFromTop(24);
+
+        auto signOutRow = area.removeFromTop(32);
+        signOutButton.setBounds(x, signOutRow.getY(), fieldWidth, signOutRow.getHeight());
     }
 }
 
 void StemhubAudioProcessorEditor::refreshAuthStateLabel()
 {
+    const auto authState = audioProcessor.getAuthState();
+    const auto uiState = audioProcessor.getUIState();
+    const auto operationState = audioProcessor.getOperationState();
+
     juce::String message;
 
-    switch (audioProcessor.getAuthState())
-    {
-        case AuthState::signedOut:
-            message = "Please sign in to your Stemhub account to access your projects.";
-            break;
+    if (authState == AuthState::signedIn && uiState == UIState::dashboard)
+        message = "Welcome back " + audioProcessor.getUsername() + "!";
+    else if (authState == AuthState::signedIn)
+        message = findMappedMessage(signedInMessages, uiState, "Welcome back " + audioProcessor.getUsername() + "!");
+    else
+        message = findMappedMessage(authMessages, authState);
 
-        case AuthState::signingIn:
-            message = "Connecting to Stemhub...";
-            break;
-
-        case AuthState::signedIn:
-            message = "Welcome back " + audioProcessor.getUsername() + "!";
-            break;
-
-        case AuthState::authError:
-            message = "An error occurred during authentication. Please try again.";
-            break;
-    }
+    const auto operationSuffix = findMappedMessage(operationMessages, operationState);
+    if (!operationSuffix.isEmpty())
+        message << "\n" << operationSuffix;
 
     authStateLabel.setText(message, juce::dontSendNotification);
 }

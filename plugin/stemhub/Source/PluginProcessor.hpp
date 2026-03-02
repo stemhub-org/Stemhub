@@ -41,29 +41,28 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    [[nodiscard]] AuthState getAuthState() const noexcept { return authState; }
-    [[nodiscard]] SyncState getSyncState() const noexcept { return syncState; }
+    [[nodiscard]] const SessionState& getSessionState() const noexcept { return sessionState; }
+    [[nodiscard]] AuthState getAuthState() const noexcept { return sessionState.authState; }
+    [[nodiscard]] UIState getUIState() const noexcept { return sessionState.uiState; }
+    [[nodiscard]] OperationState getOperationState() const noexcept { return sessionState.operationState; }
     [[nodiscard]] const std::optional<User>& getCurrentUser() const noexcept { return currentUser; }
 
-    void setAuthState(AuthState newState) noexcept { authState = newState; }
-    void setSyncState(SyncState newState) noexcept { syncState = newState; }
     void setCurrentUser(std::optional<User> newUser) noexcept { currentUser = std::move(newUser); }
-    void clearSession() noexcept
-    {
-        currentUser.reset();
-        authState = AuthState::signedOut;
-        syncState = SyncState::idle;
-    }
+    void signIn(User newUser) noexcept;
+    void signOut() noexcept;
 
     [[nodiscard]] juce::String getUsername() const noexcept
     {
         return currentUser ? currentUser->username : juce::String();
     }
 
+    void setAuthState(AuthState newAuthState) noexcept;
+    void setUIState(UIState newUIState) noexcept;
+    void setOperationState(OperationState newOperationState) noexcept;
+
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
     std::optional<User> currentUser;
-    AuthState authState { AuthState::signedOut };
-    SyncState syncState { SyncState::idle };
+    SessionState sessionState;
 };
