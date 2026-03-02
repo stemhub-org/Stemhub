@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .auth import router as auth_router
+from .routers.projects import router as projects_router
 from .database import engine, Base
 
 @asynccontextmanager
@@ -21,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(projects_router)
 
 @app.get("/")
 async def root():
