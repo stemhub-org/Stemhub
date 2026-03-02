@@ -24,7 +24,34 @@ namespace
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor (StemhubAudioProcessor& processorToEdit)
     : AudioProcessorEditor (&processorToEdit), audioProcessor (processorToEdit)
 {
-    setSize (400, 300);
+    setSize (600, 400);
+    addAndMakeVisible (signedOutButton);
+    addAndMakeVisible (signingInButton);
+    addAndMakeVisible (signedInButton);
+    addAndMakeVisible (authErrorButton);
+
+    signedOutButton.onClick = [this] {
+        audioProcessor.clearSession();
+        repaint();
+    };
+    signingInButton.onClick = [this] {
+        audioProcessor.setAuthState (AuthState::signingIn);
+        repaint();
+    };
+    signedInButton.onClick = [this] {
+        User user;
+        user.id = "12345";
+        user.email = "test@stemhub.dev";
+        user.username = "Test User";
+
+        audioProcessor.setCurrentUser (user);
+        audioProcessor.setAuthState (AuthState::signedIn);
+        repaint();
+    };
+    authErrorButton.onClick = [this] {
+        audioProcessor.setAuthState (AuthState::authError);
+        repaint();
+    };
 }
 
 void StemhubAudioProcessorEditor::paint (juce::Graphics& g)
@@ -53,4 +80,16 @@ void StemhubAudioProcessorEditor::paint (juce::Graphics& g)
 
 void StemhubAudioProcessorEditor::resized()
 {
+    auto area = getLocalBounds().reduced (20);
+
+    signedOutButton.setBounds (area.removeFromTop (30));
+    area.removeFromTop (8);
+
+    signingInButton.setBounds (area.removeFromTop (30));
+    area.removeFromTop (8);
+
+    signedInButton.setBounds (area.removeFromTop (30));
+    area.removeFromTop (8);
+
+    authErrorButton.setBounds (area.removeFromTop (30));
 }
