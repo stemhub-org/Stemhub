@@ -1,18 +1,54 @@
-#include "PluginProcessor.h"
-#include "PluginEditor.h"
+#include "PluginProcessor.hpp"
+#include "PluginEditor.hpp"
 
 StemhubAudioProcessor::StemhubAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor (BusesProperties()
+     : AudioProcessor(BusesProperties()
                      #if ! JucePlugin_IsMidiEffect
                       #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                       .withInput("Input", juce::AudioChannelSet::stereo(), true)
                       #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                       .withOutput("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
                        )
 #endif
 {
+}
+
+void StemhubAudioProcessor::signIn(User newUser) noexcept
+{
+    currentUser = std::move(newUser);
+    sessionState.authState = AuthState::signedIn;
+    sessionState.uiState = UIState::dashboard;
+    sessionState.operationState = OperationState::idle;
+}
+
+void StemhubAudioProcessor::signOut() noexcept
+{
+    currentUser.reset();
+    sessionState = {};
+}
+
+void StemhubAudioProcessor::setAuthState(AuthState newAuthState) noexcept
+{
+    sessionState.authState = newAuthState;
+
+    if (newAuthState != AuthState::signedIn)
+    {
+        sessionState.uiState = UIState::login;
+        sessionState.operationState = OperationState::idle;
+    }
+}
+
+void StemhubAudioProcessor::setUIState(UIState newUIState) noexcept
+{
+    sessionState.uiState = sessionState.authState == AuthState::signedIn ? newUIState : UIState::login;
+}
+
+void StemhubAudioProcessor::setOperationState(OperationState newOperationState) noexcept
+{
+    sessionState.operationState = sessionState.authState == AuthState::signedIn ? newOperationState
+                                                                                : OperationState::idle;
 }
 
 const juce::String StemhubAudioProcessor::getName() const
@@ -62,25 +98,25 @@ int StemhubAudioProcessor::getCurrentProgram()
     return 0;
 }
 
-void StemhubAudioProcessor::setCurrentProgram (int index)
+void StemhubAudioProcessor::setCurrentProgram(int index)
 {
-    juce::ignoreUnused (index);
+    juce::ignoreUnused(index);
 }
 
-const juce::String StemhubAudioProcessor::getProgramName (int index)
+const juce::String StemhubAudioProcessor::getProgramName(int index)
 {
-    juce::ignoreUnused (index);
+    juce::ignoreUnused(index);
     return {};
 }
 
-void StemhubAudioProcessor::changeProgramName (int index, const juce::String& newName)
+void StemhubAudioProcessor::changeProgramName(int index, const juce::String& newName)
 {
-    juce::ignoreUnused (index, newName);
+    juce::ignoreUnused(index, newName);
 }
 
-void StemhubAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+void StemhubAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    juce::ignoreUnused(sampleRate, samplesPerBlock);
 }
 
 void StemhubAudioProcessor::releaseResources()
@@ -88,10 +124,10 @@ void StemhubAudioProcessor::releaseResources()
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
-bool StemhubAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool StemhubAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
 #if JucePlugin_IsMidiEffect
-    juce::ignoreUnused (layouts);
+    juce::ignoreUnused(layouts);
     return true;
 #else
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
@@ -109,27 +145,27 @@ bool StemhubAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
 #endif
 
 template <typename SampleType>
-static void clearExtraOutputChannels (juce::AudioProcessor& processor, juce::AudioBuffer<SampleType>& buffer)
+static void clearExtraOutputChannels(juce::AudioProcessor& processor, juce::AudioBuffer<SampleType>& buffer)
 {
     const auto totalNumInputChannels = processor.getTotalNumInputChannels();
     const auto totalNumOutputChannels = processor.getTotalNumOutputChannels();
 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
+        buffer.clear(i, 0, buffer.getNumSamples());
 }
 
-void StemhubAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void StemhubAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
-    juce::ignoreUnused (midiMessages);
-    clearExtraOutputChannels (*this, buffer);
+    juce::ignoreUnused(midiMessages);
+    clearExtraOutputChannels(*this, buffer);
 }
 
-void StemhubAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midiMessages)
+void StemhubAudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
-    juce::ignoreUnused (midiMessages);
-    clearExtraOutputChannels (*this, buffer);
+    juce::ignoreUnused(midiMessages);
+    clearExtraOutputChannels(*this, buffer);
 }
 
 bool StemhubAudioProcessor::hasEditor() const
@@ -139,17 +175,17 @@ bool StemhubAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* StemhubAudioProcessor::createEditor()
 {
-    return new StemhubAudioProcessorEditor (*this);
+    return new StemhubAudioProcessorEditor(*this);
 }
 
-void StemhubAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+void StemhubAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    juce::ignoreUnused (destData);
+    juce::ignoreUnused(destData);
 }
 
-void StemhubAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+void StemhubAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused (data, sizeInBytes);
+    juce::ignoreUnused(data, sizeInBytes);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
