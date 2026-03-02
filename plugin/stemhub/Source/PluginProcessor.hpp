@@ -41,14 +41,14 @@ class StemhubAudioProcessor : public juce::AudioProcessor
         void getStateInformation (juce::MemoryBlock& destData) override;
         void setStateInformation (const void* data, int sizeInBytes) override;
 
-        [[nodiscard]] AuthState getAuthState() const noexcept;
-        [[nodiscard]] SyncState getSyncState() const noexcept;
-        [[nodiscard]] const std::optional<User>& getCurrentUser() noexcept;
+        [[nodiscard]] AuthState getAuthState() const noexcept { return authState; };
+        [[nodiscard]] SyncState getSyncState() const noexcept { return syncState; };
+        [[nodiscard]] const std::optional<User>& getCurrentUser()  noexcept { return currentUser; };
 
-        void setAuthState(AuthState newState) noexcept;
-        void setSyncState(SyncState newState) noexcept;
-        void setCurrentUser(std::optional<User> newUser) noexcept;
-        void clearSession() noexcept;
+        void setAuthState(AuthState newState) noexcept { authState = newState; };
+        void setSyncState(SyncState newState) noexcept { syncState = newState; };
+        void setCurrentUser(std::optional<User> newUser) noexcept { currentUser = newUser; };
+        void clearSession() noexcept { currentUser.reset(); authState = AuthState::signedOut; syncState = SyncState::idle; };
 
     private:
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemhubAudioProcessor)
