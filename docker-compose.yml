@@ -21,6 +21,8 @@ services:
       - SECRET_KEY=${SECRET_KEY}
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend:/app
     depends_on:
       - db
 
