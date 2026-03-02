@@ -21,6 +21,7 @@ private:
     juce::Label authStateLabel;
 
     juce::TextButton signInButton { "Sign In" };
+    juce::TextButton signOutButton { "Sign Out" };
     StemhubAudioProcessor& audioProcessor;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessorEditor)
 };

@@ -8,6 +8,7 @@ void StemhubAudioProcessorEditor::refreshComponentVisibility()
     usernameInput.setVisible(showLoginControls);
     passwordInput.setVisible(showLoginControls);
     signInButton.setVisible(showLoginControls);
+    signOutButton.setVisible(!showLoginControls);
 }
 
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
@@ -29,6 +30,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     passwordInput.setPasswordCharacter('*');
 
     addAndMakeVisible(signInButton);
+    addAndMakeVisible(signOutButton);
 
     signInButton.onClick = [this]
     {
@@ -52,6 +54,15 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
 
         audioProcessor.setCurrentUser(user);
         audioProcessor.setAuthState(AuthState::signedIn);
+        refreshAuthStateLabel();
+        refreshComponentVisibility();
+        resized();
+        repaint();
+    };
+
+    signOutButton.onClick = [this]
+    {
+        audioProcessor.clearSession();
         refreshAuthStateLabel();
         refreshComponentVisibility();
         resized();
@@ -96,6 +107,9 @@ void StemhubAudioProcessorEditor::resized()
         auto labelRow = area.removeFromTop(56);
         authStateLabel.setBounds(labelRow);
     } else {
+        auto buttonRow = area.removeFromTop(32);
+        signOutButton.setBounds(x, buttonRow.getY(), fieldWidth, buttonRow.getHeight());
+
         auto labelArea = getLocalBounds().reduced(40).withSizeKeepingCentre(400, 60);
         authStateLabel.setBounds(labelArea);
     }
