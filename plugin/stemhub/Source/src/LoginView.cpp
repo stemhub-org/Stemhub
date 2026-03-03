@@ -7,9 +7,9 @@ LoginView::LoginView()
     authStateLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     authStateLabel.setFont(juce::FontOptions(20.0f, juce::Font::bold));
 
-    addAndMakeVisible(usernameInput);
-    usernameInput.setMultiLine(false);
-    usernameInput.setTextToShowWhenEmpty("Username", juce::Colours::grey);
+    addAndMakeVisible(emailInput);
+    emailInput.setMultiLine(false);
+    emailInput.setTextToShowWhenEmpty("Email", juce::Colours::grey);
 
     addAndMakeVisible(passwordInput);
     passwordInput.setMultiLine(false);
@@ -32,8 +32,8 @@ void LoginView::resized()
 
     area.removeFromTop(64);
 
-    auto usernameRow = area.removeFromTop(32);
-    usernameInput.setBounds(x, usernameRow.getY(), fieldWidth, usernameRow.getHeight());
+    auto emailRow = area.removeFromTop(32);
+    emailInput.setBounds(x, emailRow.getY(), fieldWidth, emailRow.getHeight());
 
     area.removeFromTop(8);
 
