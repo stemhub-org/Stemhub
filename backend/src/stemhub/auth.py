@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -6,6 +6,7 @@ import jwt
 import os
 import httpx
 import urllib.parse
+import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
@@ -14,7 +15,7 @@ from .schemas import UserCreate, UserResponse, Token
 from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -33,12 +34,26 @@ GOOGLE_REDIRECT_URI = ensure_https(os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_U
 
 @router.get("/login/google")
 async def login_google():
-    return RedirectResponse(
-        url=f"https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id={GOOGLE_CLIENT_ID}&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20profile%20email&access_type=offline&prompt=select_account"
+    state = secrets.token_urlsafe(32)
+    response = RedirectResponse(
+        url=f"https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id={GOOGLE_CLIENT_ID}&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20profile%20email&access_type=offline&prompt=select_account&state={state}"
     )
+    response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        max_age=600,
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
+    return response
 
 @router.get("/callback/google")
-async def callback_google(code: str, db: AsyncSession = Depends(get_db)):
+async def callback_google(request: Request, code: str, state: str | None = None, db: AsyncSession = Depends(get_db)):
+    cookie_state = request.cookies.get("oauth_state")
+    if not state or not cookie_state or not secrets.compare_digest(state, cookie_state):
+        raise HTTPException(status_code=400, detail="Invalid state parameter")
+
     token_url = "https://oauth2.googleapis.com/token"
     async with httpx.AsyncClient() as client:
         token_res = await client.post(token_url, data={
@@ -84,7 +99,16 @@ async def callback_google(code: str, db: AsyncSession = Depends(get_db)):
             await db.refresh(user)
 
         jwt_token = create_access_token(data={"sub": user.email})
-        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
+        response = RedirectResponse(url=f"{FRONTEND_URL}/auth/callback")
+        response.set_cookie(
+            key="access_token",
+            value=jwt_token,
+            httponly=True,
+            max_age=3600,
+            secure=ENVIRONMENT != "local",
+            samesite="lax",
+        )
+        return response
 
 @router.post("/register", response_model=UserResponse)
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
@@ -117,12 +141,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+async def get_current_user(request: Request, token: str | None = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+    if not token:
+        token = request.cookies.get("access_token")
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
