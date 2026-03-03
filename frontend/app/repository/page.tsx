@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { RepositoryHeader } from "./components/RepositoryHeader";
+import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
 
 export default function RepositoryPage() {
     const router = useRouter();
@@ -24,8 +25,13 @@ export default function RepositoryPage() {
         <div className="min-h-screen bg-background text-foreground">
             <RepositoryHeader />
 
-            <motion.main
-                className="flex gap-6 p-6"
+            <div className="p-6 space-y-6">
+                <div className="rounded-xl border border-foreground/[0.08] bg-white overflow-hidden">
+                    <RepositoryPageHeader />
+                </div>
+
+                <motion.main
+                    className="flex gap-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
@@ -41,7 +47,8 @@ export default function RepositoryPage() {
                         Lecteur audio & stats
                     </div>
                 </aside>
-            </motion.main>
+                </motion.main>
+            </div>
         </div>
     );
 }
