@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
 
@@ -22,7 +23,7 @@ async def create_branch(
     Create a new branch for a specific project.
     """
     # Verify the project exists and belongs to the user
-    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id))
+    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id, Project.is_deleted == False))
     project = result.scalars().first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found or you don't have access")
@@ -43,11 +44,11 @@ async def list_branches(
     List all branches for a specific project.
     """
     # Verify project access
-    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id))
+    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id, Project.is_deleted == False))
     if not result.scalars().first():
         raise HTTPException(status_code=404, detail="Project not found or you don't have access")
 
-    result_branches = await db.execute(select(Branch).where(Branch.project_id == project_id))
+    result_branches = await db.execute(select(Branch).where(Branch.project_id == project_id, Branch.is_deleted == False))
     return result_branches.scalars().all()
 
 @router.get("/branches/{branch_id}", response_model=BranchResponse)
@@ -62,7 +63,9 @@ async def get_branch(
     result = await db.execute(
         select(Branch).join(Project).where(
             Branch.id == branch_id,
-            Project.owner_id == current_user.id
+            Project.owner_id == current_user.id,
+            Branch.is_deleted == False,
+            Project.is_deleted == False
         )
     )
     branch = result.scalars().first()
@@ -83,7 +86,9 @@ async def update_branch(
     result = await db.execute(
         select(Branch).join(Project).where(
             Branch.id == branch_id,
-            Project.owner_id == current_user.id
+            Project.owner_id == current_user.id,
+            Branch.is_deleted == False,
+            Project.is_deleted == False
         )
     )
     branch = result.scalars().first()
@@ -110,12 +115,15 @@ async def delete_branch(
     result = await db.execute(
         select(Branch).join(Project).where(
             Branch.id == branch_id,
-            Project.owner_id == current_user.id
+            Project.owner_id == current_user.id,
+            Branch.is_deleted == False,
+            Project.is_deleted == False
         )
     )
     branch = result.scalars().first()
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
 
-    await db.delete(branch)
+    branch.is_deleted = True
+    branch.deleted_at = datetime.now(timezone.utc)
     await db.commit()
