@@ -55,9 +55,15 @@ export default function DashboardPage() {
                         Dashboard
                     </h1>
                     <div className="rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 p-8 backdrop-blur-xl">
-                        <p className="font-light text-foreground/70">
+                        <p className="font-light text-foreground/70 mb-6">
                             Connexion réussie ! Bienvenue dans votre nouvel espace de travail StemHub.
                         </p>
+                        <Link
+                            href="/repository"
+                            className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-white transition-colors hover:opacity-90"
+                        >
+                            Voir mon repository
+                        </Link>
                     </div>
                 </main>
             </motion.div>
