@@ -13,16 +13,13 @@ export default function DashboardPage() {
     useEffect(() => {
         const fetchUser = async () => {
             const token = localStorage.getItem("token");
-            if (!token) {
-                router.push("/login");
-                return;
-            }
 
             try {
                 const response = await fetch("http://localhost:8000/auth/me", {
-                    headers: {
+                    headers: token ? {
                         "Authorization": `Bearer ${token}`
-                    }
+                    } : {},
+                    credentials: "include"
                 });
 
                 if (!response.ok) {

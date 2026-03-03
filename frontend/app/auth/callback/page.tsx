@@ -10,10 +10,8 @@ function AuthCallbackContent() {
         const token = searchParams.get("token");
         if (token) {
             localStorage.setItem("token", token);
-            router.push("/dashboard");
-        } else {
-            router.push("/login");
         }
+        router.push("/dashboard");
     }, [router, searchParams]);
 
     return (

@@ -15,7 +15,7 @@ from .schemas import UserCreate, UserResponse, Token
 from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -99,7 +99,16 @@ async def callback_google(request: Request, code: str, state: str | None = None,
             await db.refresh(user)
 
         jwt_token = create_access_token(data={"sub": user.email})
-        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
+        response = RedirectResponse(url=f"{FRONTEND_URL}/auth/callback")
+        response.set_cookie(
+            key="access_token",
+            value=jwt_token,
+            httponly=True,
+            max_age=3600,
+            secure=ENVIRONMENT != "local",
+            samesite="lax",
+        )
+        return response
 
 @router.post("/register", response_model=UserResponse)
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
@@ -132,12 +141,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+async def get_current_user(request: Request, token: str | None = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+    if not token:
+        token = request.cookies.get("access_token")
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
