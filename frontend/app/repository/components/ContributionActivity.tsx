@@ -8,10 +8,21 @@ const PLACEHOLDER_CONTRIBUTORS = 3;
 const GRID_COLS = 26;
 const GRID_ROWS = 7;
 const CELLS = GRID_COLS * GRID_ROWS;
-const INTENSITIES = Array.from(
-    { length: CELLS },
-    (_, i) => (Math.sin(i * 0.2) * 0.5 + 0.5) * 0.9 + 0.1
-);
+
+function seeded(i: number, row: number): number {
+    const n = (i + 1) * 12.9898 + row * 78.233;
+    return ((Math.sin(n) * 43758.5453) % 1 + 1) % 1;
+}
+
+const INTENSITIES = Array.from({ length: CELLS }, (_, i) => {
+    const row = Math.floor(i / GRID_COLS);
+    const r = seeded(i, row);
+    if (r < 0.45) return 0;
+    if (r < 0.65) return 0.25;
+    if (r < 0.8) return 0.5;
+    if (r < 0.92) return 0.75;
+    return 1;
+});
 
 const LEGEND_LEVELS = [0, 0.2, 0.45, 0.7, 1];
 
