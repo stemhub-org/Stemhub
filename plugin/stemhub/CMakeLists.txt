@@ -25,7 +25,7 @@ juce_add_plugin(stemhub
     COMPANY_NAME "Stemhub"
     BUNDLE_ID "com.stemhub.session"
     IS_SYNTH FALSE
-    NEEDS_CURL FALSE
+    NEEDS_CURL TRUE
     NEEDS_WEB_BROWSER FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
@@ -42,12 +42,15 @@ juce_generate_juce_header(stemhub)
 
 target_sources(stemhub
     PRIVATE
-        Source/PluginEditor.cpp
-        Source/PluginProcessor.cpp)
+        Source/src/PluginEditor.cpp
+        Source/src/PluginProcessor.cpp
+        Source/src/DashboardView.cpp
+        Source/src/LoginView.cpp
+        Source/src/ApiClient.cpp)
 
 target_compile_definitions(stemhub
     PRIVATE
-        JUCE_USE_CURL=0
+        JUCE_USE_CURL=1
         JUCE_WEB_BROWSER=0
         JUCE_STRICT_REFCOUNTEDPOINTER=1
         JUCE_VST3_CAN_REPLACE_VST2=0)
