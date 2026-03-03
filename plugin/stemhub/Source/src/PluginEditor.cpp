@@ -1,13 +1,16 @@
 #include <map>
 
-#include "PluginProcessor.hpp"
-#include "PluginEditor.hpp"
+#include "../include/PluginEditor.hpp"
 
-template<typename Map, typename Key>
-juce::String findMappedMessage(const Map& messageMap, const Key& key, const juce::String& defaultMessage = "")
+namespace
 {
-    auto it = messageMap.find(key);
-    return (it != messageMap.end()) ? it->second : defaultMessage;
+template<typename Map, typename Key>
+juce::String findMappedMessage(const Map& messageMap,
+                               const Key& key,
+                               const juce::String& defaultMessage = {})
+{
+    const auto it = messageMap.find(key);
+    return it != messageMap.end() ? it->second : defaultMessage;
 }
 
 const std::map<AuthState, juce::String> authMessages {
@@ -28,33 +31,46 @@ const std::map<OperationState, juce::String> operationMessages {
     { OperationState::pulling, "Syncing..." },
     { OperationState::error, "An operation error occurred." },
 };
+}
+
+StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
+    : AudioProcessorEditor(&processorToEdit), audioProcessor(processorToEdit)
+{
+    setSize(600, 400);
+
+    addAndMakeVisible(loginView);
+    addAndMakeVisible(dashboardView);
+
+    loginView.onSignIn = [this] { handleSignInClick(); };
+    dashboardView.onSave = [this] { handleSaveChangesClick(); };
+    dashboardView.onSync = [this] { handleSyncClick(); };
+    dashboardView.onBranchChange = [this] { handleChangeBranchClick(); };
+    dashboardView.onSignOut = [this] { handleSignOutClick(); };
+
+    refreshSessionUi();
+}
 
 void StemhubAudioProcessorEditor::refreshSessionUi()
 {
-    refreshAuthStateLabel();
-    refreshComponentVisibility();
+    const bool isSignedIn = audioProcessor.getAuthState() == AuthState::signedIn;
+    const auto message = buildStatusMessage();
+
+    loginView.setVisible(!isSignedIn);
+    dashboardView.setVisible(isSignedIn);
+
+    if (isSignedIn)
+        dashboardView.setMessage(message);
+    else
+        loginView.setMessage(message);
+
     resized();
     repaint();
 }
 
-void StemhubAudioProcessorEditor::refreshComponentVisibility()
-{
-    const bool isSignedIn = audioProcessor.getAuthState() == AuthState::signedIn;
-
-    usernameInput.setVisible(!isSignedIn);
-    passwordInput.setVisible(!isSignedIn);
-    signInButton.setVisible(!isSignedIn);
-
-    signOutButton.setVisible(isSignedIn);
-    saveChanges.setVisible(isSignedIn);
-    syncButton.setVisible(isSignedIn);
-    changeBranch.setVisible(isSignedIn);
-}
-
 void StemhubAudioProcessorEditor::handleSignInClick()
 {
-    const auto username = usernameInput.getText().trim();
-    const auto password = passwordInput.getText();
+    const auto username = loginView.getUsername().trim();
+    const auto password = loginView.getPassword();
 
     if (username.isEmpty() || password.isEmpty())
     {
@@ -65,19 +81,18 @@ void StemhubAudioProcessorEditor::handleSignInClick()
 
     User user;
     user.id = "local-user";
-    user.email = "";
+    user.email = {};
     user.username = username;
 
     audioProcessor.signIn(std::move(user));
-    passwordInput.clear();
+    loginView.clearPassword();
     refreshSessionUi();
 }
 
 void StemhubAudioProcessorEditor::handleSignOutClick()
 {
     audioProcessor.signOut();
-    usernameInput.clear();
-    passwordInput.clear();
+    loginView.clearInputs();
     refreshSessionUi();
 }
 
@@ -102,101 +117,7 @@ void StemhubAudioProcessorEditor::handleChangeBranchClick()
     refreshSessionUi();
 }
 
-StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
-    : AudioProcessorEditor(&processorToEdit), audioProcessor(processorToEdit)
-{
-    setSize(600, 400);
-
-    addAndMakeVisible(authStateLabel);
-    authStateLabel.setJustificationType(juce::Justification::centred);
-    authStateLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    authStateLabel.setFont(juce::FontOptions(20.0f, juce::Font::bold));
-
-    addAndMakeVisible(usernameInput);
-    usernameInput.setMultiLine(false);
-    usernameInput.setTextToShowWhenEmpty("Username", juce::Colours::grey);
-
-    addAndMakeVisible(passwordInput);
-    passwordInput.setTextToShowWhenEmpty("Password", juce::Colours::grey);
-    passwordInput.setPasswordCharacter('*');
-
-    addAndMakeVisible(signInButton);
-    addAndMakeVisible(signOutButton);
-    addAndMakeVisible(saveChanges);
-    addAndMakeVisible(syncButton);
-    addAndMakeVisible(changeBranch);
-
-    signInButton.onClick = [this] { handleSignInClick(); };
-    signOutButton.onClick = [this] { handleSignOutClick(); };
-    saveChanges.onClick = [this] { handleSaveChangesClick(); };
-    syncButton.onClick = [this] { handleSyncClick(); };
-    changeBranch.onClick = [this] { handleChangeBranchClick(); };
-
-    refreshSessionUi();
-}
-
-void StemhubAudioProcessorEditor::paint(juce::Graphics& g)
-{
-    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
-}
-
-void StemhubAudioProcessorEditor::resized()
-{
-    const bool showLoginControls = audioProcessor.getAuthState() != AuthState::signedIn;
-    auto area = getLocalBounds().reduced(20);
-    const int fieldWidth = 220;
-    const int x = (getWidth() - fieldWidth) / 2;
-
-    if (showLoginControls)
-    {
-        area.removeFromTop(64);
-
-        auto usernameRow = area.removeFromTop(32);
-        usernameInput.setBounds(x, usernameRow.getY(), fieldWidth, usernameRow.getHeight());
-
-        area.removeFromTop(8);
-
-        auto passwordRow = area.removeFromTop(32);
-        passwordInput.setBounds(x, passwordRow.getY(), fieldWidth, passwordRow.getHeight());
-
-        area.removeFromTop(12);
-
-        auto buttonRow = area.removeFromTop(32);
-        signInButton.setBounds(x, buttonRow.getY(), fieldWidth, buttonRow.getHeight());
-
-        area.removeFromTop(24);
-
-        auto labelRow = area.removeFromTop(56);
-        authStateLabel.setBounds(labelRow);
-    }
-    else
-    {
-        auto labelRow = area.removeFromTop(56);
-        authStateLabel.setBounds(labelRow);
-
-        area.removeFromTop(24);
-
-        auto saveRow = area.removeFromTop(32);
-        saveChanges.setBounds(x, saveRow.getY(), fieldWidth, saveRow.getHeight());
-
-        area.removeFromTop(8);
-
-        auto syncRow = area.removeFromTop(32);
-        syncButton.setBounds(x, syncRow.getY(), fieldWidth, syncRow.getHeight());
-
-        area.removeFromTop(8);
-
-        auto branchRow = area.removeFromTop(32);
-        changeBranch.setBounds(x, branchRow.getY(), fieldWidth, branchRow.getHeight());
-
-        area.removeFromTop(24);
-
-        auto signOutRow = area.removeFromTop(32);
-        signOutButton.setBounds(x, signOutRow.getY(), fieldWidth, signOutRow.getHeight());
-    }
-}
-
-void StemhubAudioProcessorEditor::refreshAuthStateLabel()
+juce::String StemhubAudioProcessorEditor::buildStatusMessage() const
 {
     const auto authState = audioProcessor.getAuthState();
     const auto uiState = audioProcessor.getUIState();
@@ -215,5 +136,17 @@ void StemhubAudioProcessorEditor::refreshAuthStateLabel()
     if (!operationSuffix.isEmpty())
         message << "\n" << operationSuffix;
 
-    authStateLabel.setText(message, juce::dontSendNotification);
+    return message;
+}
+
+void StemhubAudioProcessorEditor::paint(juce::Graphics& g)
+{
+    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
+}
+
+void StemhubAudioProcessorEditor::resized()
+{
+    const auto area = getLocalBounds();
+    loginView.setBounds(area);
+    dashboardView.setBounds(area);
 }

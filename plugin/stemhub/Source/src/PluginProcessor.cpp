@@ -1,5 +1,5 @@
-#include "PluginProcessor.hpp"
-#include "PluginEditor.hpp"
+#include "../include/PluginProcessor.hpp"
+#include "../include/PluginEditor.hpp"
 
 StemhubAudioProcessor::StemhubAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
