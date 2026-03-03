@@ -6,6 +6,9 @@ import { motion } from "framer-motion";
 import { RepositoryHeader } from "./components/RepositoryHeader";
 import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
 import { RepositoryFileList } from "./components/RepositoryFileList";
+import { RepositoryAudioPlayer } from "./components/RepositoryAudioPlayer";
+import { ContributionActivity } from "./components/ContributionActivity";
+import { TopContributors } from "./components/TopContributors";
 
 export default function RepositoryPage() {
     const router = useRouter();
@@ -32,18 +35,24 @@ export default function RepositoryPage() {
                 </div>
 
                 <motion.main
-                    className="flex gap-6"
+                    className="flex items-start gap-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
             >
-                <section className="min-w-0 flex-1 rounded-xl border border-foreground/[0.08] bg-white overflow-hidden">
+                <section className="min-w-0 flex-1 self-start rounded-xl border border-foreground/[0.08] bg-white overflow-hidden">
                     <RepositoryFileList />
                 </section>
 
                 <aside className="w-[28rem] shrink-0 flex flex-col gap-6">
-                    <div className="rounded-xl border border-foreground/[0.08] bg-white p-6 min-h-[280px] flex items-center justify-center text-foreground/70">
-                        Lecteur audio & stats
+                    <div className="rounded-xl border border-foreground/[0.08] bg-white p-6 overflow-hidden">
+                        <RepositoryAudioPlayer />
+                    </div>
+                    <div className="rounded-xl border border-foreground/[0.08] bg-white p-6 overflow-hidden">
+                        <ContributionActivity />
+                    </div>
+                    <div className="rounded-xl border border-foreground/[0.08] bg-white p-6 overflow-hidden">
+                        <TopContributors />
                     </div>
                 </aside>
                 </motion.main>
