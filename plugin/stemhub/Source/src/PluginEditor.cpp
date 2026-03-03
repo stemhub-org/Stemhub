@@ -71,10 +71,12 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
     loginView.setVisible(!isSignedIn);
     dashboardView.setVisible(isSignedIn);
 
-    if (isSignedIn)
+    if (isSignedIn) {
         dashboardView.setMessage(message);
-    else
+        dashboardView.setProjectStatusMessage(audioProcessor.getProjectStatusMessage());
+    } else {
         loginView.setMessage(message);
+    }
 
     resized();
     repaint();
