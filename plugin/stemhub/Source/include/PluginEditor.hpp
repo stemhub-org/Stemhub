@@ -4,16 +4,18 @@
 #include "PluginProcessor.hpp"
 #include "Views.hpp"
 
-class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor
+class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor,
+                                    private juce::ChangeListener
 {
 public:
     explicit StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit);
-    ~StemhubAudioProcessorEditor() override = default;
+    ~StemhubAudioProcessorEditor() override;
 
     void paint(juce::Graphics&) override;
     void resized() override;
 
 private:
+    void changeListenerCallback(juce::ChangeBroadcaster* source) override;
     void refreshSessionUi();
     void handleSignInClick();
     void handleSignOutClick();

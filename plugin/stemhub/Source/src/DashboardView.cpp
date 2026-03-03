@@ -7,6 +7,11 @@ DashboardView::DashboardView()
     statusLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     statusLabel.setFont(juce::FontOptions(20.0f, juce::Font::bold));
 
+    addAndMakeVisible(projectStatusLabel);
+    projectStatusLabel.setJustificationType(juce::Justification::centredLeft);
+    projectStatusLabel.setColour(juce::Label::textColourId, juce::Colours::yellowgreen);
+    projectStatusLabel.setFont(juce::FontOptions(16.0f, juce::Font::plain));
+
     addAndMakeVisible(saveChanges);
     saveChanges.onClick = [this]
     {
@@ -46,6 +51,11 @@ void DashboardView::resized()
     statusLabel.setBounds(labelRow);
 
     area.removeFromTop(24);
+
+    auto projectStatusRow = area.removeFromTop(32);
+    projectStatusLabel.setBounds(x, projectStatusRow.getY(), fieldWidth, projectStatusRow.getHeight());
+
+    area.removeFromTop(8);
 
     auto saveRow = area.removeFromTop(32);
     saveChanges.setBounds(x, saveRow.getY(), fieldWidth, saveRow.getHeight());

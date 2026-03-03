@@ -34,6 +34,7 @@ public:
     DashboardView();
 
     void setMessage(const juce::String& message) { statusLabel.setText(message, juce::dontSendNotification); }
+    void setProjectStatusMessage(const juce::String& message) { projectStatusLabel.setText(message, juce::dontSendNotification); }
     void resized() override;
 
     std::function<void()> onSave;
@@ -43,6 +44,7 @@ public:
 
 private:
     juce::Label statusLabel;
+    juce::Label projectStatusLabel;
     juce::TextButton saveChanges { "Save" };
     juce::TextButton syncButton { "Sync" };
     juce::TextButton changeBranch { "View Other Branches" };
