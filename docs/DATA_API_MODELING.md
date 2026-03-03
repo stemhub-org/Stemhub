@@ -80,12 +80,25 @@ Secure access using OAuth2 / JWT.
 | :--- | :--- | :--- |
 | `/auth/register` | `POST` | Create a new account. |
 | `/auth/login` | `POST` | Get JWT tokens. |
+| `/auth/me` | `GET` | Get the authenticated user profile. |
 
 **Example Request (`POST /auth/login`):**
 ```json
 {
   "email": "user@example.com",
   "password": "secure_password"
+}
+```
+
+**Example Response (`GET /auth/me`):**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "user@example.com",
+  "username": "ProducerX",
+  "avatar_url": null,
+  "created_at": "2026-03-03T10:00:00Z",
+  "is_active": true
 }
 ```
 
