@@ -18,7 +18,18 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = "http://localhost:8000/auth/callback/google"
+
+ENVIRONMENT = os.getenv("ENVIRONMENT", "local").lower()
+
+def ensure_https(url: str) -> str:
+    """Ensure HTTPS in non-local environments."""
+    if ENVIRONMENT != "local" and url.startswith("http://"):
+        return url.replace("http://", "https://", 1)
+    return url
+
+BACKEND_URL = ensure_https(os.getenv("BACKEND_URL", "http://localhost:8000"))
+FRONTEND_URL = ensure_https(os.getenv("FRONTEND_URL", "http://localhost:3000"))
+GOOGLE_REDIRECT_URI = ensure_https(os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_URL}/auth/callback/google"))
 
 @router.get("/login/google")
 async def login_google():
@@ -73,7 +84,7 @@ async def callback_google(code: str, db: AsyncSession = Depends(get_db)):
             await db.refresh(user)
 
         jwt_token = create_access_token(data={"sub": user.email})
-        return RedirectResponse(url=f"http://localhost:3000/auth/callback?token={jwt_token}")
+        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
 
 @router.post("/register", response_model=UserResponse)
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
