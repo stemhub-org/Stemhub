@@ -1,4 +1,8 @@
 #pragma once
+
+#include <optional>
+#include <vector>
+
 #include <JuceHeader.h>
 
 struct ApiError
