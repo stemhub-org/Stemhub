@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { RepositoryHeader } from "./components/RepositoryHeader";
 import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
+import { RepositoryBranchBar } from "./components/RepositoryBranchBar";
 import { RepositoryFileList } from "./components/RepositoryFileList";
 import { RepositoryAudioPlayer } from "./components/RepositoryAudioPlayer";
 import { ContributionActivity } from "./components/ContributionActivity";
@@ -32,6 +33,10 @@ export default function RepositoryPage() {
             <div className="p-6 space-y-6">
                 <div className="rounded-xl border border-foreground/[0.08] bg-white overflow-hidden">
                     <RepositoryPageHeader />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4">
+                    <RepositoryBranchBar />
                 </div>
 
                 <motion.main
