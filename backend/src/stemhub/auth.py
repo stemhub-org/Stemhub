@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse
 
 from .database import get_db
 from .models import User
-from .schemas import UserCreate, UserResponse, Token
+from .schemas import LoginRequest, UserCreate, UserResponse, Token
 from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -128,10 +128,10 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     return db_user
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == form_data.username))
+async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == credentials.email))
     user = result.scalars().first()
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
