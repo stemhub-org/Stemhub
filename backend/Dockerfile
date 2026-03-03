@@ -12,7 +12,7 @@ COPY src/ ./src/
 COPY alembic.ini ./
 COPY alembic/ ./alembic/
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir -e .
 
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
