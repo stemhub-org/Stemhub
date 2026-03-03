@@ -60,7 +60,7 @@ function ItemIcon({ type }: { type: RepositoryItem["type"] }) {
 
 export function RepositoryFileList() {
     return (
-        <div className="min-h-[400px]">
+        <div>
             <div className="border-b border-foreground/[0.08] bg-foreground/[0.02] px-6 py-3">
                 <div className="grid grid-cols-[1fr_2fr_auto] gap-4 text-xs font-medium uppercase tracking-wide text-foreground/60">
                     <span>Name</span>
