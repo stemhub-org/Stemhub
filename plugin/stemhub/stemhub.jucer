@@ -14,11 +14,19 @@
               splashScreenColour="Dark">
   <MAINGROUP id="mainGroup001" name="stemhub">
     <GROUP id="srcGroup001" name="Source">
-      <FILE id="f001" name="PluginProcessor.h" compile="0" resource="0" file="Source/PluginProcessor.h"/>
-      <FILE id="f002" name="PluginProcessor.cpp" compile="1" resource="0"
-            file="Source/PluginProcessor.cpp"/>
-      <FILE id="f003" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
-      <FILE id="f004" name="PluginEditor.cpp" compile="1" resource="0" file="Source/PluginEditor.cpp"/>
+      <GROUP id="srcGroupInclude001" name="include">
+        <FILE id="f001" name="PluginProcessor.hpp" compile="0" resource="0" file="Source/include/PluginProcessor.hpp"/>
+        <FILE id="f003" name="PluginEditor.hpp" compile="0" resource="0" file="Source/include/PluginEditor.hpp"/>
+        <FILE id="f005" name="States.hpp" compile="0" resource="0" file="Source/include/States.hpp"/>
+        <FILE id="f006" name="User.hpp" compile="0" resource="0" file="Source/include/User.hpp"/>
+        <FILE id="f007" name="Views.hpp" compile="0" resource="0" file="Source/include/Views.hpp"/>
+      </GROUP>
+      <GROUP id="srcGroupSource001" name="src">
+        <FILE id="f002" name="PluginProcessor.cpp" compile="1" resource="0"
+              file="Source/src/PluginProcessor.cpp"/>
+        <FILE id="f004" name="PluginEditor.cpp" compile="1" resource="0" file="Source/src/PluginEditor.cpp"/>
+        <FILE id="f008" name="Views.cpp" compile="1" resource="0" file="Source/src/Views.cpp"/>
+      </GROUP>
     </GROUP>
   </MAINGROUP>
   <EXPORTFORMATS>
