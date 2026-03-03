@@ -46,6 +46,8 @@ class ProjectResponse(ProjectBase):
     id: UUID
     owner_id: UUID
     created_at: datetime
+    is_deleted: bool
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -65,6 +67,8 @@ class BranchResponse(BranchBase):
     id: UUID
     project_id: UUID
     created_at: datetime
+    is_deleted: bool
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -87,6 +91,8 @@ class VersionResponse(VersionBase):
     id: UUID
     branch_id: UUID
     created_at: datetime
+    is_deleted: bool
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -32,6 +32,8 @@ class Project(Base):
     category = Column(String(100), default="General")
     is_public = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # ── Relationships ──
     owner = relationship("User", back_populates="projects")
@@ -58,6 +60,8 @@ class Branch(Base):
     project_id = Column(UUID(as_uuid=True), ForeignKey("project.id"), nullable=False)
     name = Column(String(255), nullable=False)  # e.g. main, feature-fast-tempo
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # ── Relationships ──
     project = relationship("Project", back_populates="branches")
@@ -73,6 +77,8 @@ class Version(Base):
     commit_message = Column(String(500), nullable=True)
     storage_path = Column(String, nullable=True)  # .als, .flp pointer
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # ── Relationships ──
     branch = relationship("Branch", back_populates="versions")
