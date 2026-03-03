@@ -1,17 +1,23 @@
 #pragma once
 
+#include <atomic>
 #include <JuceHeader.h>
+#include <mutex>
 #include <optional>
+#include <vector>
 #include "User.hpp"
+#include "Project.hpp"
 #include "States.hpp"
 #include "ApiUtils.hpp"
 #include "ApiClient.hpp"
 
-class StemhubAudioProcessor : public juce::AudioProcessor
+class StemhubAudioProcessor : public juce::AudioProcessor,
+                              public juce::ChangeBroadcaster,
+                              private juce::AsyncUpdater
 {
 public:
     StemhubAudioProcessor();
-    ~StemhubAudioProcessor() override = default;
+    ~StemhubAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -49,6 +55,9 @@ public:
     [[nodiscard]] UIState getUIState() const noexcept { return sessionState.uiState; }
     [[nodiscard]] OperationState getOperationState() const noexcept { return sessionState.operationState; }
     [[nodiscard]] const std::optional<User>& getCurrentUser() const noexcept { return currentUser; }
+    [[nodiscard]] const std::vector<Project>& getProjects() const noexcept { return projects; }
+    [[nodiscard]] const juce::String& getAuthErrorMessage() const noexcept { return authErrorMessage; }
+    [[nodiscard]] const juce::String& getProjectStatusMessage() const noexcept { return projectStatusMessage; }
 
     void setCurrentUser(std::optional<User> newUser) noexcept { currentUser = std::move(newUser); }
     void signIn(User newUser) noexcept;
@@ -63,10 +72,29 @@ public:
     void requestSignIn(const juce::String& email, const juce::String& password);
 
 private:
+    void handleAsyncUpdate() override;
+
+    struct AuthRequestResult
+    {
+        uint64_t requestId {};
+        std::optional<User> user;
+        std::vector<Project> projects;
+        juce::String token;
+        juce::String authErrorMessage;
+        juce::String projectStatusMessage;
+    };
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
     ApiClient apiClient;
     juce::String access_tkn;
+    juce::String authErrorMessage;
+    juce::String projectStatusMessage;
     std::optional<User> currentUser;
+    std::vector<Project> projects;
     SessionState sessionState;
+    std::mutex authResultMutex;
+    std::optional<AuthRequestResult> pendingAuthResult;
+    std::atomic<uint64_t> authRequestGeneration { 0 };
+    juce::ThreadPool backgroundJobs { 1 };
 };

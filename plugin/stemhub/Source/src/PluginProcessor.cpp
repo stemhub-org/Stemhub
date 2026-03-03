@@ -15,6 +15,12 @@ StemhubAudioProcessor::StemhubAudioProcessor()
 {
 }
 
+StemhubAudioProcessor::~StemhubAudioProcessor()
+{
+    cancelPendingUpdate();
+    backgroundJobs.removeAllJobs(true, 2000);
+}
+
 void StemhubAudioProcessor::signIn(User newUser) noexcept
 {
     currentUser = std::move(newUser);
@@ -25,9 +31,14 @@ void StemhubAudioProcessor::signIn(User newUser) noexcept
 
 void StemhubAudioProcessor::signOut() noexcept
 {
+    ++authRequestGeneration;
     currentUser.reset();
     access_tkn.clear();
+    authErrorMessage.clear();
+    projectStatusMessage.clear();
+    projects.clear();
     sessionState = {};
+    sendChangeMessage();
 }
 
 void StemhubAudioProcessor::setAuthState(AuthState newAuthState) noexcept
@@ -55,26 +66,96 @@ void StemhubAudioProcessor::setOperationState(OperationState newOperationState) 
 
 void StemhubAudioProcessor::requestSignIn(const juce::String& email, const juce::String& password)
 {
+    if (sessionState.authState == AuthState::signingIn)
+        return;
+
+    const auto requestId = ++authRequestGeneration;
     setAuthState(AuthState::signingIn);
-    auto loginResult = apiClient.login(email, password);
+    authErrorMessage.clear();
+    projectStatusMessage.clear();
+    projects.clear();
+    sendChangeMessage();
 
-    if (!loginResult.ok())
+    backgroundJobs.addJob([this, email, password, requestId]
     {
+        AuthRequestResult result;
+        result.requestId = requestId;
+
+        auto loginResult = apiClient.login(email, password);
+        if (!loginResult.ok())
+        {
+            result.authErrorMessage = loginResult.error ? loginResult.error->message
+                                                        : "Failed to sign in.";
+        }
+        else
+        {
+            const auto token = loginResult.value->accessToken;
+            auto userResult = apiClient.fetchCurrentUser(token);
+
+            if (!userResult.ok() || !userResult.value->isValid())
+            {
+                result.authErrorMessage = userResult.error ? userResult.error->message
+                                                           : "Failed to load your user profile.";
+            }
+            else
+            {
+                result.token = token;
+                result.user = std::move(userResult.value);
+
+                auto projectsResult = apiClient.fetchProjects(token);
+                if (projectsResult.ok())
+                {
+                    result.projects = std::move(*projectsResult.value);
+                    result.projectStatusMessage = result.projects.empty() ? "No projects found."
+                                                                          : "Loaded " + juce::String(static_cast<int>(result.projects.size())) + " project(s).";
+                }
+                else
+                {
+                    result.projectStatusMessage = projectsResult.error ? projectsResult.error->message
+                                                                       : "Failed to load projects.";
+                }
+            }
+        }
+
+        {
+            const std::lock_guard<std::mutex> lock(authResultMutex);
+            pendingAuthResult = std::move(result);
+        }
+
+        triggerAsyncUpdate();
+    });
+}
+
+void StemhubAudioProcessor::handleAsyncUpdate()
+{
+    std::optional<AuthRequestResult> result;
+
+    {
+        const std::lock_guard<std::mutex> lock(authResultMutex);
+        result = std::move(pendingAuthResult);
+        pendingAuthResult.reset();
+    }
+
+    if (!result.has_value())
+        return;
+
+    if (result->requestId != authRequestGeneration.load())
+        return;
+
+    if (result->authErrorMessage.isNotEmpty())
+    {
+        authErrorMessage = result->authErrorMessage;
         setAuthState(AuthState::authError);
+        sendChangeMessage();
         return;
     }
 
-    auto accessToken = loginResult.value->accessToken;
-    auto userResult = apiClient.fetchCurrentUser(accessToken);
-
-    if (!userResult.ok() || !userResult.value->isValid())
-    {
-        setAuthState(AuthState::authError);
-        return;
-    }
-
-    signIn(std::move(userResult.value).value());
-    access_tkn = std::move(accessToken);
+    authErrorMessage.clear();
+    projectStatusMessage = result->projectStatusMessage;
+    projects = std::move(result->projects);
+    access_tkn = std::move(result->token);
+    signIn(std::move(*result->user));
+    sendChangeMessage();
 }
 
 const juce::String StemhubAudioProcessor::getName() const
