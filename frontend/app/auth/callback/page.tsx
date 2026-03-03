@@ -7,12 +7,8 @@ function AuthCallbackContent() {
     const searchParams = useSearchParams();
 
     useEffect(() => {
-        const token = searchParams.get("token");
-        if (token) {
-            localStorage.setItem("token", token);
-        }
         router.push("/dashboard");
-    }, [router, searchParams]);
+    }, [router]);
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-background px-6">
