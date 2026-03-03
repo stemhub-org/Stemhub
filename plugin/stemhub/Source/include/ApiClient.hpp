@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "User.hpp"
+#include "Project.hpp"
 #include "ApiUtils.hpp"
 
 class ApiClient
@@ -16,6 +17,7 @@ class ApiClient
 
         ApiResult<LoginResponse> login(const juce::String& email, const juce::String& password) const;
         ApiResult<User> fetchCurrentUser(const juce::String& accessToken) const;
+        ApiResult<std::vector<Project>> fetchProjects(const juce::String& accessToken) const;
     private:
         juce::String baseUrl;
 };

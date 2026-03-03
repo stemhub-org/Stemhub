@@ -38,6 +38,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     : AudioProcessorEditor(&processorToEdit), audioProcessor(processorToEdit)
 {
     setSize(600, 400);
+    audioProcessor.addChangeListener(this);
 
     addAndMakeVisible(loginView);
     addAndMakeVisible(dashboardView);
@@ -49,6 +50,17 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     dashboardView.onSignOut = [this] { handleSignOutClick(); };
 
     refreshSessionUi();
+}
+
+StemhubAudioProcessorEditor::~StemhubAudioProcessorEditor()
+{
+    audioProcessor.removeChangeListener(this);
+}
+
+void StemhubAudioProcessorEditor::changeListenerCallback(juce::ChangeBroadcaster* source)
+{
+    if (source == &audioProcessor)
+        refreshSessionUi();
 }
 
 void StemhubAudioProcessorEditor::refreshSessionUi()
@@ -119,9 +131,16 @@ juce::String StemhubAudioProcessorEditor::buildStatusMessage() const
     juce::String message;
 
     if (authState == AuthState::signedIn && uiState == UIState::dashboard)
+    {
         message = "Welcome back " + audioProcessor.getUsername() + "!";
+
+        if (audioProcessor.getProjectStatusMessage().isNotEmpty())
+            message << "\n" << audioProcessor.getProjectStatusMessage();
+    }
     else if (authState == AuthState::signedIn)
         message = findMappedMessage(signedInMessages, uiState, "Welcome back " + audioProcessor.getUsername() + "!");
+    else if (authState == AuthState::authError && audioProcessor.getAuthErrorMessage().isNotEmpty())
+        message = audioProcessor.getAuthErrorMessage();
     else
         message = findMappedMessage(authMessages, authState);
 
