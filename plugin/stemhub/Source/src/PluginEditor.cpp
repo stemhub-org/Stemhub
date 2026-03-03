@@ -14,6 +14,7 @@ juce::String findMappedMessage(const Map& messageMap,
 }
 
 const std::map<AuthState, juce::String> authMessages {
+    { AuthState::signingIn, "Signing in..." },
     { AuthState::signedOut, "Please sign in to your Stemhub account to access your projects." },
     { AuthState::authError, "An error occurred during authentication. Please try again." },
 };
@@ -74,18 +75,10 @@ void StemhubAudioProcessorEditor::handleSignInClick()
 
     if (email.isEmpty() || password.isEmpty())
     {
-        audioProcessor.setAuthState(AuthState::authError);
-        refreshSessionUi();
+        loginView.setMessage("Please enter both email and password.");
         return;
     }
-
-    User user;
-    user.id = "local-user";
-    user.email = email;
-    user.username = email;
-
-    audioProcessor.signIn(std::move(user));
-    loginView.clearPassword();
+    audioProcessor.requestSignIn(email, password);
     refreshSessionUi();
 }
 
