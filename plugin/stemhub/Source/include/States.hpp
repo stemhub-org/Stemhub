@@ -3,6 +3,7 @@
 enum class AuthState
 {
     signedOut,
+    signingIn,
     signedIn,
     authError
 };
