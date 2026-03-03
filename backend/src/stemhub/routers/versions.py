@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -25,7 +26,9 @@ async def create_version(
     result = await db.execute(
         select(Branch).join(Project).where(
             Branch.id == branch_id,
-            Project.owner_id == current_user.id
+            Project.owner_id == current_user.id,
+            Branch.is_deleted == False,
+            Project.is_deleted == False
         )
     )
     branch = result.scalars().first()
@@ -51,13 +54,15 @@ async def list_versions(
     result = await db.execute(
         select(Branch).join(Project).where(
             Branch.id == branch_id,
-            Project.owner_id == current_user.id
+            Project.owner_id == current_user.id,
+            Branch.is_deleted == False,
+            Project.is_deleted == False
         )
     )
     if not result.scalars().first():
         raise HTTPException(status_code=404, detail="Branch not found or you don't have access")
 
-    result_versions = await db.execute(select(Version).where(Version.branch_id == branch_id))
+    result_versions = await db.execute(select(Version).where(Version.branch_id == branch_id, Version.is_deleted == False))
     return result_versions.scalars().all()
 
 @router.get("/versions/{version_id}", response_model=VersionResponse)
@@ -72,7 +77,10 @@ async def get_version(
     result = await db.execute(
         select(Version).join(Branch).join(Project).where(
             Version.id == version_id,
-            Project.owner_id == current_user.id
+            Project.owner_id == current_user.id,
+            Version.is_deleted == False,
+            Branch.is_deleted == False,
+            Project.is_deleted == False
         )
     )
     version = result.scalars().first()
@@ -93,7 +101,10 @@ async def update_version(
     result = await db.execute(
         select(Version).join(Branch).join(Project).where(
             Version.id == version_id,
-            Project.owner_id == current_user.id
+            Project.owner_id == current_user.id,
+            Version.is_deleted == False,
+            Branch.is_deleted == False,
+            Project.is_deleted == False
         )
     )
     version = result.scalars().first()
@@ -120,12 +131,16 @@ async def delete_version(
     result = await db.execute(
         select(Version).join(Branch).join(Project).where(
             Version.id == version_id,
-            Project.owner_id == current_user.id
+            Project.owner_id == current_user.id,
+            Version.is_deleted == False,
+            Branch.is_deleted == False,
+            Project.is_deleted == False
         )
     )
     version = result.scalars().first()
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
 
-    await db.delete(version)
+    version.is_deleted = True
+    version.deleted_at = datetime.now(timezone.utc)
     await db.commit()

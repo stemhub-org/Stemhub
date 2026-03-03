@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timezone
 from sqlalchemy.future import select
 from typing import List
 from uuid import UUID
@@ -34,7 +35,7 @@ async def list_projects(
     """
     List all projects owned by the current user.
     """
-    result = await db.execute(select(Project).where(Project.owner_id == current_user.id))
+    result = await db.execute(select(Project).where(Project.owner_id == current_user.id, Project.is_deleted == False))
     projects = result.scalars().all()
     return projects
 
@@ -47,7 +48,7 @@ async def get_project(
     """
     Get a specific project by ID.
     """
-    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id))
+    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id, Project.is_deleted == False))
     project = result.scalars().first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -63,7 +64,7 @@ async def update_project(
     """
     Update a project by ID.
     """
-    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id))
+    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id, Project.is_deleted == False))
     project = result.scalars().first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -85,10 +86,11 @@ async def delete_project(
     """
     Delete a project by ID.
     """
-    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id))
+    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id, Project.is_deleted == False))
     project = result.scalars().first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    await db.delete(project)
+    project.is_deleted = True
+    project.deleted_at = datetime.now(timezone.utc)
     await db.commit()
