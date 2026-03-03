@@ -26,6 +26,7 @@ void StemhubAudioProcessor::signIn(User newUser) noexcept
 void StemhubAudioProcessor::signOut() noexcept
 {
     currentUser.reset();
+    access_tkn.clear();
     sessionState = {};
 }
 
@@ -49,6 +50,31 @@ void StemhubAudioProcessor::setOperationState(OperationState newOperationState) 
 {
     sessionState.operationState = sessionState.authState == AuthState::signedIn ? newOperationState
                                                                                 : OperationState::idle;
+}
+
+
+void StemhubAudioProcessor::requestSignIn(const juce::String& email, const juce::String& password)
+{
+    setAuthState(AuthState::signingIn);
+    auto loginResult = apiClient.login(email, password);
+
+    if (!loginResult.ok())
+    {
+        setAuthState(AuthState::authError);
+        return;
+    }
+
+    auto accessToken = loginResult.value->accessToken;
+    auto userResult = apiClient.fetchCurrentUser(accessToken);
+
+    if (!userResult.ok() || !userResult.value->isValid())
+    {
+        setAuthState(AuthState::authError);
+        return;
+    }
+
+    signIn(std::move(userResult.value).value());
+    access_tkn = std::move(accessToken);
 }
 
 const juce::String StemhubAudioProcessor::getName() const

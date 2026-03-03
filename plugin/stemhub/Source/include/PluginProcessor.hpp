@@ -4,6 +4,8 @@
 #include <optional>
 #include "User.hpp"
 #include "States.hpp"
+#include "ApiUtils.hpp"
+#include "ApiClient.hpp"
 
 class StemhubAudioProcessor : public juce::AudioProcessor
 {
@@ -41,6 +43,7 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+    // CUSTOM METHODS
     [[nodiscard]] const SessionState& getSessionState() const noexcept { return sessionState; }
     [[nodiscard]] AuthState getAuthState() const noexcept { return sessionState.authState; }
     [[nodiscard]] UIState getUIState() const noexcept { return sessionState.uiState; }
@@ -51,18 +54,19 @@ public:
     void signIn(User newUser) noexcept;
     void signOut() noexcept;
 
-    [[nodiscard]] juce::String getUsername() const noexcept
-    {
-        return currentUser ? currentUser->username : juce::String();
-    }
+    [[nodiscard]] juce::String getUsername() const noexcept { return currentUser ? currentUser->username : juce::String();}
 
     void setAuthState(AuthState newAuthState) noexcept;
     void setUIState(UIState newUIState) noexcept;
     void setOperationState(OperationState newOperationState) noexcept;
 
+    void requestSignIn(const juce::String& email, const juce::String& password);
+
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
+    ApiClient apiClient;
+    juce::String access_tkn;
     std::optional<User> currentUser;
     SessionState sessionState;
 };
