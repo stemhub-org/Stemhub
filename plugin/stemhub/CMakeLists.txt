@@ -42,8 +42,10 @@ juce_generate_juce_header(stemhub)
 
 target_sources(stemhub
     PRIVATE
-        Source/PluginEditor.cpp
-        Source/PluginProcessor.cpp)
+        Source/src/PluginEditor.cpp
+        Source/src/PluginProcessor.cpp
+        Source/src/DashboardView.cpp
+        Source/src/LoginView.cpp)
 
 target_compile_definitions(stemhub
     PRIVATE
