@@ -3,6 +3,10 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import jwt
+import os
+import httpx
+import urllib.parse
+from fastapi.responses import RedirectResponse
 
 from .database import get_db
 from .models import User
@@ -11,6 +15,65 @@ from .security import get_password_hash, verify_password, create_access_token, S
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = "http://localhost:8000/auth/callback/google"
+
+@router.get("/login/google")
+async def login_google():
+    return RedirectResponse(
+        url=f"https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id={GOOGLE_CLIENT_ID}&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20profile%20email&access_type=offline&prompt=select_account"
+    )
+
+@router.get("/callback/google")
+async def callback_google(code: str, db: AsyncSession = Depends(get_db)):
+    token_url = "https://oauth2.googleapis.com/token"
+    async with httpx.AsyncClient() as client:
+        token_res = await client.post(token_url, data={
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": GOOGLE_REDIRECT_URI
+        })
+        token_data = token_res.json()
+        access_token = token_data.get("access_token")
+
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Failed to get access token from Google")
+
+        user_info_res = await client.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
+        user_info = user_info_res.json()
+        email = user_info.get("email")
+        name = user_info.get("name")
+        avatar_url = user_info.get("picture")
+
+        if not email:
+            raise HTTPException(status_code=400, detail="Failed to get email from Google")
+
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalars().first()
+
+        if not user:
+            base_username = name.replace(" ", "").lower() if name else email.split("@")[0]
+            username = base_username
+            counter = 1
+            while True:
+                existing = await db.execute(select(User).where(User.username == username))
+                if not existing.scalars().first():
+                    break
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            password_hash = get_password_hash(urllib.parse.quote(email) + "oauth_dummy")
+            user = User(email=email, username=username, password_hash=password_hash, avatar_url=avatar_url)
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+
+        jwt_token = create_access_token(data={"sub": user.email})
+        return RedirectResponse(url=f"http://localhost:3000/auth/callback?token={jwt_token}")
 
 @router.post("/register", response_model=UserResponse)
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
@@ -62,3 +125,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     if user is None:
         raise credentials_exception
     return user
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
