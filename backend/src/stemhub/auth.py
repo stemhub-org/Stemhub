@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -6,6 +6,7 @@ import jwt
 import os
 import httpx
 import urllib.parse
+import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
@@ -33,12 +34,26 @@ GOOGLE_REDIRECT_URI = ensure_https(os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_U
 
 @router.get("/login/google")
 async def login_google():
-    return RedirectResponse(
-        url=f"https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id={GOOGLE_CLIENT_ID}&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20profile%20email&access_type=offline&prompt=select_account"
+    state = secrets.token_urlsafe(32)
+    response = RedirectResponse(
+        url=f"https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id={GOOGLE_CLIENT_ID}&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20profile%20email&access_type=offline&prompt=select_account&state={state}"
     )
+    response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        max_age=600,
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
+    return response
 
 @router.get("/callback/google")
-async def callback_google(code: str, db: AsyncSession = Depends(get_db)):
+async def callback_google(request: Request, code: str, state: str | None = None, db: AsyncSession = Depends(get_db)):
+    cookie_state = request.cookies.get("oauth_state")
+    if not state or not cookie_state or not secrets.compare_digest(state, cookie_state):
+        raise HTTPException(status_code=400, detail="Invalid state parameter")
+
     token_url = "https://oauth2.googleapis.com/token"
     async with httpx.AsyncClient() as client:
         token_res = await client.post(token_url, data={
