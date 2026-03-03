@@ -9,12 +9,12 @@ class LoginView : public juce::Component
 public:
     LoginView();
 
-    juce::String getUsername() const noexcept { return usernameInput.getText(); }
+    juce::String getEmail() const noexcept { return emailInput.getText(); }
     juce::String getPassword() const noexcept { return passwordInput.getText(); }
 
-    void clearUsername() { usernameInput.clear(); }
+    void clearEmail() { emailInput.clear(); }
     void clearPassword() { passwordInput.clear(); }
-    void clearInputs() { clearUsername(); clearPassword(); }
+    void clearInputs() { clearEmail(); clearPassword(); }
 
     void setMessage(const juce::String& message) { authStateLabel.setText(message, juce::dontSendNotification); }
     void resized() override;
@@ -22,7 +22,7 @@ public:
     std::function<void()> onSignIn;
 
 private:
-    juce::TextEditor usernameInput;
+    juce::TextEditor emailInput;
     juce::TextEditor passwordInput;
     juce::Label authStateLabel;
     juce::TextButton signInButton { "Sign In" };

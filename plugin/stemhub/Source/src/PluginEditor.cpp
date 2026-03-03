@@ -69,10 +69,10 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
 
 void StemhubAudioProcessorEditor::handleSignInClick()
 {
-    const auto username = loginView.getUsername().trim();
+    const auto email = loginView.getEmail().trim();
     const auto password = loginView.getPassword();
 
-    if (username.isEmpty() || password.isEmpty())
+    if (email.isEmpty() || password.isEmpty())
     {
         audioProcessor.setAuthState(AuthState::authError);
         refreshSessionUi();
@@ -81,8 +81,8 @@ void StemhubAudioProcessorEditor::handleSignInClick()
 
     User user;
     user.id = "local-user";
-    user.email = {};
-    user.username = username;
+    user.email = email;
+    user.username = email;
 
     audioProcessor.signIn(std::move(user));
     loginView.clearPassword();
