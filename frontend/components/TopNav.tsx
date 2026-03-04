@@ -22,7 +22,7 @@ export default function TopNav() {
             <div className="flex items-center gap-4 ml-6">
                 <button className="relative p-2 rounded-full hover:bg-foreground/5 text-foreground/70 hover:text-foreground transition-colors">
                     <Bell size={20} />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent border-2 border-background"></span>
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent-blue border-2 border-background"></span>
                 </button>
 
                 <div className="h-8 w-px bg-foreground/10 mx-2"></div>
@@ -37,7 +37,8 @@ export default function TopNav() {
                             localStorage.removeItem("token");
                             router.push("/login");
                         }}
-                        className="h-10 w-10 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
+                        className="h-10 w-10 rounded-full flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
+                        style={{ background: "linear-gradient(to top right, #3E63DD, #6B8CEE)" }}
                         title="Sign out"
                     >
                         <User size={18} />
