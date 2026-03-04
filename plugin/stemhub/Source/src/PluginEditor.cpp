@@ -106,7 +106,38 @@ void StemhubAudioProcessorEditor::handleSignOutClick()
 void StemhubAudioProcessorEditor::handleSaveChangesClick()
 {
     audioProcessor.setUIState(UIState::commit);
-    audioProcessor.setOperationState(OperationState::idle);
+    audioProcessor.setOperationState(OperationState::committing);
+    refreshSessionUi();
+
+    auto& versionControl = audioProcessor.getVersionControlService();
+
+    ProjectVersionContext context;
+    context.projectId = "project-id";
+    context.branchId = "branch-id";
+    context.lastVersionId = versionControl.getLastVersionId();
+    versionControl.setCurrentProjectContext(context);
+
+    PushVersionRequest request;
+    request.branchId = context.branchId;
+    request.localProjectFile = juce::File("/absolute/path/to/project.flp");
+    request.commitMessage = "Save from plugin";
+    request.dawName = "FL Studio";
+
+    const auto result = versionControl.pushVersion(request);
+
+    if (result.wasOk())
+    {
+        audioProcessor.setOperationState(OperationState::idle);
+        dashboardView.setMessage("Version pushed successfully.");
+    }
+    else
+    {
+        audioProcessor.setOperationState(OperationState::error);
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Push failed",
+            result.getErrorMessage());
+    }
     refreshSessionUi();
 }
 
