@@ -12,10 +12,7 @@ enum class UIState
 {
     login,
     projectSelection,
-    dashboard,
-    commit,
-    history,
-    settings
+    dashboard
 };
 
 enum class OperationState

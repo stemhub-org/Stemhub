@@ -25,8 +25,6 @@ private:
     void handleSaveChangesClick();
     void handleSyncClick();
     void handleChangeBranchClick();
-
-    juce::String buildStatusMessage() const;
     LoginView loginView;
     ProjectSelectionView projectSelectionView;
     DashboardView dashboardView;

@@ -81,13 +81,13 @@ StemhubAudioProcessor::AuthRequestResult StemhubAudioProcessor::performSignInReq
     if (projectsResult.ok())
     {
         result.projects = std::move(*projectsResult.value);
-        result.projectStatusMessage = result.projects.empty()
+        result.projectSelectionStatusMessage = result.projects.empty()
             ? "No projects found."
             : "Loaded " + juce::String(static_cast<int>(result.projects.size())) + " project(s).";
     }
     else
     {
-        result.projectStatusMessage = projectsResult.error ? projectsResult.error->message
+        result.projectSelectionStatusMessage = projectsResult.error ? projectsResult.error->message
                                                            : "Failed to load projects.";
     }
 
@@ -144,7 +144,7 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     result.selectedProject = *projectIt;
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
-    result.projectStatusMessage = "Project ready.";
+    result.activeProjectStatusMessage = "Project ready.";
     return result;
 }
 
@@ -196,7 +196,7 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     result.selectedProject = *createdProject.value;
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
-    result.projectStatusMessage = "Project created and main branch selected.";
+    result.activeProjectStatusMessage = "Project created and main branch selected.";
     return result;
 }
 
@@ -241,7 +241,7 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     }
 
     result.pushedVersionId = versionControlService.getLastVersionId();
-    result.projectStatusMessage = "Version pushed successfully.";
+    result.activeProjectStatusMessage = "Version pushed successfully.";
     return result;
 }
 
@@ -255,7 +255,8 @@ void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
     }
 
     authErrorMessage.clear();
-    projectStatusMessage = std::move(result.projectStatusMessage);
+    projectSelectionStatusMessage = std::move(result.projectSelectionStatusMessage);
+    activeProjectStatusMessage.clear();
     projects = std::move(result.projects);
     access_tkn = std::move(result.token);
     versionControlService.setAccessToken(access_tkn);
@@ -267,7 +268,7 @@ void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobRes
     if (hasError(result))
     {
         setOperationState(OperationState::error);
-        projectStatusMessage = result.errorMessage;
+        projectSelectionStatusMessage = result.errorMessage;
         return;
     }
 
@@ -275,14 +276,13 @@ void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobRes
     {
         const auto count = static_cast<int>(result.projects.size());
         projects = std::move(result.projects);
-        if (projectStatusMessage.isEmpty())
-            projectStatusMessage = count == 0 ? "No projects found."
-                                              : "Loaded " + juce::String(count) + " project(s).";
+        projectSelectionStatusMessage = count == 0 ? "No projects found."
+                                                   : "Loaded " + juce::String(count) + " project(s).";
     }
 
     selectProject(*result.selectedProject, result.branchId, result.branchName, std::move(result.projectFile));
     setOperationState(OperationState::idle);
-    projectStatusMessage = std::move(result.projectStatusMessage);
+    activeProjectStatusMessage = std::move(result.activeProjectStatusMessage);
 }
 
 void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
@@ -290,13 +290,13 @@ void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
     if (hasError(result))
     {
         setOperationState(OperationState::error);
-        projectStatusMessage = result.errorMessage;
+        activeProjectStatusMessage = result.errorMessage;
         return;
     }
 
     versionControlService.setLastVersionId(std::move(result.pushedVersionId));
     setOperationState(OperationState::idle);
-    projectStatusMessage = std::move(result.projectStatusMessage);
+    activeProjectStatusMessage = std::move(result.activeProjectStatusMessage);
 }
 
 void StemhubAudioProcessor::applyBackgroundResult(BackgroundJobResult result)
@@ -329,7 +329,8 @@ void StemhubAudioProcessor::signOut() noexcept
     access_tkn.clear();
     versionControlService.clearAccessToken();
     authErrorMessage.clear();
-    projectStatusMessage.clear();
+    projectSelectionStatusMessage.clear();
+    activeProjectStatusMessage.clear();
     projects.clear();
     clearSelectedProject();
     pendingProjectFile = juce::File();
@@ -360,16 +361,15 @@ void StemhubAudioProcessor::setOperationState(OperationState newOperationState) 
                                                                                 : OperationState::idle;
 }
 
-void StemhubAudioProcessor::setProjects(std::vector<Project> newProjects, juce::String statusMessage)
+void StemhubAudioProcessor::setProjectSelectionStatusMessage(juce::String message)
 {
-    projects = std::move(newProjects);
-    projectStatusMessage = std::move(statusMessage);
+    projectSelectionStatusMessage = std::move(message);
     sendChangeMessage();
 }
 
-void StemhubAudioProcessor::setProjectStatusMessage(juce::String message)
+void StemhubAudioProcessor::setActiveProjectStatusMessage(juce::String message)
 {
-    projectStatusMessage = std::move(message);
+    activeProjectStatusMessage = std::move(message);
     sendChangeMessage();
 }
 
@@ -405,6 +405,7 @@ void StemhubAudioProcessor::clearSelectedProject() noexcept
     selectedBranchName.clear();
     selectedProjectFile = juce::File();
     versionControlService.clearProjectContext();
+    activeProjectStatusMessage.clear();
 }
 
 
@@ -415,7 +416,8 @@ void StemhubAudioProcessor::requestSignIn(const juce::String& email, const juce:
 
     setAuthState(AuthState::signingIn);
     authErrorMessage.clear();
-    projectStatusMessage.clear();
+    projectSelectionStatusMessage.clear();
+    activeProjectStatusMessage.clear();
     projects.clear();
     sendChangeMessage();
 
@@ -458,7 +460,6 @@ void StemhubAudioProcessor::requestCreateProject(juce::File localProjectFile)
 
 void StemhubAudioProcessor::requestPushVersion(juce::String commitMessage, juce::String dawName)
 {
-    setUIState(UIState::commit);
     setOperationState(OperationState::committing);
     sendChangeMessage();
 
