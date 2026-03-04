@@ -58,18 +58,19 @@ public:
     [[nodiscard]] const std::vector<Project>& getProjects() const noexcept { return projects; }
     [[nodiscard]] const juce::String& getAuthErrorMessage() const noexcept { return authErrorMessage; }
     [[nodiscard]] const juce::String& getProjectStatusMessage() const noexcept { return projectStatusMessage; }
-
+    
     void setCurrentUser(std::optional<User> newUser) noexcept { currentUser = std::move(newUser); }
     void signIn(User newUser) noexcept;
     void signOut() noexcept;
-
+    
     [[nodiscard]] juce::String getUsername() const noexcept { return currentUser ? currentUser->username : juce::String();}
-
+    
     void setAuthState(AuthState newAuthState) noexcept;
     void setUIState(UIState newUIState) noexcept;
     void setOperationState(OperationState newOperationState) noexcept;
-
+    
     void requestSignIn(const juce::String& email, const juce::String& password);
+    VersionControlService& getVersionControlService() noexcept { return versionControlService; }
 
 private:
     void handleAsyncUpdate() override;
@@ -97,4 +98,5 @@ private:
     std::optional<AuthRequestResult> pendingAuthResult;
     std::atomic<uint64_t> authRequestGeneration { 0 };
     juce::ThreadPool backgroundJobs { 1 };
+    VersionControlService versionControlService { apiClient };
 };
