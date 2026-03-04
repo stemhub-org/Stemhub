@@ -1,17 +1,41 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f1f1f1;
-  --background-secondary: #e1e1e1;
-  --accent: #9c57df;
-  --foreground: #1a1a1a;
+  /* LIGHT MODE (Default) */
+  --background: #FFFFFF;
+  --background-secondary: #F4F4F5;
+  --background-tertiary: #E4E4E7;
+  --accent: #E2E2E2;
+  --accent-blue: #3E63DD;
+  --foreground: #09090B;
+  --foreground-muted: #71717A;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+}
+
+.dark {
+  /* DARK MODE (Ultra-Premium Noir) */
+  --background: #000000;
+  --background-secondary: #0A0A0A;
+  --background-tertiary: #111111;
+  --accent: #E2E2E2;
+  --accent-blue: #3E63DD;
+  --foreground: #EDEDED;
+  --foreground-muted: #888888;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-background-secondary: var(--background-secondary);
+  --color-background-tertiary: var(--background-tertiary);
   --color-accent: var(--accent);
+  --color-accent-blue: var(--accent-blue);
   --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-hover: var(--border-hover);
 }
 
 html {
@@ -25,11 +49,12 @@ body {
 }
 
 ::selection {
-  background: rgba(156, 87, 223, 0.2);
-  color: var(--foreground);
+  background: rgba(62, 99, 221, 0.3);
+  color: #ffffff;
 }
 
-html.lenis, html.lenis body {
+html.lenis,
+html.lenis body {
   height: auto;
 }
 
@@ -45,9 +70,25 @@ html.lenis, html.lenis body {
   overflow: hidden;
 }
 
-.gradient-text {
-  background: linear-gradient(135deg, var(--accent) 0%, #c084fc 50%, var(--accent) 100%);
-  background-clip: text;
+/* Minimalist utilities */
+.glass-panel {
+  background: var(--background-secondary);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.glass-panel-hover {
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.glass-panel-hover:hover {
+  background: var(--background-tertiary);
+  border-color: var(--border-hover);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #ffffff 0%, #a0a0a0 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
