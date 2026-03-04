@@ -62,9 +62,15 @@ export function RepositoryFileList() {
     return (
         <div>
             <div className="border-b border-foreground/[0.08] bg-foreground/[0.02] px-6 py-3">
+                <h3
+                    className="mb-3 text-sm font-medium text-foreground"
+                    style={{ fontFamily: "var(--font-syne)" }}
+                >
+                    Files
+                </h3>
                 <div className="grid grid-cols-[1fr_2fr_auto] gap-4 text-xs font-medium uppercase tracking-wide text-foreground/60">
                     <span>Name</span>
-                    <span>Commit message</span>
+                    <span>Change message</span>
                     <span>Updated</span>
                 </div>
             </div>
