@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "User.hpp"
+#include "Branch.hpp"
 #include "Project.hpp"
 #include "ApiUtils.hpp"
 
@@ -25,6 +26,8 @@ public:
     ApiResult<LoginResponse> login(const juce::String& email, const juce::String& password) const;
     ApiResult<User> fetchCurrentUser(const juce::String& accessToken) const;
     ApiResult<std::vector<Project>> fetchProjects(const juce::String& accessToken) const;
+    ApiResult<Project> createProject(const juce::String& name, const juce::String& accessToken) const;
+    ApiResult<std::vector<Branch>> fetchBranches(const juce::String& projectId, const juce::String& accessToken) const;
 
 private:
     juce::String baseUrl;
