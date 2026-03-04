@@ -31,10 +31,10 @@ export default function Sidebar() {
             <div className="h-20 flex items-center px-8 border-b border-border-subtle">
                 <Link href="/">
                     <span
-                        className="text-xl font-semibold tracking-tight text-foreground"
+                        className="text-xl font-normal tracking-tight text-foreground"
                         style={{ fontFamily: "var(--font-syne)" }}
                     >
-                        stemhub<span className="text-accent-blue">.</span>
+                        StemHub<span className="text-accent-blue">.</span>
                     </span>
                 </Link>
             </div>
