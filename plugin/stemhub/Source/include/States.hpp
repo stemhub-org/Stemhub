@@ -11,10 +11,8 @@ enum class AuthState
 enum class UIState
 {
     login,
-    dashboard,
-    commit,
-    history,
-    settings
+    projectSelection,
+    dashboard
 };
 
 enum class OperationState

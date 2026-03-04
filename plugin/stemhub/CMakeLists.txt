@@ -46,7 +46,8 @@ target_sources(stemhub
         Source/src/PluginProcessor.cpp
         Source/src/DashboardView.cpp
         Source/src/LoginView.cpp
-        Source/src/ApiClient.cpp)
+        Source/src/ApiClient.cpp
+        Source/src/VersionControlService.cpp)
 
 target_compile_definitions(stemhub
     PRIVATE
