@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Eye, GitFork, Star, Download } from "lucide-react";
+import { Eye, Star } from "lucide-react";
 
 const PLACEHOLDER_USER = "Skrillex";
 const PLACEHOLDER_REPO = "Dubstep-Track";
@@ -55,31 +55,17 @@ export function RepositoryPageHeader() {
                 <div className="flex flex-wrap items-center gap-2">
                     <button
                         type="button"
-                        className="inline-flex items-center gap-2 rounded-xl border border-foreground/[0.08] bg-transparent px-4 py-2 text-sm font-light text-foreground transition-colors hover:bg-foreground/5"
+                        className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
                     >
                         <Eye className="size-4" aria-hidden />
                         Watch
                     </button>
                     <button
                         type="button"
-                        className="inline-flex items-center gap-2 rounded-xl border border-foreground/[0.08] bg-transparent px-4 py-2 text-sm font-light text-foreground transition-colors hover:bg-foreground/5"
-                    >
-                        <GitFork className="size-4" aria-hidden />
-                        Fork
-                    </button>
-                    <button
-                        type="button"
-                        className="inline-flex items-center gap-2 rounded-xl border border-foreground/[0.08] bg-transparent px-4 py-2 text-sm font-light text-foreground transition-colors hover:bg-foreground/5"
+                        className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
                     >
                         <Star className="size-4" aria-hidden />
                         Star
-                    </button>
-                    <button
-                        type="button"
-                        className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                    >
-                        <Download className="size-4" aria-hidden />
-                        Clone
                     </button>
                 </div>
             </div>
