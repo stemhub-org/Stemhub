@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 import { RepositoryHeader } from "../components/RepositoryHeader";
 import { ArrowLeft } from "lucide-react";
 
@@ -87,20 +86,15 @@ function TypeBadge({ type }: { type: ChangeType }) {
     );
 }
 
+const cardBase =
+    "rounded-xl bg-background-secondary border border-border-subtle p-6 transition-all duration-300";
+const cardHoverDark =
+    "hover:border-accent-blue/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent-blue/5 hover:shadow-[0_0_20px_rgba(62,99,221,0.05)]";
+
 export default function RepositoryChangesPage() {
-    const router = useRouter();
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-    useEffect(() => {
-        const token = localStorage.getItem("token");
-        if (!token) {
-            router.push("/login");
-        } else {
-            setIsAuthenticated(true);
-        }
-    }, [router]);
-
-    if (!isAuthenticated) return null;
+    const { resolvedTheme } = useTheme();
+    const isDark = resolvedTheme === "dark";
+    const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -113,7 +107,7 @@ export default function RepositoryChangesPage() {
                     <ArrowLeft className="size-4" aria-hidden />
                     Back to repository
                 </Link>
-                <div className="rounded-xl border border-foreground/[0.08] bg-white p-6">
+                <div className={cardClass}>
                     <h1
                         className="mb-6 pb-1 text-lg font-medium leading-relaxed text-foreground"
                         style={{ fontFamily: "var(--font-syne)" }}
