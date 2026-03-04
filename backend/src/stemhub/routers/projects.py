@@ -6,7 +6,7 @@ from typing import List
 from uuid import UUID
 
 from stemhub.database import get_db
-from stemhub.models import Project, User
+from stemhub.models import Branch, Project, User
 from stemhub.schemas import ProjectCreate, ProjectUpdate, ProjectResponse
 from stemhub.auth import get_current_user
 
@@ -23,6 +23,10 @@ async def create_project(
     """
     db_project = Project(**project_in.model_dump(), owner_id=current_user.id)
     db.add(db_project)
+    await db.flush()
+
+    db.add(Branch(project_id=db_project.id, name="main"))
+
     await db.commit()
     await db.refresh(db_project)
     return db_project
