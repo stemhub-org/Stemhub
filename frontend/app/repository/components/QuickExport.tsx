@@ -37,7 +37,7 @@ export function QuickExport() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:[&>*]:h-full">
                 <button
                     type="button"
-                    className="flex flex-col justify-between rounded-xl border border-accent/40 bg-foreground/[0.01] px-4 py-3 text-left transition-colors hover:bg-accent/5"
+                    className="flex flex-col justify-between rounded-xl border border-border-subtle dark:border-accent-blue/40 bg-background-tertiary/50 dark:bg-foreground/[0.01] px-4 py-3 text-left transition-colors dark:hover:bg-accent-blue/5"
                 >
                     <div className="mb-2 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -55,7 +55,7 @@ export function QuickExport() {
                     <button
                         type="button"
                         onClick={() => setIsZipOpen((prev) => !prev)}
-                        className="flex h-full w-full flex-col justify-between rounded-xl border border-foreground/[0.08] bg-foreground/[0.01] px-4 py-3 text-left transition-colors hover:bg-foreground/[0.03]"
+                        className="flex h-full w-full flex-col justify-between rounded-xl border border-border-subtle bg-background-tertiary/50 dark:bg-foreground/[0.01] px-4 py-3 text-left transition-colors dark:hover:bg-foreground/[0.03]"
                         aria-expanded={isZipOpen}
                         aria-haspopup="true"
                     >
@@ -83,7 +83,7 @@ export function QuickExport() {
                         </div>
                     </button>
                     {isZipOpen && (
-                        <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border border-foreground/[0.08] bg-white py-2 shadow-xl">
+                        <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border border-border-subtle bg-background-secondary py-2 shadow-xl">
                             {DAW_OPTIONS.map((daw) => (
                                 <button
                                     key={daw.id}
@@ -91,7 +91,7 @@ export function QuickExport() {
                                     onClick={() => {
                                         setIsZipOpen(false);
                                     }}
-                                    className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-foreground/[0.04]"
+                                    className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-background-tertiary"
                                 >
                                     <span className="flex items-center gap-2">
                                         <Download className="size-4 text-accent" aria-hidden />
