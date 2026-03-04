@@ -54,7 +54,7 @@ export function TopContributors() {
                             </div>
                         </div>
                         <span className="shrink-0 text-sm text-foreground/70">
-                            {contributor.commits} commits
+                            {contributor.commits} changes
                         </span>
                     </li>
                 ))}
