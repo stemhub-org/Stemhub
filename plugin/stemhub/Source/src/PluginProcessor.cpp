@@ -1,5 +1,6 @@
 #include "../include/PluginProcessor.hpp"
 #include "../include/PluginEditor.hpp"
+#include "../include/VersionControlService.hpp"
 
 StemhubAudioProcessor::StemhubAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -34,6 +35,7 @@ void StemhubAudioProcessor::signOut() noexcept
     ++authRequestGeneration;
     currentUser.reset();
     access_tkn.clear();
+    versionControlService.clearAccessToken();
     authErrorMessage.clear();
     projectStatusMessage.clear();
     projects.clear();
@@ -154,6 +156,7 @@ void StemhubAudioProcessor::handleAsyncUpdate()
     projectStatusMessage = result->projectStatusMessage;
     projects = std::move(result->projects);
     access_tkn = std::move(result->token);
+    versionControlService.setAccessToken(access_tkn);
     signIn(std::move(*result->user));
     sendChangeMessage();
 }

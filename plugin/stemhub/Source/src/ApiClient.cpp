@@ -15,6 +15,17 @@ juce::String buildJsonHeaders(const juce::String& bearerToken)
     return headers;
 }
 
+juce::String buildBinaryHeaders(const juce::String& bearerToken)
+{
+    juce::String headers;
+    headers << "Accept: application/octet-stream\r\n";
+
+    if (bearerToken.isNotEmpty())
+        headers << "Authorization: Bearer " << bearerToken << "\r\n";
+
+    return headers;
+}
+
 juce::String extractErrorMessage(const juce::var& parsedJson,
                                  const juce::String& responseText,
                                  const juce::String& fallback)
@@ -71,6 +82,86 @@ ApiResult<juce::var> ApiClient::requestJson(const juce::String& path, const juce
         return { {}, ApiError { statusCode, "Backend returned invalid JSON." } };
 
     return { parsedJson, {} };
+}
+
+ApiResult<juce::var> ApiClient::uploadFile(const juce::String& path,
+                                           const juce::File& file,
+                                           const juce::String& formFieldName,
+                                           const juce::String& bearerToken) const
+{
+    if (!file.existsAsFile())
+        return { {}, ApiError { 0, "Snapshot file does not exist." } };
+
+    auto url = juce::URL(baseUrl + path).withFileToUpload(formFieldName, file, "application/octet-stream");
+
+    juce::StringPairArray responseHeaders;
+    int statusCode = 0;
+
+    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
+        .withHttpRequestCmd("POST")
+        .withExtraHeaders("Accept: application/json\r\nAuthorization: Bearer " + bearerToken + "\r\n")
+        .withResponseHeaders(&responseHeaders)
+        .withStatusCode(&statusCode)
+        .withConnectionTimeoutMs(30000);
+
+    auto stream = url.createInputStream(options);
+    if (stream == nullptr)
+        return { {}, ApiError { statusCode, "Failed to connect to backend." } };
+
+    const auto responseText = stream->readEntireStreamAsString();
+    const auto parsedJson = juce::JSON::parse(responseText);
+
+    if (statusCode < 200 || statusCode >= 300)
+    {
+        return { {}, ApiError { statusCode, extractErrorMessage(parsedJson,
+                                                                responseText,
+                                                                "File upload failed.") } };
+    }
+
+    if (parsedJson.isVoid())
+        return { {}, ApiError { statusCode, "Backend returned invalid JSON." } };
+
+    return { parsedJson, {} };
+}
+
+juce::Result ApiClient::downloadFile(const juce::String& path,
+                                     const juce::File& destinationFile,
+                                     const juce::String& bearerToken) const
+{
+    auto url = juce::URL(baseUrl + path);
+
+    juce::StringPairArray responseHeaders;
+    int statusCode = 0;
+
+    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
+        .withHttpRequestCmd("GET")
+        .withExtraHeaders(buildBinaryHeaders(bearerToken))
+        .withResponseHeaders(&responseHeaders)
+        .withStatusCode(&statusCode)
+        .withConnectionTimeoutMs(30000);
+
+    auto stream = url.createInputStream(options);
+    if (stream == nullptr)
+        return juce::Result::fail("Failed to connect to backend.");
+
+    if (statusCode < 200 || statusCode >= 300)
+    {
+        const auto responseText = stream->readEntireStreamAsString();
+        const auto parsedJson = juce::JSON::parse(responseText);
+        return juce::Result::fail(extractErrorMessage(parsedJson, responseText, "File download failed."));
+    }
+
+    destinationFile.getParentDirectory().createDirectory();
+
+    juce::FileOutputStream output(destinationFile);
+    if (!output.openedOk())
+        return juce::Result::fail("Failed to open destination file for writing.");
+
+    if (output.writeFromInputStream(*stream, -1) < 0)
+        return juce::Result::fail("Failed to write downloaded snapshot to disk.");
+
+    output.flush();
+    return juce::Result::ok();
 }
 
 ApiResult<LoginResponse> ApiClient::login(const juce::String& email,
