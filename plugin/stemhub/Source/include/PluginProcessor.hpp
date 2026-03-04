@@ -10,6 +10,7 @@
 #include "States.hpp"
 #include "ApiUtils.hpp"
 #include "ApiClient.hpp"
+#include "VersionControlService.hpp"
 
 class StemhubAudioProcessor : public juce::AudioProcessor,
                               public juce::ChangeBroadcaster,
