@@ -54,7 +54,12 @@ erDiagram
         uuid branch_id FK
         uuid parent_version_id FK "For Git-like history"
         string commit_message
-        string storage_path ".als, .flp pointer"
+        string artifact_path ".als, .flp pointer"
+        bigint artifact_size_bytes "Snapshot size in bytes"
+        string artifact_checksum "SHA-256 checksum"
+        string source_daw "e.g. FL Studio, Ableton Live"
+        string source_project_filename "Original uploaded project filename"
+        jsonb snapshot_manifest "Extracted snapshot metadata for restore"
         datetime created_at
     }
 
