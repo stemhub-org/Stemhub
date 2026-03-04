@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+from typing import List
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from datetime import datetime, timezone
-from typing import List, Optional
-from uuid import UUID
 
 from stemhub.database import get_db
 from stemhub.models import Version, Branch, Project, User
@@ -96,7 +97,7 @@ async def update_version(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Update a version (e.g., commit message, storage path).
+    Update mutable version metadata.
     """
     result = await db.execute(
         select(Version).join(Branch).join(Project).where(
