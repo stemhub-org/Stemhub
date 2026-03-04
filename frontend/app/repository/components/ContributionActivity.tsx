@@ -74,7 +74,7 @@ export function ContributionActivity() {
             <div className="mt-1 flex gap-4">
                 <div className="rounded-lg bg-foreground/[0.04] px-3 py-2">
                     <p className="text-[10px] uppercase tracking-wide text-foreground/50">
-                        Total Commits
+                        Total Changes
                     </p>
                     <p className="text-lg font-medium text-foreground">
                         {PLACEHOLDER_TOTAL_COMMITS}
