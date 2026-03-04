@@ -1,10 +1,13 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <JuceHeader.h>
 #include <mutex>
 #include <optional>
 #include <vector>
+#include <variant>
+#include "Branch.hpp"
 #include "User.hpp"
 #include "Project.hpp"
 #include "States.hpp"
@@ -57,8 +60,14 @@ public:
     [[nodiscard]] OperationState getOperationState() const noexcept { return sessionState.operationState; }
     [[nodiscard]] const std::optional<User>& getCurrentUser() const noexcept { return currentUser; }
     [[nodiscard]] const std::vector<Project>& getProjects() const noexcept { return projects; }
+    [[nodiscard]] const std::optional<Project>& getSelectedProject() const noexcept { return selectedProject; }
+    [[nodiscard]] const juce::String& getSelectedBranchId() const noexcept { return selectedBranchId; }
+    [[nodiscard]] const juce::String& getSelectedBranchName() const noexcept { return selectedBranchName; }
+    [[nodiscard]] const juce::String& getAccessToken() const noexcept { return access_tkn; }
     [[nodiscard]] const juce::String& getAuthErrorMessage() const noexcept { return authErrorMessage; }
     [[nodiscard]] const juce::String& getProjectStatusMessage() const noexcept { return projectStatusMessage; }
+    [[nodiscard]] const juce::File& getPendingProjectFile() const noexcept { return pendingProjectFile; }
+    [[nodiscard]] const juce::File& getSelectedProjectFile() const noexcept { return selectedProjectFile; }
     
     void setCurrentUser(std::optional<User> newUser) noexcept { currentUser = std::move(newUser); }
     void signIn(User newUser) noexcept;
@@ -69,9 +78,18 @@ public:
     void setAuthState(AuthState newAuthState) noexcept;
     void setUIState(UIState newUIState) noexcept;
     void setOperationState(OperationState newOperationState) noexcept;
+    void setProjects(std::vector<Project> newProjects, juce::String statusMessage);
+    void setProjectStatusMessage(juce::String message);
+    void setPendingProjectFile(const juce::File& file);
+    void selectProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile);
+    void clearSelectedProject() noexcept;
     
     void requestSignIn(const juce::String& email, const juce::String& password);
+    void requestOpenProject(juce::String projectId, juce::File localProjectFile);
+    void requestCreateProject(juce::File localProjectFile);
+    void requestPushVersion(juce::String commitMessage, juce::String dawName);
     VersionControlService& getVersionControlService() noexcept { return versionControlService; }
+    ApiClient& getApiClient() noexcept { return apiClient; }
 
 private:
     void handleAsyncUpdate() override;
@@ -86,6 +104,51 @@ private:
         juce::String projectStatusMessage;
     };
 
+    struct ProjectActivationJobResult
+    {
+        std::optional<Project> selectedProject;
+        std::vector<Project> projects;
+        juce::String branchId;
+        juce::String branchName;
+        juce::File projectFile;
+        juce::String errorMessage;
+        juce::String projectStatusMessage;
+        bool refreshProjects { false };
+    };
+
+    struct PushVersionJobResult
+    {
+        juce::String pushedVersionId;
+        juce::String errorMessage;
+        juce::String projectStatusMessage;
+    };
+
+    using BackgroundJobPayload = std::variant<AuthRequestResult, ProjectActivationJobResult, PushVersionJobResult>;
+
+    struct BackgroundJobResult
+    {
+        uint64_t requestId {};
+        BackgroundJobPayload payload;
+    };
+
+    void enqueueBackgroundTask(std::function<BackgroundJobPayload()> job);
+    AuthRequestResult performSignInRequest(const juce::String& email, const juce::String& password) const;
+    ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,
+                                                         const juce::File& localProjectFile,
+                                                         const std::vector<Project>& availableProjects,
+                                                         const juce::String& accessToken) const;
+    ProjectActivationJobResult performCreateProjectRequest(const juce::File& localProjectFile,
+                                                           const juce::String& accessToken) const;
+    PushVersionJobResult performPushVersionRequest(const juce::File& projectFile,
+                                                   const std::optional<Project>& project,
+                                                   const juce::String& branchId,
+                                                   const juce::String& commitMessage,
+                                                   const juce::String& dawName);
+    void applyBackgroundResult(BackgroundJobResult result);
+    void applyAuthRequestResult(AuthRequestResult result);
+    void applyProjectActivationResult(ProjectActivationJobResult result);
+    void applyPushVersionResult(PushVersionJobResult result);
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
     ApiClient apiClient;
@@ -94,10 +157,15 @@ private:
     juce::String projectStatusMessage;
     std::optional<User> currentUser;
     std::vector<Project> projects;
+    std::optional<Project> selectedProject;
+    juce::String selectedBranchId;
+    juce::String selectedBranchName;
     SessionState sessionState;
     std::mutex authResultMutex;
-    std::optional<AuthRequestResult> pendingAuthResult;
-    std::atomic<uint64_t> authRequestGeneration { 0 };
+    std::optional<BackgroundJobResult> pendingBackgroundResult;
+    std::atomic<uint64_t> backgroundRequestGeneration { 0 };
     juce::ThreadPool backgroundJobs { 1 };
     VersionControlService versionControlService { apiClient };
+    juce::File pendingProjectFile;
+    juce::File selectedProjectFile;
 };
