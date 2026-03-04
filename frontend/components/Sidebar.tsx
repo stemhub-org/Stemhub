@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
 import {
     LayoutDashboard,
     Compass,
@@ -15,17 +14,14 @@ import {
 
 const navigation = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Repositories", href: "/dashboard/repositories", icon: FolderDot },
+    { name: "Repositories", href: "/repository", icon: FolderDot },
     { name: "Explore", href: "/dashboard/explore", icon: Compass },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
 export default function Sidebar() {
     const pathname = usePathname();
-    const { theme, resolvedTheme, setTheme } = useTheme();
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => setMounted(true), []);
+    const { resolvedTheme, setTheme } = useTheme();
 
     const isDark = resolvedTheme === "dark";
 
@@ -66,24 +62,22 @@ export default function Sidebar() {
 
             <div className="p-6 border-t border-border-subtle space-y-3">
                 {/* Theme Toggle */}
-                {mounted && (
-                    <button
-                        onClick={() => setTheme(isDark ? "light" : "dark")}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border-subtle bg-background-secondary hover:border-accent-blue/30 hover:bg-background-tertiary transition-all duration-300 group"
-                        aria-label="Toggle theme"
-                    >
-                        <span className="text-xs font-medium text-foreground-muted group-hover:text-foreground transition-colors">
-                            {isDark ? "Light Mode" : "Dark Mode"}
-                        </span>
-                        <div className="h-6 w-6 rounded-md bg-background border border-border-subtle flex items-center justify-center group-hover:border-accent-blue/30 transition-colors">
-                            {isDark ? (
-                                <Sun size={13} className="text-foreground-muted group-hover:text-accent-blue transition-colors" />
-                            ) : (
-                                <Moon size={13} className="text-foreground-muted group-hover:text-accent-blue transition-colors" />
-                            )}
-                        </div>
-                    </button>
-                )}
+                <button
+                    onClick={() => setTheme(isDark ? "light" : "dark")}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border-subtle bg-background-secondary hover:border-accent-blue/30 hover:bg-background-tertiary transition-all duration-300 group"
+                    aria-label="Toggle theme"
+                >
+                    <span className="text-xs font-medium text-foreground-muted group-hover:text-foreground transition-colors">
+                        {isDark ? "Light Mode" : "Dark Mode"}
+                    </span>
+                    <div className="h-6 w-6 rounded-md bg-background border border-border-subtle flex items-center justify-center group-hover:border-accent-blue/30 transition-colors">
+                        {isDark ? (
+                            <Sun size={13} className="text-foreground-muted group-hover:text-accent-blue transition-colors" />
+                        ) : (
+                            <Moon size={13} className="text-foreground-muted group-hover:text-accent-blue transition-colors" />
+                        )}
+                    </div>
+                </button>
 
                 {/* Pro Plan Card */}
                 <div className="rounded-lg bg-background-secondary border border-border-subtle p-4">

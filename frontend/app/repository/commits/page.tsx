@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { RepositoryHeader } from "../components/RepositoryHeader";
 import { ArrowLeft } from "lucide-react";
@@ -88,20 +86,6 @@ function TypeBadge({ type }: { type: ChangeType }) {
 }
 
 export default function RepositoryChangesPage() {
-    const router = useRouter();
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-    useEffect(() => {
-        const token = localStorage.getItem("token");
-        if (!token) {
-            router.push("/login");
-        } else {
-            setIsAuthenticated(true);
-        }
-    }, [router]);
-
-    if (!isAuthenticated) return null;
-
     return (
         <div className="min-h-screen bg-background text-foreground">
             <RepositoryHeader />

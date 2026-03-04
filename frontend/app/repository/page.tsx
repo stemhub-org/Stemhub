@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { RepositoryHeader } from "./components/RepositoryHeader";
 import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
@@ -14,22 +12,11 @@ import { ContributionActivity } from "./components/ContributionActivity";
 import { TopContributors } from "./components/TopContributors";
 
 export default function RepositoryPage() {
-    const router = useRouter();
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-    useEffect(() => {
-        const token = localStorage.getItem("token");
-        if (!token) {
-            router.push("/login");
-        } else {
-            setIsAuthenticated(true);
-        }
-    }, [router]);
-
-    if (!isAuthenticated) return null;
-
     return (
-        <div className="min-h-screen bg-background text-foreground">
+        <div
+            className="min-h-screen bg-background text-foreground"
+            style={{ "--accent": "#3E63DD" } as React.CSSProperties}
+        >
             <RepositoryHeader />
 
             <div className="p-6 space-y-6">
