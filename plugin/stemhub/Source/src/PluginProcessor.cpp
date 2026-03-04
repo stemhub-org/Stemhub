@@ -12,6 +12,20 @@ bool hasError(const ResultType& result)
 {
     return !result.errorMessage.isEmpty();
 }
+
+juce::String normalizeProjectName(const juce::String& name)
+{
+    return name.trim();
+}
+
+bool hasProjectNameConflict(const std::vector<Project>& projects, const juce::String& projectName)
+{
+    const auto normalizedProjectName = normalizeProjectName(projectName);
+    return std::any_of(projects.begin(), projects.end(), [&normalizedProjectName](const Project& project)
+    {
+        return !project.isDeleted && normalizeProjectName(project.name).compareIgnoreCase(normalizedProjectName) == 0;
+    });
+}
 }
 
 StemhubAudioProcessor::StemhubAudioProcessor()
@@ -446,6 +460,21 @@ void StemhubAudioProcessor::requestOpenProject(juce::String projectId, juce::Fil
 
 void StemhubAudioProcessor::requestCreateProject(juce::File localProjectFile)
 {
+    const auto projectName = localProjectFile.getFileNameWithoutExtension().trim();
+    if (projectName.isEmpty())
+    {
+        setOperationState(OperationState::error);
+        setProjectSelectionStatusMessage("Choose a project file first.");
+        return;
+    }
+
+    if (hasProjectNameConflict(projects, projectName))
+    {
+        setOperationState(OperationState::error);
+        setProjectSelectionStatusMessage("A project with this name already exists. Open it instead.");
+        return;
+    }
+
     setOperationState(OperationState::loadingProjects);
     sendChangeMessage();
 
