@@ -21,6 +21,7 @@ const std::map<AuthState, juce::String> authMessages {
 
 const std::map<UIState, juce::String> signedInMessages {
     { UIState::login, "Please sign in to your Stemhub account to access your projects." },
+    { UIState::projectSelection, "Choose an existing project or create a new one." },
     { UIState::commit, "Commit view" },
     { UIState::history, "History and sync view" },
     { UIState::settings, "Branch management view" },
@@ -41,9 +42,14 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     audioProcessor.addChangeListener(this);
 
     addAndMakeVisible(loginView);
+    addAndMakeVisible(projectSelectionView);
     addAndMakeVisible(dashboardView);
 
     loginView.onSignIn = [this] { handleSignInClick(); };
+    projectSelectionView.onChooseProjectFile = [this] { handleChooseProjectFileClick(); };
+    projectSelectionView.onOpenProject = [this] { handleOpenProjectClick(); };
+    projectSelectionView.onCreateProject = [this] { handleCreateProjectClick(); };
+    projectSelectionView.onSignOut = [this] { handleSignOutClick(); };
     dashboardView.onSave = [this] { handleSaveChangesClick(); };
     dashboardView.onSync = [this] { handleSyncClick(); };
     dashboardView.onBranchChange = [this] { handleChangeBranchClick(); };
@@ -66,20 +72,105 @@ void StemhubAudioProcessorEditor::changeListenerCallback(juce::ChangeBroadcaster
 void StemhubAudioProcessorEditor::refreshSessionUi()
 {
     const bool isSignedIn = audioProcessor.getAuthState() == AuthState::signedIn;
+    const bool showProjectSelection = isSignedIn && audioProcessor.getUIState() == UIState::projectSelection;
+    const bool showDashboard = isSignedIn && !showProjectSelection;
     const auto message = buildStatusMessage();
 
     loginView.setVisible(!isSignedIn);
-    dashboardView.setVisible(isSignedIn);
+    projectSelectionView.setVisible(showProjectSelection);
+    dashboardView.setVisible(showDashboard);
 
-    if (isSignedIn) {
-        dashboardView.setMessage(message);
+    if (showProjectSelection)
+    {
+        std::vector<juce::String> projectNames;
+        std::vector<juce::String> projectIds;
+        const auto& projects = audioProcessor.getProjects();
+        projectNames.reserve(projects.size());
+        projectIds.reserve(projects.size());
+
+        for (const auto& project : projects)
+        {
+            projectNames.push_back(project.name);
+            projectIds.push_back(project.id);
+        }
+
+        projectSelectionView.setHasExistingProjects(!projects.empty());
+        projectSelectionView.setMessage(message);
+        projectSelectionView.setSelectedProjectFileMessage(audioProcessor.getPendingProjectFile().existsAsFile()
+            ? audioProcessor.getPendingProjectFile().getFullPathName()
+            : "No project file selected.");
+        projectSelectionView.setProjects(projectNames,
+                                         projectIds,
+                                         audioProcessor.getSelectedProject() ? audioProcessor.getSelectedProject()->id : juce::String());
+    }
+    else if (showDashboard) {
         dashboardView.setProjectStatusMessage(audioProcessor.getProjectStatusMessage());
+        dashboardView.setCurrentProjectMessage(audioProcessor.getSelectedProject()
+            ? "Project: " + audioProcessor.getSelectedProject()->name + " | Branch: " + audioProcessor.getSelectedBranchName()
+            : "No project selected.");
+        dashboardView.setSelectedProjectFileMessage(audioProcessor.getSelectedProjectFile().existsAsFile()
+            ? audioProcessor.getSelectedProjectFile().getFullPathName()
+            : "No project file selected.");
     } else {
         loginView.setMessage(message);
     }
 
     resized();
     repaint();
+}
+
+void StemhubAudioProcessorEditor::handleChooseProjectFileClick()
+{
+    projectFileChooser = std::make_unique<juce::FileChooser>(
+        "Select a DAW project file",
+        audioProcessor.getPendingProjectFile(),
+        "*.flp;*.als");
+
+    constexpr auto flags = juce::FileBrowserComponent::openMode
+        | juce::FileBrowserComponent::canSelectFiles;
+
+    projectFileChooser->launchAsync(flags, [this](const juce::FileChooser& chooser)
+    {
+        const auto file = chooser.getResult();
+
+        if (file.existsAsFile())
+            audioProcessor.setPendingProjectFile(file);
+
+        projectFileChooser.reset();
+    });
+}
+
+void StemhubAudioProcessorEditor::handleOpenProjectClick()
+{
+    const auto pendingFile = audioProcessor.getPendingProjectFile();
+    if (!pendingFile.existsAsFile())
+    {
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Open project",
+            "Choose the local DAW project file before continuing.");
+        return;
+    }
+
+    const auto projectId = projectSelectionView.getSelectedProjectId();
+    audioProcessor.requestOpenProject(projectId, pendingFile);
+    refreshSessionUi();
+}
+
+void StemhubAudioProcessorEditor::handleCreateProjectClick()
+{
+    const auto selectedFile = audioProcessor.getPendingProjectFile();
+    if (!selectedFile.existsAsFile())
+    {
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Create project",
+            "Choose a project file first.");
+        return;
+    }
+
+    audioProcessor.requestCreateProject(selectedFile);
+    refreshSessionUi();
 }
 
 void StemhubAudioProcessorEditor::handleSignInClick()
@@ -105,39 +196,27 @@ void StemhubAudioProcessorEditor::handleSignOutClick()
 
 void StemhubAudioProcessorEditor::handleSaveChangesClick()
 {
-    audioProcessor.setUIState(UIState::commit);
-    audioProcessor.setOperationState(OperationState::committing);
-    refreshSessionUi();
-
-    auto& versionControl = audioProcessor.getVersionControlService();
-
-    ProjectVersionContext context;
-    context.projectId = "project-id";
-    context.branchId = "branch-id";
-    context.lastVersionId = versionControl.getLastVersionId();
-    versionControl.setCurrentProjectContext(context);
-
-    PushVersionRequest request;
-    request.branchId = context.branchId;
-    request.localProjectFile = juce::File("/absolute/path/to/project.flp");
-    request.commitMessage = "Save from plugin";
-    request.dawName = "FL Studio";
-
-    const auto result = versionControl.pushVersion(request);
-
-    if (result.wasOk())
+    if (!audioProcessor.getSelectedProject() || audioProcessor.getSelectedBranchId().isEmpty())
     {
-        audioProcessor.setOperationState(OperationState::idle);
-        dashboardView.setMessage("Version pushed successfully.");
-    }
-    else
-    {
-        audioProcessor.setOperationState(OperationState::error);
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::WarningIcon,
             "Push failed",
-            result.getErrorMessage());
+            "Choose or create a project before saving.");
+        refreshSessionUi();
+        return;
     }
+
+    if (!audioProcessor.getSelectedProjectFile().existsAsFile())
+    {
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Push failed",
+            "Choose a project file before saving.");
+        refreshSessionUi();
+        return;
+    }
+
+    audioProcessor.requestPushVersion("Save from plugin", "FL Studio");
     refreshSessionUi();
 }
 
@@ -163,7 +242,11 @@ juce::String StemhubAudioProcessorEditor::buildStatusMessage() const
 
     juce::String message;
 
-    if (authState == AuthState::signedIn && uiState == UIState::dashboard)
+    if (authState == AuthState::signedIn
+        && uiState == UIState::projectSelection
+        && audioProcessor.getProjects().empty())
+        message = "Choose a DAW file to create your first project.";
+    else if (authState == AuthState::signedIn && uiState == UIState::dashboard)
     {
         message = "Welcome back " + audioProcessor.getUsername() + "!";
 
@@ -193,5 +276,6 @@ void StemhubAudioProcessorEditor::resized()
 {
     const auto area = getLocalBounds();
     loginView.setBounds(area);
+    projectSelectionView.setBounds(area);
     dashboardView.setBounds(area);
 }
