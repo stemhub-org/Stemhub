@@ -1,6 +1,18 @@
+#include <algorithm>
+#include <type_traits>
+
 #include "../include/PluginProcessor.hpp"
 #include "../include/PluginEditor.hpp"
 #include "../include/VersionControlService.hpp"
+
+namespace
+{
+template <typename ResultType>
+bool hasError(const ResultType& result)
+{
+    return !result.errorMessage.isEmpty();
+}
+}
 
 StemhubAudioProcessor::StemhubAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -22,23 +34,306 @@ StemhubAudioProcessor::~StemhubAudioProcessor()
     backgroundJobs.removeAllJobs(true, 2000);
 }
 
+void StemhubAudioProcessor::enqueueBackgroundTask(std::function<BackgroundJobPayload()> taskFactory)
+{
+    const auto requestId = ++backgroundRequestGeneration;
+
+    backgroundJobs.addJob([this, requestId, backgroundTask = std::move(taskFactory)]
+    {
+        BackgroundJobResult result { requestId, backgroundTask() };
+
+        {
+            const std::lock_guard<std::mutex> lock(authResultMutex);
+            pendingBackgroundResult = std::move(result);
+        }
+
+        triggerAsyncUpdate();
+    });
+}
+
+StemhubAudioProcessor::AuthRequestResult StemhubAudioProcessor::performSignInRequest(
+    const juce::String& email,
+    const juce::String& password) const
+{
+    AuthRequestResult result;
+
+    auto loginResult = apiClient.login(email, password);
+    if (!loginResult.ok())
+    {
+        result.authErrorMessage = loginResult.error ? loginResult.error->message
+                                                    : "Failed to sign in.";
+        return result;
+    }
+
+    const auto token = loginResult.value->accessToken;
+    auto userResult = apiClient.fetchCurrentUser(token);
+    if (!userResult.ok() || !userResult.value->isValid())
+    {
+        result.authErrorMessage = userResult.error ? userResult.error->message
+                                                   : "Failed to load your user profile.";
+        return result;
+    }
+
+    result.token = token;
+    result.user = std::move(userResult.value);
+
+    auto projectsResult = apiClient.fetchProjects(token);
+    if (projectsResult.ok())
+    {
+        result.projects = std::move(*projectsResult.value);
+        result.projectStatusMessage = result.projects.empty()
+            ? "No projects found."
+            : "Loaded " + juce::String(static_cast<int>(result.projects.size())) + " project(s).";
+    }
+    else
+    {
+        result.projectStatusMessage = projectsResult.error ? projectsResult.error->message
+                                                           : "Failed to load projects.";
+    }
+
+    return result;
+}
+
+StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::performOpenProjectRequest(
+    const juce::String& projectId,
+    const juce::File& localProjectFile,
+    const std::vector<Project>& availableProjects,
+    const juce::String& accessToken) const
+{
+    ProjectActivationJobResult result;
+    result.projectFile = localProjectFile;
+
+    if (!localProjectFile.existsAsFile())
+    {
+        result.errorMessage = "Choose the local DAW project file before continuing.";
+        return result;
+    }
+
+    if (projectId.isEmpty())
+    {
+        result.errorMessage = "Choose a project before continuing.";
+        return result;
+    }
+
+    const auto projectIt = std::find_if(availableProjects.begin(), availableProjects.end(), [&projectId](const Project& project)
+    {
+        return project.id == projectId;
+    });
+
+    if (projectIt == availableProjects.end())
+    {
+        result.errorMessage = "The selected project is no longer available.";
+        return result;
+    }
+
+    const auto branchesResult = apiClient.fetchBranches(projectId, accessToken);
+    if (!branchesResult.ok() || !branchesResult.value.has_value() || branchesResult.value->empty())
+    {
+        result.errorMessage = branchesResult.error ? branchesResult.error->message
+                                                   : "No branches found for this project.";
+        return result;
+    }
+
+    const auto& branches = *branchesResult.value;
+    const auto branchIt = std::find_if(branches.begin(), branches.end(), [](const Branch& branch)
+    {
+        return branch.name == "main";
+    });
+    const auto& selectedBranch = branchIt != branches.end() ? *branchIt : branches.front();
+
+    result.selectedProject = *projectIt;
+    result.branchId = selectedBranch.id;
+    result.branchName = selectedBranch.name;
+    result.projectStatusMessage = "Project ready.";
+    return result;
+}
+
+StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::performCreateProjectRequest(
+    const juce::File& localProjectFile,
+    const juce::String& accessToken) const
+{
+    ProjectActivationJobResult result;
+    result.projectFile = localProjectFile;
+    result.refreshProjects = true;
+
+    const auto projectName = localProjectFile.existsAsFile()
+        ? localProjectFile.getFileNameWithoutExtension()
+        : juce::String();
+
+    if (projectName.isEmpty())
+    {
+        result.errorMessage = "Choose a project file first.";
+        return result;
+    }
+
+    const auto createdProject = apiClient.createProject(projectName, accessToken);
+    if (!createdProject.ok() || !createdProject.value.has_value())
+    {
+        result.errorMessage = createdProject.error ? createdProject.error->message
+                                                   : "Failed to create project.";
+        return result;
+    }
+
+    auto projectsResult = apiClient.fetchProjects(accessToken);
+    if (projectsResult.ok() && projectsResult.value.has_value())
+        result.projects = std::move(*projectsResult.value);
+
+    const auto branchesResult = apiClient.fetchBranches(createdProject.value->id, accessToken);
+    if (!branchesResult.ok() || !branchesResult.value.has_value() || branchesResult.value->empty())
+    {
+        result.errorMessage = branchesResult.error ? branchesResult.error->message
+                                                   : "Project created but no branch was returned.";
+        return result;
+    }
+
+    const auto& branches = *branchesResult.value;
+    const auto branchIt = std::find_if(branches.begin(), branches.end(), [](const Branch& branch)
+    {
+        return branch.name == "main";
+    });
+    const auto& selectedBranch = branchIt != branches.end() ? *branchIt : branches.front();
+
+    result.selectedProject = *createdProject.value;
+    result.branchId = selectedBranch.id;
+    result.branchName = selectedBranch.name;
+    result.projectStatusMessage = "Project created and main branch selected.";
+    return result;
+}
+
+StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVersionRequest(
+    const juce::File& projectFile,
+    const std::optional<Project>& project,
+    const juce::String& branchId,
+    const juce::String& commitMessage,
+    const juce::String& dawName)
+{
+    PushVersionJobResult result;
+
+    if (!project.has_value() || branchId.isEmpty())
+    {
+        result.errorMessage = "Choose or create a project before saving.";
+        return result;
+    }
+
+    if (!projectFile.existsAsFile())
+    {
+        result.errorMessage = "Choose a project file before saving.";
+        return result;
+    }
+
+    ProjectVersionContext context;
+    context.projectId = project->id;
+    context.branchId = branchId;
+    context.lastVersionId = versionControlService.getLastVersionId();
+    versionControlService.setCurrentProjectContext(context);
+
+    PushVersionRequest request;
+    request.branchId = branchId;
+    request.localProjectFile = projectFile;
+    request.commitMessage = commitMessage;
+    request.dawName = dawName;
+
+    const auto pushResult = versionControlService.pushVersion(request);
+    if (pushResult.failed())
+    {
+        result.errorMessage = pushResult.getErrorMessage();
+        return result;
+    }
+
+    result.pushedVersionId = versionControlService.getLastVersionId();
+    result.projectStatusMessage = "Version pushed successfully.";
+    return result;
+}
+
+void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
+{
+    if (result.authErrorMessage.isNotEmpty())
+    {
+        authErrorMessage = result.authErrorMessage;
+        setAuthState(AuthState::authError);
+        return;
+    }
+
+    authErrorMessage.clear();
+    projectStatusMessage = std::move(result.projectStatusMessage);
+    projects = std::move(result.projects);
+    access_tkn = std::move(result.token);
+    versionControlService.setAccessToken(access_tkn);
+    signIn(std::move(*result.user));
+}
+
+void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobResult result)
+{
+    if (hasError(result))
+    {
+        setOperationState(OperationState::error);
+        projectStatusMessage = result.errorMessage;
+        return;
+    }
+
+    if (result.refreshProjects)
+    {
+        const auto count = static_cast<int>(result.projects.size());
+        projects = std::move(result.projects);
+        if (projectStatusMessage.isEmpty())
+            projectStatusMessage = count == 0 ? "No projects found."
+                                              : "Loaded " + juce::String(count) + " project(s).";
+    }
+
+    selectProject(*result.selectedProject, result.branchId, result.branchName, std::move(result.projectFile));
+    setOperationState(OperationState::idle);
+    projectStatusMessage = std::move(result.projectStatusMessage);
+}
+
+void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
+{
+    if (hasError(result))
+    {
+        setOperationState(OperationState::error);
+        projectStatusMessage = result.errorMessage;
+        return;
+    }
+
+    versionControlService.setLastVersionId(std::move(result.pushedVersionId));
+    setOperationState(OperationState::idle);
+    projectStatusMessage = std::move(result.projectStatusMessage);
+}
+
+void StemhubAudioProcessor::applyBackgroundResult(BackgroundJobResult result)
+{
+    std::visit([this](auto&& payload)
+    {
+        using Payload = std::decay_t<decltype(payload)>;
+
+        if constexpr (std::is_same_v<Payload, AuthRequestResult>)
+            applyAuthRequestResult(std::move(payload));
+        else if constexpr (std::is_same_v<Payload, ProjectActivationJobResult>)
+            applyProjectActivationResult(std::move(payload));
+        else if constexpr (std::is_same_v<Payload, PushVersionJobResult>)
+            applyPushVersionResult(std::move(payload));
+    }, std::move(result.payload));
+}
+
 void StemhubAudioProcessor::signIn(User newUser) noexcept
 {
     currentUser = std::move(newUser);
     sessionState.authState = AuthState::signedIn;
-    sessionState.uiState = UIState::dashboard;
+    sessionState.uiState = UIState::projectSelection;
     sessionState.operationState = OperationState::idle;
 }
 
 void StemhubAudioProcessor::signOut() noexcept
 {
-    ++authRequestGeneration;
+    ++backgroundRequestGeneration;
     currentUser.reset();
     access_tkn.clear();
     versionControlService.clearAccessToken();
     authErrorMessage.clear();
     projectStatusMessage.clear();
     projects.clear();
+    clearSelectedProject();
+    pendingProjectFile = juce::File();
+    selectedProjectFile = juce::File();
     sessionState = {};
     sendChangeMessage();
 }
@@ -65,99 +360,139 @@ void StemhubAudioProcessor::setOperationState(OperationState newOperationState) 
                                                                                 : OperationState::idle;
 }
 
+void StemhubAudioProcessor::setProjects(std::vector<Project> newProjects, juce::String statusMessage)
+{
+    projects = std::move(newProjects);
+    projectStatusMessage = std::move(statusMessage);
+    sendChangeMessage();
+}
+
+void StemhubAudioProcessor::setProjectStatusMessage(juce::String message)
+{
+    projectStatusMessage = std::move(message);
+    sendChangeMessage();
+}
+
+void StemhubAudioProcessor::setPendingProjectFile(const juce::File& file)
+{
+    pendingProjectFile = file;
+    sendChangeMessage();
+}
+
+void StemhubAudioProcessor::selectProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile)
+{
+    versionControlService.clearProjectContext();
+    versionControlService.setLastVersionId({});
+    selectedProject = std::move(project);
+    selectedBranchId = std::move(branchId);
+    selectedBranchName = std::move(branchName);
+    selectedProjectFile = std::move(projectFile);
+    pendingProjectFile = selectedProjectFile;
+
+    ProjectVersionContext context;
+    context.projectId = selectedProject ? selectedProject->id : juce::String();
+    context.branchId = selectedBranchId;
+    context.lastVersionId = versionControlService.getLastVersionId();
+    versionControlService.setCurrentProjectContext(context);
+    sessionState.uiState = UIState::dashboard;
+    sendChangeMessage();
+}
+
+void StemhubAudioProcessor::clearSelectedProject() noexcept
+{
+    selectedProject.reset();
+    selectedBranchId.clear();
+    selectedBranchName.clear();
+    selectedProjectFile = juce::File();
+    versionControlService.clearProjectContext();
+}
+
 
 void StemhubAudioProcessor::requestSignIn(const juce::String& email, const juce::String& password)
 {
     if (sessionState.authState == AuthState::signingIn)
         return;
 
-    const auto requestId = ++authRequestGeneration;
     setAuthState(AuthState::signingIn);
     authErrorMessage.clear();
     projectStatusMessage.clear();
     projects.clear();
     sendChangeMessage();
 
-    backgroundJobs.addJob([this, email, password, requestId]
+    enqueueBackgroundTask([this, email, password]() -> BackgroundJobPayload
     {
-        AuthRequestResult result;
-        result.requestId = requestId;
+        return performSignInRequest(email, password);
+    });
+}
 
-        auto loginResult = apiClient.login(email, password);
-        if (!loginResult.ok())
-        {
-            result.authErrorMessage = loginResult.error ? loginResult.error->message
-                                                        : "Failed to sign in.";
-        }
-        else
-        {
-            const auto token = loginResult.value->accessToken;
-            auto userResult = apiClient.fetchCurrentUser(token);
+void StemhubAudioProcessor::requestOpenProject(juce::String projectId, juce::File localProjectFile)
+{
+    setOperationState(OperationState::loadingProjects);
+    sendChangeMessage();
 
-            if (!userResult.ok() || !userResult.value->isValid())
-            {
-                result.authErrorMessage = userResult.error ? userResult.error->message
-                                                           : "Failed to load your user profile.";
-            }
-            else
-            {
-                result.token = token;
-                result.user = std::move(userResult.value);
+    const auto projectsSnapshot = projects;
+    const auto token = access_tkn;
+    enqueueBackgroundTask([this,
+                           requestedProjectId = std::move(projectId),
+                           requestedProjectFile = std::move(localProjectFile),
+                           projectsSnapshot,
+                           token]() -> BackgroundJobPayload
+    {
+        return performOpenProjectRequest(requestedProjectId, requestedProjectFile, projectsSnapshot, token);
+    });
+}
 
-                auto projectsResult = apiClient.fetchProjects(token);
-                if (projectsResult.ok())
-                {
-                    result.projects = std::move(*projectsResult.value);
-                    result.projectStatusMessage = result.projects.empty() ? "No projects found."
-                                                                          : "Loaded " + juce::String(static_cast<int>(result.projects.size())) + " project(s).";
-                }
-                else
-                {
-                    result.projectStatusMessage = projectsResult.error ? projectsResult.error->message
-                                                                       : "Failed to load projects.";
-                }
-            }
-        }
+void StemhubAudioProcessor::requestCreateProject(juce::File localProjectFile)
+{
+    setOperationState(OperationState::loadingProjects);
+    sendChangeMessage();
 
-        {
-            const std::lock_guard<std::mutex> lock(authResultMutex);
-            pendingAuthResult = std::move(result);
-        }
+    const auto token = access_tkn;
+    enqueueBackgroundTask([this,
+                           requestedProjectFile = std::move(localProjectFile),
+                           token]() -> BackgroundJobPayload
+    {
+        return performCreateProjectRequest(requestedProjectFile, token);
+    });
+}
 
-        triggerAsyncUpdate();
+void StemhubAudioProcessor::requestPushVersion(juce::String commitMessage, juce::String dawName)
+{
+    setUIState(UIState::commit);
+    setOperationState(OperationState::committing);
+    sendChangeMessage();
+
+    const auto projectFile = selectedProjectFile;
+    const auto project = selectedProject;
+    const auto branchId = selectedBranchId;
+    enqueueBackgroundTask([this,
+                           selectedFile = std::move(projectFile),
+                           project,
+                           selectedBranch = std::move(branchId),
+                           requestedCommitMessage = std::move(commitMessage),
+                           requestedDawName = std::move(dawName)]() mutable -> BackgroundJobPayload
+    {
+        return performPushVersionRequest(selectedFile, project, selectedBranch, requestedCommitMessage, requestedDawName);
     });
 }
 
 void StemhubAudioProcessor::handleAsyncUpdate()
 {
-    std::optional<AuthRequestResult> result;
+    std::optional<BackgroundJobResult> result;
 
     {
         const std::lock_guard<std::mutex> lock(authResultMutex);
-        result = std::move(pendingAuthResult);
-        pendingAuthResult.reset();
+        result = std::move(pendingBackgroundResult);
+        pendingBackgroundResult.reset();
     }
 
     if (!result.has_value())
         return;
 
-    if (result->requestId != authRequestGeneration.load())
+    if (result->requestId != backgroundRequestGeneration.load())
         return;
 
-    if (result->authErrorMessage.isNotEmpty())
-    {
-        authErrorMessage = result->authErrorMessage;
-        setAuthState(AuthState::authError);
-        sendChangeMessage();
-        return;
-    }
-
-    authErrorMessage.clear();
-    projectStatusMessage = result->projectStatusMessage;
-    projects = std::move(result->projects);
-    access_tkn = std::move(result->token);
-    versionControlService.setAccessToken(access_tkn);
-    signIn(std::move(*result->user));
+    applyBackgroundResult(std::move(*result));
     sendChangeMessage();
 }
 

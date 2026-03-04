@@ -31,6 +31,7 @@ class VersionControlService
             const juce::String& accessToken) const;
         
         void setCurrentProjectContext(ProjectVersionContext newContext) noexcept { context = std::move(newContext); }
+        void clearProjectContext() noexcept { context = {}; }
         void setAccessToken(juce::String newAccessToken) { accessToken = std::move(newAccessToken); }
         void clearAccessToken() noexcept { accessToken.clear(); }
         
