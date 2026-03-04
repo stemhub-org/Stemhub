@@ -65,7 +65,8 @@ public:
     [[nodiscard]] const juce::String& getSelectedBranchName() const noexcept { return selectedBranchName; }
     [[nodiscard]] const juce::String& getAccessToken() const noexcept { return access_tkn; }
     [[nodiscard]] const juce::String& getAuthErrorMessage() const noexcept { return authErrorMessage; }
-    [[nodiscard]] const juce::String& getProjectStatusMessage() const noexcept { return projectStatusMessage; }
+    [[nodiscard]] const juce::String& getProjectSelectionStatusMessage() const noexcept { return projectSelectionStatusMessage; }
+    [[nodiscard]] const juce::String& getActiveProjectStatusMessage() const noexcept { return activeProjectStatusMessage; }
     [[nodiscard]] const juce::File& getPendingProjectFile() const noexcept { return pendingProjectFile; }
     [[nodiscard]] const juce::File& getSelectedProjectFile() const noexcept { return selectedProjectFile; }
     
@@ -78,8 +79,8 @@ public:
     void setAuthState(AuthState newAuthState) noexcept;
     void setUIState(UIState newUIState) noexcept;
     void setOperationState(OperationState newOperationState) noexcept;
-    void setProjects(std::vector<Project> newProjects, juce::String statusMessage);
-    void setProjectStatusMessage(juce::String message);
+    void setProjectSelectionStatusMessage(juce::String message);
+    void setActiveProjectStatusMessage(juce::String message);
     void setPendingProjectFile(const juce::File& file);
     void selectProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile);
     void clearSelectedProject() noexcept;
@@ -101,7 +102,7 @@ private:
         std::vector<Project> projects;
         juce::String token;
         juce::String authErrorMessage;
-        juce::String projectStatusMessage;
+        juce::String projectSelectionStatusMessage;
     };
 
     struct ProjectActivationJobResult
@@ -112,7 +113,8 @@ private:
         juce::String branchName;
         juce::File projectFile;
         juce::String errorMessage;
-        juce::String projectStatusMessage;
+        juce::String projectSelectionStatusMessage;
+        juce::String activeProjectStatusMessage;
         bool refreshProjects { false };
     };
 
@@ -120,7 +122,7 @@ private:
     {
         juce::String pushedVersionId;
         juce::String errorMessage;
-        juce::String projectStatusMessage;
+        juce::String activeProjectStatusMessage;
     };
 
     using BackgroundJobPayload = std::variant<AuthRequestResult, ProjectActivationJobResult, PushVersionJobResult>;
@@ -154,7 +156,8 @@ private:
     ApiClient apiClient;
     juce::String access_tkn;
     juce::String authErrorMessage;
-    juce::String projectStatusMessage;
+    juce::String projectSelectionStatusMessage;
+    juce::String activeProjectStatusMessage;
     std::optional<User> currentUser;
     std::vector<Project> projects;
     std::optional<Project> selectedProject;
