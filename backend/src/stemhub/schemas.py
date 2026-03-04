@@ -1,7 +1,8 @@
-from pydantic import BaseModel, EmailStr
-from uuid import UUID
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr
 
 # ── User Schemas ──
 
@@ -77,15 +78,19 @@ class BranchResponse(BranchBase):
 
 class VersionBase(BaseModel):
     commit_message: Optional[str] = None
-    storage_path: Optional[str] = None
     parent_version_id: Optional[UUID] = None
+    artifact_path: Optional[str] = None
+    artifact_size_bytes: Optional[int] = None
+    artifact_checksum: Optional[str] = None
+    source_daw: Optional[str] = None
+    source_project_filename: Optional[str] = None
+    snapshot_manifest: Optional[dict[str, Any]] = None
 
 class VersionCreate(VersionBase):
     pass
 
 class VersionUpdate(BaseModel):
     commit_message: Optional[str] = None
-    storage_path: Optional[str] = None
 
 class VersionResponse(VersionBase):
     id: UUID
