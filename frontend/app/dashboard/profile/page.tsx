@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
     MapPin,
@@ -14,6 +16,51 @@ import {
 } from "lucide-react";
 
 export default function ProfilePage() {
+    const router = useRouter();
+    const [user, setUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            const token = localStorage.getItem("token");
+
+            try {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                const response = await fetch(`${apiUrl}/auth/me`, {
+                    headers: token ? {
+                        "Authorization": `Bearer ${token}`
+                    } : {},
+                    credentials: "include"
+                });
+
+                if (!response.ok) {
+                    throw new Error("Session expirée");
+                }
+
+                const data = await response.json();
+                setUser(data);
+            } catch (err) {
+                localStorage.removeItem("token");
+                router.push("/login");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchUser();
+    }, [router]);
+
+    if (loading) {
+        return (
+            <div className="flex h-full min-h-[50vh] items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            </div>
+        );
+    }
+
+    const { username, email, avatar_url, created_at } = user || {};
+    const joinedDate = created_at ? new Date(created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown Date';
+    const initials = username ? username.substring(0, 2).toUpperCase() : '??';
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-12">
             {/* Header Section */}
@@ -29,29 +76,37 @@ export default function ProfilePage() {
                     </button>
                 </div>
 
-                <div className="h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shrink-0">
-                    SK
-                </div>
+                {avatar_url ? (
+                    <img
+                        src={avatar_url}
+                        alt={username}
+                        className="h-32 w-32 md:h-40 md:w-40 rounded-full object-cover shrink-0 border-4 border-background-secondary shadow-xl"
+                    />
+                ) : (
+                    <div className="h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shrink-0 shadow-xl">
+                        {initials}
+                    </div>
+                )}
 
                 <div className="space-y-4 pt-2 flex-1">
                     <div>
-                        <h1 className="text-4xl font-medium tracking-tight mb-1" style={{ fontFamily: "var(--font-syne)" }}>Skrillex</h1>
-                        <p className="text-foreground/60 text-base">@skrillex</p>
+                        <h1 className="text-4xl font-medium tracking-tight mb-1" style={{ fontFamily: "var(--font-syne)" }}>{username || 'Producer'}</h1>
+                        <p className="text-foreground/60 text-base">{email}</p>
                     </div>
 
                     <p className="text-foreground/80 text-sm max-w-2xl leading-relaxed">
-                        Electronic music producer & sound designer. Specializing in bass music, dubstep, and experimental sound design. Always pushing boundaries and collaborating with talented artists worldwide.
+                        Electronic music producer & sound designer. Always pushing boundaries and collaborating with talented artists worldwide.
                     </p>
 
                     <div className="flex flex-wrap items-center gap-6 text-sm text-foreground/60 font-light">
-                        <span className="flex items-center gap-1.5"><MapPin size={16} /> Los Angeles, CA</span>
-                        <span className="flex items-center gap-1.5"><LinkIcon size={16} className="text-accent" /> <a href="#" className="text-accent hover:underline">skrillex.com</a></span>
-                        <span className="flex items-center gap-1.5"><Calendar size={16} /> Joined January 2024</span>
+                        <span className="flex items-center gap-1.5"><MapPin size={16} /> Online</span>
+                        <span className="flex items-center gap-1.5"><LinkIcon size={16} className="text-accent" /> <a href="#" className="text-accent hover:underline">stemhub.com</a></span>
+                        <span className="flex items-center gap-1.5"><Calendar size={16} /> Joined {joinedDate}</span>
                     </div>
 
                     <div className="flex items-center gap-6 text-sm pt-2">
-                        <div><span className="font-medium text-foreground text-base">2.4k</span> <span className="text-foreground/60 font-light">followers</span></div>
-                        <div><span className="font-medium text-foreground text-base">342</span> <span className="text-foreground/60 font-light">following</span></div>
+                        <div><span className="font-medium text-foreground text-base">0</span> <span className="text-foreground/60 font-light">followers</span></div>
+                        <div><span className="font-medium text-foreground text-base">0</span> <span className="text-foreground/60 font-light">following</span></div>
                     </div>
                 </div>
             </motion.div>
@@ -197,8 +252,8 @@ export default function ProfilePage() {
                                     <div
                                         key={i}
                                         className={`w-full aspect-square rounded-[2px] ${Math.random() > 0.7
-                                                ? Math.random() > 0.5 ? 'bg-accent' : 'bg-accent/60'
-                                                : Math.random() > 0.8 ? 'bg-accent/40' : 'bg-foreground/5'
+                                            ? Math.random() > 0.5 ? 'bg-accent' : 'bg-accent/60'
+                                            : Math.random() > 0.8 ? 'bg-accent/40' : 'bg-foreground/5'
                                             }`}
                                     />
                                 ))}
