@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import Link from "next/link";
-import { GitBranch, ChevronDown, GitCommit } from "lucide-react";
+import { GitBranch, ChevronDown } from "lucide-react";
 
 const PLACEHOLDER_BRANCHES = ["main", "develop", "feature/vocals", "fix/mix"];
 const PLACEHOLDER_CURRENT_BRANCH = "main";
@@ -65,15 +64,8 @@ export function RepositoryBranchBar() {
             </div>
             <div className="flex items-center gap-2 text-sm text-foreground/70">
                 <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden />
-                <span>{PLACEHOLDER_BRANCHES.length} Branches</span>
+                <span>{PLACEHOLDER_BRANCHES.length} Versions</span>
             </div>
-            <Link
-                href="/repository/commits"
-                className="flex items-center gap-2 rounded-xl border border-foreground/[0.08] bg-white px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-foreground/[0.03]"
-            >
-                <GitCommit className="size-4 text-foreground/60" aria-hidden />
-                Commits
-            </Link>
         </div>
     );
 }
