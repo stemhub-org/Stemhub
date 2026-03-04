@@ -27,7 +27,7 @@ export function RepositoryBranchBar() {
                 <button
                     type="button"
                     onClick={() => setIsOpen((prev) => !prev)}
-                    className="flex items-center gap-2 rounded-xl border border-foreground/[0.08] bg-white px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-foreground/[0.03]"
+                    className="flex items-center gap-2 rounded-xl bg-background-secondary border border-border-subtle px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-background-tertiary"
                     aria-expanded={isOpen}
                     aria-haspopup="listbox"
                     aria-label="Sélectionner la branche"
@@ -42,7 +42,7 @@ export function RepositoryBranchBar() {
                 {isOpen && (
                     <ul
                         role="listbox"
-                        className="absolute left-0 top-full z-10 mt-1 min-w-[12rem] rounded-xl border border-foreground/[0.08] bg-white py-1 shadow-lg"
+                        className="absolute left-0 top-full z-10 mt-1 min-w-[12rem] rounded-xl bg-background-secondary border border-border-subtle py-1 shadow-lg"
                     >
                         {PLACEHOLDER_BRANCHES.map((branch) => (
                             <li key={branch} role="option">
@@ -52,7 +52,7 @@ export function RepositoryBranchBar() {
                                         setSelectedBranch(branch);
                                         setIsOpen(false);
                                     }}
-                                    className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-foreground/[0.05] ${selectedBranch === branch ? "font-medium text-accent" : "text-foreground"}`}
+                                    className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-background-tertiary ${selectedBranch === branch ? "font-medium text-accent-blue" : "text-foreground"}`}
                                 >
                                     <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden />
                                     {branch}
