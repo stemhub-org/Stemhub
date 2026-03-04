@@ -34,11 +34,10 @@ export default function TopNav() {
                     </div>
                     <button
                         onClick={() => {
-                            localStorage.removeItem("token");
-                            router.push("/login");
+                            router.push("/dashboard/profile");
                         }}
                         className="h-10 w-10 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
-                        title="Sign out"
+                        title="Profile"
                     >
                         <User size={18} />
                     </button>
