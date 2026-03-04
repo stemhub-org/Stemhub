@@ -86,6 +86,8 @@ export default function LoginPage() {
         )}
 
         <button
+          type="button"
+          onClick={() => { window.location.href = "http://localhost:8000/auth/login/google"; }}
           className="flex w-full items-center justify-center gap-3 rounded-xl border border-foreground/[0.08] bg-background-secondary/50 px-6 py-3.5 text-sm font-light transition-all duration-300 hover:border-foreground/20 hover:bg-background-secondary"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >

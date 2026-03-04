@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
     GitCommit,
@@ -75,6 +77,48 @@ const ACTIVITY_FEED = [
 ];
 
 export default function DashboardPage() {
+    const router = useRouter();
+    const [user, setUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            const token = localStorage.getItem("token");
+
+            try {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                const response = await fetch(`${apiUrl}/auth/me`, {
+                    headers: token ? {
+                        "Authorization": `Bearer ${token}`
+                    } : {},
+                    credentials: "include"
+                });
+
+                if (!response.ok) {
+                    throw new Error("Session expirée");
+                }
+
+                const data = await response.json();
+                setUser(data);
+            } catch (err) {
+                localStorage.removeItem("token");
+                router.push("/login");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchUser();
+    }, [router]);
+
+    if (loading) {
+        return (
+            <div className="flex h-full min-h-[50vh] items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-7xl mx-auto space-y-10 pb-12">
             <motion.div
@@ -85,7 +129,7 @@ export default function DashboardPage() {
             >
                 <div>
                     <h1 className="text-3xl font-light mb-2 tracking-tight" style={{ fontFamily: "var(--font-syne)" }}>
-                        Welcome back, <span className="font-medium text-accent">Producer</span>
+                        Welcome back, <span className="font-medium text-accent">{user?.username || "Producer"}</span>
                     </h1>
                     <p className="text-foreground/60 font-light">
                         Here's what's happening with your sessions today.
