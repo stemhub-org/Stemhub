@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from contextlib import asynccontextmanager
 from .auth import router as auth_router
+from .routers.files import router as files_router
 from .routers.projects import router as projects_router
 from .routers.branches import router as branches_router
 from .routers.versions import router as versions_router
@@ -28,6 +29,7 @@ app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(branches_router)
 app.include_router(versions_router)
+app.include_router(files_router)
 
 @app.get("/")
 async def root():
