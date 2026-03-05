@@ -1,26 +1,69 @@
 #include "../include/Views.hpp"
 
+namespace
+{
+    const auto kStemhubPurple = juce::Colour::fromRGB(0x9C, 0x57, 0xDF);
+    const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
+    const auto kStemhubLight = juce::Colour::fromRGB(0xF1, 0xF1, 0xF1);
+    const auto kStemhubSurface = juce::Colour::fromRGB(0x2B, 0x2B, 0x30);
+    
+    void styleComboBox(juce::ComboBox& combo)
+    {
+        combo.setColour(juce::ComboBox::backgroundColourId, kStemhubSurface);
+        combo.setColour(juce::ComboBox::textColourId, kStemhubLight);
+        combo.setColour(juce::ComboBox::outlineColourId, kStemhubLight.withAlpha(0.45f));
+        combo.setColour(juce::ComboBox::arrowColourId, kStemhubLight);
+    }
+    
+    void stylePrimaryButton(juce::TextButton& button)
+    {
+        button.setColour(juce::TextButton::buttonColourId, kStemhubPurple);
+        button.setColour(juce::TextButton::buttonOnColourId, kStemhubPurple.brighter(0.15f));
+        button.setColour(juce::TextButton::textColourOffId, kStemhubLight);
+        button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+    }
+    
+    void styleSecondaryButton(juce::TextButton& button)
+    {
+        button.setColour(juce::TextButton::buttonColourId, kStemhubSurface.withAlpha(0.95f));
+        button.setColour(juce::TextButton::buttonOnColourId, kStemhubSurface.brighter(0.12f));
+        button.setColour(juce::TextButton::textColourOffId, kStemhubLight);
+        button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+    }
+    
+    void styleCompactTopButton(juce::TextButton& button)
+    {
+        button.setColour(juce::TextButton::buttonColourId, kStemhubDark.withAlpha(0.85f));
+        button.setColour(juce::TextButton::buttonOnColourId, kStemhubPurple.withAlpha(0.8f));
+        button.setColour(juce::TextButton::textColourOffId, kStemhubLight.withAlpha(0.9f));
+        button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+    }
+}
+
 ProjectSelectionView::ProjectSelectionView()
 {
     addAndMakeVisible(statusLabel);
     statusLabel.setJustificationType(juce::Justification::centred);
-    statusLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    statusLabel.setColour(juce::Label::textColourId, kStemhubLight);
     statusLabel.setFont(juce::FontOptions(20.0f, juce::Font::bold));
 
     addAndMakeVisible(projectFileLabel);
     projectFileLabel.setJustificationType(juce::Justification::centredLeft);
-    projectFileLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    projectFileLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.8f));
     projectFileLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
     projectFileLabel.setText("No project file selected.", juce::dontSendNotification);
 
     addAndMakeVisible(existingProjectsLabel);
     existingProjectsLabel.setText("Existing projects", juce::dontSendNotification);
     existingProjectsLabel.setJustificationType(juce::Justification::centredLeft);
+    existingProjectsLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
     addAndMakeVisible(projectComboBox);
     projectComboBox.setTextWhenNothingSelected("Select a project");
+    styleComboBox(projectComboBox);
 
     addAndMakeVisible(chooseProjectFileButton);
+    styleSecondaryButton(chooseProjectFileButton);
     chooseProjectFileButton.onClick = [this]
     {
         if (onChooseProjectFile != nullptr)
@@ -28,6 +71,7 @@ ProjectSelectionView::ProjectSelectionView()
     };
 
     addAndMakeVisible(openProjectButton);
+    stylePrimaryButton(openProjectButton);
     openProjectButton.onClick = [this]
     {
         if (onOpenProject != nullptr)
@@ -35,6 +79,7 @@ ProjectSelectionView::ProjectSelectionView()
     };
 
     addAndMakeVisible(createProjectButton);
+    stylePrimaryButton(createProjectButton);
     createProjectButton.onClick = [this]
     {
         if (onCreateProject != nullptr)
@@ -48,6 +93,8 @@ ProjectSelectionView::ProjectSelectionView()
         if (onSignOut != nullptr)
             onSignOut();
     };
+
+    styleCompactTopButton(signOutButton);
 }
 
 void ProjectSelectionView::setProjects(const std::vector<juce::String>& projectNames,
@@ -107,8 +154,15 @@ void ProjectSelectionView::resized()
     auto area = getLocalBounds().reduced(20);
     const int fieldWidth = 260;
     const int x = (getWidth() - fieldWidth) / 2;
+    const int contentRight = area.getRight();
 
-    auto titleRow = area.removeFromTop(56);
+    auto topActionsRow = area.removeFromTop(22);
+    const int signOutButtonWidth = 46;
+    signOutButton.setBounds(contentRight - signOutButtonWidth, topActionsRow.getY(), signOutButtonWidth, topActionsRow.getHeight());
+
+    area.removeFromTop(8);
+
+    auto titleRow = area.removeFromTop(48);
     statusLabel.setBounds(titleRow);
 
     area.removeFromTop(16);
@@ -151,49 +205,64 @@ void ProjectSelectionView::resized()
     {
         area.removeFromTop(8);
     }
-
-    auto signOutRow = area.removeFromTop(32);
-    signOutButton.setBounds(x, signOutRow.getY(), fieldWidth, signOutRow.getHeight());
 }
 
 DashboardView::DashboardView()
 {
     addAndMakeVisible(projectStatusLabel);
     projectStatusLabel.setJustificationType(juce::Justification::centredLeft);
-    projectStatusLabel.setColour(juce::Label::textColourId, juce::Colours::yellowgreen);
+    projectStatusLabel.setColour(juce::Label::textColourId, kStemhubPurple.brighter(0.25f));
     projectStatusLabel.setFont(juce::FontOptions(16.0f, juce::Font::plain));
 
     addAndMakeVisible(projectFileLabel);
     projectFileLabel.setJustificationType(juce::Justification::centredLeft);
-    projectFileLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    projectFileLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.8f));
     projectFileLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
     projectFileLabel.setText("No project file selected.", juce::dontSendNotification);
 
-    addAndMakeVisible(currentProjectLabel);
-    currentProjectLabel.setJustificationType(juce::Justification::centredLeft);
-    currentProjectLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    currentProjectLabel.setFont(juce::FontOptions(15.0f, juce::Font::plain));
+    addAndMakeVisible(projectNameLabel);
+    projectNameLabel.setJustificationType(juce::Justification::centredLeft);
+    projectNameLabel.setColour(juce::Label::textColourId, kStemhubLight);
+    projectNameLabel.setFont(juce::FontOptions(15.0f, juce::Font::bold));
+
+    addAndMakeVisible(branchNameLabel);
+    branchNameLabel.setJustificationType(juce::Justification::centredLeft);
+    branchNameLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.85f));
+    branchNameLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
 
     addAndMakeVisible(branchLabel);
     branchLabel.setText("Branch", juce::dontSendNotification);
     branchLabel.setJustificationType(juce::Justification::centredLeft);
+    branchLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
     addAndMakeVisible(branchComboBox);
     branchComboBox.setTextWhenNothingSelected("No branch available");
+    styleComboBox(branchComboBox);
 
     addAndMakeVisible(versionLabel);
     versionLabel.setText("Version history", juce::dontSendNotification);
     versionLabel.setJustificationType(juce::Justification::centredLeft);
+    versionLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
     addAndMakeVisible(versionComboBox);
     versionComboBox.setTextWhenNothingSelected("No versions available");
+    styleComboBox(versionComboBox);
     versionComboBox.onChange = [this]
     {
         if (onVersionSelectionChange != nullptr)
             onVersionSelectionChange();
     };
 
+    addAndMakeVisible(backToProjectsButton);
+    styleCompactTopButton(backToProjectsButton);
+    backToProjectsButton.onClick = [this]
+    {
+        if (onBackToProjects != nullptr)
+            onBackToProjects();
+    };
+
     addAndMakeVisible(saveChanges);
+    stylePrimaryButton(saveChanges);
     saveChanges.onClick = [this]
     {
         if (onSave != nullptr)
@@ -201,6 +270,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(syncButton);
+    styleSecondaryButton(syncButton);
     syncButton.onClick = [this]
     {
         if (onSync != nullptr)
@@ -208,6 +278,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(changeBranch);
+    styleSecondaryButton(changeBranch);
     changeBranch.onClick = [this]
     {
         if (onBranchChange != nullptr)
@@ -215,6 +286,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(signOutButton);
+    styleCompactTopButton(signOutButton);
     signOutButton.onClick = [this]
     {
         if (onSignOut != nullptr)
@@ -307,57 +379,67 @@ void DashboardView::resized()
     auto area = getLocalBounds().reduced(20);
     const int fieldWidth = 280;
     const int x = (getWidth() - fieldWidth) / 2;
+    const int contentLeft = area.getX();
+    const int contentRight = area.getRight();
 
-    auto projectStatusRow = area.removeFromTop(32);
+    auto topActionsRow = area.removeFromTop(22);
+    const int backButtonWidth = 112;
+    const int signOutButtonWidth = 46;
+    backToProjectsButton.setBounds(contentLeft, topActionsRow.getY(), backButtonWidth, topActionsRow.getHeight());
+    signOutButton.setBounds(contentRight - signOutButtonWidth, topActionsRow.getY(), signOutButtonWidth, topActionsRow.getHeight());
+
+    area.removeFromTop(4);
+
+    auto projectStatusRow = area.removeFromTop(24);
     projectStatusLabel.setBounds(x, projectStatusRow.getY(), fieldWidth, projectStatusRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto currentProjectRow = area.removeFromTop(28);
-    currentProjectLabel.setBounds(x - 80, currentProjectRow.getY(), fieldWidth + 160, currentProjectRow.getHeight());
+    auto projectNameRow = area.removeFromTop(22);
+    projectNameLabel.setBounds(x - 80, projectNameRow.getY(), fieldWidth + 160, projectNameRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(1);
 
-    auto projectFileRow = area.removeFromTop(40);
+    auto branchNameRow = area.removeFromTop(22);
+    branchNameLabel.setBounds(x - 80, branchNameRow.getY(), fieldWidth + 160, branchNameRow.getHeight());
+
+    area.removeFromTop(4);
+
+    auto projectFileRow = area.removeFromTop(28);
     projectFileLabel.setBounds(x - 80, projectFileRow.getY(), fieldWidth + 160, projectFileRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto branchLabelRow = area.removeFromTop(22);
+    auto branchLabelRow = area.removeFromTop(18);
     branchLabel.setBounds(x, branchLabelRow.getY(), fieldWidth, branchLabelRow.getHeight());
 
-    area.removeFromTop(2);
+    area.removeFromTop(1);
 
-    auto branchComboRow = area.removeFromTop(28);
+    auto branchComboRow = area.removeFromTop(24);
     branchComboBox.setBounds(x, branchComboRow.getY(), fieldWidth, branchComboRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto branchRow = area.removeFromTop(32);
+    auto branchRow = area.removeFromTop(26);
     changeBranch.setBounds(x, branchRow.getY(), fieldWidth, branchRow.getHeight());
 
-    area.removeFromTop(10);
+    area.removeFromTop(5);
 
-    auto versionLabelRow = area.removeFromTop(22);
+    auto versionLabelRow = area.removeFromTop(18);
     versionLabel.setBounds(x, versionLabelRow.getY(), fieldWidth, versionLabelRow.getHeight());
 
-    area.removeFromTop(2);
+    area.removeFromTop(1);
 
-    auto versionComboRow = area.removeFromTop(28);
+    auto versionComboRow = area.removeFromTop(24);
     versionComboBox.setBounds(x, versionComboRow.getY(), fieldWidth, versionComboRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto saveRow = area.removeFromTop(32);
+    auto saveRow = area.removeFromTop(26);
     saveChanges.setBounds(x, saveRow.getY(), fieldWidth, saveRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto syncRow = area.removeFromTop(32);
+    auto syncRow = area.removeFromTop(26);
     syncButton.setBounds(x, syncRow.getY(), fieldWidth, syncRow.getHeight());
-
-    area.removeFromTop(24);
-
-    auto signOutRow = area.removeFromTop(32);
-    signOutButton.setBounds(x, signOutRow.getY(), fieldWidth, signOutRow.getHeight());
 }

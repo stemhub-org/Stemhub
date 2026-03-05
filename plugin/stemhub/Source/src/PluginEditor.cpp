@@ -49,11 +49,15 @@ juce::String formatVersionLabel(const VersionSummary& version)
     const auto message = version.commitMessage.isNotEmpty() ? version.commitMessage : "No commit message";
     return shortId + " - " + message;
 }
+
+const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
+const auto kStemhubPurple = juce::Colour::fromRGB(0x9C, 0x57, 0xDF);
 }
 
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
     : AudioProcessorEditor(&processorToEdit), audioProcessor(processorToEdit)
 {
+    juce::LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypefaceName("Syne");
     setSize(600, 400);
     audioProcessor.addChangeListener(this);
 
@@ -70,6 +74,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     dashboardView.onSync = [this] { handleSyncClick(); };
     dashboardView.onBranchChange = [this] { handleChangeBranchClick(); };
     dashboardView.onVersionSelectionChange = [this] { handleVersionSelectionChanged(); };
+    dashboardView.onBackToProjects = [this] { handleBackToProjectsClick(); };
     dashboardView.onSignOut = [this] { handleSignOutClick(); };
 
     refreshSessionUi();
@@ -149,9 +154,12 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
         dashboardView.setProjectStatusMessage(getDashboardMessage(audioProcessor));
         dashboardView.setBranches(branchNames, branchIds, audioProcessor.getSelectedBranchId());
         dashboardView.setVersions(versionLabels, versionIds, audioProcessor.getSelectedVersionId());
-        dashboardView.setCurrentProjectMessage(audioProcessor.getSelectedProject()
-            ? "Project: " + audioProcessor.getSelectedProject()->name + " | Branch: " + audioProcessor.getSelectedBranchName()
-            : "No project selected.");
+        dashboardView.setProjectNameMessage(audioProcessor.getSelectedProject()
+            ? "Project: " + audioProcessor.getSelectedProject()->name
+            : "Project: No project selected");
+        dashboardView.setBranchNameMessage(audioProcessor.getSelectedBranchName().isNotEmpty()
+            ? "Branch: " + audioProcessor.getSelectedBranchName()
+            : "Branch: Not selected");
         dashboardView.setSelectedProjectFileMessage(audioProcessor.getSelectedProjectFile().existsAsFile()
             ? audioProcessor.getSelectedProjectFile().getFullPathName()
             : "No project file selected.");
@@ -292,9 +300,26 @@ void StemhubAudioProcessorEditor::handleVersionSelectionChanged()
     audioProcessor.setSelectedVersionId(selectedVersionId);
 }
 
+void StemhubAudioProcessorEditor::handleBackToProjectsClick()
+{
+    audioProcessor.setOperationState(OperationState::idle);
+    audioProcessor.setUIState(UIState::projectSelection);
+    refreshSessionUi();
+}
+
 void StemhubAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
+    g.fillAll(kStemhubDark);
+
+    juce::ColourGradient topGlow(kStemhubPurple.withAlpha(0.22f),
+                                 static_cast<float>(getWidth()) * 0.52f,
+                                 static_cast<float>(getHeight()) * 0.08f,
+                                 kStemhubDark,
+                                 static_cast<float>(getWidth()) * 0.5f,
+                                 static_cast<float>(getHeight()) * 0.7f,
+                                 true);
+    g.setGradientFill(topGlow);
+    g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(6.0f), 10.0f);
 }
 
 void StemhubAudioProcessorEditor::resized()
