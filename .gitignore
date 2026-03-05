@@ -19,4 +19,10 @@ plugin/stemhub/JUCE/
 
 # Environment
 .env
+.venv/
 
+# IDE configuration
+.vscode/
+
+# local storage data for projects
+backend/data/
