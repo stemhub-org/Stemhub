@@ -261,6 +261,22 @@ DashboardView::DashboardView()
             onBackToProjects();
     };
 
+    addAndMakeVisible(commitMessageLabel);
+    commitMessageLabel.setText("Commit message", juce::dontSendNotification);
+    commitMessageLabel.setJustificationType(juce::Justification::centredLeft);
+    commitMessageLabel.setColour(juce::Label::textColourId, kStemhubLight);
+
+    addAndMakeVisible(commitMessageInput);
+    commitMessageInput.setTextToShowWhenEmpty("Describe this save", juce::Colours::grey);
+    commitMessageInput.setMultiLine(false);
+    commitMessageInput.setReturnKeyStartsNewLine(false);
+    commitMessageInput.setScrollbarsShown(false);
+    commitMessageInput.setJustification(juce::Justification::centredLeft);
+    commitMessageInput.setColour(juce::TextEditor::backgroundColourId, kStemhubSurface);
+    commitMessageInput.setColour(juce::TextEditor::textColourId, kStemhubLight);
+    commitMessageInput.setColour(juce::TextEditor::outlineColourId, kStemhubLight.withAlpha(0.45f));
+    commitMessageInput.setColour(juce::CaretComponent::caretColourId, kStemhubLight);
+
     addAndMakeVisible(saveChanges);
     stylePrimaryButton(saveChanges);
     saveChanges.onClick = [this]
@@ -432,6 +448,16 @@ void DashboardView::resized()
 
     auto versionComboRow = area.removeFromTop(24);
     versionComboBox.setBounds(x, versionComboRow.getY(), fieldWidth, versionComboRow.getHeight());
+
+    area.removeFromTop(4);
+
+    auto commitMessageLabelRow = area.removeFromTop(18);
+    commitMessageLabel.setBounds(x, commitMessageLabelRow.getY(), fieldWidth, commitMessageLabelRow.getHeight());
+
+    area.removeFromTop(1);
+
+    auto commitMessageRow = area.removeFromTop(24);
+    commitMessageInput.setBounds(x, commitMessageRow.getY(), fieldWidth, commitMessageRow.getHeight());
 
     area.removeFromTop(4);
 

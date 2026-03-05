@@ -47,7 +47,18 @@ juce::String formatVersionLabel(const VersionSummary& version)
 {
     const auto shortId = version.id.substring(0, 8);
     const auto message = version.commitMessage.isNotEmpty() ? version.commitMessage : "No commit message";
-    return shortId + " - " + message;
+
+    juce::String timestamp = "Unknown time";
+    if (version.createdAt.isNotEmpty())
+    {
+        const auto parsed = juce::Time::fromISO8601(version.createdAt);
+        if (parsed.toMilliseconds() > 0)
+            timestamp = parsed.toString(true, true, true, true);
+        else
+            timestamp = version.createdAt;
+    }
+
+    return shortId + " - " + message + " (" + timestamp + ")";
 }
 
 const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
@@ -160,8 +171,11 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
         dashboardView.setBranchNameMessage(audioProcessor.getSelectedBranchName().isNotEmpty()
             ? "Branch: " + audioProcessor.getSelectedBranchName()
             : "Branch: Not selected");
-        dashboardView.setSelectedProjectFileMessage(audioProcessor.getSelectedProjectFile().existsAsFile()
-            ? audioProcessor.getSelectedProjectFile().getFullPathName()
+        const auto selectedProjectFile = audioProcessor.getSelectedProjectFile();
+        const auto pendingProjectFile = audioProcessor.getPendingProjectFile();
+        const auto fileToDisplay = selectedProjectFile.existsAsFile() ? selectedProjectFile : pendingProjectFile;
+        dashboardView.setSelectedProjectFileMessage(fileToDisplay.existsAsFile()
+            ? fileToDisplay.getFullPathName()
             : "No project file selected.");
     } else {
         loginView.setMessage(getLoginMessage(audioProcessor));
@@ -258,17 +272,41 @@ void StemhubAudioProcessorEditor::handleSaveChangesClick()
         return;
     }
 
-    if (!audioProcessor.getSelectedProjectFile().existsAsFile())
+    const auto selectedProjectFile = audioProcessor.getSelectedProjectFile();
+    const auto pendingProjectFile = audioProcessor.getPendingProjectFile();
+    const auto hasAnyProjectFile = selectedProjectFile.existsAsFile() || pendingProjectFile.existsAsFile();
+
+    if (!hasAnyProjectFile)
     {
-        juce::AlertWindow::showMessageBoxAsync(
-            juce::AlertWindow::WarningIcon,
-            "Push failed",
-            "Choose a project file before saving.");
+        projectFileChooser = std::make_unique<juce::FileChooser>(
+            "Select a DAW project file before saving",
+            audioProcessor.getPendingProjectFile(),
+            "*.flp;*.als");
+
+        constexpr auto flags = juce::FileBrowserComponent::openMode
+            | juce::FileBrowserComponent::canSelectFiles;
+
+        projectFileChooser->launchAsync(flags, [this](const juce::FileChooser& chooser)
+        {
+            const auto file = chooser.getResult();
+
+            if (file.existsAsFile())
+            {
+                audioProcessor.setPendingProjectFile(file);
+                const auto commitMessage = dashboardView.getCommitMessage();
+                audioProcessor.requestPushVersion(commitMessage.isNotEmpty() ? commitMessage : "Save from plugin", "FL Studio");
+                refreshSessionUi();
+            }
+
+            projectFileChooser.reset();
+        });
+
         refreshSessionUi();
         return;
     }
 
-    audioProcessor.requestPushVersion("Save from plugin", "FL Studio");
+    const auto commitMessage = dashboardView.getCommitMessage();
+    audioProcessor.requestPushVersion(commitMessage.isNotEmpty() ? commitMessage : "Save from plugin", "FL Studio");
     refreshSessionUi();
 }
 
