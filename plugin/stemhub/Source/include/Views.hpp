@@ -93,6 +93,8 @@ public:
     std::function<void()> onSignOut;
 
 private:
+    std::vector<juce::String> comboBranchIds;
+    std::vector<juce::String> comboVersionIds;
     juce::Label projectStatusLabel;
     juce::Label projectFileLabel;
     juce::Label projectNameLabel;

@@ -18,6 +18,7 @@ ApiResult<VersionSummary> parseVersionSummary(const juce::var& value)
     summary.id = object->getProperty("id").toString();
     summary.branchId = object->getProperty("branch_id").toString();
     summary.parentVersionId = object->getProperty("parent_version_id").toString();
+    summary.createdAt = object->getProperty("created_at").toString();
     summary.commitMessage = object->getProperty("commit_message").toString();
     summary.sourceDaw = object->getProperty("source_daw").toString();
     summary.sourceProjectFilename = object->getProperty("source_project_filename").toString();
