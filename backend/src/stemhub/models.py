@@ -53,6 +53,7 @@ class Collaborator(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("project.id"), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="Viewer")  # Admin, Editor, Viewer
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # ── Relationships ──
     project: Mapped["Project"] = relationship("Project", back_populates="collaborators")
@@ -79,6 +80,7 @@ class Version(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branch.id"), nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     parent_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=True)  # Git-like history
     commit_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -93,6 +95,7 @@ class Version(Base):
 
     # ── Relationships ──
     branch: Mapped["Branch"] = relationship("Branch", back_populates="versions")
+    author: Mapped["User | None"] = relationship("User", foreign_keys=[created_by])
     parent: Mapped["Version | None"] = relationship("Version", remote_side="Version.id", backref="children")
     tracks: Mapped[list["Track"]] = relationship("Track", back_populates="version")
 
