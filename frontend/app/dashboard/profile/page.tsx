@@ -34,6 +34,18 @@ export default function ProfilePage() {
     const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
     const [isSearchingLocation, setIsSearchingLocation] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setEditForm((prev) => ({ ...prev, avatar_url: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -194,26 +206,46 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="relative group shrink-0">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept="image/*"
+                        className="hidden"
+                    />
                     {editForm.avatar_url || avatar_url ? (
-                        <img
-                            src={isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url}
-                            alt={username}
-                            className="h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 border-background-secondary shadow-xl"
-                        />
-                    ) : (
-                        <div className="h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl">
-                            {initials}
-                        </div>
-                    )}
-                    {isEditModalOpen && (
-                        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-full max-w-[200px] bg-black/80 backdrop-blur border border-white/20 rounded-xl p-2 px-3 shadow-xl">
-                            <input
-                                type="text"
-                                value={editForm.avatar_url}
-                                onChange={(e) => setEditForm({ ...editForm, avatar_url: e.target.value })}
-                                placeholder="Avatar URL..."
-                                className="w-full text-xs bg-transparent border-none text-white focus:outline-none placeholder:text-white/40"
+                        <div className="relative">
+                            <img
+                                src={isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url}
+                                alt={username}
+                                className={`h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 border-background-secondary shadow-xl transition-all ${isEditModalOpen ? "cursor-pointer hover:brightness-75" : ""}`}
+                                onClick={() => isEditModalOpen && fileInputRef.current?.click()}
                             />
+                            {isEditModalOpen && (
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-white shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
+                                    title="Change picture"
+                                >
+                                    <Edit2 size={16} />
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <div
+                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl relative ${isEditModalOpen ? "cursor-pointer hover:brightness-90" : ""}`}
+                            onClick={() => isEditModalOpen && fileInputRef.current?.click()}
+                        >
+                            {initials}
+                            {isEditModalOpen && (
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-white shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
+                                    title="Change picture"
+                                >
+                                    <Edit2 size={16} />
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
