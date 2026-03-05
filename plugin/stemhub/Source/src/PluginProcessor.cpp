@@ -294,7 +294,8 @@ void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobRes
                                                    : "Loaded " + juce::String(count) + " project(s).";
     }
 
-    selectProject(*result.selectedProject, result.branchId, result.branchName, std::move(result.projectFile));
+    selectProject(*result.selectedProject, result.branchId, result.branchName,
+            std::move(result.projectFile), result.projectFile.getParentDirectory());
     setOperationState(OperationState::idle);
     activeProjectStatusMessage = std::move(result.activeProjectStatusMessage);
 }
@@ -348,7 +349,9 @@ void StemhubAudioProcessor::signOut() noexcept
     projects.clear();
     clearSelectedProject();
     pendingProjectFile = juce::File();
+    pendingProjectFolder = juce::File();
     selectedProjectFile = juce::File();
+    selectedProjectFolder = juce::File();
     sessionState = {};
     sendChangeMessage();
 }
@@ -390,10 +393,17 @@ void StemhubAudioProcessor::setActiveProjectStatusMessage(juce::String message)
 void StemhubAudioProcessor::setPendingProjectFile(const juce::File& file)
 {
     pendingProjectFile = file;
+    pendingProjectFolder = file.getParentDirectory();
     sendChangeMessage();
 }
 
-void StemhubAudioProcessor::selectProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile)
+void StemhubAudioProcessor::setPendingProjectFolder(const juce::File& folder)
+{
+    pendingProjectFolder = folder;
+    sendChangeMessage();
+}
+
+void StemhubAudioProcessor::selectProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile, juce::File projectFolder)
 {
     versionControlService.clearProjectContext();
     versionControlService.setLastVersionId({});
@@ -401,7 +411,10 @@ void StemhubAudioProcessor::selectProject(Project project, juce::String branchId
     selectedBranchId = std::move(branchId);
     selectedBranchName = std::move(branchName);
     selectedProjectFile = std::move(projectFile);
-    pendingProjectFile = selectedProjectFile;
+    pendingProjectFile = std::move(selectedProjectFile);
+    selectedProjectFolder = projectFolder.isDirectory() ? std::move(projectFolder)
+                                                        : pendingProjectFile.getParentDirectory();
+    pendingProjectFolder = selectedProjectFolder;
 
     ProjectVersionContext context;
     context.projectId = selectedProject ? selectedProject->id : juce::String();
@@ -418,6 +431,7 @@ void StemhubAudioProcessor::clearSelectedProject() noexcept
     selectedBranchId.clear();
     selectedBranchName.clear();
     selectedProjectFile = juce::File();
+    selectedProjectFolder = juce::File();
     versionControlService.clearProjectContext();
     activeProjectStatusMessage.clear();
 }
