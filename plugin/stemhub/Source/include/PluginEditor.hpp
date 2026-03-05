@@ -25,6 +25,7 @@ private:
     void handleSaveChangesClick();
     void handleSyncClick();
     void handleChangeBranchClick();
+    void handleVersionSelectionChanged();
     LoginView loginView;
     ProjectSelectionView projectSelectionView;
     DashboardView dashboardView;

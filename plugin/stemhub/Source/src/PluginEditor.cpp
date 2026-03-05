@@ -35,12 +35,19 @@ juce::String getDashboardMessage(const StemhubAudioProcessor& processor)
         return "Committing...";
 
     if (processor.getOperationState() == OperationState::pulling)
-        return "Syncing...";
+        return "Refreshing version history...";
 
     if (processor.getActiveProjectStatusMessage().isNotEmpty())
         return processor.getActiveProjectStatusMessage();
 
     return "Project ready.";
+}
+
+juce::String formatVersionLabel(const VersionSummary& version)
+{
+    const auto shortId = version.id.substring(0, 8);
+    const auto message = version.commitMessage.isNotEmpty() ? version.commitMessage : "No commit message";
+    return shortId + " - " + message;
 }
 }
 
@@ -62,6 +69,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     dashboardView.onSave = [this] { handleSaveChangesClick(); };
     dashboardView.onSync = [this] { handleSyncClick(); };
     dashboardView.onBranchChange = [this] { handleChangeBranchClick(); };
+    dashboardView.onVersionSelectionChange = [this] { handleVersionSelectionChanged(); };
     dashboardView.onSignOut = [this] { handleSignOutClick(); };
 
     refreshSessionUi();
@@ -114,7 +122,33 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
                                          audioProcessor.getSelectedProject() ? audioProcessor.getSelectedProject()->id : juce::String());
     }
     else if (showDashboard) {
+        std::vector<juce::String> branchNames;
+        std::vector<juce::String> branchIds;
+        const auto& branches = audioProcessor.getBranches();
+        branchNames.reserve(branches.size());
+        branchIds.reserve(branches.size());
+
+        for (const auto& branch : branches)
+        {
+            branchNames.push_back(branch.name);
+            branchIds.push_back(branch.id);
+        }
+
+        std::vector<juce::String> versionLabels;
+        std::vector<juce::String> versionIds;
+        const auto& versions = audioProcessor.getVersionHistory();
+        versionLabels.reserve(versions.size());
+        versionIds.reserve(versions.size());
+
+        for (const auto& version : versions)
+        {
+            versionLabels.push_back(formatVersionLabel(version));
+            versionIds.push_back(version.id);
+        }
+
         dashboardView.setProjectStatusMessage(getDashboardMessage(audioProcessor));
+        dashboardView.setBranches(branchNames, branchIds, audioProcessor.getSelectedBranchId());
+        dashboardView.setVersions(versionLabels, versionIds, audioProcessor.getSelectedVersionId());
         dashboardView.setCurrentProjectMessage(audioProcessor.getSelectedProject()
             ? "Project: " + audioProcessor.getSelectedProject()->name + " | Branch: " + audioProcessor.getSelectedBranchName()
             : "No project selected.");
@@ -232,16 +266,30 @@ void StemhubAudioProcessorEditor::handleSaveChangesClick()
 
 void StemhubAudioProcessorEditor::handleSyncClick()
 {
-    audioProcessor.setOperationState(OperationState::idle);
-    audioProcessor.setActiveProjectStatusMessage("Sync is not implemented yet.");
+    audioProcessor.requestRefreshVersionHistory();
     refreshSessionUi();
 }
 
 void StemhubAudioProcessorEditor::handleChangeBranchClick()
 {
-    audioProcessor.setOperationState(OperationState::idle);
-    audioProcessor.setActiveProjectStatusMessage("Branch management is not implemented yet.");
+    const auto selectedBranchId = dashboardView.getSelectedBranchId();
+    if (selectedBranchId.isEmpty())
+    {
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Branch selection",
+            "Select a branch before loading history.");
+        return;
+    }
+
+    audioProcessor.requestSelectBranch(selectedBranchId);
     refreshSessionUi();
+}
+
+void StemhubAudioProcessorEditor::handleVersionSelectionChanged()
+{
+    const auto selectedVersionId = dashboardView.getSelectedVersionId();
+    audioProcessor.setSelectedVersionId(selectedVersionId);
 }
 
 void StemhubAudioProcessorEditor::paint(juce::Graphics& g)

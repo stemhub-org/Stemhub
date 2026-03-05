@@ -27,6 +27,34 @@ bool hasProjectNameConflict(const std::vector<Project>& projects, const juce::St
         return !project.isDeleted && normalizeProjectName(project.name).compareIgnoreCase(normalizedProjectName) == 0;
     });
 }
+
+void sortVersionHistoryNewestFirst(std::vector<VersionSummary>& versions)
+{
+    std::sort(versions.begin(), versions.end(), [](const VersionSummary& lhs, const VersionSummary& rhs)
+    {
+        return lhs.createdAt > rhs.createdAt;
+    });
+}
+
+juce::String chooseSelectedVersionId(const std::vector<VersionSummary>& versions,
+                                     const juce::String& preferredVersionId)
+{
+    if (versions.empty())
+        return {};
+
+    if (preferredVersionId.isNotEmpty())
+    {
+        const auto it = std::find_if(versions.begin(), versions.end(), [&preferredVersionId](const VersionSummary& version)
+        {
+            return version.id == preferredVersionId;
+        });
+
+        if (it != versions.end())
+            return it->id;
+    }
+
+    return versions.front().id;
+}
 }
 
 StemhubAudioProcessor::StemhubAudioProcessor()
@@ -143,19 +171,46 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
         return result;
     }
 
-    const auto& branches = *branchesResult.value;
-    const auto branchIt = std::find_if(branches.begin(), branches.end(), [](const Branch& branch)
+    const auto& fetchedBranches = *branchesResult.value;
+    result.branches = fetchedBranches;
+    const auto branchIt = std::find_if(fetchedBranches.begin(), fetchedBranches.end(), [](const Branch& branch)
     {
         return branch.name == "main";
     });
-    const auto& selectedBranch = branchIt != branches.end() ? *branchIt : branches.front();
+    const auto& selectedBranch = branchIt != fetchedBranches.end() ? *branchIt : fetchedBranches.front();
 
     result.selectedProject = *projectIt;
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
-    result.activeProjectStatusMessage = localProjectFile.existsAsFile()
-        ? "Project ready."
-        : "Project ready. Choose a local project file before saving.";
+
+    const auto versionsResult = versionControlService.fetchVersionHistory(selectedBranch.id, accessToken);
+    if (versionsResult.ok() && versionsResult.value.has_value())
+    {
+        result.versions = std::move(*versionsResult.value);
+        sortVersionHistoryNewestFirst(result.versions);
+        result.selectedVersionId = chooseSelectedVersionId(result.versions, {});
+    }
+
+    const juce::String projectReadyMessage = localProjectFile.existsAsFile()
+        ? juce::String("Project ready.")
+        : juce::String("Project ready. Choose a local project file before saving.");
+
+    if (!versionsResult.ok())
+    {
+        result.activeProjectStatusMessage = versionsResult.error ? versionsResult.error->message
+                                                                 : "Project ready, but failed to load version history.";
+    }
+    else if (result.versions.empty())
+    {
+        result.activeProjectStatusMessage = projectReadyMessage + " No versions yet.";
+    }
+    else
+    {
+        result.activeProjectStatusMessage = "Project ready. Loaded "
+            + juce::String(static_cast<int>(result.versions.size()))
+            + " version(s).";
+    }
+
     return result;
 }
 
@@ -197,17 +252,76 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
         return result;
     }
 
-    const auto& branches = *branchesResult.value;
-    const auto branchIt = std::find_if(branches.begin(), branches.end(), [](const Branch& branch)
+    const auto& fetchedBranches = *branchesResult.value;
+    result.branches = fetchedBranches;
+    const auto branchIt = std::find_if(fetchedBranches.begin(), fetchedBranches.end(), [](const Branch& branch)
     {
         return branch.name == "main";
     });
-    const auto& selectedBranch = branchIt != branches.end() ? *branchIt : branches.front();
+    const auto& selectedBranch = branchIt != fetchedBranches.end() ? *branchIt : fetchedBranches.front();
 
     result.selectedProject = *createdProject.value;
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
-    result.activeProjectStatusMessage = "Project created and main branch selected.";
+
+    const auto versionsResult = versionControlService.fetchVersionHistory(selectedBranch.id, accessToken);
+    if (versionsResult.ok() && versionsResult.value.has_value())
+    {
+        result.versions = std::move(*versionsResult.value);
+        sortVersionHistoryNewestFirst(result.versions);
+        result.selectedVersionId = chooseSelectedVersionId(result.versions, {});
+    }
+
+    if (!versionsResult.ok())
+    {
+        result.activeProjectStatusMessage = versionsResult.error ? versionsResult.error->message
+                                                                 : "Project created, but failed to load version history.";
+    }
+    else if (result.versions.empty())
+    {
+        result.activeProjectStatusMessage = "Project created and main branch selected. No versions yet.";
+    }
+    else
+    {
+        result.activeProjectStatusMessage = "Project created and main branch selected.";
+    }
+
+    return result;
+}
+
+StemhubAudioProcessor::BranchHistoryJobResult StemhubAudioProcessor::performFetchBranchHistoryRequest(
+    const juce::String& branchId,
+    const juce::String& branchName,
+    const juce::String& preferredVersionId,
+    const juce::String& accessToken) const
+{
+    BranchHistoryJobResult result;
+    result.branchId = branchId;
+    result.branchName = branchName;
+
+    const auto versionsResult = versionControlService.fetchVersionHistory(branchId, accessToken);
+    if (!versionsResult.ok() || !versionsResult.value.has_value())
+    {
+        result.errorMessage = versionsResult.error ? versionsResult.error->message
+                                                   : "Failed to load version history.";
+        return result;
+    }
+
+    result.versions = std::move(*versionsResult.value);
+    sortVersionHistoryNewestFirst(result.versions);
+    result.selectedVersionId = chooseSelectedVersionId(result.versions, preferredVersionId);
+
+    if (result.versions.empty())
+    {
+        result.activeProjectStatusMessage = "Loaded branch \"" + branchName + "\". No versions yet.";
+    }
+    else
+    {
+        result.activeProjectStatusMessage = "Loaded "
+            + juce::String(static_cast<int>(result.versions.size()))
+            + " version(s) for branch \"" + branchName + "\".";
+    }
+
     return result;
 }
 
@@ -315,8 +429,35 @@ void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobRes
                                                    : "Loaded " + juce::String(count) + " project(s).";
     }
 
+    branches = std::move(result.branches);
+    versionHistory = std::move(result.versions);
+    selectedVersionId = chooseSelectedVersionId(versionHistory, result.selectedVersionId);
     selectProject(*result.selectedProject, result.branchId, result.branchName,
             std::move(result.projectFile), result.projectFile.getParentDirectory());
+    setOperationState(OperationState::idle);
+    activeProjectStatusMessage = std::move(result.activeProjectStatusMessage);
+}
+
+void StemhubAudioProcessor::applyBranchHistoryResult(BranchHistoryJobResult result)
+{
+    if (hasError(result))
+    {
+        setOperationState(OperationState::error);
+        activeProjectStatusMessage = result.errorMessage;
+        return;
+    }
+
+    selectedBranchId = std::move(result.branchId);
+    selectedBranchName = std::move(result.branchName);
+    versionHistory = std::move(result.versions);
+    selectedVersionId = chooseSelectedVersionId(versionHistory, result.selectedVersionId);
+
+    ProjectVersionContext context;
+    context.projectId = selectedProject ? selectedProject->id : juce::String();
+    context.branchId = selectedBranchId;
+    context.lastVersionId = versionHistory.empty() ? juce::String() : versionHistory.front().id;
+    versionControlService.setCurrentProjectContext(context);
+
     setOperationState(OperationState::idle);
     activeProjectStatusMessage = std::move(result.activeProjectStatusMessage);
 }
@@ -331,8 +472,8 @@ void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
     }
 
     versionControlService.setLastVersionId(std::move(result.pushedVersionId));
-    setOperationState(OperationState::idle);
-    activeProjectStatusMessage = std::move(result.activeProjectStatusMessage);
+    activeProjectStatusMessage = "Version pushed successfully. Refreshing history...";
+    requestRefreshVersionHistory();
 }
 
 void StemhubAudioProcessor::applyBackgroundResult(BackgroundJobResult result)
@@ -345,6 +486,8 @@ void StemhubAudioProcessor::applyBackgroundResult(BackgroundJobResult result)
             applyAuthRequestResult(std::move(payload));
         else if constexpr (std::is_same_v<Payload, ProjectActivationJobResult>)
             applyProjectActivationResult(std::move(payload));
+        else if constexpr (std::is_same_v<Payload, BranchHistoryJobResult>)
+            applyBranchHistoryResult(std::move(payload));
         else if constexpr (std::is_same_v<Payload, PushVersionJobResult>)
             applyPushVersionResult(std::move(payload));
     }, std::move(result.payload));
@@ -427,7 +570,6 @@ void StemhubAudioProcessor::setPendingProjectFolder(const juce::File& folder)
 void StemhubAudioProcessor::selectProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile, juce::File projectFolder)
 {
     versionControlService.clearProjectContext();
-    versionControlService.setLastVersionId({});
     selectedProject = std::move(project);
     selectedBranchId = std::move(branchId);
     selectedBranchName = std::move(branchName);
@@ -440,7 +582,7 @@ void StemhubAudioProcessor::selectProject(Project project, juce::String branchId
     ProjectVersionContext context;
     context.projectId = selectedProject ? selectedProject->id : juce::String();
     context.branchId = selectedBranchId;
-    context.lastVersionId = versionControlService.getLastVersionId();
+    context.lastVersionId = versionHistory.empty() ? juce::String() : versionHistory.front().id;
     versionControlService.setCurrentProjectContext(context);
     sessionState.uiState = UIState::dashboard;
     sendChangeMessage();
@@ -451,8 +593,11 @@ void StemhubAudioProcessor::clearSelectedProject() noexcept
     selectedProject.reset();
     selectedBranchId.clear();
     selectedBranchName.clear();
+    selectedVersionId.clear();
     selectedProjectFile = juce::File();
     selectedProjectFolder = juce::File();
+    branches.clear();
+    versionHistory.clear();
     versionControlService.clearProjectContext();
     activeProjectStatusMessage.clear();
 }
@@ -468,6 +613,9 @@ void StemhubAudioProcessor::requestSignIn(const juce::String& email, const juce:
     projectSelectionStatusMessage.clear();
     activeProjectStatusMessage.clear();
     projects.clear();
+    branches.clear();
+    versionHistory.clear();
+    selectedVersionId.clear();
     sendChangeMessage();
 
     enqueueBackgroundTask([this, email, password]() -> BackgroundJobPayload
@@ -522,6 +670,72 @@ void StemhubAudioProcessor::requestCreateProject(juce::File localProjectFile)
     });
 }
 
+void StemhubAudioProcessor::requestSelectBranch(juce::String branchId)
+{
+    if (!selectedProject.has_value())
+    {
+        setOperationState(OperationState::error);
+        setActiveProjectStatusMessage("Choose a project before selecting a branch.");
+        return;
+    }
+
+    const auto branchIt = std::find_if(branches.begin(), branches.end(), [&branchId](const Branch& branch)
+    {
+        return branch.id == branchId;
+    });
+
+    if (branchIt == branches.end())
+    {
+        setOperationState(OperationState::error);
+        setActiveProjectStatusMessage("Selected branch is no longer available.");
+        return;
+    }
+
+    setOperationState(OperationState::pulling);
+    setActiveProjectStatusMessage("Loading branch history...");
+
+    const auto token = access_tkn;
+    const auto branchName = branchIt->name;
+    enqueueBackgroundTask([this,
+                           requestedBranchId = std::move(branchId),
+                           requestedBranchName = std::move(branchName),
+                           token]() -> BackgroundJobPayload
+    {
+        return performFetchBranchHistoryRequest(requestedBranchId, requestedBranchName, {}, token);
+    });
+}
+
+void StemhubAudioProcessor::requestRefreshVersionHistory()
+{
+    if (!selectedProject.has_value() || selectedBranchId.isEmpty())
+    {
+        setOperationState(OperationState::error);
+        setActiveProjectStatusMessage("Choose a project and branch before refreshing history.");
+        return;
+    }
+
+    const auto branchNameIt = std::find_if(branches.begin(), branches.end(), [this](const Branch& branch)
+    {
+        return branch.id == selectedBranchId;
+    });
+    const auto branchName = branchNameIt != branches.end() ? branchNameIt->name : selectedBranchName;
+
+    setOperationState(OperationState::pulling);
+    setActiveProjectStatusMessage("Refreshing version history...");
+
+    const auto token = access_tkn;
+    const auto branchId = selectedBranchId;
+    const auto preferredVersionId = selectedVersionId;
+    enqueueBackgroundTask([this,
+                           branchId,
+                           branchName,
+                           preferredVersionId,
+                           token]() -> BackgroundJobPayload
+    {
+        return performFetchBranchHistoryRequest(branchId, branchName, preferredVersionId, token);
+    });
+}
+
 void StemhubAudioProcessor::requestPushVersion(juce::String commitMessage, juce::String dawName)
 {
     setOperationState(OperationState::committing);
@@ -539,6 +753,12 @@ void StemhubAudioProcessor::requestPushVersion(juce::String commitMessage, juce:
     {
         return performPushVersionRequest(selectedFile, project, selectedBranch, requestedCommitMessage, requestedDawName);
     });
+}
+
+void StemhubAudioProcessor::setSelectedVersionId(juce::String versionId)
+{
+    selectedVersionId = std::move(versionId);
+    sendChangeMessage();
 }
 
 void StemhubAudioProcessor::handleAsyncUpdate()

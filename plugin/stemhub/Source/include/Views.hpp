@@ -70,19 +70,34 @@ public:
     void setProjectStatusMessage(const juce::String& message) { projectStatusLabel.setText(message, juce::dontSendNotification); }
     void setSelectedProjectFileMessage(const juce::String& message) { projectFileLabel.setText(message, juce::dontSendNotification); }
     void setCurrentProjectMessage(const juce::String& message) { currentProjectLabel.setText(message, juce::dontSendNotification); }
+    void setBranches(const std::vector<juce::String>& branchNames,
+                     const std::vector<juce::String>& branchIds,
+                     const juce::String& selectedBranchId);
+    void setVersions(const std::vector<juce::String>& versionLabels,
+                     const std::vector<juce::String>& versionIds,
+                     const juce::String& selectedVersionId);
+    juce::String getSelectedBranchId() const;
+    juce::String getSelectedVersionId() const;
     void resized() override;
 
     std::function<void()> onSave;
     std::function<void()> onSync;
     std::function<void()> onBranchChange;
+    std::function<void()> onVersionSelectionChange;
     std::function<void()> onSignOut;
 
 private:
+    std::vector<juce::String> comboBranchIds;
+    std::vector<juce::String> comboVersionIds;
     juce::Label projectStatusLabel;
     juce::Label projectFileLabel;
     juce::Label currentProjectLabel;
+    juce::Label branchLabel;
+    juce::Label versionLabel;
+    juce::ComboBox branchComboBox;
+    juce::ComboBox versionComboBox;
     juce::TextButton saveChanges { "Save" };
-    juce::TextButton syncButton { "Sync" };
-    juce::TextButton changeBranch { "View Other Branches" };
+    juce::TextButton syncButton { "Refresh History" };
+    juce::TextButton changeBranch { "Load Branch" };
     juce::TextButton signOutButton { "Sign Out" };
 };

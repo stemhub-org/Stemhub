@@ -174,6 +174,25 @@ DashboardView::DashboardView()
     currentProjectLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     currentProjectLabel.setFont(juce::FontOptions(15.0f, juce::Font::plain));
 
+    addAndMakeVisible(branchLabel);
+    branchLabel.setText("Branch", juce::dontSendNotification);
+    branchLabel.setJustificationType(juce::Justification::centredLeft);
+
+    addAndMakeVisible(branchComboBox);
+    branchComboBox.setTextWhenNothingSelected("No branch available");
+
+    addAndMakeVisible(versionLabel);
+    versionLabel.setText("Version history", juce::dontSendNotification);
+    versionLabel.setJustificationType(juce::Justification::centredLeft);
+
+    addAndMakeVisible(versionComboBox);
+    versionComboBox.setTextWhenNothingSelected("No versions available");
+    versionComboBox.onChange = [this]
+    {
+        if (onVersionSelectionChange != nullptr)
+            onVersionSelectionChange();
+    };
+
     addAndMakeVisible(saveChanges);
     saveChanges.onClick = [this]
     {
@@ -203,10 +222,90 @@ DashboardView::DashboardView()
     };
 }
 
+void DashboardView::setBranches(const std::vector<juce::String>& branchNames,
+                                const std::vector<juce::String>& branchIds,
+                                const juce::String& selectedBranchId)
+{
+    branchComboBox.clear(juce::dontSendNotification);
+    comboBranchIds = branchIds;
+
+    for (size_t i = 0; i < branchNames.size() && i < branchIds.size(); ++i)
+        branchComboBox.addItem(branchNames[i], static_cast<int>(i) + 1);
+
+    if (comboBranchIds.empty())
+    {
+        branchComboBox.setSelectedId(0, juce::dontSendNotification);
+        return;
+    }
+
+    if (selectedBranchId.isNotEmpty())
+    {
+        for (size_t i = 0; i < comboBranchIds.size(); ++i)
+        {
+            if (comboBranchIds[i] == selectedBranchId)
+            {
+                branchComboBox.setSelectedId(static_cast<int>(i) + 1, juce::dontSendNotification);
+                return;
+            }
+        }
+    }
+
+    branchComboBox.setSelectedId(1, juce::dontSendNotification);
+}
+
+void DashboardView::setVersions(const std::vector<juce::String>& versionLabels,
+                                const std::vector<juce::String>& versionIds,
+                                const juce::String& selectedVersionId)
+{
+    versionComboBox.clear(juce::dontSendNotification);
+    comboVersionIds = versionIds;
+
+    for (size_t i = 0; i < versionLabels.size() && i < versionIds.size(); ++i)
+        versionComboBox.addItem(versionLabels[i], static_cast<int>(i) + 1);
+
+    if (comboVersionIds.empty())
+    {
+        versionComboBox.setSelectedId(0, juce::dontSendNotification);
+        return;
+    }
+
+    if (selectedVersionId.isNotEmpty())
+    {
+        for (size_t i = 0; i < comboVersionIds.size(); ++i)
+        {
+            if (comboVersionIds[i] == selectedVersionId)
+            {
+                versionComboBox.setSelectedId(static_cast<int>(i) + 1, juce::dontSendNotification);
+                return;
+            }
+        }
+    }
+
+    versionComboBox.setSelectedId(1, juce::dontSendNotification);
+}
+
+juce::String DashboardView::getSelectedBranchId() const
+{
+    const auto selectedIndex = branchComboBox.getSelectedItemIndex();
+    if (selectedIndex < 0 || static_cast<size_t>(selectedIndex) >= comboBranchIds.size())
+        return {};
+
+    return comboBranchIds[static_cast<size_t>(selectedIndex)];
+}
+
+juce::String DashboardView::getSelectedVersionId() const
+{
+    const auto selectedIndex = versionComboBox.getSelectedItemIndex();
+    if (selectedIndex < 0 || static_cast<size_t>(selectedIndex) >= comboVersionIds.size())
+        return {};
+
+    return comboVersionIds[static_cast<size_t>(selectedIndex)];
+}
+
 void DashboardView::resized()
 {
     auto area = getLocalBounds().reduced(20);
-    const int fieldWidth = 220;
+    const int fieldWidth = 280;
     const int x = (getWidth() - fieldWidth) / 2;
 
     auto projectStatusRow = area.removeFromTop(32);
@@ -224,6 +323,31 @@ void DashboardView::resized()
 
     area.removeFromTop(8);
 
+    auto branchLabelRow = area.removeFromTop(22);
+    branchLabel.setBounds(x, branchLabelRow.getY(), fieldWidth, branchLabelRow.getHeight());
+
+    area.removeFromTop(2);
+
+    auto branchComboRow = area.removeFromTop(28);
+    branchComboBox.setBounds(x, branchComboRow.getY(), fieldWidth, branchComboRow.getHeight());
+
+    area.removeFromTop(8);
+
+    auto branchRow = area.removeFromTop(32);
+    changeBranch.setBounds(x, branchRow.getY(), fieldWidth, branchRow.getHeight());
+
+    area.removeFromTop(10);
+
+    auto versionLabelRow = area.removeFromTop(22);
+    versionLabel.setBounds(x, versionLabelRow.getY(), fieldWidth, versionLabelRow.getHeight());
+
+    area.removeFromTop(2);
+
+    auto versionComboRow = area.removeFromTop(28);
+    versionComboBox.setBounds(x, versionComboRow.getY(), fieldWidth, versionComboRow.getHeight());
+
+    area.removeFromTop(8);
+
     auto saveRow = area.removeFromTop(32);
     saveChanges.setBounds(x, saveRow.getY(), fieldWidth, saveRow.getHeight());
 
@@ -231,11 +355,6 @@ void DashboardView::resized()
 
     auto syncRow = area.removeFromTop(32);
     syncButton.setBounds(x, syncRow.getY(), fieldWidth, syncRow.getHeight());
-
-    area.removeFromTop(8);
-
-    auto branchRow = area.removeFromTop(32);
-    changeBranch.setBounds(x, branchRow.getY(), fieldWidth, branchRow.getHeight());
 
     area.removeFromTop(24);
 
