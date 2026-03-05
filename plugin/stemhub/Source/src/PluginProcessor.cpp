@@ -4,6 +4,7 @@
 #include "../include/PluginProcessor.hpp"
 #include "../include/PluginEditor.hpp"
 #include "../include/VersionControlService.hpp"
+#include "../include/SnapshotBundler.hpp"
 
 namespace
 {
@@ -247,6 +248,14 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     request.commitMessage = commitMessage;
     request.dawName = dawName;
 
+    SnapshotBundleRequest bundleRequest;
+    bundleRequest.sourceProjectFile = projectFile;
+    bundleRequest.sourceDaw = dawName;
+    bundleRequest.projectRootDirectory = selectedProjectFolder.exists() ? selectedProjectFolder
+                                                                        : projectFile.getParentDirectory();
+
+    SnapshotBundler bundle;
+    SnapshotBundleResult bundleResult = bundle.bundleProject(bundleRequest, );
     const auto pushResult = versionControlService.pushVersion(request);
     if (pushResult.failed())
     {

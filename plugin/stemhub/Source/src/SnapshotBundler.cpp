@@ -8,18 +8,18 @@ namespace
     {
         return file.getRelativePathFrom(rootDirectory).replaceCharacter('\\', '/');
     }
-    
+
     bool isSourceFileWithinRoot(const juce::File& sourceFile, const juce::File& rootDirectory)
     {
         if (!sourceFile.existsAsFile() || !rootDirectory.isDirectory())
             return false;
-    
+
         const auto sourceParent = sourceFile.getParentDirectory();
         return sourceParent == rootDirectory || sourceFile.isAChildOf(rootDirectory);
     }
 }
 
-juce::Result SnapshotBundler::buildSnapshotBundle(const SnapshotBundleRequest& request,
+juce::Result SnapshotBundler::bundleProject(const SnapshotBundleRequest& request,
                                                   SnapshotBundleResult& outResult) const
 {
     outResult = {};

@@ -18,7 +18,7 @@ struct SnapshotBundleResult
 class SnapshotBundler
 {
     public:
-        [[nodiscard]] juce::Result buildSnapshotBundle(const SnapshotBundleRequest& request,
+        [[nodiscard]] juce::Result bundleProject(const SnapshotBundleRequest& request,
                                                     SnapshotBundleResult& outResult) const;
 };
 
