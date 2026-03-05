@@ -444,7 +444,11 @@ function NotificationSettings() {
                     <div className="space-y-3">
                         <ToggleRow
                             title="New Pull Requests"
+<<<<<<< HEAD
                             description="When someone opens a PR on your project"
+=======
+                            description="When someone opens a PR on your repository"
+>>>>>>> origin/dev
                             defaultChecked={true}
                         />
                         <ToggleRow

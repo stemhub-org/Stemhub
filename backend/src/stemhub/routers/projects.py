@@ -1,4 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+<<<<<<< HEAD
+=======
+from sqlalchemy import func
+>>>>>>> origin/dev
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 from sqlalchemy.future import select
@@ -12,6 +16,29 @@ from stemhub.auth import get_current_user
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
+<<<<<<< HEAD
+=======
+
+async def _project_name_exists(
+    *,
+    db: AsyncSession,
+    owner_id: UUID,
+    name: str,
+    exclude_project_id: UUID | None = None,
+) -> bool:
+    query = select(Project.id).where(
+        Project.owner_id == owner_id,
+        func.lower(Project.name) == name.lower(),
+        Project.is_deleted == False,
+    )
+    if exclude_project_id is not None:
+        query = query.where(Project.id != exclude_project_id)
+
+    result = await db.execute(query)
+    return result.first() is not None
+
+
+>>>>>>> origin/dev
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
     project_in: ProjectCreate,
@@ -21,7 +48,20 @@ async def create_project(
     """
     Create a new project.
     """
+<<<<<<< HEAD
     db_project = Project(**project_in.model_dump(), owner_id=current_user.id)
+=======
+    project_name = project_in.name.strip()
+    if project_name == "":
+        raise HTTPException(status_code=400, detail="Project name cannot be empty")
+
+    if await _project_name_exists(db=db, owner_id=current_user.id, name=project_name):
+        raise HTTPException(status_code=409, detail="Project name already exists")
+
+    payload = project_in.model_dump()
+    payload["name"] = project_name
+    db_project = Project(**payload, owner_id=current_user.id)
+>>>>>>> origin/dev
     db.add(db_project)
     await db.flush()
 
@@ -74,6 +114,25 @@ async def update_project(
         raise HTTPException(status_code=404, detail="Project not found")
     
     update_data = project_in.model_dump(exclude_unset=True)
+<<<<<<< HEAD
+=======
+
+    if "name" in update_data and update_data["name"] is not None:
+        project_name = update_data["name"].strip()
+        if project_name == "":
+            raise HTTPException(status_code=400, detail="Project name cannot be empty")
+
+        if await _project_name_exists(
+            db=db,
+            owner_id=current_user.id,
+            name=project_name,
+            exclude_project_id=project_id,
+        ):
+            raise HTTPException(status_code=409, detail="Project name already exists")
+
+        update_data["name"] = project_name
+
+>>>>>>> origin/dev
     for field, value in update_data.items():
         setattr(project, field, value)
         

@@ -18,6 +18,10 @@ ApiResult<VersionSummary> parseVersionSummary(const juce::var& value)
     summary.id = object->getProperty("id").toString();
     summary.branchId = object->getProperty("branch_id").toString();
     summary.parentVersionId = object->getProperty("parent_version_id").toString();
+<<<<<<< HEAD
+=======
+    summary.createdAt = object->getProperty("created_at").toString();
+>>>>>>> origin/dev
     summary.commitMessage = object->getProperty("commit_message").toString();
     summary.sourceDaw = object->getProperty("source_daw").toString();
     summary.sourceProjectFilename = object->getProperty("source_project_filename").toString();
@@ -57,7 +61,17 @@ juce::Result VersionControlService::pushVersion(const PushVersionRequest& reques
     if (request.dawName.isNotEmpty())
         bodyObject->setProperty("source_daw", request.dawName);
 
+<<<<<<< HEAD
     bodyObject->setProperty("source_project_filename", request.localProjectFile.getFileName());
+=======
+    const auto sourceProjectFilename = request.sourceProjectFilename.isNotEmpty()
+        ? request.sourceProjectFilename
+        : request.localProjectFile.getFileName();
+    bodyObject->setProperty("source_project_filename", sourceProjectFilename);
+
+    if (!request.snapshotManifest.isVoid())
+        bodyObject->setProperty("snapshot_manifest", request.snapshotManifest);
+>>>>>>> origin/dev
 
     const auto body = juce::JSON::toString(juce::var(bodyObject.get()));
     const auto createResult = apiClient.requestJson("/branches/" + branchId + "/versions/", "POST", body, accessToken);
