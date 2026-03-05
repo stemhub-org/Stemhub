@@ -7,6 +7,8 @@ from .routers.files import router as files_router
 from .routers.projects import router as projects_router
 from .routers.branches import router as branches_router
 from .routers.versions import router as versions_router
+from .routers.tracks import router as tracks_router
+from .routers.collaborators import router as collaborators_router
 from .database import engine, Base
 
 @asynccontextmanager
@@ -30,6 +32,8 @@ app.include_router(projects_router)
 app.include_router(branches_router)
 app.include_router(versions_router)
 app.include_router(files_router)
+app.include_router(tracks_router)
+app.include_router(collaborators_router)
 
 @app.get("/")
 async def root():

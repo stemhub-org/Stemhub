@@ -95,6 +95,7 @@ class VersionUpdate(BaseModel):
 class VersionResponse(VersionBase):
     id: UUID
     branch_id: UUID
+    created_by: Optional[UUID] = None
     created_at: datetime
     is_deleted: bool
     deleted_at: Optional[datetime] = None
@@ -102,9 +103,42 @@ class VersionResponse(VersionBase):
     class Config:
         from_attributes = True
 
+# ── Track Schemas ──
+
+class TrackBase(BaseModel):
+    name: str
+    file_type: str = ".json"
+    storage_path: Optional[str] = None
+
+class TrackCreate(TrackBase):
+    pass
+
+class TrackResponse(TrackBase):
+    id: UUID
+    version_id: UUID
+
+    class Config:
+        from_attributes = True
+
+# ── Collaborator Schemas ──
+
+class CollaboratorCreate(BaseModel):
+    user_id: UUID
+    role: Optional[str] = "Viewer"
+
+class CollaboratorResponse(BaseModel):
+    project_id: UUID
+    user_id: UUID
+    role: str
+    created_at: datetime
+    user: Optional[UserResponse] = None
+
+    class Config:
+        from_attributes = True
 
 # ── Auth Schemas ──
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
