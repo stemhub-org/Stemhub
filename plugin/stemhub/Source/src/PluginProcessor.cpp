@@ -118,12 +118,6 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     ProjectActivationJobResult result;
     result.projectFile = localProjectFile;
 
-    if (!localProjectFile.existsAsFile())
-    {
-        result.errorMessage = "Choose the local DAW project file before continuing.";
-        return result;
-    }
-
     if (projectId.isEmpty())
     {
         result.errorMessage = "Choose a project before continuing.";
@@ -159,7 +153,9 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     result.selectedProject = *projectIt;
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
-    result.activeProjectStatusMessage = "Project ready.";
+    result.activeProjectStatusMessage = localProjectFile.existsAsFile()
+        ? "Project ready."
+        : "Project ready. Choose a local project file before saving.";
     return result;
 }
 

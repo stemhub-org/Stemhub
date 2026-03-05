@@ -102,9 +102,11 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
             projectIds.push_back(project.id);
         }
 
+        const auto hasSelectedProjectFile = audioProcessor.getPendingProjectFile().existsAsFile();
         projectSelectionView.setHasExistingProjects(!projects.empty());
+        projectSelectionView.setCanCreateProject(hasSelectedProjectFile);
         projectSelectionView.setMessage(getProjectSelectionMessage(audioProcessor));
-        projectSelectionView.setSelectedProjectFileMessage(audioProcessor.getPendingProjectFile().existsAsFile()
+        projectSelectionView.setSelectedProjectFileMessage(hasSelectedProjectFile
             ? audioProcessor.getPendingProjectFile().getFullPathName()
             : "No project file selected.");
         projectSelectionView.setProjects(projectNames,
@@ -150,17 +152,17 @@ void StemhubAudioProcessorEditor::handleChooseProjectFileClick()
 
 void StemhubAudioProcessorEditor::handleOpenProjectClick()
 {
-    const auto pendingFile = audioProcessor.getPendingProjectFile();
-    if (!pendingFile.existsAsFile())
+    const auto projectId = projectSelectionView.getSelectedProjectId();
+    if (projectId.isEmpty())
     {
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::WarningIcon,
             "Open project",
-            "Choose the local DAW project file before continuing.");
+            "Choose an existing project before continuing.");
         return;
     }
 
-    const auto projectId = projectSelectionView.getSelectedProjectId();
+    const auto pendingFile = audioProcessor.getPendingProjectFile();
     audioProcessor.requestOpenProject(projectId, pendingFile);
     refreshSessionUi();
 }

@@ -40,6 +40,7 @@ ProjectSelectionView::ProjectSelectionView()
         if (onCreateProject != nullptr)
             onCreateProject();
     };
+    createProjectButton.setVisible(false);
 
     addAndMakeVisible(signOutButton);
     signOutButton.onClick = [this]
@@ -70,6 +71,10 @@ void ProjectSelectionView::setProjects(const std::vector<juce::String>& projectN
             }
         }
     }
+    else if (!comboProjectIds.empty())
+    {
+        projectComboBox.setSelectedId(1, juce::dontSendNotification);
+    }
 }
 
 void ProjectSelectionView::setHasExistingProjects(bool hasProjects)
@@ -78,6 +83,13 @@ void ProjectSelectionView::setHasExistingProjects(bool hasProjects)
     existingProjectsLabel.setVisible(hasExistingProjects);
     projectComboBox.setVisible(hasExistingProjects);
     openProjectButton.setVisible(hasExistingProjects);
+    resized();
+}
+
+void ProjectSelectionView::setCanCreateProject(bool canCreate)
+{
+    canCreateProject = canCreate;
+    createProjectButton.setVisible(canCreateProject);
     resized();
 }
 
@@ -129,10 +141,16 @@ void ProjectSelectionView::resized()
         area.removeFromTop(16);
     }
 
-    auto createRow = area.removeFromTop(32);
-    createProjectButton.setBounds(x, createRow.getY(), fieldWidth, createRow.getHeight());
-
-    area.removeFromTop(20);
+    if (canCreateProject)
+    {
+        auto createRow = area.removeFromTop(32);
+        createProjectButton.setBounds(x, createRow.getY(), fieldWidth, createRow.getHeight());
+        area.removeFromTop(20);
+    }
+    else
+    {
+        area.removeFromTop(8);
+    }
 
     auto signOutRow = area.removeFromTop(32);
     signOutButton.setBounds(x, signOutRow.getY(), fieldWidth, signOutRow.getHeight());
