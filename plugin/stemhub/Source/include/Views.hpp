@@ -41,7 +41,7 @@ public:
                      const juce::String& selectedProjectId);
     void setHasExistingProjects(bool hasProjects);
     void setCanCreateProject(bool canCreate);
-    juce::String getSelectedProjectId() const;
+    [[nodiscard]] juce::String getSelectedProjectId() const;
     void resized() override;
 
     std::function<void()> onChooseProjectFile;
@@ -78,8 +78,11 @@ public:
     void setVersions(const std::vector<juce::String>& versionLabels,
                      const std::vector<juce::String>& versionIds,
                      const juce::String& selectedVersionId);
-    juce::String getSelectedBranchId() const;
-    juce::String getSelectedVersionId() const;
+    [[nodiscard]] juce::String getSelectedBranchId() const;
+    [[nodiscard]] juce::String getSelectedVersionId() const;
+    [[nodiscard]] juce::String getCommitMessage() const noexcept { return commitMessageInput.getText().trim(); }
+    void setCommitMessage(const juce::String& message) { commitMessageInput.setText(message, juce::dontSendNotification); }
+    void clearCommitMessage() { commitMessageInput.clear(); }
     void resized() override;
 
     std::function<void()> onSave;
@@ -98,9 +101,11 @@ private:
     juce::Label branchNameLabel;
     juce::Label branchLabel;
     juce::Label versionLabel;
+    juce::Label commitMessageLabel;
     juce::ComboBox branchComboBox;
     juce::ComboBox versionComboBox;
     juce::TextButton backToProjectsButton { "< Projects" };
+    juce::TextEditor commitMessageInput;
     juce::TextButton saveChanges { "Save" };
     juce::TextButton syncButton { "Refresh History" };
     juce::TextButton changeBranch { "Load Branch" };
