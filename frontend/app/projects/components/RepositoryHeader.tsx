@@ -5,9 +5,14 @@ import { useRouter } from "next/navigation";
 import { Bell, Sun, User } from "lucide-react";
 import { useTheme } from "next-themes";
 
-const REPO_ACCENT = "#3E63DD";
+const REPO_ACCENT = "#9C57DF";
 
-export function RepositoryHeader() {
+type RepositoryHeaderProps = {
+    onToggleSidebar?: () => void;
+    sidebarOpen?: boolean;
+};
+
+export function RepositoryHeader({ onToggleSidebar, sidebarOpen = false }: RepositoryHeaderProps) {
     const router = useRouter();
     const { resolvedTheme, setTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
@@ -22,15 +27,40 @@ export function RepositoryHeader() {
     };
 
     return (
-        <header className="flex justify-between items-center py-4 px-6 border-b border-border-subtle bg-background">
-            <Link href="/dashboard">
-                <span
-                    className="text-xl font-medium tracking-tight text-foreground"
-                    style={{ fontFamily: "var(--font-syne)" }}
-                >
-                    StemHub<span style={{ color: REPO_ACCENT }}>.</span>
-                </span>
-            </Link>
+        <header className="flex items-center justify-between py-4 px-6 border-b border-border-subtle bg-background">
+            <div className="flex items-center gap-3">
+                {onToggleSidebar && !sidebarOpen && (
+                    <button
+                        type="button"
+                        onClick={onToggleSidebar}
+                        aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-transparent hover:bg-foreground/5 transition-colors"
+                    >
+                        <span className="flex flex-col justify-center gap-1 items-center">
+                            <span
+                                className={`block h-[2px] min-h-[2px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
+                                    sidebarOpen ? "translate-y-[2px] rotate-45" : ""
+                                }`}
+                            />
+                            <span
+                                className={`block h-[2px] min-h-[2px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
+                                    sidebarOpen ? "-translate-y-[2px] -rotate-45" : ""
+                                }`}
+                            />
+                        </span>
+                    </button>
+                )}
+                {(!onToggleSidebar || !sidebarOpen) && (
+                    <Link href="/dashboard">
+                        <span
+                            className="text-2xl font-medium tracking-tight text-foreground"
+                            style={{ fontFamily: "var(--font-syne)" }}
+                        >
+                            StemHub<span style={{ color: REPO_ACCENT }}>.</span>
+                        </span>
+                    </Link>
+                )}
+            </div>
 
             <div className="flex items-center gap-4">
                 <button
@@ -63,7 +93,7 @@ export function RepositoryHeader() {
                         type="button"
                         onClick={handleLogout}
                         className="h-10 w-10 rounded-full flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
-                        style={{ background: `linear-gradient(to top right, ${REPO_ACCENT}, #6B8CEE)` }}
+                        style={{ background: `linear-gradient(to top right, ${REPO_ACCENT}, #C28CF0)` }}
                         title="Déconnexion"
                         aria-label="Profil / Déconnexion"
                     >

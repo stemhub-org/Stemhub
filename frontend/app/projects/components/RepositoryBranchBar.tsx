@@ -52,7 +52,7 @@ export function RepositoryBranchBar() {
                                         setSelectedBranch(branch);
                                         setIsOpen(false);
                                     }}
-                                    className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-background-tertiary ${selectedBranch === branch ? "font-medium text-accent-blue" : "text-foreground"}`}
+                                    className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-background-tertiary ${selectedBranch === branch ? "font-medium text-accent" : "text-foreground"}`}
                                 >
                                     <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden />
                                     {branch}

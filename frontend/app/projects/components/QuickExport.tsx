@@ -37,7 +37,7 @@ export function QuickExport() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:[&>*]:h-full">
                 <button
                     type="button"
-                    className="flex flex-col justify-between rounded-xl border border-border-subtle dark:border-accent-blue/40 bg-background-tertiary/50 dark:bg-foreground/[0.01] px-4 py-3 text-left transition-colors dark:hover:bg-accent-blue/5"
+                    className="flex flex-col justify-between rounded-xl border border-border-subtle dark:border-accent/40 bg-background-tertiary/50 dark:bg-foreground/[0.01] px-4 py-3 text-left transition-colors dark:hover:bg-accent/5"
                 >
                     <div className="mb-2 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
