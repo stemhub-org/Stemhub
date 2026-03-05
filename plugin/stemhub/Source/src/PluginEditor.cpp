@@ -70,6 +70,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     dashboardView.onSync = [this] { handleSyncClick(); };
     dashboardView.onBranchChange = [this] { handleChangeBranchClick(); };
     dashboardView.onVersionSelectionChange = [this] { handleVersionSelectionChanged(); };
+    dashboardView.onBackToProjects = [this] { handleBackToProjectsClick(); };
     dashboardView.onSignOut = [this] { handleSignOutClick(); };
 
     refreshSessionUi();
@@ -149,9 +150,12 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
         dashboardView.setProjectStatusMessage(getDashboardMessage(audioProcessor));
         dashboardView.setBranches(branchNames, branchIds, audioProcessor.getSelectedBranchId());
         dashboardView.setVersions(versionLabels, versionIds, audioProcessor.getSelectedVersionId());
-        dashboardView.setCurrentProjectMessage(audioProcessor.getSelectedProject()
-            ? "Project: " + audioProcessor.getSelectedProject()->name + " | Branch: " + audioProcessor.getSelectedBranchName()
-            : "No project selected.");
+        dashboardView.setProjectNameMessage(audioProcessor.getSelectedProject()
+            ? "Project: " + audioProcessor.getSelectedProject()->name
+            : "Project: No project selected");
+        dashboardView.setBranchNameMessage(audioProcessor.getSelectedBranchName().isNotEmpty()
+            ? "Branch: " + audioProcessor.getSelectedBranchName()
+            : "Branch: Not selected");
         dashboardView.setSelectedProjectFileMessage(audioProcessor.getSelectedProjectFile().existsAsFile()
             ? audioProcessor.getSelectedProjectFile().getFullPathName()
             : "No project file selected.");
@@ -290,6 +294,13 @@ void StemhubAudioProcessorEditor::handleVersionSelectionChanged()
 {
     const auto selectedVersionId = dashboardView.getSelectedVersionId();
     audioProcessor.setSelectedVersionId(selectedVersionId);
+}
+
+void StemhubAudioProcessorEditor::handleBackToProjectsClick()
+{
+    audioProcessor.setOperationState(OperationState::idle);
+    audioProcessor.setUIState(UIState::projectSelection);
+    refreshSessionUi();
 }
 
 void StemhubAudioProcessorEditor::paint(juce::Graphics& g)

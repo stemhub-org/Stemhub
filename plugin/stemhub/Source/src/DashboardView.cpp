@@ -107,8 +107,15 @@ void ProjectSelectionView::resized()
     auto area = getLocalBounds().reduced(20);
     const int fieldWidth = 260;
     const int x = (getWidth() - fieldWidth) / 2;
+    const int contentRight = area.getRight();
 
-    auto titleRow = area.removeFromTop(56);
+    auto topActionsRow = area.removeFromTop(22);
+    const int signOutButtonWidth = 46;
+    signOutButton.setBounds(contentRight - signOutButtonWidth, topActionsRow.getY(), signOutButtonWidth, topActionsRow.getHeight());
+
+    area.removeFromTop(8);
+
+    auto titleRow = area.removeFromTop(48);
     statusLabel.setBounds(titleRow);
 
     area.removeFromTop(16);
@@ -151,9 +158,6 @@ void ProjectSelectionView::resized()
     {
         area.removeFromTop(8);
     }
-
-    auto signOutRow = area.removeFromTop(32);
-    signOutButton.setBounds(x, signOutRow.getY(), fieldWidth, signOutRow.getHeight());
 }
 
 DashboardView::DashboardView()
@@ -169,10 +173,15 @@ DashboardView::DashboardView()
     projectFileLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
     projectFileLabel.setText("No project file selected.", juce::dontSendNotification);
 
-    addAndMakeVisible(currentProjectLabel);
-    currentProjectLabel.setJustificationType(juce::Justification::centredLeft);
-    currentProjectLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    currentProjectLabel.setFont(juce::FontOptions(15.0f, juce::Font::plain));
+    addAndMakeVisible(projectNameLabel);
+    projectNameLabel.setJustificationType(juce::Justification::centredLeft);
+    projectNameLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    projectNameLabel.setFont(juce::FontOptions(15.0f, juce::Font::bold));
+
+    addAndMakeVisible(branchNameLabel);
+    branchNameLabel.setJustificationType(juce::Justification::centredLeft);
+    branchNameLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    branchNameLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
 
     addAndMakeVisible(branchLabel);
     branchLabel.setText("Branch", juce::dontSendNotification);
@@ -191,6 +200,13 @@ DashboardView::DashboardView()
     {
         if (onVersionSelectionChange != nullptr)
             onVersionSelectionChange();
+    };
+
+    addAndMakeVisible(backToProjectsButton);
+    backToProjectsButton.onClick = [this]
+    {
+        if (onBackToProjects != nullptr)
+            onBackToProjects();
     };
 
     addAndMakeVisible(saveChanges);
@@ -307,57 +323,67 @@ void DashboardView::resized()
     auto area = getLocalBounds().reduced(20);
     const int fieldWidth = 280;
     const int x = (getWidth() - fieldWidth) / 2;
+    const int contentLeft = area.getX();
+    const int contentRight = area.getRight();
 
-    auto projectStatusRow = area.removeFromTop(32);
+    auto topActionsRow = area.removeFromTop(22);
+    const int backButtonWidth = 112;
+    const int signOutButtonWidth = 46;
+    backToProjectsButton.setBounds(contentLeft, topActionsRow.getY(), backButtonWidth, topActionsRow.getHeight());
+    signOutButton.setBounds(contentRight - signOutButtonWidth, topActionsRow.getY(), signOutButtonWidth, topActionsRow.getHeight());
+
+    area.removeFromTop(4);
+
+    auto projectStatusRow = area.removeFromTop(24);
     projectStatusLabel.setBounds(x, projectStatusRow.getY(), fieldWidth, projectStatusRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto currentProjectRow = area.removeFromTop(28);
-    currentProjectLabel.setBounds(x - 80, currentProjectRow.getY(), fieldWidth + 160, currentProjectRow.getHeight());
+    auto projectNameRow = area.removeFromTop(22);
+    projectNameLabel.setBounds(x - 80, projectNameRow.getY(), fieldWidth + 160, projectNameRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(1);
 
-    auto projectFileRow = area.removeFromTop(40);
+    auto branchNameRow = area.removeFromTop(22);
+    branchNameLabel.setBounds(x - 80, branchNameRow.getY(), fieldWidth + 160, branchNameRow.getHeight());
+
+    area.removeFromTop(4);
+
+    auto projectFileRow = area.removeFromTop(28);
     projectFileLabel.setBounds(x - 80, projectFileRow.getY(), fieldWidth + 160, projectFileRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto branchLabelRow = area.removeFromTop(22);
+    auto branchLabelRow = area.removeFromTop(18);
     branchLabel.setBounds(x, branchLabelRow.getY(), fieldWidth, branchLabelRow.getHeight());
 
-    area.removeFromTop(2);
+    area.removeFromTop(1);
 
-    auto branchComboRow = area.removeFromTop(28);
+    auto branchComboRow = area.removeFromTop(24);
     branchComboBox.setBounds(x, branchComboRow.getY(), fieldWidth, branchComboRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto branchRow = area.removeFromTop(32);
+    auto branchRow = area.removeFromTop(26);
     changeBranch.setBounds(x, branchRow.getY(), fieldWidth, branchRow.getHeight());
 
-    area.removeFromTop(10);
+    area.removeFromTop(5);
 
-    auto versionLabelRow = area.removeFromTop(22);
+    auto versionLabelRow = area.removeFromTop(18);
     versionLabel.setBounds(x, versionLabelRow.getY(), fieldWidth, versionLabelRow.getHeight());
 
-    area.removeFromTop(2);
+    area.removeFromTop(1);
 
-    auto versionComboRow = area.removeFromTop(28);
+    auto versionComboRow = area.removeFromTop(24);
     versionComboBox.setBounds(x, versionComboRow.getY(), fieldWidth, versionComboRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto saveRow = area.removeFromTop(32);
+    auto saveRow = area.removeFromTop(26);
     saveChanges.setBounds(x, saveRow.getY(), fieldWidth, saveRow.getHeight());
 
-    area.removeFromTop(8);
+    area.removeFromTop(4);
 
-    auto syncRow = area.removeFromTop(32);
+    auto syncRow = area.removeFromTop(26);
     syncButton.setBounds(x, syncRow.getY(), fieldWidth, syncRow.getHeight());
-
-    area.removeFromTop(24);
-
-    auto signOutRow = area.removeFromTop(32);
-    signOutButton.setBounds(x, signOutRow.getY(), fieldWidth, signOutRow.getHeight());
 }
