@@ -69,7 +69,8 @@ async def upload_version_artifact(
     version.artifact_path = stored.path
     version.artifact_size_bytes = stored.size_bytes
     version.artifact_checksum = stored.checksum_sha256
-    version.source_project_filename = artifact.filename
+    if not version.source_project_filename:
+        version.source_project_filename = artifact.filename
 
     await db.commit()
     await db.refresh(version)
