@@ -21,7 +21,7 @@ function WaveformPlaceholder() {
     const progressIndex = Math.floor(bars.length * progress);
 
     return (
-        <div className="flex h-14 w-full items-center rounded-lg bg-foreground/[0.03] px-4">
+        <div className="flex h-14 w-full items-center rounded-lg bg-background-tertiary px-4">
             <div className="flex h-full w-full items-end gap-[1px]">
                 {bars.map((height, index) => {
                     const baseHeight = 18;
@@ -37,7 +37,7 @@ function WaveformPlaceholder() {
                                 height: `${barHeight}px`,
                                 backgroundColor: isPlayed
                                     ? "var(--accent)"
-                                    : "rgba(26, 26, 26, 0.18)",
+                                    : "var(--border-subtle)",
                             }}
                         />
                     );
