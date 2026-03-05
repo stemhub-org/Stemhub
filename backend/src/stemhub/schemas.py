@@ -153,4 +153,3 @@ class CollaboratorResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-
