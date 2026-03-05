@@ -39,4 +39,6 @@ struct PushVersionRequest
     juce::String commitMessage;
     juce::String dawName;
     juce::String parentVersionId;
+    juce::String sourceProjectFilename;
+    juce::var snapshotManifest;
 };

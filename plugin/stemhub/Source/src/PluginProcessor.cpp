@@ -264,6 +264,8 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     }
 
     request.localProjectFile = bundleOutput.bundleFile;
+    request.sourceProjectFilename = projectFile.getFileName();
+    request.snapshotManifest = bundleOutput.manifest;
 
     const auto pushResult = versionControlService.pushVersion(request);
     if (pushResult.failed())
