@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -12,13 +12,28 @@ import {
     Headphones,
     GitBranch,
     Users,
-    Edit2
+    Edit2,
+    Search,
+    X,
+    Loader2
 } from "lucide-react";
 
 export default function ProfilePage() {
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editForm, setEditForm] = useState({
+        username: "",
+        location: "",
+        website: "",
+        avatar_url: "",
+        bio: ""
+    });
+    const [isSaving, setIsSaving] = useState(false);
+    const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
+    const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -39,6 +54,13 @@ export default function ProfilePage() {
 
                 const data = await response.json();
                 setUser(data);
+                setEditForm({
+                    username: data.username || "",
+                    location: data.location || "",
+                    website: data.website || "",
+                    avatar_url: data.avatar_url || "",
+                    bio: data.bio || ""
+                });
             } catch (err) {
                 localStorage.removeItem("token");
                 router.push("/login");
@@ -58,7 +80,72 @@ export default function ProfilePage() {
         );
     }
 
-    const { username, email, avatar_url, created_at } = user || {};
+    const handleLocationSearch = (query: string) => {
+        setEditForm({ ...editForm, location: query });
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        if (query.length < 3) {
+            setLocationSuggestions([]);
+            return;
+        }
+
+        searchTimeoutRef.current = setTimeout(async () => {
+            setIsSearchingLocation(true);
+            try {
+                // Nominatim restricts to 1 request/second.
+                // We also avoid custom headers like User-Agent to prevent CORS preflight blocks in newer browsers.
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=5`);
+                const data = await response.json();
+                setLocationSuggestions(data);
+            } catch (error) {
+                console.error("Error searching location:", error);
+            } finally {
+                setIsSearchingLocation(false);
+            }
+        }, 600); // 600ms debounce
+    };
+
+    const selectLocation = (suggestion: any) => {
+        setEditForm({ ...editForm, location: suggestion.display_name });
+        setLocationSuggestions([]);
+    };
+
+    const handleUpdateProfile = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        const token = localStorage.getItem("token");
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const response = await fetch(`${apiUrl}/auth/me`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify(editForm),
+                credentials: "include"
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || "Erreur lors de la mise à jour");
+            }
+
+            const updatedUser = await response.json();
+            setUser(updatedUser);
+            setIsEditModalOpen(false);
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const { username, email, avatar_url, created_at, location, website, bio } = user || {};
     const joinedDate = created_at ? new Date(created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown Date';
     const initials = username ? username.substring(0, 2).toUpperCase() : '??';
     return (
@@ -70,38 +157,161 @@ export default function ProfilePage() {
                 transition={{ duration: 0.4 }}
                 className="flex flex-col md:flex-row gap-8 items-start relative rounded-2xl border border-foreground/[0.08] bg-background-secondary/10 p-8 backdrop-blur-xl"
             >
-                <div className="absolute right-8 top-8">
-                    <button className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20">
-                        Edit Profile
-                    </button>
+                <div className="absolute right-8 top-8 z-10">
+                    {!isEditModalOpen ? (
+                        <button
+                            onClick={() => setIsEditModalOpen(true)}
+                            className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 relative"
+                        >
+                            <Edit2 size={16} /> Edit Profile
+                        </button>
+                    ) : (
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    setEditForm({
+                                        username: user?.username || "",
+                                        location: user?.location || "",
+                                        website: user?.website || "",
+                                        avatar_url: user?.avatar_url || "",
+                                        bio: user?.bio || ""
+                                    });
+                                    setIsEditModalOpen(false);
+                                }}
+                                className="px-5 py-2.5 border border-white/10 hover:bg-white/5 text-white text-sm font-medium rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleUpdateProfile}
+                                disabled={isSaving}
+                                className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
+                            >
+                                {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Save"}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
-                {avatar_url ? (
-                    <img
-                        src={avatar_url}
-                        alt={username}
-                        className="h-32 w-32 md:h-40 md:w-40 rounded-full object-cover shrink-0 border-4 border-background-secondary shadow-xl"
-                    />
-                ) : (
-                    <div className="h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shrink-0 shadow-xl">
-                        {initials}
-                    </div>
-                )}
+                <div className="relative group shrink-0">
+                    {editForm.avatar_url || avatar_url ? (
+                        <img
+                            src={isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url}
+                            alt={username}
+                            className="h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 border-background-secondary shadow-xl"
+                        />
+                    ) : (
+                        <div className="h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl">
+                            {initials}
+                        </div>
+                    )}
+                    {isEditModalOpen && (
+                        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-full max-w-[200px] bg-black/80 backdrop-blur border border-white/20 rounded-xl p-2 px-3 shadow-xl">
+                            <input
+                                type="text"
+                                value={editForm.avatar_url}
+                                onChange={(e) => setEditForm({ ...editForm, avatar_url: e.target.value })}
+                                placeholder="Avatar URL..."
+                                className="w-full text-xs bg-transparent border-none text-white focus:outline-none placeholder:text-white/40"
+                            />
+                        </div>
+                    )}
+                </div>
 
-                <div className="space-y-4 pt-2 flex-1">
+                <div className="space-y-4 pt-2 flex-1 relative">
                     <div>
-                        <h1 className="text-4xl font-medium tracking-tight mb-1" style={{ fontFamily: "var(--font-syne)" }}>{username || 'Producer'}</h1>
+                        {isEditModalOpen ? (
+                            <input
+                                type="text"
+                                value={editForm.username}
+                                onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
+                                className="text-4xl font-medium tracking-tight mb-1 bg-transparent border-b border-accent/50 focus:border-accent focus:outline-none w-full max-w-sm text-foreground"
+                                style={{ fontFamily: "var(--font-syne)" }}
+                                placeholder="Pseudo"
+                            />
+                        ) : (
+                            <h1 className="text-4xl font-medium tracking-tight mb-1" style={{ fontFamily: "var(--font-syne)" }}>{username || 'Producer'}</h1>
+                        )}
                         <p className="text-foreground/60 text-base">{email}</p>
                     </div>
 
-                    <p className="text-foreground/80 text-sm max-w-2xl leading-relaxed">
-                        Electronic music producer & sound designer. Always pushing boundaries and collaborating with talented artists worldwide.
-                    </p>
+                    {isEditModalOpen ? (
+                        <textarea
+                            value={editForm.bio}
+                            onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                            placeholder="Write a short summary about yourself..."
+                            className="w-full bg-transparent border border-white/20 rounded-xl p-3 text-sm text-foreground focus:border-accent focus:outline-none placeholder:text-foreground/30 resize-none h-24 max-w-2xl"
+                        />
+                    ) : bio ? (
+                        <p className="text-foreground/80 text-sm max-w-2xl leading-relaxed">
+                            {bio}
+                        </p>
+                    ) : (
+                        <p className="text-foreground/50 italic text-sm max-w-2xl">
+                            No biography provided.
+                        </p>
+                    )}
 
-                    <div className="flex flex-wrap items-center gap-6 text-sm text-foreground/60 font-light">
-                        <span className="flex items-center gap-1.5"><MapPin size={16} /> Online</span>
-                        <span className="flex items-center gap-1.5"><LinkIcon size={16} className="text-accent" /> <a href="#" className="text-accent hover:underline">stemhub.com</a></span>
-                        <span className="flex items-center gap-1.5"><Calendar size={16} /> Joined {joinedDate}</span>
+                    <div className="flex flex-col gap-3 text-sm text-foreground/60 font-light mt-4">
+                        {isEditModalOpen ? (
+                            <div className="flex flex-col gap-3 w-full max-w-md">
+                                <div className="flex items-center gap-2 relative">
+                                    <MapPin size={16} className="text-accent" />
+                                    <input
+                                        type="text"
+                                        value={editForm.location}
+                                        onChange={(e) => handleLocationSearch(e.target.value)}
+                                        className="bg-transparent border-b border-white/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
+                                        placeholder="Location (e.g. Paris, France)"
+                                    />
+                                    {isSearchingLocation && <Loader2 size={14} className="animate-spin text-accent absolute right-2" />}
+                                    {locationSuggestions.length > 0 && (
+                                        <div className="absolute z-[60] left-6 top-8 w-[calc(100%-1.5rem)] bg-black border border-white/20 rounded-xl overflow-hidden shadow-2xl backdrop-blur-3xl">
+                                            {locationSuggestions.map((suggestion: any) => (
+                                                <button
+                                                    key={suggestion.place_id}
+                                                    type="button"
+                                                    onClick={() => selectLocation(suggestion)}
+                                                    className="w-full px-4 py-3 text-left hover:bg-white/10 text-sm text-white transition-colors border-b border-white/10 last:border-none"
+                                                >
+                                                    {suggestion.display_name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <LinkIcon size={16} className="text-accent" />
+                                    <input
+                                        type="text"
+                                        value={editForm.website}
+                                        onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+                                        className="bg-transparent border-b border-white/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
+                                        placeholder="Website URL"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap items-center gap-6">
+                                {location && (
+                                    <span className="flex items-center gap-1.5 hover:text-foreground transition-colors cursor-default">
+                                        <MapPin size={16} className="text-accent" /> {location}
+                                    </span>
+                                )}
+                                {website && (
+                                    <span className="flex items-center gap-1.5">
+                                        <LinkIcon size={16} className="text-accent" />
+                                        <a href={website.startsWith('http') ? website : `https://${website}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                                            {website.replace(/^https?:\/\//, '')}
+                                        </a>
+                                    </span>
+                                )}
+                                <span className="flex items-center gap-1.5"><Calendar size={16} /> Joined {joinedDate}</span>
+                            </div>
+                        )}
+                        {isEditModalOpen && (
+                            <span className="flex items-center gap-1.5 mt-1"><Calendar size={16} /> Joined {joinedDate}</span>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-6 text-sm pt-2">
@@ -285,6 +495,7 @@ export default function ProfilePage() {
                 </motion.div>
 
             </div>
+
         </div>
     );
 }
