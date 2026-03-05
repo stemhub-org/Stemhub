@@ -192,6 +192,9 @@ async def update_me(user_update: UserUpdate, current_user: User = Depends(get_cu
     if user_update.website is not None:
         current_user.website = user_update.website
     
+    if user_update.genres is not None:
+        current_user.genres = user_update.genres
+    
     await db.commit()
     await db.refresh(current_user)
     return current_user

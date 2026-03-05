@@ -15,21 +15,43 @@ import {
     Edit2,
     Search,
     X,
-    Loader2
+    Loader2,
+    Check
 } from "lucide-react";
+
+const GENRE_GROUPS = [
+    { label: "Electronic & Dance", genres: ["breakbeat", "chicago-house", "club", "dance", "dancehall", "deep-house", "detroit-techno", "disco", "drum-and-bass", "dub", "dubstep", "edm", "electro", "electronic", "garage", "house", "idm", "minimal-techno", "post-dubstep", "progressive-house", "techno", "trance"] },
+    { label: "Rock & Metal", genres: ["alt-rock", "alternative", "black-metal", "death-metal", "emo", "goth", "grindcore", "grunge", "hard-rock", "hardcore", "hardstyle", "heavy-metal", "indie", "indie-pop", "industrial", "metal", "metal-misc", "metalcore", "psych-rock", "punk", "punk-rock", "rock", "rock-n-roll", "rockabilly"] },
+    { label: "Pop", genres: ["cantopop", "j-idol", "j-pop", "k-pop", "mandopop", "pop", "pop-film", "power-pop", "synth-pop"] },
+    { label: "Hip-Hop & R&B", genres: ["afrobeat", "funk", "groove", "hip-hop", "r-n-b", "soul", "trip-hop"] },
+    { label: "Acoustic & Folk", genres: ["acoustic", "bluegrass", "folk", "guitar", "piano", "romance", "sad", "singer-songwriter", "songwriter"] },
+    { label: "Latin & Caribbean", genres: ["bossanova", "brazil", "forro", "latin", "latino", "pagode", "reggae", "reggaeton", "salsa", "samba", "sertanejo", "ska", "tango"] },
+    { label: "World & Regional", genres: ["british", "french", "german", "indian", "iranian", "j-dance", "j-rock", "malay", "philippines-opm", "spanish", "swedish", "turkish", "world-music"] },
+    { label: "Other & Moods", genres: ["ambient", "anime", "children", "chill", "classical", "comedy", "country", "disney", "gospel", "happy", "holidays", "honky-tonk", "jazz", "kids", "movies", "mpb", "new-age", "new-release", "opera", "party", "rainy-day", "road-trip", "show-tunes", "sleep", "soundtracks", "study", "summer", "work-out"] }
+];
 
 export default function ProfilePage() {
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [editForm, setEditForm] = useState({
+    const [editForm, setEditForm] = useState<{
+        username: string;
+        location: string;
+        website: string;
+        avatar_url: string;
+        bio: string;
+        genres: string[];
+    }>({
         username: "",
         location: "",
         website: "",
         avatar_url: "",
-        bio: ""
+        bio: "",
+        genres: []
     });
+    const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
+    const [genreSearch, setGenreSearch] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
     const [isSearchingLocation, setIsSearchingLocation] = useState(false);
@@ -71,7 +93,8 @@ export default function ProfilePage() {
                     location: data.location || "",
                     website: data.website || "",
                     avatar_url: data.avatar_url || "",
-                    bio: data.bio || ""
+                    bio: data.bio || "",
+                    genres: data.genres || []
                 });
             } catch (err) {
                 localStorage.removeItem("token");
@@ -157,6 +180,37 @@ export default function ProfilePage() {
         }
     };
 
+    const handleSaveGenres = async () => {
+        setIsSaving(true);
+        const token = localStorage.getItem("token");
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const response = await fetch(`${apiUrl}/auth/me`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ genres: editForm.genres }),
+                credentials: "include"
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || "Erreur lors de la mise à jour des styles de production");
+            }
+
+            const updatedUser = await response.json();
+            setUser(updatedUser);
+            setIsGenreModalOpen(false);
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const { username, email, avatar_url, created_at, location, website, bio } = user || {};
     const joinedDate = created_at ? new Date(created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown Date';
     const initials = username ? username.substring(0, 2).toUpperCase() : '??';
@@ -186,7 +240,8 @@ export default function ProfilePage() {
                                         location: user?.location || "",
                                         website: user?.website || "",
                                         avatar_url: user?.avatar_url || "",
-                                        bio: user?.bio || ""
+                                        bio: user?.bio || "",
+                                        genres: user?.genres || []
                                     });
                                     setIsEditModalOpen(false);
                                 }}
@@ -365,16 +420,138 @@ export default function ProfilePage() {
                         <Music size={18} className="text-accent" />
                         <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Production Styles</h2>
                     </div>
-                    <button className="flex items-center gap-2 text-xs text-foreground/60 hover:text-foreground border border-foreground/10 px-4 py-2 rounded-xl transition-colors hover:bg-foreground/5">
+                    <button
+                        onClick={() => setIsGenreModalOpen(true)}
+                        className="flex items-center gap-2 text-xs text-foreground/60 hover:text-foreground border border-foreground/10 px-4 py-2 rounded-xl transition-colors hover:bg-foreground/5"
+                    >
                         <Edit2 size={14} /> Edit
                     </button>
                 </div>
-                <div className="flex items-center gap-3">
-                    <span className="px-4 py-2 rounded-xl border border-accent/20 bg-accent/10 text-accent text-sm font-medium">Trap</span>
-                    <span className="px-4 py-2 rounded-xl border border-accent/20 bg-accent/10 text-accent text-sm font-medium">Bass Music</span>
-                    <span className="px-4 py-2 rounded-xl border border-accent/20 bg-accent/10 text-accent text-sm font-medium">Dubstep</span>
+                <div className="flex flex-wrap gap-3">
+                    {user?.genres && user.genres.length > 0 ? (
+                        user.genres.map((genre: string) => (
+                            <span key={genre} className="px-4 py-2 rounded-xl border border-accent/20 bg-accent/10 text-accent text-sm font-medium capitalize">
+                                {genre.replace(/-/g, ' ')}
+                            </span>
+                        ))
+                    ) : (
+                        <p className="text-sm text-foreground/40 italic">No production styles selected.</p>
+                    )}
                 </div>
             </motion.div>
+
+            {/* Genre Selection Modal */}
+            {isGenreModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsGenreModalOpen(false)}
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                    />
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="relative w-full max-w-4xl max-h-[80vh] bg-background-secondary border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                    >
+                        <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-xl font-medium" style={{ fontFamily: "var(--font-syne)" }}>Select Production Styles</h2>
+                                <p className="text-sm text-foreground/50 mt-1">Choose the genres that best describe your music.</p>
+                            </div>
+                            <button
+                                onClick={() => setIsGenreModalOpen(false)}
+                                className="p-2 hover:bg-white/5 rounded-full transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="px-6 pt-6 pb-2 border-b border-white/10 relative">
+                            <Search size={16} className="absolute left-10 top-1/2 -translate-y-1/2 text-foreground/40 mt-2" />
+                            <input
+                                type="text"
+                                placeholder="Search styles..."
+                                value={genreSearch}
+                                onChange={(e) => setGenreSearch(e.target.value)}
+                                className="w-full bg-background/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
+                            />
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                            {GENRE_GROUPS.map((group) => {
+                                const filteredGenres = group.genres.filter(g =>
+                                    g.replace(/-/g, ' ').toLowerCase().includes(genreSearch.toLowerCase())
+                                );
+
+                                if (filteredGenres.length === 0) return null;
+
+                                return (
+                                    <div key={group.label} className="space-y-4">
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-accent border-l-2 border-accent pl-3">
+                                            {group.label}
+                                        </h3>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                                            {filteredGenres.map((genre) => {
+                                                const isSelected = editForm.genres.includes(genre);
+                                                return (
+                                                    <button
+                                                        key={genre}
+                                                        onClick={() => {
+                                                            const newGenres = isSelected
+                                                                ? editForm.genres.filter(g => g !== genre)
+                                                                : [...editForm.genres, genre];
+                                                            setEditForm({ ...editForm, genres: newGenres });
+                                                        }}
+                                                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between border ${isSelected
+                                                            ? "bg-accent border-accent text-white"
+                                                            : "bg-white/5 border-white/10 text-foreground/60 hover:border-white/20 hover:text-foreground"
+                                                            }`}
+                                                    >
+                                                        <span className="capitalize text-left">{genre.replace(/-/g, ' ')}</span>
+                                                        {isSelected && <Check size={12} className="shrink-0 ml-1" />}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {GENRE_GROUPS.every(group =>
+                                group.genres.filter(g => g.replace(/-/g, ' ').toLowerCase().includes(genreSearch.toLowerCase())).length === 0
+                            ) && (
+                                    <div className="text-center py-10 text-foreground/40 text-sm italic">
+                                        No genres found matching "{genreSearch}"
+                                    </div>
+                                )}
+                        </div>
+
+                        <div className="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setEditForm({ ...editForm, genres: user?.genres || [] });
+                                    setEditForm({ ...editForm, genres: user?.genres || [] });
+                                    setIsGenreModalOpen(false);
+                                }}
+                                className="px-5 py-2 text-sm font-medium hover:bg-white/5 rounded-xl transition-colors disabled:opacity-50"
+                                disabled={isSaving}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveGenres}
+                                disabled={isSaving}
+                                className="px-6 py-2 bg-accent text-white text-sm font-medium rounded-xl hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
+                            >
+                                {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Confirm Selection"}
+                            </button>
+                        </div>
+                    </motion.div>
+                </div >
+            )
+            }
 
             {/* Grid for Featured Projects & Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -528,6 +705,6 @@ export default function ProfilePage() {
 
             </div>
 
-        </div>
+        </div >
     );
 }

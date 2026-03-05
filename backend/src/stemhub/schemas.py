@@ -19,6 +19,7 @@ class UserResponse(BaseModel):
     bio: Optional[str] = None
     location: Optional[str] = None
     website: Optional[str] = None
+    genres: Optional[list[str]] = None
     created_at: datetime
     is_active: bool
 
@@ -31,6 +32,7 @@ class UserUpdate(BaseModel):
     bio: Optional[str] = None
     location: Optional[str] = None
     website: Optional[str] = None
+    genres: Optional[list[str]] = None
 
 class Token(BaseModel):
     access_token: str
