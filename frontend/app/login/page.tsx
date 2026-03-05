@@ -22,9 +22,15 @@ export default function LoginPage() {
       const response = await fetch(`${apiUrl}/auth/login`, {
         method: "POST",
         headers: {
+<<<<<<< HEAD
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({ username: email, password: password }),
+=======
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+>>>>>>> origin/dev
       });
 
       if (!response.ok) {

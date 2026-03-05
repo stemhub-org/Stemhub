@@ -17,6 +17,10 @@ public:
     void clearInputs() { clearEmail(); clearPassword(); }
 
     void setMessage(const juce::String& message) { authStateLabel.setText(message, juce::dontSendNotification); }
+<<<<<<< HEAD
+=======
+    void paint(juce::Graphics&) override;
+>>>>>>> origin/dev
     void resized() override;
 
     std::function<void()> onSignIn;
@@ -39,7 +43,12 @@ public:
                      const std::vector<juce::String>& projectIds,
                      const juce::String& selectedProjectId);
     void setHasExistingProjects(bool hasProjects);
+<<<<<<< HEAD
     juce::String getSelectedProjectId() const;
+=======
+    void setCanCreateProject(bool canCreate);
+    [[nodiscard]] juce::String getSelectedProjectId() const;
+>>>>>>> origin/dev
     void resized() override;
 
     std::function<void()> onChooseProjectFile;
@@ -50,6 +59,10 @@ public:
 private:
     std::vector<juce::String> comboProjectIds;
     bool hasExistingProjects { false };
+<<<<<<< HEAD
+=======
+    bool canCreateProject { false };
+>>>>>>> origin/dev
     juce::Label statusLabel;
     juce::Label projectFileLabel;
     juce::Label existingProjectsLabel;
@@ -67,12 +80,29 @@ public:
 
     void setProjectStatusMessage(const juce::String& message) { projectStatusLabel.setText(message, juce::dontSendNotification); }
     void setSelectedProjectFileMessage(const juce::String& message) { projectFileLabel.setText(message, juce::dontSendNotification); }
+<<<<<<< HEAD
     void setCurrentProjectMessage(const juce::String& message) { currentProjectLabel.setText(message, juce::dontSendNotification); }
+=======
+    void setProjectNameMessage(const juce::String& message) { projectNameLabel.setText(message, juce::dontSendNotification); }
+    void setBranchNameMessage(const juce::String& message) { branchNameLabel.setText(message, juce::dontSendNotification); }
+    void setBranches(const std::vector<juce::String>& branchNames,
+                     const std::vector<juce::String>& branchIds,
+                     const juce::String& selectedBranchId);
+    void setVersions(const std::vector<juce::String>& versionLabels,
+                     const std::vector<juce::String>& versionIds,
+                     const juce::String& selectedVersionId);
+    [[nodiscard]] juce::String getSelectedBranchId() const;
+    [[nodiscard]] juce::String getSelectedVersionId() const;
+    [[nodiscard]] juce::String getCommitMessage() const noexcept { return commitMessageInput.getText().trim(); }
+    void setCommitMessage(const juce::String& message) { commitMessageInput.setText(message, juce::dontSendNotification); }
+    void clearCommitMessage() { commitMessageInput.clear(); }
+>>>>>>> origin/dev
     void resized() override;
 
     std::function<void()> onSave;
     std::function<void()> onSync;
     std::function<void()> onBranchChange;
+<<<<<<< HEAD
     std::function<void()> onSignOut;
 
 private:
@@ -82,5 +112,28 @@ private:
     juce::TextButton saveChanges { "Save" };
     juce::TextButton syncButton { "Sync" };
     juce::TextButton changeBranch { "View Other Branches" };
+=======
+    std::function<void()> onVersionSelectionChange;
+    std::function<void()> onBackToProjects;
+    std::function<void()> onSignOut;
+
+private:
+    std::vector<juce::String> comboBranchIds;
+    std::vector<juce::String> comboVersionIds;
+    juce::Label projectStatusLabel;
+    juce::Label projectFileLabel;
+    juce::Label projectNameLabel;
+    juce::Label branchNameLabel;
+    juce::Label branchLabel;
+    juce::Label versionLabel;
+    juce::Label commitMessageLabel;
+    juce::ComboBox branchComboBox;
+    juce::ComboBox versionComboBox;
+    juce::TextButton backToProjectsButton { "< Projects" };
+    juce::TextEditor commitMessageInput;
+    juce::TextButton saveChanges { "Save" };
+    juce::TextButton syncButton { "Refresh History" };
+    juce::TextButton changeBranch { "Load Branch" };
+>>>>>>> origin/dev
     juce::TextButton signOutButton { "Sign Out" };
 };

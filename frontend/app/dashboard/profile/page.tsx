@@ -1,0 +1,501 @@
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import {
+    MapPin,
+    Link as LinkIcon,
+    Calendar,
+    Music,
+    Star,
+    Headphones,
+    GitBranch,
+    Users,
+    Edit2,
+    Search,
+    X,
+    Loader2
+} from "lucide-react";
+
+export default function ProfilePage() {
+    const router = useRouter();
+    const [user, setUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editForm, setEditForm] = useState({
+        username: "",
+        location: "",
+        website: "",
+        avatar_url: "",
+        bio: ""
+    });
+    const [isSaving, setIsSaving] = useState(false);
+    const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
+    const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            const token = localStorage.getItem("token");
+
+            try {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                const response = await fetch(`${apiUrl}/auth/me`, {
+                    headers: token ? {
+                        "Authorization": `Bearer ${token}`
+                    } : {},
+                    credentials: "include"
+                });
+
+                if (!response.ok) {
+                    throw new Error("Session expirée");
+                }
+
+                const data = await response.json();
+                setUser(data);
+                setEditForm({
+                    username: data.username || "",
+                    location: data.location || "",
+                    website: data.website || "",
+                    avatar_url: data.avatar_url || "",
+                    bio: data.bio || ""
+                });
+            } catch (err) {
+                localStorage.removeItem("token");
+                router.push("/login");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchUser();
+    }, [router]);
+
+    if (loading) {
+        return (
+            <div className="flex h-full min-h-[50vh] items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            </div>
+        );
+    }
+
+    const handleLocationSearch = (query: string) => {
+        setEditForm({ ...editForm, location: query });
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        if (query.length < 3) {
+            setLocationSuggestions([]);
+            return;
+        }
+
+        searchTimeoutRef.current = setTimeout(async () => {
+            setIsSearchingLocation(true);
+            try {
+                // Nominatim restricts to 1 request/second.
+                // We also avoid custom headers like User-Agent to prevent CORS preflight blocks in newer browsers.
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=5`);
+                const data = await response.json();
+                setLocationSuggestions(data);
+            } catch (error) {
+                console.error("Error searching location:", error);
+            } finally {
+                setIsSearchingLocation(false);
+            }
+        }, 600); // 600ms debounce
+    };
+
+    const selectLocation = (suggestion: any) => {
+        setEditForm({ ...editForm, location: suggestion.display_name });
+        setLocationSuggestions([]);
+    };
+
+    const handleUpdateProfile = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        const token = localStorage.getItem("token");
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const response = await fetch(`${apiUrl}/auth/me`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify(editForm),
+                credentials: "include"
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || "Erreur lors de la mise à jour");
+            }
+
+            const updatedUser = await response.json();
+            setUser(updatedUser);
+            setIsEditModalOpen(false);
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const { username, email, avatar_url, created_at, location, website, bio } = user || {};
+    const joinedDate = created_at ? new Date(created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown Date';
+    const initials = username ? username.substring(0, 2).toUpperCase() : '??';
+    return (
+        <div className="max-w-7xl mx-auto space-y-8 pb-12">
+            {/* Header Section */}
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="flex flex-col md:flex-row gap-8 items-start relative rounded-2xl border border-foreground/[0.08] bg-background-secondary/10 p-8 backdrop-blur-xl"
+            >
+                <div className="absolute right-8 top-8 z-10">
+                    {!isEditModalOpen ? (
+                        <button
+                            onClick={() => setIsEditModalOpen(true)}
+                            className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 relative"
+                        >
+                            <Edit2 size={16} /> Edit Profile
+                        </button>
+                    ) : (
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    setEditForm({
+                                        username: user?.username || "",
+                                        location: user?.location || "",
+                                        website: user?.website || "",
+                                        avatar_url: user?.avatar_url || "",
+                                        bio: user?.bio || ""
+                                    });
+                                    setIsEditModalOpen(false);
+                                }}
+                                className="px-5 py-2.5 border border-white/10 hover:bg-white/5 text-white text-sm font-medium rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleUpdateProfile}
+                                disabled={isSaving}
+                                className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
+                            >
+                                {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Save"}
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="relative group shrink-0">
+                    {editForm.avatar_url || avatar_url ? (
+                        <img
+                            src={isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url}
+                            alt={username}
+                            className="h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 border-background-secondary shadow-xl"
+                        />
+                    ) : (
+                        <div className="h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl">
+                            {initials}
+                        </div>
+                    )}
+                    {isEditModalOpen && (
+                        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-full max-w-[200px] bg-black/80 backdrop-blur border border-white/20 rounded-xl p-2 px-3 shadow-xl">
+                            <input
+                                type="text"
+                                value={editForm.avatar_url}
+                                onChange={(e) => setEditForm({ ...editForm, avatar_url: e.target.value })}
+                                placeholder="Avatar URL..."
+                                className="w-full text-xs bg-transparent border-none text-white focus:outline-none placeholder:text-white/40"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-4 pt-2 flex-1 relative">
+                    <div>
+                        {isEditModalOpen ? (
+                            <input
+                                type="text"
+                                value={editForm.username}
+                                onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
+                                className="text-4xl font-medium tracking-tight mb-1 bg-transparent border-b border-accent/50 focus:border-accent focus:outline-none w-full max-w-sm text-foreground"
+                                style={{ fontFamily: "var(--font-syne)" }}
+                                placeholder="Pseudo"
+                            />
+                        ) : (
+                            <h1 className="text-4xl font-medium tracking-tight mb-1" style={{ fontFamily: "var(--font-syne)" }}>{username || 'Producer'}</h1>
+                        )}
+                        <p className="text-foreground/60 text-base">{email}</p>
+                    </div>
+
+                    {isEditModalOpen ? (
+                        <textarea
+                            value={editForm.bio}
+                            onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                            placeholder="Write a short summary about yourself..."
+                            className="w-full bg-transparent border border-white/20 rounded-xl p-3 text-sm text-foreground focus:border-accent focus:outline-none placeholder:text-foreground/30 resize-none h-24 max-w-2xl"
+                        />
+                    ) : bio ? (
+                        <p className="text-foreground/80 text-sm max-w-2xl leading-relaxed">
+                            {bio}
+                        </p>
+                    ) : (
+                        <p className="text-foreground/50 italic text-sm max-w-2xl">
+                            No biography provided.
+                        </p>
+                    )}
+
+                    <div className="flex flex-col gap-3 text-sm text-foreground/60 font-light mt-4">
+                        {isEditModalOpen ? (
+                            <div className="flex flex-col gap-3 w-full max-w-md">
+                                <div className="flex items-center gap-2 relative">
+                                    <MapPin size={16} className="text-accent" />
+                                    <input
+                                        type="text"
+                                        value={editForm.location}
+                                        onChange={(e) => handleLocationSearch(e.target.value)}
+                                        className="bg-transparent border-b border-white/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
+                                        placeholder="Location (e.g. Paris, France)"
+                                    />
+                                    {isSearchingLocation && <Loader2 size={14} className="animate-spin text-accent absolute right-2" />}
+                                    {locationSuggestions.length > 0 && (
+                                        <div className="absolute z-[60] left-6 top-8 w-[calc(100%-1.5rem)] bg-black border border-white/20 rounded-xl overflow-hidden shadow-2xl backdrop-blur-3xl">
+                                            {locationSuggestions.map((suggestion: any) => (
+                                                <button
+                                                    key={suggestion.place_id}
+                                                    type="button"
+                                                    onClick={() => selectLocation(suggestion)}
+                                                    className="w-full px-4 py-3 text-left hover:bg-white/10 text-sm text-white transition-colors border-b border-white/10 last:border-none"
+                                                >
+                                                    {suggestion.display_name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <LinkIcon size={16} className="text-accent" />
+                                    <input
+                                        type="text"
+                                        value={editForm.website}
+                                        onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+                                        className="bg-transparent border-b border-white/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
+                                        placeholder="Website URL"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap items-center gap-6">
+                                {location && (
+                                    <span className="flex items-center gap-1.5 hover:text-foreground transition-colors cursor-default">
+                                        <MapPin size={16} className="text-accent" /> {location}
+                                    </span>
+                                )}
+                                {website && (
+                                    <span className="flex items-center gap-1.5">
+                                        <LinkIcon size={16} className="text-accent" />
+                                        <a href={website.startsWith('http') ? website : `https://${website}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                                            {website.replace(/^https?:\/\//, '')}
+                                        </a>
+                                    </span>
+                                )}
+                                <span className="flex items-center gap-1.5"><Calendar size={16} /> Joined {joinedDate}</span>
+                            </div>
+                        )}
+                        {isEditModalOpen && (
+                            <span className="flex items-center gap-1.5 mt-1"><Calendar size={16} /> Joined {joinedDate}</span>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-6 text-sm pt-2">
+                        <div><span className="font-medium text-foreground text-base">0</span> <span className="text-foreground/60 font-light">followers</span></div>
+                        <div><span className="font-medium text-foreground text-base">0</span> <span className="text-foreground/60 font-light">following</span></div>
+                    </div>
+                </div>
+            </motion.div>
+
+            {/* Production Styles */}
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.1 }}
+                className="rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 p-6 backdrop-blur-xl"
+            >
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <Music size={18} className="text-accent" />
+                        <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Production Styles</h2>
+                    </div>
+                    <button className="flex items-center gap-2 text-xs text-foreground/60 hover:text-foreground border border-foreground/10 px-4 py-2 rounded-xl transition-colors hover:bg-foreground/5">
+                        <Edit2 size={14} /> Edit
+                    </button>
+                </div>
+                <div className="flex items-center gap-3">
+                    <span className="px-4 py-2 rounded-xl border border-accent/20 bg-accent/10 text-accent text-sm font-medium">Trap</span>
+                    <span className="px-4 py-2 rounded-xl border border-accent/20 bg-accent/10 text-accent text-sm font-medium">Bass Music</span>
+                    <span className="px-4 py-2 rounded-xl border border-accent/20 bg-accent/10 text-accent text-sm font-medium">Dubstep</span>
+                </div>
+            </motion.div>
+
+            {/* Grid for Featured Projects & Activity */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                {/* Featured Projects */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.2 }}
+                    className="lg:col-span-2 space-y-5"
+                >
+                    <div className="flex items-center gap-2 mb-2">
+                        <Star size={18} className="text-accent" />
+                        <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Featured Projects <span className="text-foreground/40 font-light text-sm tracking-normal">• Pinned</span></h2>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* Project Card 1 */}
+                        <div className="rounded-2xl border border-foreground/[0.08] bg-background-secondary/10 p-6 hover:bg-background-secondary/30 transition-all cursor-pointer backdrop-blur-xl group">
+                            <div className="flex items-start justify-between mb-4">
+                                <div>
+                                    <h3 className="text-lg font-medium flex items-center gap-2 group-hover:text-accent transition-colors">
+                                        <div className="w-2 h-2 rounded-full bg-accent"></div>
+                                        <span>Dubstep-Track</span>
+                                    </h3>
+                                    <p className="text-sm text-foreground/60 mt-1 font-light">Experimental dubstep track</p>
+                                </div>
+                                <span className="text-xs text-foreground/40 font-light">2h ago</span>
+                            </div>
+
+                            <div className="flex items-center gap-3 mb-5">
+                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">140 BPM</span>
+                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">C minor</span>
+                                <span className="flex items-center gap-1.5 text-xs text-foreground/60 ml-2 font-light"><Users size={14} /> 3 contributors</span>
+                            </div>
+
+                            <div className="flex items-center gap-5 text-sm text-foreground/50 font-light">
+                                <span className="flex items-center gap-1.5 hover:text-accent transition-colors"><Star size={16} /> 1243</span>
+                                <span className="flex items-center gap-1.5 hover:text-blue-400 transition-colors"><GitBranch size={16} /> 87</span>
+                            </div>
+                        </div>
+
+                        {/* Project Card 2 */}
+                        <div className="rounded-2xl border border-foreground/[0.08] bg-background-secondary/10 p-6 hover:bg-background-secondary/30 transition-all cursor-pointer backdrop-blur-xl group">
+                            <div className="flex items-start justify-between mb-4">
+                                <div>
+                                    <h3 className="text-lg font-medium flex items-center gap-2 group-hover:text-accent transition-colors">
+                                        <div className="w-2 h-2 rounded-full bg-accent"></div>
+                                        <span>Melodic-House-EP</span>
+                                    </h3>
+                                    <p className="text-sm text-foreground/60 mt-1 font-light">Deep melodic house collection</p>
+                                </div>
+                                <span className="text-xs text-foreground/40 font-light">1d ago</span>
+                            </div>
+
+                            <div className="flex items-center gap-3 mb-5">
+                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">124 BPM</span>
+                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">A minor</span>
+                                <span className="flex items-center gap-1.5 text-xs text-foreground/60 ml-2 font-light"><Users size={14} /> 2 contributors</span>
+                            </div>
+
+                            <div className="flex items-center gap-5 text-sm text-foreground/50 font-light">
+                                <span className="flex items-center gap-1.5 hover:text-accent transition-colors"><Star size={16} /> 892</span>
+                                <span className="flex items-center gap-1.5 hover:text-blue-400 transition-colors"><GitBranch size={16} /> 54</span>
+                            </div>
+                        </div>
+
+                        {/* Project Card 3 */}
+                        <div className="rounded-2xl border border-foreground/[0.08] bg-background-secondary/10 p-6 hover:bg-background-secondary/30 transition-all cursor-pointer backdrop-blur-xl group">
+                            <div className="flex items-start justify-between mb-4">
+                                <div>
+                                    <h3 className="text-lg font-medium flex items-center gap-2 group-hover:text-accent transition-colors">
+                                        <div className="w-2 h-2 rounded-full bg-accent"></div>
+                                        <span>Bass-Experiments</span>
+                                    </h3>
+                                    <p className="text-sm text-foreground/60 mt-1 font-light">Sub bass design toolkit</p>
+                                </div>
+                                <span className="text-xs text-foreground/40 font-light">3d ago</span>
+                            </div>
+
+                            <div className="flex items-center gap-3 mb-5">
+                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">140 BPM</span>
+                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">E minor</span>
+                                <span className="flex items-center gap-1.5 text-xs text-foreground/60 ml-2 font-light"><Users size={14} /> 1 contributor</span>
+                            </div>
+
+                            <div className="flex items-center gap-5 text-sm text-foreground/50 font-light">
+                                <span className="flex items-center gap-1.5 hover:text-accent transition-colors"><Star size={16} /> 892</span>
+                                <span className="flex items-center gap-1.5 hover:text-blue-400 transition-colors"><GitBranch size={16} /> 54</span>
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+
+                {/* Activity and Stats */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.3 }}
+                    className="space-y-6"
+                >
+                    <div className="flex items-center gap-2 mb-2">
+                        <Headphones size={18} className="text-foreground/80" />
+                        <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Activity</h2>
+                    </div>
+
+                    <div className="rounded-2xl border border-foreground/[0.08] bg-background-secondary/10 p-6 backdrop-blur-xl">
+                        <div className="flex flex-col gap-1 mb-6">
+                            <span className="text-xs text-foreground/50 font-light">Last year</span>
+                            <span className="text-3xl font-medium tracking-tight">696 <span className="text-sm font-light text-foreground/50 tracking-normal">contributions</span></span>
+                        </div>
+
+                        {/* Contribution Graph Mock */}
+                        <div className="mt-2">
+                            <div className="grid grid-cols-[repeat(26,minmax(0,1fr))] gap-1 opacity-80">
+                                {[...Array(26 * 7)].map((_, i) => (
+                                    <div
+                                        key={i}
+                                        className={`w-full aspect-square rounded-[2px] ${Math.random() > 0.7
+                                            ? Math.random() > 0.5 ? 'bg-accent' : 'bg-accent/60'
+                                            : Math.random() > 0.8 ? 'bg-accent/40' : 'bg-foreground/5'
+                                            }`}
+                                    />
+                                ))}
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] text-foreground/40 mt-4 pt-3 border-t border-foreground/5">
+                                <span>Less</span>
+                                <div className="flex gap-1.5">
+                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-foreground/5"></div>
+                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-accent/40"></div>
+                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-accent/60"></div>
+                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-accent"></div>
+                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-[#fff] border border-accent/20"></div>
+                                </div>
+                                <span>More</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary/10 p-5 backdrop-blur-xl hover:bg-background-secondary/30 transition-colors cursor-pointer">
+                            <span className="text-xs text-foreground/50 font-light">Projects</span>
+                            <p className="text-2xl font-medium mt-1 tracking-tight">24</p>
+                        </div>
+                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary/10 p-5 backdrop-blur-xl hover:bg-background-secondary/30 transition-colors cursor-pointer">
+                            <span className="text-xs text-foreground/50 font-light">Collaborations</span>
+                            <p className="text-2xl font-medium mt-1 tracking-tight">18</p>
+                        </div>
+                    </div>
+                </motion.div>
+
+            </div>
+
+        </div>
+    );
+}
