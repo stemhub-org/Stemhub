@@ -2,42 +2,123 @@
 
 namespace
 {
-    const auto kStemhubPurple = juce::Colour::fromRGB(0x9C, 0x57, 0xDF);
-    const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
-    const auto kStemhubLight = juce::Colour::fromRGB(0xF1, 0xF1, 0xF1);
-    const auto kStemhubSurface = juce::Colour::fromRGB(0x2B, 0x2B, 0x30);
-    
-    void styleComboBox(juce::ComboBox& combo)
+const auto kStemhubPurple = juce::Colour::fromRGB(0x9C, 0x57, 0xDF);
+const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
+const auto kStemhubLight = juce::Colour::fromRGB(0xF1, 0xF1, 0xF1);
+const auto kStemhubSurface = juce::Colour::fromRGB(0x2B, 0x2B, 0x30);
+
+void invokeIfBound(const std::function<void()>& callback)
+{
+    if (callback != nullptr)
+        callback();
+}
+
+void styleComboBox(juce::ComboBox& combo)
+{
+    combo.setColour(juce::ComboBox::backgroundColourId, kStemhubSurface);
+    combo.setColour(juce::ComboBox::textColourId, kStemhubLight);
+    combo.setColour(juce::ComboBox::outlineColourId, kStemhubLight.withAlpha(0.45f));
+    combo.setColour(juce::ComboBox::arrowColourId, kStemhubLight);
+}
+
+void stylePrimaryButton(juce::TextButton& button)
+{
+    button.setColour(juce::TextButton::buttonColourId, kStemhubPurple);
+    button.setColour(juce::TextButton::buttonOnColourId, kStemhubPurple.brighter(0.15f));
+    button.setColour(juce::TextButton::textColourOffId, kStemhubLight);
+    button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+}
+
+void styleSecondaryButton(juce::TextButton& button)
+{
+    button.setColour(juce::TextButton::buttonColourId, kStemhubSurface.withAlpha(0.95f));
+    button.setColour(juce::TextButton::buttonOnColourId, kStemhubSurface.brighter(0.12f));
+    button.setColour(juce::TextButton::textColourOffId, kStemhubLight);
+    button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+}
+
+void styleCompactTopButton(juce::TextButton& button)
+{
+    button.setColour(juce::TextButton::buttonColourId, kStemhubDark.withAlpha(0.85f));
+    button.setColour(juce::TextButton::buttonOnColourId, kStemhubPurple.withAlpha(0.8f));
+    button.setColour(juce::TextButton::textColourOffId, kStemhubLight.withAlpha(0.9f));
+    button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+}
+
+void setMappedComboItems(juce::ComboBox& combo,
+                         std::vector<juce::String>& mappedIds,
+                         const std::vector<juce::String>& itemNames,
+                         const std::vector<juce::String>& itemIds,
+                         const juce::String& selectedItemId)
+{
+    combo.clear(juce::dontSendNotification);
+    mappedIds.clear();
+
+    for (size_t i = 0; i < itemNames.size() && i < itemIds.size(); ++i)
     {
-        combo.setColour(juce::ComboBox::backgroundColourId, kStemhubSurface);
-        combo.setColour(juce::ComboBox::textColourId, kStemhubLight);
-        combo.setColour(juce::ComboBox::outlineColourId, kStemhubLight.withAlpha(0.45f));
-        combo.setColour(juce::ComboBox::arrowColourId, kStemhubLight);
+        combo.addItem(itemNames[i], static_cast<int>(i) + 1);
+        mappedIds.push_back(itemIds[i]);
     }
-    
-    void stylePrimaryButton(juce::TextButton& button)
+
+    if (mappedIds.empty())
     {
-        button.setColour(juce::TextButton::buttonColourId, kStemhubPurple);
-        button.setColour(juce::TextButton::buttonOnColourId, kStemhubPurple.brighter(0.15f));
-        button.setColour(juce::TextButton::textColourOffId, kStemhubLight);
-        button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+        combo.setSelectedId(0, juce::dontSendNotification);
+        return;
     }
-    
-    void styleSecondaryButton(juce::TextButton& button)
+
+    if (selectedItemId.isNotEmpty())
     {
-        button.setColour(juce::TextButton::buttonColourId, kStemhubSurface.withAlpha(0.95f));
-        button.setColour(juce::TextButton::buttonOnColourId, kStemhubSurface.brighter(0.12f));
-        button.setColour(juce::TextButton::textColourOffId, kStemhubLight);
-        button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+        for (size_t i = 0; i < mappedIds.size(); ++i)
+        {
+            if (mappedIds[i] == selectedItemId)
+            {
+                combo.setSelectedId(static_cast<int>(i) + 1, juce::dontSendNotification);
+                return;
+            }
+        }
     }
-    
-    void styleCompactTopButton(juce::TextButton& button)
+
+    combo.setSelectedId(1, juce::dontSendNotification);
+}
+
+juce::String getMappedComboSelection(const juce::ComboBox& combo, const std::vector<juce::String>& mappedIds)
+{
+    const auto selectedIndex = combo.getSelectedItemIndex();
+    if (selectedIndex < 0 || static_cast<size_t>(selectedIndex) >= mappedIds.size())
+        return {};
+
+    return mappedIds[static_cast<size_t>(selectedIndex)];
+}
+
+void setSimpleComboItems(juce::ComboBox& combo,
+                         const std::vector<juce::String>& items,
+                         const juce::String& selectedItem)
+{
+    combo.clear(juce::dontSendNotification);
+
+    for (size_t i = 0; i < items.size(); ++i)
+        combo.addItem(items[i], static_cast<int>(i) + 1);
+
+    if (items.empty())
     {
-        button.setColour(juce::TextButton::buttonColourId, kStemhubDark.withAlpha(0.85f));
-        button.setColour(juce::TextButton::buttonOnColourId, kStemhubPurple.withAlpha(0.8f));
-        button.setColour(juce::TextButton::textColourOffId, kStemhubLight.withAlpha(0.9f));
-        button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+        combo.setSelectedId(0, juce::dontSendNotification);
+        return;
     }
+
+    if (selectedItem.isNotEmpty())
+    {
+        for (size_t i = 0; i < items.size(); ++i)
+        {
+            if (items[i] == selectedItem)
+            {
+                combo.setSelectedId(static_cast<int>(i) + 1, juce::dontSendNotification);
+                return;
+            }
+        }
+    }
+
+    combo.setSelectedId(1, juce::dontSendNotification);
+}
 }
 
 ProjectSelectionView::ProjectSelectionView()
@@ -66,32 +147,28 @@ ProjectSelectionView::ProjectSelectionView()
     styleSecondaryButton(chooseProjectFileButton);
     chooseProjectFileButton.onClick = [this]
     {
-        if (onChooseProjectFile != nullptr)
-            onChooseProjectFile();
+        invokeIfBound(onChooseProjectFile);
     };
 
     addAndMakeVisible(openProjectButton);
     stylePrimaryButton(openProjectButton);
     openProjectButton.onClick = [this]
     {
-        if (onOpenProject != nullptr)
-            onOpenProject();
+        invokeIfBound(onOpenProject);
     };
 
     addAndMakeVisible(createProjectButton);
     stylePrimaryButton(createProjectButton);
     createProjectButton.onClick = [this]
     {
-        if (onCreateProject != nullptr)
-            onCreateProject();
+        invokeIfBound(onCreateProject);
     };
     createProjectButton.setVisible(false);
 
     addAndMakeVisible(signOutButton);
     signOutButton.onClick = [this]
     {
-        if (onSignOut != nullptr)
-            onSignOut();
+        invokeIfBound(onSignOut);
     };
 
     styleCompactTopButton(signOutButton);
@@ -249,16 +326,30 @@ DashboardView::DashboardView()
     styleComboBox(versionComboBox);
     versionComboBox.onChange = [this]
     {
-        if (onVersionSelectionChange != nullptr)
-            onVersionSelectionChange();
+        invokeIfBound(onVersionSelectionChange);
+    };
+
+    addAndMakeVisible(commitTemplateLabel);
+    commitTemplateLabel.setText("Template", juce::dontSendNotification);
+    commitTemplateLabel.setJustificationType(juce::Justification::centredLeft);
+    commitTemplateLabel.setColour(juce::Label::textColourId, kStemhubLight);
+
+    addAndMakeVisible(commitTemplateComboBox);
+    commitTemplateComboBox.setTextWhenNothingSelected("Custom");
+    styleComboBox(commitTemplateComboBox);
+
+    addAndMakeVisible(applyCommitTemplateButton);
+    styleSecondaryButton(applyCommitTemplateButton);
+    applyCommitTemplateButton.onClick = [this]
+    {
+        invokeIfBound(onApplyCommitTemplate);
     };
 
     addAndMakeVisible(backToProjectsButton);
     styleCompactTopButton(backToProjectsButton);
     backToProjectsButton.onClick = [this]
     {
-        if (onBackToProjects != nullptr)
-            onBackToProjects();
+        invokeIfBound(onBackToProjects);
     };
 
     addAndMakeVisible(commitMessageLabel);
@@ -281,32 +372,28 @@ DashboardView::DashboardView()
     stylePrimaryButton(saveChanges);
     saveChanges.onClick = [this]
     {
-        if (onSave != nullptr)
-            onSave();
+        invokeIfBound(onSave);
     };
 
     addAndMakeVisible(syncButton);
     styleSecondaryButton(syncButton);
     syncButton.onClick = [this]
     {
-        if (onSync != nullptr)
-            onSync();
+        invokeIfBound(onSync);
     };
 
     addAndMakeVisible(changeBranch);
     styleSecondaryButton(changeBranch);
     changeBranch.onClick = [this]
     {
-        if (onBranchChange != nullptr)
-            onBranchChange();
+        invokeIfBound(onBranchChange);
     };
 
     addAndMakeVisible(signOutButton);
     styleCompactTopButton(signOutButton);
     signOutButton.onClick = [this]
     {
-        if (onSignOut != nullptr)
-            onSignOut();
+        invokeIfBound(onSignOut);
     };
 }
 
@@ -314,80 +401,35 @@ void DashboardView::setBranches(const std::vector<juce::String>& branchNames,
                                 const std::vector<juce::String>& branchIds,
                                 const juce::String& selectedBranchId)
 {
-    branchComboBox.clear(juce::dontSendNotification);
-    comboBranchIds = branchIds;
-
-    for (size_t i = 0; i < branchNames.size() && i < branchIds.size(); ++i)
-        branchComboBox.addItem(branchNames[i], static_cast<int>(i) + 1);
-
-    if (comboBranchIds.empty())
-    {
-        branchComboBox.setSelectedId(0, juce::dontSendNotification);
-        return;
-    }
-
-    if (selectedBranchId.isNotEmpty())
-    {
-        for (size_t i = 0; i < comboBranchIds.size(); ++i)
-        {
-            if (comboBranchIds[i] == selectedBranchId)
-            {
-                branchComboBox.setSelectedId(static_cast<int>(i) + 1, juce::dontSendNotification);
-                return;
-            }
-        }
-    }
-
-    branchComboBox.setSelectedId(1, juce::dontSendNotification);
+    setMappedComboItems(branchComboBox, comboBranchIds, branchNames, branchIds, selectedBranchId);
 }
 
 void DashboardView::setVersions(const std::vector<juce::String>& versionLabels,
                                 const std::vector<juce::String>& versionIds,
                                 const juce::String& selectedVersionId)
 {
-    versionComboBox.clear(juce::dontSendNotification);
-    comboVersionIds = versionIds;
+    setMappedComboItems(versionComboBox, comboVersionIds, versionLabels, versionIds, selectedVersionId);
+}
 
-    for (size_t i = 0; i < versionLabels.size() && i < versionIds.size(); ++i)
-        versionComboBox.addItem(versionLabels[i], static_cast<int>(i) + 1);
-
-    if (comboVersionIds.empty())
-    {
-        versionComboBox.setSelectedId(0, juce::dontSendNotification);
-        return;
-    }
-
-    if (selectedVersionId.isNotEmpty())
-    {
-        for (size_t i = 0; i < comboVersionIds.size(); ++i)
-        {
-            if (comboVersionIds[i] == selectedVersionId)
-            {
-                versionComboBox.setSelectedId(static_cast<int>(i) + 1, juce::dontSendNotification);
-                return;
-            }
-        }
-    }
-
-    versionComboBox.setSelectedId(1, juce::dontSendNotification);
+void DashboardView::setCommitTemplates(const std::vector<juce::String>& templateNames,
+                                       const juce::String& selectedTemplateName)
+{
+    setSimpleComboItems(commitTemplateComboBox, templateNames, selectedTemplateName);
 }
 
 juce::String DashboardView::getSelectedBranchId() const
 {
-    const auto selectedIndex = branchComboBox.getSelectedItemIndex();
-    if (selectedIndex < 0 || static_cast<size_t>(selectedIndex) >= comboBranchIds.size())
-        return {};
-
-    return comboBranchIds[static_cast<size_t>(selectedIndex)];
+    return getMappedComboSelection(branchComboBox, comboBranchIds);
 }
 
 juce::String DashboardView::getSelectedVersionId() const
 {
-    const auto selectedIndex = versionComboBox.getSelectedItemIndex();
-    if (selectedIndex < 0 || static_cast<size_t>(selectedIndex) >= comboVersionIds.size())
-        return {};
+    return getMappedComboSelection(versionComboBox, comboVersionIds);
+}
 
-    return comboVersionIds[static_cast<size_t>(selectedIndex)];
+juce::String DashboardView::getSelectedCommitTemplate() const
+{
+    return commitTemplateComboBox.getText().trim();
 }
 
 void DashboardView::resized()
@@ -448,6 +490,18 @@ void DashboardView::resized()
 
     auto versionComboRow = area.removeFromTop(24);
     versionComboBox.setBounds(x, versionComboRow.getY(), fieldWidth, versionComboRow.getHeight());
+
+    area.removeFromTop(4);
+
+    auto commitTemplateLabelRow = area.removeFromTop(18);
+    commitTemplateLabel.setBounds(x, commitTemplateLabelRow.getY(), fieldWidth, commitTemplateLabelRow.getHeight());
+
+    area.removeFromTop(1);
+
+    auto commitTemplateRow = area.removeFromTop(24);
+    const int applyButtonWidth = 72;
+    commitTemplateComboBox.setBounds(x, commitTemplateRow.getY(), fieldWidth - applyButtonWidth - 6, commitTemplateRow.getHeight());
+    applyCommitTemplateButton.setBounds(x + fieldWidth - applyButtonWidth, commitTemplateRow.getY(), applyButtonWidth, commitTemplateRow.getHeight());
 
     area.removeFromTop(4);
 
