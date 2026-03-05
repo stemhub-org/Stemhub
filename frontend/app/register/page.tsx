@@ -14,7 +14,10 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
+<<<<<<< HEAD
+=======
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+>>>>>>> origin/dev
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +29,11 @@ export default function RegisterPage() {
     }
 
     try {
+<<<<<<< HEAD
+      const response = await fetch("http://localhost:8000/auth/register", {
+=======
       const response = await fetch(`${apiUrl}/auth/register`, {
+>>>>>>> origin/dev
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -95,7 +102,11 @@ export default function RegisterPage() {
 
         <button
           type="button"
+<<<<<<< HEAD
+          onClick={() => { window.location.href = "http://localhost:8000/auth/login/google"; }}
+=======
           onClick={() => { window.location.href = `${apiUrl}/auth/login/google`; }}
+>>>>>>> origin/dev
           className="flex w-full items-center justify-center gap-3 rounded-xl border border-foreground/[0.08] bg-background-secondary/50 px-6 py-3.5 text-sm font-light transition-all duration-300 hover:border-foreground/20 hover:bg-background-secondary"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >

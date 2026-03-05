@@ -6,7 +6,10 @@ struct VersionSummary
     juce::String id;
     juce::String branchId;
     juce::String parentVersionId;
+<<<<<<< HEAD
+=======
     juce::String createdAt;
+>>>>>>> origin/dev
     juce::String commitMessage;
     juce::String sourceDaw;
     juce::String sourceProjectFilename;
@@ -40,6 +43,9 @@ struct PushVersionRequest
     juce::String commitMessage;
     juce::String dawName;
     juce::String parentVersionId;
+<<<<<<< HEAD
+=======
     juce::String sourceProjectFilename;
     juce::var snapshotManifest;
+>>>>>>> origin/dev
 };

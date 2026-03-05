@@ -47,8 +47,12 @@ target_sources(stemhub
         Source/src/DashboardView.cpp
         Source/src/LoginView.cpp
         Source/src/ApiClient.cpp
+<<<<<<< HEAD
+        Source/src/VersionControlService.cpp)
+=======
         Source/src/VersionControlService.cpp
         Source/src/SnapshotBundler.cpp)
+>>>>>>> origin/dev
 
 target_compile_definitions(stemhub
     PRIVATE

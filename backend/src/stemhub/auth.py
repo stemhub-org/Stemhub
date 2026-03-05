@@ -11,7 +11,11 @@ from fastapi.responses import RedirectResponse
 
 from .database import get_db
 from .models import User
+<<<<<<< HEAD
+from .schemas import LoginRequest, UserCreate, UserResponse, Token
+=======
 from .schemas import LoginRequest, UserCreate, UserResponse, Token, UserUpdate
+>>>>>>> origin/dev
 from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -170,6 +174,8 @@ async def get_current_user(request: Request, token: str | None = Depends(oauth2_
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+<<<<<<< HEAD
+=======
 
 @router.put("/me", response_model=UserResponse)
 async def update_me(user_update: UserUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -198,3 +204,4 @@ async def update_me(user_update: UserUpdate, current_user: User = Depends(get_cu
     await db.commit()
     await db.refresh(current_user)
     return current_user
+>>>>>>> origin/dev

@@ -21,10 +21,13 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+<<<<<<< HEAD
+=======
       - ENVIRONMENT=${ENVIRONMENT}
       - BACKEND_URL=${BACKEND_URL}
       - FRONTEND_URL=${FRONTEND_URL}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+>>>>>>> origin/dev
     ports:
       - "8000:8000"
     volumes:
