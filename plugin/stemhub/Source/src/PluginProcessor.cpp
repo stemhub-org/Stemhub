@@ -244,7 +244,6 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
 
     PushVersionRequest request;
     request.branchId = branchId;
-    request.localProjectFile = projectFile;
     request.commitMessage = commitMessage;
     request.dawName = dawName;
 
@@ -255,13 +254,28 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
                                                                         : projectFile.getParentDirectory();
 
     SnapshotBundler bundle;
-    SnapshotBundleResult bundleResult = bundle.bundleProject(bundleRequest, );
+    SnapshotBundleResult bundleOutput;
+
+    const auto bundleStatus = bundle.bundleProject(bundleRequest, bundleOutput);
+    if (bundleStatus.failed())
+    {
+        result.errorMessage = bundleStatus.getErrorMessage();
+        return result;
+    }
+
+    request.localProjectFile = bundleOutput.bundleFile;
+
     const auto pushResult = versionControlService.pushVersion(request);
     if (pushResult.failed())
     {
         result.errorMessage = pushResult.getErrorMessage();
+        if (bundleOutput.bundleFile.existsAsFile())
+            bundleOutput.bundleFile.deleteFile();
         return result;
     }
+
+    if (bundleOutput.bundleFile.existsAsFile())
+        bundleOutput.bundleFile.deleteFile();
 
     result.pushedVersionId = versionControlService.getLastVersionId();
     result.activeProjectStatusMessage = "Version pushed successfully.";
