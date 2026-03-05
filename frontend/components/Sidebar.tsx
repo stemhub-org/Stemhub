@@ -10,10 +10,12 @@ import {
     FolderDot,
     Sun,
     Moon,
+    User,
 } from "lucide-react";
 
 const navigation = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Profile", href: "/dashboard/profile", icon: User },
     { name: "Repositories", href: "/repository", icon: FolderDot },
     { name: "Explore", href: "/dashboard/explore", icon: Compass },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
@@ -29,7 +31,7 @@ export default function Sidebar() {
         <div className="w-64 border-r border-border-subtle bg-background h-full flex flex-col relative">
 
             <div className="h-20 flex items-center px-8 border-b border-border-subtle">
-                <Link href="/">
+                <Link href="/dashboard">
                     <span
                         className="text-xl font-normal tracking-tight text-foreground"
                         style={{ fontFamily: "var(--font-syne)" }}

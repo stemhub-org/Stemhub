@@ -33,13 +33,10 @@ export default function TopNav() {
                         <span className="text-xs text-foreground/50">Free Plan</span>
                     </div>
                     <button
-                        onClick={() => {
-                            localStorage.removeItem("token");
-                            router.push("/login");
-                        }}
+                        onClick={() => router.push("/dashboard/profile")}
                         className="h-10 w-10 rounded-full flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
                         style={{ background: "linear-gradient(to top right, #3E63DD, #6B8CEE)" }}
-                        title="Sign out"
+                        title="Profile"
                     >
                         <User size={18} />
                     </button>

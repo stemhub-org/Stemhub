@@ -16,11 +16,21 @@ class UserResponse(BaseModel):
     email: EmailStr
     username: str
     avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    website: Optional[str] = None
     created_at: datetime
     is_active: bool
 
     class Config:
         from_attributes = True
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    website: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str
