@@ -57,7 +57,13 @@ juce::Result VersionControlService::pushVersion(const PushVersionRequest& reques
     if (request.dawName.isNotEmpty())
         bodyObject->setProperty("source_daw", request.dawName);
 
-    bodyObject->setProperty("source_project_filename", request.localProjectFile.getFileName());
+    const auto sourceProjectFilename = request.sourceProjectFilename.isNotEmpty()
+        ? request.sourceProjectFilename
+        : request.localProjectFile.getFileName();
+    bodyObject->setProperty("source_project_filename", sourceProjectFilename);
+
+    if (!request.snapshotManifest.isVoid())
+        bodyObject->setProperty("snapshot_manifest", request.snapshotManifest);
 
     const auto body = juce::JSON::toString(juce::var(bodyObject.get()));
     const auto createResult = apiClient.requestJson("/branches/" + branchId + "/versions/", "POST", body, accessToken);
