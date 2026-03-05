@@ -90,35 +90,6 @@ juce::String getMappedComboSelection(const juce::ComboBox& combo, const std::vec
     return mappedIds[static_cast<size_t>(selectedIndex)];
 }
 
-void setSimpleComboItems(juce::ComboBox& combo,
-                         const std::vector<juce::String>& items,
-                         const juce::String& selectedItem)
-{
-    combo.clear(juce::dontSendNotification);
-
-    for (size_t i = 0; i < items.size(); ++i)
-        combo.addItem(items[i], static_cast<int>(i) + 1);
-
-    if (items.empty())
-    {
-        combo.setSelectedId(0, juce::dontSendNotification);
-        return;
-    }
-
-    if (selectedItem.isNotEmpty())
-    {
-        for (size_t i = 0; i < items.size(); ++i)
-        {
-            if (items[i] == selectedItem)
-            {
-                combo.setSelectedId(static_cast<int>(i) + 1, juce::dontSendNotification);
-                return;
-            }
-        }
-    }
-
-    combo.setSelectedId(1, juce::dontSendNotification);
-}
 }
 
 ProjectSelectionView::ProjectSelectionView()
@@ -329,22 +300,6 @@ DashboardView::DashboardView()
         invokeIfBound(onVersionSelectionChange);
     };
 
-    addAndMakeVisible(commitTemplateLabel);
-    commitTemplateLabel.setText("Template", juce::dontSendNotification);
-    commitTemplateLabel.setJustificationType(juce::Justification::centredLeft);
-    commitTemplateLabel.setColour(juce::Label::textColourId, kStemhubLight);
-
-    addAndMakeVisible(commitTemplateComboBox);
-    commitTemplateComboBox.setTextWhenNothingSelected("Custom");
-    styleComboBox(commitTemplateComboBox);
-
-    addAndMakeVisible(applyCommitTemplateButton);
-    styleSecondaryButton(applyCommitTemplateButton);
-    applyCommitTemplateButton.onClick = [this]
-    {
-        invokeIfBound(onApplyCommitTemplate);
-    };
-
     addAndMakeVisible(backToProjectsButton);
     styleCompactTopButton(backToProjectsButton);
     backToProjectsButton.onClick = [this]
@@ -411,12 +366,6 @@ void DashboardView::setVersions(const std::vector<juce::String>& versionLabels,
     setMappedComboItems(versionComboBox, comboVersionIds, versionLabels, versionIds, selectedVersionId);
 }
 
-void DashboardView::setCommitTemplates(const std::vector<juce::String>& templateNames,
-                                       const juce::String& selectedTemplateName)
-{
-    setSimpleComboItems(commitTemplateComboBox, templateNames, selectedTemplateName);
-}
-
 juce::String DashboardView::getSelectedBranchId() const
 {
     return getMappedComboSelection(branchComboBox, comboBranchIds);
@@ -425,11 +374,6 @@ juce::String DashboardView::getSelectedBranchId() const
 juce::String DashboardView::getSelectedVersionId() const
 {
     return getMappedComboSelection(versionComboBox, comboVersionIds);
-}
-
-juce::String DashboardView::getSelectedCommitTemplate() const
-{
-    return commitTemplateComboBox.getText().trim();
 }
 
 void DashboardView::resized()
@@ -490,18 +434,6 @@ void DashboardView::resized()
 
     auto versionComboRow = area.removeFromTop(24);
     versionComboBox.setBounds(x, versionComboRow.getY(), fieldWidth, versionComboRow.getHeight());
-
-    area.removeFromTop(4);
-
-    auto commitTemplateLabelRow = area.removeFromTop(18);
-    commitTemplateLabel.setBounds(x, commitTemplateLabelRow.getY(), fieldWidth, commitTemplateLabelRow.getHeight());
-
-    area.removeFromTop(1);
-
-    auto commitTemplateRow = area.removeFromTop(24);
-    const int applyButtonWidth = 72;
-    commitTemplateComboBox.setBounds(x, commitTemplateRow.getY(), fieldWidth - applyButtonWidth - 6, commitTemplateRow.getHeight());
-    applyCommitTemplateButton.setBounds(x + fieldWidth - applyButtonWidth, commitTemplateRow.getY(), applyButtonWidth, commitTemplateRow.getHeight());
 
     area.removeFromTop(4);
 

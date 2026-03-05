@@ -31,7 +31,6 @@ private:
     void handleSyncClick();
     void handleChangeBranchClick();
     void handleVersionSelectionChanged();
-    void handleApplyCommitTemplateClick();
     void handleBackToProjectsClick();
     void launchProjectFileChooser(const juce::String& title,
                                   std::function<void(const juce::File&)> onFileChosen);

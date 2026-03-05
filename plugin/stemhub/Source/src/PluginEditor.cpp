@@ -1,27 +1,10 @@
-#include <array>
-
 #include "../include/PluginEditor.hpp"
 
 namespace
 {
 constexpr auto kDefaultCommitMessage = "Save from plugin";
-constexpr auto kDefaultCommitTemplate = "Custom";
 constexpr auto kDawName = "FL Studio";
 constexpr auto kProjectFilePattern = "*.flp;*.als";
-
-struct CommitTemplateDefinition
-{
-    const char* name;
-    const char* pattern;
-};
-
-constexpr std::array<CommitTemplateDefinition, 5> kCommitTemplates { {
-    { "Custom", "" },
-    { "Update snapshots", "Update {project} on {branch} ({date})" },
-    { "Fix mix", "Fix mix in {project} ({branch})" },
-    { "Arrangement tweak", "Tweak arrangement for {project} ({branch})" },
-    { "Sound design", "Sound design pass for {project} ({branch})" },
-} };
 
 juce::String getLoginMessage(const StemhubAudioProcessor& processor)
 {
@@ -82,60 +65,6 @@ juce::String formatVersionLabel(const VersionSummary& version)
 
 const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
 const auto kStemhubPurple = juce::Colour::fromRGB(0x9C, 0x57, 0xDF);
-
-std::vector<juce::String> getCommitTemplateNames()
-{
-    std::vector<juce::String> names;
-    names.reserve(kCommitTemplates.size());
-
-    for (const auto& templateDefinition : kCommitTemplates)
-        names.emplace_back(templateDefinition.name);
-
-    return names;
-}
-
-const CommitTemplateDefinition* findTemplateByName(const juce::String& templateName)
-{
-    for (const auto& templateDefinition : kCommitTemplates)
-    {
-        if (templateName.compareIgnoreCase(templateDefinition.name) == 0)
-            return &templateDefinition;
-    }
-
-    return nullptr;
-}
-
-juce::String renderCommitTemplate(const juce::String& templateName, const StemhubAudioProcessor& processor)
-{
-    const auto* templateDefinition = findTemplateByName(templateName);
-    if (templateDefinition == nullptr)
-        return {};
-
-    juce::String pattern(templateDefinition->pattern);
-    if (pattern.isEmpty())
-        return {};
-
-    const auto projectName = processor.getSelectedProject() ? processor.getSelectedProject()->name : "project";
-    const auto branchName = processor.getSelectedBranchName().isNotEmpty() ? processor.getSelectedBranchName() : "main";
-    const auto now = juce::Time::getCurrentTime().formatted("%Y-%m-%d %H:%M");
-
-    return pattern
-        .replace("{project}", projectName)
-        .replace("{branch}", branchName)
-        .replace("{date}", now)
-        .replace("{daw}", kDawName);
-}
-
-int resolveTemplateSelectionId(const std::vector<juce::String>& templateNames, const juce::String& selectedTemplate)
-{
-    for (size_t i = 0; i < templateNames.size(); ++i)
-    {
-        if (templateNames[i] == selectedTemplate)
-            return static_cast<int>(i) + 1;
-    }
-
-    return 1;
-}
 }
 
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
@@ -161,10 +90,8 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     dashboardView.onSync = [this] { handleSyncClick(); };
     dashboardView.onBranchChange = [this] { handleChangeBranchClick(); };
     dashboardView.onVersionSelectionChange = [this] { handleVersionSelectionChanged(); };
-    dashboardView.onApplyCommitTemplate = [this] { handleApplyCommitTemplateClick(); };
     dashboardView.onBackToProjects = [this] { handleBackToProjectsClick(); };
     dashboardView.onSignOut = [this] { handleSignOutClick(); };
-    dashboardView.setCommitTemplates(getCommitTemplateNames(), kDefaultCommitTemplate);
 
     refreshSessionUi();
 }
@@ -454,46 +381,15 @@ void StemhubAudioProcessorEditor::handleVersionSelectionChanged()
     audioProcessor.setSelectedVersionId(selectedVersionId);
 }
 
-void StemhubAudioProcessorEditor::handleApplyCommitTemplateClick()
-{
-    const auto templateName = dashboardView.getSelectedCommitTemplate();
-    const auto renderedTemplate = renderCommitTemplate(templateName, audioProcessor);
-    if (renderedTemplate.isNotEmpty())
-        dashboardView.setCommitMessage(renderedTemplate);
-}
-
 void StemhubAudioProcessorEditor::showCommitMessagePopupForSave()
 {
     auto* commitPopup = new juce::AlertWindow("Save version",
                                               "Enter a commit message before saving.",
                                               juce::AlertWindow::NoIcon);
 
-    const auto templateNames = getCommitTemplateNames();
-    juce::StringArray templateNameChoices;
-    for (const auto& templateName : templateNames)
-        templateNameChoices.add(templateName);
-
-    commitPopup->addComboBox("template", templateNameChoices, "Template");
     commitPopup->addTextEditor("commit_message", dashboardView.getCommitMessage(), "Commit message");
     commitPopup->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
     commitPopup->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-
-    if (auto* templateSelector = commitPopup->getComboBoxComponent("template"))
-    {
-        const auto selectedTemplate = dashboardView.getSelectedCommitTemplate();
-        templateSelector->setSelectedId(resolveTemplateSelectionId(templateNames, selectedTemplate),
-                                        juce::dontSendNotification);
-
-        if (auto* messageEditor = commitPopup->getTextEditor("commit_message"))
-        {
-            templateSelector->onChange = [this, templateSelector, messageEditor]
-            {
-                const auto renderedTemplate = renderCommitTemplate(templateSelector->getText(), audioProcessor);
-                if (renderedTemplate.isNotEmpty())
-                    messageEditor->setText(renderedTemplate, juce::dontSendNotification);
-            };
-        }
-    }
 
     const auto popupRef = juce::Component::SafePointer<juce::AlertWindow>(commitPopup);
     const auto editorRef = juce::Component::SafePointer<StemhubAudioProcessorEditor>(this);
@@ -503,10 +399,6 @@ void StemhubAudioProcessorEditor::showCommitMessagePopupForSave()
             return;
 
         const auto commitMessage = popupRef->getTextEditorContents("commit_message").trim();
-        const auto selectedTemplate = popupRef->getComboBoxComponent("template") != nullptr
-            ? popupRef->getComboBoxComponent("template")->getText()
-            : juce::String(kDefaultCommitTemplate);
-        editorRef->dashboardView.setCommitTemplates(getCommitTemplateNames(), selectedTemplate);
         editorRef->dashboardView.setCommitMessage(commitMessage);
         editorRef->requestSaveWithCommitMessage(commitMessage);
     }), true);
