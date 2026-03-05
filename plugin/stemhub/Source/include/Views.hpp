@@ -39,6 +39,7 @@ public:
                      const std::vector<juce::String>& projectIds,
                      const juce::String& selectedProjectId);
     void setHasExistingProjects(bool hasProjects);
+    void setCanCreateProject(bool canCreate);
     juce::String getSelectedProjectId() const;
     void resized() override;
 
@@ -50,6 +51,7 @@ public:
 private:
     std::vector<juce::String> comboProjectIds;
     bool hasExistingProjects { false };
+    bool canCreateProject { false };
     juce::Label statusLabel;
     juce::Label projectFileLabel;
     juce::Label existingProjectsLabel;
