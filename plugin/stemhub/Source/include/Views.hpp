@@ -17,6 +17,7 @@ public:
     void clearInputs() { clearEmail(); clearPassword(); }
 
     void setMessage(const juce::String& message) { authStateLabel.setText(message, juce::dontSendNotification); }
+    void paint(juce::Graphics&) override;
     void resized() override;
 
     std::function<void()> onSignIn;

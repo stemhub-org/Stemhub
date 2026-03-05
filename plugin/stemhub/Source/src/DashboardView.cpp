@@ -1,26 +1,69 @@
 #include "../include/Views.hpp"
 
+namespace
+{
+    const auto kStemhubPurple = juce::Colour::fromRGB(0x9C, 0x57, 0xDF);
+    const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
+    const auto kStemhubLight = juce::Colour::fromRGB(0xF1, 0xF1, 0xF1);
+    const auto kStemhubSurface = juce::Colour::fromRGB(0x2B, 0x2B, 0x30);
+    
+    void styleComboBox(juce::ComboBox& combo)
+    {
+        combo.setColour(juce::ComboBox::backgroundColourId, kStemhubSurface);
+        combo.setColour(juce::ComboBox::textColourId, kStemhubLight);
+        combo.setColour(juce::ComboBox::outlineColourId, kStemhubLight.withAlpha(0.45f));
+        combo.setColour(juce::ComboBox::arrowColourId, kStemhubLight);
+    }
+    
+    void stylePrimaryButton(juce::TextButton& button)
+    {
+        button.setColour(juce::TextButton::buttonColourId, kStemhubPurple);
+        button.setColour(juce::TextButton::buttonOnColourId, kStemhubPurple.brighter(0.15f));
+        button.setColour(juce::TextButton::textColourOffId, kStemhubLight);
+        button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+    }
+    
+    void styleSecondaryButton(juce::TextButton& button)
+    {
+        button.setColour(juce::TextButton::buttonColourId, kStemhubSurface.withAlpha(0.95f));
+        button.setColour(juce::TextButton::buttonOnColourId, kStemhubSurface.brighter(0.12f));
+        button.setColour(juce::TextButton::textColourOffId, kStemhubLight);
+        button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+    }
+    
+    void styleCompactTopButton(juce::TextButton& button)
+    {
+        button.setColour(juce::TextButton::buttonColourId, kStemhubDark.withAlpha(0.85f));
+        button.setColour(juce::TextButton::buttonOnColourId, kStemhubPurple.withAlpha(0.8f));
+        button.setColour(juce::TextButton::textColourOffId, kStemhubLight.withAlpha(0.9f));
+        button.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+    }
+}
+
 ProjectSelectionView::ProjectSelectionView()
 {
     addAndMakeVisible(statusLabel);
     statusLabel.setJustificationType(juce::Justification::centred);
-    statusLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    statusLabel.setColour(juce::Label::textColourId, kStemhubLight);
     statusLabel.setFont(juce::FontOptions(20.0f, juce::Font::bold));
 
     addAndMakeVisible(projectFileLabel);
     projectFileLabel.setJustificationType(juce::Justification::centredLeft);
-    projectFileLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    projectFileLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.8f));
     projectFileLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
     projectFileLabel.setText("No project file selected.", juce::dontSendNotification);
 
     addAndMakeVisible(existingProjectsLabel);
     existingProjectsLabel.setText("Existing projects", juce::dontSendNotification);
     existingProjectsLabel.setJustificationType(juce::Justification::centredLeft);
+    existingProjectsLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
     addAndMakeVisible(projectComboBox);
     projectComboBox.setTextWhenNothingSelected("Select a project");
+    styleComboBox(projectComboBox);
 
     addAndMakeVisible(chooseProjectFileButton);
+    styleSecondaryButton(chooseProjectFileButton);
     chooseProjectFileButton.onClick = [this]
     {
         if (onChooseProjectFile != nullptr)
@@ -28,6 +71,7 @@ ProjectSelectionView::ProjectSelectionView()
     };
 
     addAndMakeVisible(openProjectButton);
+    stylePrimaryButton(openProjectButton);
     openProjectButton.onClick = [this]
     {
         if (onOpenProject != nullptr)
@@ -35,6 +79,7 @@ ProjectSelectionView::ProjectSelectionView()
     };
 
     addAndMakeVisible(createProjectButton);
+    stylePrimaryButton(createProjectButton);
     createProjectButton.onClick = [this]
     {
         if (onCreateProject != nullptr)
@@ -48,6 +93,8 @@ ProjectSelectionView::ProjectSelectionView()
         if (onSignOut != nullptr)
             onSignOut();
     };
+
+    styleCompactTopButton(signOutButton);
 }
 
 void ProjectSelectionView::setProjects(const std::vector<juce::String>& projectNames,
@@ -164,38 +211,42 @@ DashboardView::DashboardView()
 {
     addAndMakeVisible(projectStatusLabel);
     projectStatusLabel.setJustificationType(juce::Justification::centredLeft);
-    projectStatusLabel.setColour(juce::Label::textColourId, juce::Colours::yellowgreen);
+    projectStatusLabel.setColour(juce::Label::textColourId, kStemhubPurple.brighter(0.25f));
     projectStatusLabel.setFont(juce::FontOptions(16.0f, juce::Font::plain));
 
     addAndMakeVisible(projectFileLabel);
     projectFileLabel.setJustificationType(juce::Justification::centredLeft);
-    projectFileLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    projectFileLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.8f));
     projectFileLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
     projectFileLabel.setText("No project file selected.", juce::dontSendNotification);
 
     addAndMakeVisible(projectNameLabel);
     projectNameLabel.setJustificationType(juce::Justification::centredLeft);
-    projectNameLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    projectNameLabel.setColour(juce::Label::textColourId, kStemhubLight);
     projectNameLabel.setFont(juce::FontOptions(15.0f, juce::Font::bold));
 
     addAndMakeVisible(branchNameLabel);
     branchNameLabel.setJustificationType(juce::Justification::centredLeft);
-    branchNameLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    branchNameLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.85f));
     branchNameLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
 
     addAndMakeVisible(branchLabel);
     branchLabel.setText("Branch", juce::dontSendNotification);
     branchLabel.setJustificationType(juce::Justification::centredLeft);
+    branchLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
     addAndMakeVisible(branchComboBox);
     branchComboBox.setTextWhenNothingSelected("No branch available");
+    styleComboBox(branchComboBox);
 
     addAndMakeVisible(versionLabel);
     versionLabel.setText("Version history", juce::dontSendNotification);
     versionLabel.setJustificationType(juce::Justification::centredLeft);
+    versionLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
     addAndMakeVisible(versionComboBox);
     versionComboBox.setTextWhenNothingSelected("No versions available");
+    styleComboBox(versionComboBox);
     versionComboBox.onChange = [this]
     {
         if (onVersionSelectionChange != nullptr)
@@ -203,6 +254,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(backToProjectsButton);
+    styleCompactTopButton(backToProjectsButton);
     backToProjectsButton.onClick = [this]
     {
         if (onBackToProjects != nullptr)
@@ -210,6 +262,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(saveChanges);
+    stylePrimaryButton(saveChanges);
     saveChanges.onClick = [this]
     {
         if (onSave != nullptr)
@@ -217,6 +270,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(syncButton);
+    styleSecondaryButton(syncButton);
     syncButton.onClick = [this]
     {
         if (onSync != nullptr)
@@ -224,6 +278,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(changeBranch);
+    styleSecondaryButton(changeBranch);
     changeBranch.onClick = [this]
     {
         if (onBranchChange != nullptr)
@@ -231,6 +286,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(signOutButton);
+    styleCompactTopButton(signOutButton);
     signOutButton.onClick = [this]
     {
         if (onSignOut != nullptr)
