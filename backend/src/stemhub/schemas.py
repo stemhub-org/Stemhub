@@ -107,7 +107,7 @@ class VersionResponse(VersionBase):
 
 class TrackBase(BaseModel):
     name: str
-    file_type: Optional[str] = ".json"
+    file_type: str = ".json"
     storage_path: Optional[str] = None
 
 class TrackCreate(TrackBase):
