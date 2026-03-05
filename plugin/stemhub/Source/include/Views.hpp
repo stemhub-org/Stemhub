@@ -107,7 +107,7 @@ private:
     juce::TextButton backToProjectsButton { "< Projects" };
     juce::TextEditor commitMessageInput;
     juce::TextButton saveChanges { "Save" };
-    juce::TextButton syncButton { "Sync" };
-    juce::TextButton changeBranch { "View Other Branches" };
+    juce::TextButton syncButton { "Refresh History" };
+    juce::TextButton changeBranch { "Load Branch" };
     juce::TextButton signOutButton { "Sign Out" };
 };

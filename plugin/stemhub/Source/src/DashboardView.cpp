@@ -323,6 +323,25 @@ DashboardView::DashboardView()
     commitMessageInput.setColour(juce::TextEditor::outlineColourId, kStemhubLight.withAlpha(0.45f));
     commitMessageInput.setColour(juce::CaretComponent::caretColourId, kStemhubLight);
 
+    addAndMakeVisible(branchLabel);
+    branchLabel.setText("Branch", juce::dontSendNotification);
+    branchLabel.setJustificationType(juce::Justification::centredLeft);
+
+    addAndMakeVisible(branchComboBox);
+    branchComboBox.setTextWhenNothingSelected("No branch available");
+
+    addAndMakeVisible(versionLabel);
+    versionLabel.setText("Version history", juce::dontSendNotification);
+    versionLabel.setJustificationType(juce::Justification::centredLeft);
+
+    addAndMakeVisible(versionComboBox);
+    versionComboBox.setTextWhenNothingSelected("No versions available");
+    versionComboBox.onChange = [this]
+    {
+        if (onVersionSelectionChange != nullptr)
+            onVersionSelectionChange();
+    };
+
     addAndMakeVisible(saveChanges);
     stylePrimaryButton(saveChanges);
     saveChanges.onClick = [this]
@@ -379,7 +398,7 @@ juce::String DashboardView::getSelectedVersionId() const
 void DashboardView::resized()
 {
     auto area = getLocalBounds().reduced(20);
-    const int fieldWidth = 220;
+    const int fieldWidth = 280;
     const int x = (getWidth() - fieldWidth) / 2;
     const int contentLeft = area.getX();
     const int contentRight = area.getRight();

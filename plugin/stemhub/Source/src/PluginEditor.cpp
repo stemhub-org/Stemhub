@@ -37,7 +37,7 @@ juce::String getDashboardMessage(const StemhubAudioProcessor& processor)
         return "Committing...";
 
     if (processor.getOperationState() == OperationState::pulling)
-        return "Syncing...";
+        return "Refreshing version history...";
 
     if (processor.getActiveProjectStatusMessage().isNotEmpty())
         return processor.getActiveProjectStatusMessage();
@@ -355,15 +355,23 @@ juce::File StemhubAudioProcessorEditor::getEffectiveProjectFile() const
 
 void StemhubAudioProcessorEditor::handleSyncClick()
 {
-    audioProcessor.setOperationState(OperationState::idle);
-    audioProcessor.setActiveProjectStatusMessage("Sync is not implemented yet.");
+    audioProcessor.requestRefreshVersionHistory();
     refreshSessionUi();
 }
 
 void StemhubAudioProcessorEditor::handleChangeBranchClick()
 {
-    audioProcessor.setOperationState(OperationState::idle);
-    audioProcessor.setActiveProjectStatusMessage("Branch management is not implemented yet.");
+    const auto selectedBranchId = dashboardView.getSelectedBranchId();
+    if (selectedBranchId.isEmpty())
+    {
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Branch selection",
+            "Select a branch before loading history.");
+        return;
+    }
+
+    audioProcessor.requestSelectBranch(selectedBranchId);
     refreshSessionUi();
 }
 
