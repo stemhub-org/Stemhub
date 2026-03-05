@@ -45,7 +45,8 @@ async def create_track(
     """
     await _get_owned_version(version_id=version_id, current_user=current_user, db=db)
 
-    db_track = Track(**track_in.model_dump(), version_id=version_id)
+    track_data = track_in.model_dump(exclude_none=True)
+    db_track = Track(**track_data, version_id=version_id)
     db.add(db_track)
     await db.commit()
     await db.refresh(db_track)
