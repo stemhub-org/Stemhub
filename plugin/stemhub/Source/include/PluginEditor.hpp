@@ -5,18 +5,23 @@
 #include "Views.hpp"
 
 class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor,
-                                    private juce::ChangeListener
+                                    private juce::ChangeListener,
+                                    private juce::KeyListener
 {
 public:
     explicit StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit);
     ~StemhubAudioProcessorEditor() override;
 
+    using juce::Component::keyPressed;
     void paint(juce::Graphics&) override;
     void resized() override;
 
 private:
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+    bool keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) override;
     void refreshSessionUi();
+    void refreshProjectSelectionUi();
+    void refreshDashboardUi();
     void handleChooseProjectFileClick();
     void handleOpenProjectClick();
     void handleCreateProjectClick();
@@ -27,6 +32,13 @@ private:
     void handleChangeBranchClick();
     void handleVersionSelectionChanged();
     void handleBackToProjectsClick();
+    void launchProjectFileChooser(const juce::String& title,
+                                  std::function<void(const juce::File&)> onFileChosen);
+    void triggerPushVersion(const juce::String& commitMessage);
+    bool hasActiveProjectSelection() const;
+    juce::File getEffectiveProjectFile() const;
+    void showCommitMessagePopupForSave();
+    void requestSaveWithCommitMessage(juce::String commitMessage);
     LoginView loginView;
     ProjectSelectionView projectSelectionView;
     DashboardView dashboardView;
