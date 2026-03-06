@@ -1,4 +1,4 @@
-#include "../include/PluginEditor.hpp"
+#include "ui/PluginEditor.hpp"
 
 namespace
 {
@@ -92,6 +92,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     dashboardView.onVersionSelectionChange = [this] { handleVersionSelectionChanged(); };
     dashboardView.onBackToProjects = [this] { handleBackToProjectsClick(); };
     dashboardView.onSignOut = [this] { handleSignOutClick(); };
+    dashboardView.onRestore = [this] { handleRestoreClick(); };
 
     refreshSessionUi();
 }
@@ -240,6 +241,27 @@ void StemhubAudioProcessorEditor::launchProjectFileChooser(const juce::String& t
     });
 }
 
+void StemhubAudioProcessorEditor::launchProjectFolderChooser(const juce::String& title,
+                                                           std::function<void(const juce::File&)> onFolderChosen)
+{
+    projectFileChooser = std::make_unique<juce::FileChooser>(
+        title,
+        audioProcessor.getPendingProjectFolder(),
+        juce::String());
+
+    constexpr auto flags = juce::FileBrowserComponent::openMode
+        | juce::FileBrowserComponent::canSelectDirectories;
+
+    projectFileChooser->launchAsync(flags, [this, folderChosenCallback = std::move(onFolderChosen)](const juce::FileChooser& chooser)
+    {
+        const auto folder = chooser.getResult();
+        if (folder.isDirectory() && folderChosenCallback != nullptr)
+            folderChosenCallback(folder);
+
+        projectFileChooser.reset();
+    });
+}
+
 void StemhubAudioProcessorEditor::handleOpenProjectClick()
 {
     const auto projectId = projectSelectionView.getSelectedProjectId();
@@ -297,6 +319,28 @@ void StemhubAudioProcessorEditor::handleSignOutClick()
 void StemhubAudioProcessorEditor::handleSaveChangesClick()
 {
     requestSaveWithCommitMessage(dashboardView.getCommitMessage());
+}
+
+void StemhubAudioProcessorEditor::handleRestoreClick()
+{
+    const auto selectedVersionId = dashboardView.getSelectedVersionId();
+    if (selectedVersionId.isEmpty())
+    {
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Restore version",
+            "Select a version to restore before continuing.");
+        return;
+    }
+
+    launchProjectFolderChooser("Select where to restore version snapshot", [this, selectedVersionId](const juce::File& folder)
+    {
+        if (!folder.isDirectory())
+            return;
+
+        audioProcessor.requestRestoreVersion(selectedVersionId, folder);
+        refreshSessionUi();
+    });
 }
 
 void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String commitMessage)

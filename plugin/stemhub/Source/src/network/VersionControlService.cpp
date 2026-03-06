@@ -1,4 +1,4 @@
-#include "../include/VersionControlService.hpp"
+#include "application/VersionControlService.hpp"
 
 namespace
 {
@@ -32,12 +32,22 @@ ApiResult<VersionSummary> parseVersionSummary(const juce::var& value)
 
     return { summary, {} };
 }
+
+}
+
+const IProjectApi* VersionControlService::getApiClient() const noexcept
+{
+    return apiClient;
 }
 
 juce::Result VersionControlService::pushVersion(const PushVersionRequest& request)
 {
     if (accessToken.isEmpty())
         return juce::Result::fail("No access token is configured for version control.");
+
+    const auto* api = getApiClient();
+    if (api == nullptr)
+        return juce::Result::fail("VersionControlService API client is not configured.");
 
     const auto branchId = request.branchId.isNotEmpty() ? request.branchId : context.branchId;
     if (branchId.isEmpty())
@@ -67,7 +77,7 @@ juce::Result VersionControlService::pushVersion(const PushVersionRequest& reques
         bodyObject->setProperty("snapshot_manifest", request.snapshotManifest);
 
     const auto body = juce::JSON::toString(juce::var(bodyObject.get()));
-    const auto createResult = apiClient.requestJson("/branches/" + branchId + "/versions/", "POST", body, accessToken);
+    const auto createResult = api->requestJson("/branches/" + branchId + "/versions/", "POST", body, accessToken);
     if (!createResult.ok())
         return juce::Result::fail(buildApiErrorMessage(createResult.error, "Failed to create version."));
 
@@ -75,7 +85,7 @@ juce::Result VersionControlService::pushVersion(const PushVersionRequest& reques
     if (!createdVersion.ok())
         return juce::Result::fail(buildApiErrorMessage(createdVersion.error, "Failed to parse created version."));
 
-    const auto uploadResult = apiClient.uploadFile("/versions/" + createdVersion.value->id + "/artifact",
+    const auto uploadResult = api->uploadFile("/versions/" + createdVersion.value->id + "/artifact",
                                                    request.localProjectFile,
                                                    "artifact",
                                                    accessToken);
@@ -101,7 +111,11 @@ ApiResult<std::vector<VersionSummary>> VersionControlService::fetchVersionHistor
     if (bearerToken.isEmpty())
         return { {}, ApiError { 0, "An access token is required to fetch version history." } };
 
-    const auto jsonResult = apiClient.requestJson("/branches/" + branchId + "/versions/", "GET", {}, bearerToken);
+    const auto* api = getApiClient();
+    if (api == nullptr)
+        return { {}, ApiError { 0, "VersionControlService API client is not configured." } };
+
+    const auto jsonResult = api->requestJson("/branches/" + branchId + "/versions/", "GET", {}, bearerToken);
     if (!jsonResult.ok())
         return { {}, jsonResult.error };
 
@@ -134,7 +148,11 @@ ApiResult<VersionSummary> VersionControlService::fetchVersion(
     if (bearerToken.isEmpty())
         return { {}, ApiError { 0, "An access token is required to fetch version details." } };
 
-    const auto jsonResult = apiClient.requestJson("/versions/" + versionId, "GET", {}, bearerToken);
+    const auto* api = getApiClient();
+    if (api == nullptr)
+        return { {}, ApiError { 0, "VersionControlService API client is not configured." } };
+
+    const auto jsonResult = api->requestJson("/versions/" + versionId, "GET", {}, bearerToken);
     if (!jsonResult.ok())
         return { {}, jsonResult.error };
 
@@ -155,7 +173,11 @@ juce::Result VersionControlService::downloadVersion(
     if (destinationFile.isDirectory())
         return juce::Result::fail("Destination path must be a file, not a directory.");
 
-    return apiClient.downloadFile("/versions/" + versionId + "/artifact", destinationFile, bearerToken);
+    const auto* api = getApiClient();
+    if (api == nullptr)
+        return juce::Result::fail("VersionControlService API client is not configured.");
+
+    return api->downloadFile("/versions/" + versionId + "/artifact", destinationFile, bearerToken);
 }
 
 juce::Result VersionControlService::restoreVersion(

@@ -1,19 +1,19 @@
 #pragma once
 
-#include <atomic>
 #include <functional>
+#include <memory>
 #include <JuceHeader.h>
-#include <mutex>
 #include <optional>
 #include <vector>
 #include <variant>
-#include "Branch.hpp"
-#include "User.hpp"
-#include "Project.hpp"
-#include "States.hpp"
-#include "ApiUtils.hpp"
-#include "ApiClient.hpp"
-#include "VersionControlService.hpp"
+#include "application/BackgroundJobCoordinator.hpp"
+#include "domain/Branch.hpp"
+#include "domain/User.hpp"
+#include "domain/Project.hpp"
+#include "domain/States.hpp"
+#include "network/ApiUtils.hpp"
+#include "network/ApiClient.hpp"
+#include "application/VersionControlService.hpp"
 
 class StemhubAudioProcessor : public juce::AudioProcessor,
                               public juce::ChangeBroadcaster,
@@ -21,6 +21,7 @@ class StemhubAudioProcessor : public juce::AudioProcessor,
 {
 public:
     StemhubAudioProcessor();
+    explicit StemhubAudioProcessor(std::unique_ptr<IProjectApi> apiClient);
     ~StemhubAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
@@ -97,9 +98,11 @@ public:
     void requestSelectBranch(juce::String branchId);
     void requestRefreshVersionHistory();
     void requestPushVersion(juce::String commitMessage, juce::String dawName);
+    void requestRestoreVersion(const juce::String& versionId, const juce::File& destinationFolder);
+
     void setSelectedVersionId(juce::String versionId);
     VersionControlService& getVersionControlService() noexcept { return versionControlService; }
-    ApiClient& getApiClient() noexcept { return apiClient; }
+    IProjectApi& getApiClient() noexcept { return *apiClient; }
 
 private:
     void handleAsyncUpdate() override;
@@ -147,15 +150,20 @@ private:
         juce::String activeProjectStatusMessage;
     };
 
-    using BackgroundJobPayload = std::variant<AuthRequestResult, ProjectActivationJobResult, BranchHistoryJobResult, PushVersionJobResult>;
-
-    struct BackgroundJobResult
+    struct RestoreVersionJobResult
     {
-        uint64_t requestId {};
-        BackgroundJobPayload payload;
+        juce::File restoredProjectFile;
+        juce::String errorMessage;
+        juce::String activeProjectStatusMessage;
     };
 
+    using BackgroundJobPayload = std::variant<AuthRequestResult, ProjectActivationJobResult, BranchHistoryJobResult, PushVersionJobResult, RestoreVersionJobResult>;
+
+    using BackgroundJobResult = BackgroundJobCoordinator<BackgroundJobPayload>::JobResult;
+
     void enqueueBackgroundTask(std::function<BackgroundJobPayload()> job);
+
+    RestoreVersionJobResult performRestoreVersionRequest(const juce::String& versionId, const juce::File& destinationFile) const;
     AuthRequestResult performSignInRequest(const juce::String& email, const juce::String& password) const;
     ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,
                                                          const juce::File& localProjectFile,
@@ -177,10 +185,11 @@ private:
     void applyProjectActivationResult(ProjectActivationJobResult result);
     void applyBranchHistoryResult(BranchHistoryJobResult result);
     void applyPushVersionResult(PushVersionJobResult result);
+    void applyRestoreVersionResult(RestoreVersionJobResult result);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
-    ApiClient apiClient;
+    std::unique_ptr<IProjectApi> apiClient;
     juce::String access_tkn;
     juce::String authErrorMessage;
     juce::String projectSelectionStatusMessage;
@@ -194,11 +203,8 @@ private:
     juce::String selectedBranchName;
     juce::String selectedVersionId;
     SessionState sessionState;
-    std::mutex authResultMutex;
-    std::optional<BackgroundJobResult> pendingBackgroundResult;
-    std::atomic<uint64_t> backgroundRequestGeneration { 0 };
-    juce::ThreadPool backgroundJobs { 1 };
-    VersionControlService versionControlService { apiClient };
+    BackgroundJobCoordinator<BackgroundJobPayload> backgroundJobs { 2 };
+    VersionControlService versionControlService;
     juce::File pendingProjectFile;
     juce::File selectedProjectFile;
     juce::File pendingProjectFolder;

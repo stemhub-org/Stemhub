@@ -1,8 +1,8 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "PluginProcessor.hpp"
-#include "Views.hpp"
+#include "application/PluginProcessor.hpp"
+#include "ui/Views.hpp"
 
 class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     private juce::ChangeListener,
@@ -32,8 +32,12 @@ private:
     void handleChangeBranchClick();
     void handleVersionSelectionChanged();
     void handleBackToProjectsClick();
+    void handleRestoreClick();
+
     void launchProjectFileChooser(const juce::String& title,
                                   std::function<void(const juce::File&)> onFileChosen);
+    void launchProjectFolderChooser(const juce::String& title,
+                                   std::function<void(const juce::File&)> onFolderChosen);
     void triggerPushVersion(const juce::String& commitMessage);
     bool hasActiveProjectSelection() const;
     juce::File getEffectiveProjectFile() const;
