@@ -33,7 +33,7 @@ public:
 class ApiClient final : public IProjectApi
 {
 public:
-    explicit ApiClient(juce::String baseUrl = "http://localhost:8000");
+    explicit ApiClient(juce::String baseUrl = {});
 
     ApiResult<juce::var> requestJson(const juce::String& path,
                                      const juce::String& httpMethod,

@@ -3,6 +3,18 @@
 
 namespace
 {
+juce::String resolveApiBaseUrl(juce::String configuredBaseUrl)
+{
+    if (configuredBaseUrl.isNotEmpty())
+        return configuredBaseUrl;
+
+    const auto fromEnvironment = juce::SystemStats::getEnvironmentVariable("STEMHUB_API_BASE_URL", {});
+    if (fromEnvironment.isNotEmpty())
+        return fromEnvironment;
+
+    return "http://localhost:8000";
+}
+
 juce::String buildJsonHeaders(const juce::String& bearerToken)
 {
     juce::String headers;
@@ -98,7 +110,7 @@ ApiResult<Branch> parseBranch(const juce::var& value)
 }
 
 ApiClient::ApiClient(juce::String apiBaseUrl)
-    : baseUrl(std::move(apiBaseUrl))
+    : baseUrl(resolveApiBaseUrl(std::move(apiBaseUrl)))
 {
 }
 
