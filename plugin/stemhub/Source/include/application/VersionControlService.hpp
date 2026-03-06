@@ -1,8 +1,8 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "ApiClient.hpp"
-#include "VersionControlUtils.hpp"
+#include "network/ApiClient.hpp"
+#include "application/VersionControlUtils.hpp"
 
 class VersionControlService
 {

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "PluginProcessor.hpp"
-#include "Views.hpp"
+#include "application/PluginProcessor.hpp"
+#include "ui/Views.hpp"
 
 class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     private juce::ChangeListener,

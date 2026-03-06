@@ -6,14 +6,14 @@
 #include <optional>
 #include <vector>
 #include <variant>
-#include "BackgroundJobCoordinator.hpp"
-#include "Branch.hpp"
-#include "User.hpp"
-#include "Project.hpp"
-#include "States.hpp"
-#include "ApiUtils.hpp"
-#include "ApiClient.hpp"
-#include "VersionControlService.hpp"
+#include "application/BackgroundJobCoordinator.hpp"
+#include "domain/Branch.hpp"
+#include "domain/User.hpp"
+#include "domain/Project.hpp"
+#include "domain/States.hpp"
+#include "network/ApiUtils.hpp"
+#include "network/ApiClient.hpp"
+#include "application/VersionControlService.hpp"
 
 class StemhubAudioProcessor : public juce::AudioProcessor,
                               public juce::ChangeBroadcaster,

@@ -1,5 +1,5 @@
-#include "../include/ApiClient.hpp"
-#include "../include/ApiUtils.hpp"
+#include "../include/network/ApiClient.hpp"
+#include "../include/network/ApiUtils.hpp"
 
 namespace
 {

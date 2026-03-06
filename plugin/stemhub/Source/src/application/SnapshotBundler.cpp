@@ -1,6 +1,6 @@
 #include <algorithm>
 
-#include "../include/SnapshotBundler.hpp"
+#include "../include/application/SnapshotBundler.hpp"
 
 namespace
 {
@@ -116,4 +116,3 @@ juce::Result SnapshotBundler::bundleProject(const SnapshotBundleRequest& request
     outResult.manifest = manifest;
     return juce::Result::ok();
 }
-

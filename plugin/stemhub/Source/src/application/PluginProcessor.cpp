@@ -1,10 +1,10 @@
 #include <algorithm>
 #include <type_traits>
 
-#include "../include/PluginProcessor.hpp"
-#include "../include/PluginEditor.hpp"
-#include "../include/VersionControlService.hpp"
-#include "../include/SnapshotBundler.hpp"
+#include "../../include/application/PluginProcessor.hpp"
+#include "../../include/ui/PluginEditor.hpp"
+#include "../../include/application/VersionControlService.hpp"
+#include "../../include/application/SnapshotBundler.hpp"
 
 namespace
 {

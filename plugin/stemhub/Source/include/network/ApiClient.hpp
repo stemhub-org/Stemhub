@@ -1,10 +1,10 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "User.hpp"
-#include "Branch.hpp"
-#include "Project.hpp"
-#include "ApiUtils.hpp"
+#include "domain/User.hpp"
+#include "domain/Branch.hpp"
+#include "domain/Project.hpp"
+#include "network/ApiUtils.hpp"
 
 class IProjectApi
 {
