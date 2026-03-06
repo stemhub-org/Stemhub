@@ -28,7 +28,7 @@ export function RepositoryHeader({ onToggleSidebar, sidebarOpen = false }: Repos
     return (
         <header className="flex items-center justify-between py-4 px-6 border-b border-border-subtle bg-background">
             <div className="flex items-center gap-3">
-                {onToggleSidebar && !sidebarOpen && (
+                {onToggleSidebar && (
                     <button
                         type="button"
                         onClick={onToggleSidebar}
