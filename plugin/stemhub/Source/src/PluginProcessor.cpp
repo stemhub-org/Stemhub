@@ -168,29 +168,12 @@ StemhubAudioProcessor::StemhubAudioProcessor()
 StemhubAudioProcessor::~StemhubAudioProcessor()
 {
     cancelPendingUpdate();
-    backgroundJobs.removeAllJobs(true, 2000);
 }
 
 void StemhubAudioProcessor::enqueueBackgroundTask(std::function<BackgroundJobPayload()> taskFactory)
 {
-    const auto requestGeneration = backgroundRequestGeneration.load();
-    const auto requestId = ++backgroundRequestCounter;
-
-    backgroundJobs.addJob([this,
-                           requestGeneration,
-                           requestId,
-                           backgroundTask = std::move(taskFactory)]()
+    backgroundJobs.enqueue(std::move(taskFactory), [this]()
     {
-        if (requestGeneration != backgroundRequestGeneration.load())
-            return;
-
-        BackgroundJobResult result { requestGeneration, requestId, backgroundTask() };
-
-        {
-            const std::lock_guard<std::mutex> lock(backgroundResultMutex);
-            pendingBackgroundResults.push_back(std::move(result));
-        }
-
         triggerAsyncUpdate();
     });
 }
@@ -677,11 +660,7 @@ void StemhubAudioProcessor::signIn(User newUser) noexcept
 
 void StemhubAudioProcessor::signOut() noexcept
 {
-    ++backgroundRequestGeneration;
-    {
-        const std::lock_guard<std::mutex> lock(backgroundResultMutex);
-        pendingBackgroundResults.clear();
-    }
+    backgroundJobs.invalidateSession();
     currentUser.reset();
     access_tkn.clear();
     versionControlService.clearAccessToken();
@@ -969,30 +948,10 @@ void StemhubAudioProcessor::setSelectedVersionId(juce::String versionId)
 
 void StemhubAudioProcessor::handleAsyncUpdate()
 {
-    std::deque<BackgroundJobResult> results;
-
+    const auto didApply = backgroundJobs.flushResults([this](auto&& result)
     {
-        const std::lock_guard<std::mutex> lock(backgroundResultMutex);
-        std::swap(results, pendingBackgroundResults);
-    }
-
-    if (results.empty())
-        return;
-
-    const auto activeGeneration = backgroundRequestGeneration.load();
-    bool didApply = false;
-
-    while (!results.empty())
-    {
-        auto result = std::move(results.front());
-        results.pop_front();
-
-        if (result.requestGeneration != activeGeneration)
-            continue;
-
-        applyBackgroundResult(std::move(result));
-        didApply = true;
-    }
+        applyBackgroundResult(std::forward<decltype(result)>(result));
+    });
 
     if (didApply)
         sendChangeMessage();

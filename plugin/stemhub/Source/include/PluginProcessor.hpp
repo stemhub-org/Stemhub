@@ -1,13 +1,11 @@
 #pragma once
 
-#include <atomic>
-#include <deque>
 #include <functional>
 #include <JuceHeader.h>
-#include <mutex>
 #include <optional>
 #include <vector>
 #include <variant>
+#include "BackgroundJobCoordinator.hpp"
 #include "Branch.hpp"
 #include "User.hpp"
 #include "Project.hpp"
@@ -159,12 +157,7 @@ private:
 
     using BackgroundJobPayload = std::variant<AuthRequestResult, ProjectActivationJobResult, BranchHistoryJobResult, PushVersionJobResult, RestoreVersionJobResult>;
 
-    struct BackgroundJobResult
-    {
-        uint64_t requestGeneration {};
-        uint64_t requestId {};
-        BackgroundJobPayload payload;
-    };
+    using BackgroundJobResult = BackgroundJobCoordinator<BackgroundJobPayload>::JobResult;
 
     void enqueueBackgroundTask(std::function<BackgroundJobPayload()> job);
 
@@ -208,11 +201,7 @@ private:
     juce::String selectedBranchName;
     juce::String selectedVersionId;
     SessionState sessionState;
-    std::mutex backgroundResultMutex;
-    std::deque<BackgroundJobResult> pendingBackgroundResults;
-    std::atomic<uint64_t> backgroundRequestGeneration { 0 };
-    std::atomic<uint64_t> backgroundRequestCounter { 0 };
-    juce::ThreadPool backgroundJobs { 2 };
+    BackgroundJobCoordinator<BackgroundJobPayload> backgroundJobs { 2 };
     VersionControlService versionControlService { apiClient };
     juce::File pendingProjectFile;
     juce::File selectedProjectFile;
