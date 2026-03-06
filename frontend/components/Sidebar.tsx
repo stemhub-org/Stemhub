@@ -10,6 +10,7 @@ import {
     FolderDot,
     Sun,
     Moon,
+    ChevronLeft,
 } from "lucide-react";
 
 const navigation = [
@@ -42,7 +43,7 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                     <div className="h-20 flex items-center justify-between px-8 border-b border-border-subtle">
                         <Link href="/">
                             <span
-                                className="text-2xl font-normal tracking-tight text-foreground"
+                                className="text-2xl font-medium tracking-tight text-foreground"
                                 style={{ fontFamily: "var(--font-syne)" }}
                             >
                                 StemHub<span className="text-accent">.</span>
@@ -55,10 +56,7 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                                 aria-label="Close sidebar"
                                 className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-foreground/5 transition-colors"
                             >
-                                <span className="relative block h-4 w-4">
-                                    <span className="absolute inset-x-0 top-1/2 h-[2px] min-h-[2px] w-full -translate-y-1/2 rotate-45 rounded-full bg-foreground shrink-0" />
-                                    <span className="absolute inset-x-0 top-1/2 h-[2px] min-h-[2px] w-full -translate-y-1/2 -rotate-45 rounded-full bg-foreground shrink-0" />
-                                </span>
+                                <ChevronLeft size={18} className="text-foreground" />
                             </button>
                         )}
                     </div>
