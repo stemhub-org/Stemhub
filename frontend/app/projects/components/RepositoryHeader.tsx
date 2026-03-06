@@ -17,9 +17,8 @@ export function RepositoryHeader({ onToggleSidebar, sidebarOpen = false }: Repos
     const { resolvedTheme, setTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
 
-    const handleLogout = () => {
-        localStorage.removeItem("token");
-        router.push("/login");
+    const handleOpenProfile = () => {
+        router.push("/dashboard/profile");
     };
 
     const toggleTheme = () => {
@@ -91,11 +90,11 @@ export function RepositoryHeader({ onToggleSidebar, sidebarOpen = false }: Repos
                     </div>
                     <button
                         type="button"
-                        onClick={handleLogout}
+                        onClick={handleOpenProfile}
                         className="h-10 w-10 rounded-full flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
                         style={{ background: `linear-gradient(to top right, ${REPO_ACCENT}, #C28CF0)` }}
-                        title="Déconnexion"
-                        aria-label="Profil / Déconnexion"
+                        title="View profile"
+                        aria-label="Open profile"
                     >
                         <User size={18} />
                     </button>

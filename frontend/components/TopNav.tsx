@@ -62,12 +62,11 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                     </div>
                     <button
                         onClick={() => {
-                            localStorage.removeItem("token");
-                            router.push("/login");
+                            router.push("/dashboard/profile");
                         }}
                         className="h-10 w-10 rounded-full flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
                         style={{ background: "linear-gradient(to top right, #9C57DF, #C28CF0)" }}
-                        title="Sign out"
+                        title="View profile"
                     >
                         <User size={18} />
                     </button>
