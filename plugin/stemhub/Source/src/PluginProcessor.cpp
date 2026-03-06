@@ -82,6 +82,61 @@ juce::File resolveProjectFolder(const juce::File& folder, const juce::File& proj
     return folder.isDirectory() ? folder : projectFile.getParentDirectory();
 }
 
+juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
+                                 const juce::File& restoreDirectory,
+                                 juce::File& restoredProjectFile)
+{
+    if (!snapshotZipFile.existsAsFile())
+        return juce::Result::fail("Downloaded snapshot file is missing.");
+
+    if (restoreDirectory.existsAsFile())
+        return juce::Result::fail("Restore path must be a folder, but a file already exists there.");
+
+    if (!restoreDirectory.createDirectory())
+        return juce::Result::fail("Failed to create folder to restore snapshot.");
+
+    juce::ZipFile snapshotZip(snapshotZipFile);
+    const auto uncompressResult = snapshotZip.uncompressTo(restoreDirectory);
+    if (uncompressResult.failed())
+        return uncompressResult;
+
+    const auto manifestFile = restoreDirectory.getChildFile("manifest.json");
+    if (manifestFile.existsAsFile())
+    {
+        const auto manifestText = manifestFile.loadFileAsString();
+        const auto manifestObject = juce::JSON::parse(manifestText).getDynamicObject();
+        if (manifestObject == nullptr)
+            return juce::Result::fail("Snapshot manifest is invalid.");
+
+        const auto sourceProjectPath = manifestObject->getProperty("flp_relative_path").toString();
+        const auto fallbackPath = manifestObject->getProperty("source_project_filename").toString();
+        restoredProjectFile = !sourceProjectPath.isEmpty()
+            ? restoreDirectory.getChildFile(sourceProjectPath)
+            : restoreDirectory.getChildFile(fallbackPath);
+    }
+
+    if (!restoredProjectFile.existsAsFile())
+    {
+        juce::Array<juce::File> flpFiles;
+        restoreDirectory.findChildFiles(flpFiles, juce::File::findFiles, true, "*.flp");
+        if (!flpFiles.isEmpty())
+            restoredProjectFile = flpFiles[0];
+    }
+
+    if (!restoredProjectFile.existsAsFile())
+    {
+        juce::Array<juce::File> alsFiles;
+        restoreDirectory.findChildFiles(alsFiles, juce::File::findFiles, true, "*.als");
+        if (!alsFiles.isEmpty())
+            restoredProjectFile = alsFiles[0];
+    }
+
+    if (!restoredProjectFile.existsAsFile())
+        return juce::Result::fail("Restored snapshot did not produce a project file.");
+
+    return juce::Result::ok();
+}
+
 void ensureSelectedProjectFile(juce::File& selectedFile,
                                juce::File& selectedFolder,
                                const juce::File& pendingFile,
@@ -118,15 +173,22 @@ StemhubAudioProcessor::~StemhubAudioProcessor()
 
 void StemhubAudioProcessor::enqueueBackgroundTask(std::function<BackgroundJobPayload()> taskFactory)
 {
-    const auto requestId = ++backgroundRequestGeneration;
+    const auto requestGeneration = backgroundRequestGeneration.load();
+    const auto requestId = ++backgroundRequestCounter;
 
-    backgroundJobs.addJob([this, requestId, backgroundTask = std::move(taskFactory)]
+    backgroundJobs.addJob([this,
+                           requestGeneration,
+                           requestId,
+                           backgroundTask = std::move(taskFactory)]()
     {
-        BackgroundJobResult result { requestId, backgroundTask() };
+        if (requestGeneration != backgroundRequestGeneration.load())
+            return;
+
+        BackgroundJobResult result { requestGeneration, requestId, backgroundTask() };
 
         {
-            const std::lock_guard<std::mutex> lock(authResultMutex);
-            pendingBackgroundResult = std::move(result);
+            const std::lock_guard<std::mutex> lock(backgroundResultMutex);
+            pendingBackgroundResults.push_back(std::move(result));
         }
 
         triggerAsyncUpdate();
@@ -461,8 +523,27 @@ StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRes
         return result;
     }
 
-    result.restoredProjectFile = destinationFile;
-    result.activeProjectStatusMessage = "Version restored successfully: " + destinationFile.getFileName();
+    const auto restoreDirectory = destinationFile.getParentDirectory().getChildFile(
+        destinationFile.getFileNameWithoutExtension());
+    if (restoreDirectory.exists())
+    {
+        if (!restoreDirectory.deleteRecursively())
+        {
+            result.errorMessage = "Failed to clear previous restore folder at " + restoreDirectory.getFullPathName();
+            return result;
+        }
+    }
+
+    juce::File restoredProjectFile;
+    const auto extractResult = resolveRestoreResult(destinationFile, restoreDirectory, restoredProjectFile);
+    if (extractResult.failed())
+    {
+        result.errorMessage = extractResult.getErrorMessage();
+        return result;
+    }
+
+    result.restoredProjectFile = std::move(restoredProjectFile);
+    result.activeProjectStatusMessage = "Version restored successfully: " + result.restoredProjectFile.getFileName();
     return result;
 }
 
@@ -597,6 +678,10 @@ void StemhubAudioProcessor::signIn(User newUser) noexcept
 void StemhubAudioProcessor::signOut() noexcept
 {
     ++backgroundRequestGeneration;
+    {
+        const std::lock_guard<std::mutex> lock(backgroundResultMutex);
+        pendingBackgroundResults.clear();
+    }
     currentUser.reset();
     access_tkn.clear();
     versionControlService.clearAccessToken();
@@ -884,22 +969,33 @@ void StemhubAudioProcessor::setSelectedVersionId(juce::String versionId)
 
 void StemhubAudioProcessor::handleAsyncUpdate()
 {
-    std::optional<BackgroundJobResult> result;
+    std::deque<BackgroundJobResult> results;
 
     {
-        const std::lock_guard<std::mutex> lock(authResultMutex);
-        result = std::move(pendingBackgroundResult);
-        pendingBackgroundResult.reset();
+        const std::lock_guard<std::mutex> lock(backgroundResultMutex);
+        std::swap(results, pendingBackgroundResults);
     }
 
-    if (!result.has_value())
+    if (results.empty())
         return;
 
-    if (result->requestId != backgroundRequestGeneration.load())
-        return;
+    const auto activeGeneration = backgroundRequestGeneration.load();
+    bool didApply = false;
 
-    applyBackgroundResult(std::move(*result));
-    sendChangeMessage();
+    while (!results.empty())
+    {
+        auto result = std::move(results.front());
+        results.pop_front();
+
+        if (result.requestGeneration != activeGeneration)
+            continue;
+
+        applyBackgroundResult(std::move(result));
+        didApply = true;
+    }
+
+    if (didApply)
+        sendChangeMessage();
 }
 
 const juce::String StemhubAudioProcessor::getName() const

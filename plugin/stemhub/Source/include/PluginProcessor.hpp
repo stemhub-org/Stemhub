@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <deque>
 #include <functional>
 #include <JuceHeader.h>
 #include <mutex>
@@ -160,6 +161,7 @@ private:
 
     struct BackgroundJobResult
     {
+        uint64_t requestGeneration {};
         uint64_t requestId {};
         BackgroundJobPayload payload;
     };
@@ -206,10 +208,11 @@ private:
     juce::String selectedBranchName;
     juce::String selectedVersionId;
     SessionState sessionState;
-    std::mutex authResultMutex;
-    std::optional<BackgroundJobResult> pendingBackgroundResult;
+    std::mutex backgroundResultMutex;
+    std::deque<BackgroundJobResult> pendingBackgroundResults;
     std::atomic<uint64_t> backgroundRequestGeneration { 0 };
-    juce::ThreadPool backgroundJobs { 1 };
+    std::atomic<uint64_t> backgroundRequestCounter { 0 };
+    juce::ThreadPool backgroundJobs { 2 };
     VersionControlService versionControlService { apiClient };
     juce::File pendingProjectFile;
     juce::File selectedProjectFile;
