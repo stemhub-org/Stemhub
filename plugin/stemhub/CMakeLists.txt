@@ -50,6 +50,10 @@ target_sources(stemhub
         Source/src/network/ApiClient.cpp
         Source/src/network/VersionControlService.cpp)
 
+target_include_directories(stemhub
+    PRIVATE
+        Source/include)
+
 target_compile_definitions(stemhub
     PRIVATE
         JUCE_USE_CURL=1

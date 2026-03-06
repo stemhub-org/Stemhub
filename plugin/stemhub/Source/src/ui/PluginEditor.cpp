@@ -1,4 +1,4 @@
-#include "../include/ui/PluginEditor.hpp"
+#include "ui/PluginEditor.hpp"
 
 namespace
 {

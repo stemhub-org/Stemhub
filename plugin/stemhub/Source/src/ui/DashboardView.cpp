@@ -1,4 +1,4 @@
-#include "../include/ui/Views.hpp"
+#include "ui/Views.hpp"
 
 namespace
 {

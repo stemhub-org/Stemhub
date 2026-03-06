@@ -1,6 +1,6 @@
 #include <algorithm>
 
-#include "../include/application/SnapshotBundler.hpp"
+#include "application/SnapshotBundler.hpp"
 
 namespace
 {
