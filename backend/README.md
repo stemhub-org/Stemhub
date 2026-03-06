@@ -8,6 +8,32 @@ This backend depends on `PyFLP_enhanced` through a Git submodule, so StemHub doe
 ./backend/scripts/bootstrap-backend.sh
 ```
 
+## Artifact storage configuration
+
+The backend reads `STEMHUB_STORAGE_PROVIDER` from the environment:
+
+- `localfs` (default): artifacts are stored under `STEMHUB_ARTIFACTS_ROOT`.
+- `gcs`: artifacts are stored in Google Cloud Storage.
+
+Example settings:
+
+```bash
+STEMHUB_STORAGE_PROVIDER=localfs
+STEMHUB_ARTIFACTS_ROOT=./backend/data/artifacts
+```
+
+For Google Cloud Storage:
+
+```bash
+STEMHUB_STORAGE_PROVIDER=gcs
+STEMHUB_GCS_BUCKET=your-bucket-name
+STEMHUB_GCS_PROJECT=your-gcp-project-id
+# Option A (recommended in GKE/App Runner/etc.):
+# GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+# Option B:
+# STEMHUB_GCS_CREDENTIALS_JSON='{"type":"service_account",...}'
+```
+
 Equivalent commands:
 
 ```bash
