@@ -91,6 +91,7 @@ public:
     std::function<void()> onVersionSelectionChange;
     std::function<void()> onBackToProjects;
     std::function<void()> onSignOut;
+    std::function<void()> onRestore;
 
 private:
     std::vector<juce::String> comboBranchIds;
@@ -110,4 +111,5 @@ private:
     juce::TextButton syncButton { "Refresh History" };
     juce::TextButton changeBranch { "Load Branch" };
     juce::TextButton signOutButton { "Sign Out" };
+    juce::TextButton restoreButton { "Restore Selected Version" };
 };

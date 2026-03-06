@@ -369,6 +369,13 @@ DashboardView::DashboardView()
     {
         invokeIfBound(onSignOut);
     };
+
+    addAndMakeVisible(restoreButton);
+    styleSecondaryButton(restoreButton);
+    restoreButton.onClick = [this]
+    {
+        invokeIfBound(onRestore);
+    };
 }
 
 void DashboardView::setBranches(const std::vector<juce::String>& branchNames,
@@ -473,4 +480,7 @@ void DashboardView::resized()
 
     auto syncRow = area.removeFromTop(26);
     syncButton.setBounds(x, syncRow.getY(), fieldWidth, syncRow.getHeight());
+
+    auto restoreRow = area.removeFromTop(26);
+    restoreButton.setBounds(x, restoreRow.getY(), fieldWidth, restoreRow.getHeight());
 }
