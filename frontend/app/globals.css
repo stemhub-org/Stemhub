@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
 :root {
-  /* LIGHT MODE (Default) */
   --background: #FFFFFF;
   --background-secondary: #F4F4F5;
   --background-tertiary: #E4E4E7;
@@ -14,7 +13,6 @@
 }
 
 .dark {
-  /* DARK MODE (Ultra-Premium Noir) */
   --background: #000000;
   --background-secondary: #0A0A0A;
   --background-tertiary: #111111;
@@ -70,7 +68,6 @@ html.lenis body {
   overflow: hidden;
 }
 
-/* Minimalist utilities */
 .glass-panel {
   background: var(--background-secondary);
   border: 1px solid var(--border-subtle);

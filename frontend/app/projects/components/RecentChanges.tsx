@@ -104,7 +104,7 @@ export function RecentChanges() {
                     </span>
                 </div>
                 <Link
-                    href="/repository/commits"
+                    href="/projects/changes"
                     className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
                     aria-label="View all changes"
                 >

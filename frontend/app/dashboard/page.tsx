@@ -16,7 +16,7 @@ import {
     Search
 } from "lucide-react";
 
-const RECENT_REPOSITORIES = [
+const RECENT_PROJECTS = [
     {
         id: 1,
         name: "Synthwave Anthem",
@@ -55,7 +55,7 @@ const ACTIVITY_FEED = [
         repository: "Synthwave Anthem",
         time: "2h",
         icon: GitCommit,
-        color: "text-accent-blue"
+        color: "text-accent"
     },
     {
         id: 2,
@@ -115,7 +115,7 @@ export default function DashboardPage() {
     if (loading) {
         return (
             <div className="flex h-full min-h-[50vh] items-center justify-center">
-                <div className="h-6 w-6 border-2 border-border-subtle border-t-accent-blue rounded-full animate-spin" />
+                <div className="h-6 w-6 border-2 border-border-subtle border-t-accent rounded-full animate-spin" />
             </div>
         );
     }
@@ -133,7 +133,7 @@ export default function DashboardPage() {
                 >
                     <div>
                         <h1 className="text-3xl font-medium tracking-tight text-foreground mb-1">
-                            Welcome, <span className="text-accent-blue">{user?.username || "Producer"}</span>
+                            Welcome, <span className="text-accent">{user?.username || "Producer"}</span>
                         </h1>
                         <p className="text-foreground-muted text-sm">
                             System overview and recent studio activity.
@@ -141,13 +141,13 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex gap-3">
-                        <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent-blue/10 border border-accent-blue/20 hover:bg-accent-blue/20 hover:border-accent-blue/40 transition-all duration-300 text-sm font-medium text-accent-blue group">
-                            <DownloadCloud size={16} className="text-accent-blue group-hover:scale-110 transition-transform" />
+                        <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent/10 border border-accent/20 hover:bg-accent/20 hover:border-accent/40 transition-all duration-300 text-sm font-medium text-accent group">
+                            <DownloadCloud size={16} className="text-accent group-hover:scale-110 transition-transform" />
                             <span>Import</span>
                         </button>
-                        <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent-blue text-white hover:bg-accent-blue/90 hover:shadow-[0_0_15px_rgba(62,99,221,0.4)] transition-all duration-300 text-sm font-medium">
+                        <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent text-white hover:bg-accent/90 hover:shadow-[0_0_15px_rgba(156,87,223,0.4)] transition-all duration-300 text-sm font-medium">
                             <Plus size={16} />
-                            <span>New Repository</span>
+                            <span>New Project</span>
                         </button>
                     </div>
                 </motion.div>
@@ -159,24 +159,24 @@ export default function DashboardPage() {
                     transition={{ duration: 0.4, delay: 0.1 }}
                     className="grid grid-cols-1 md:grid-cols-3 gap-4"
                 >
-                    <div className="bg-background-secondary border border-border-subtle rounded-xl p-6 hover:border-accent-blue/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent-blue/5 hover:shadow-[0_0_20px_rgba(62,99,221,0.05)] transition-all duration-300 group">
+                    <div className="bg-background-secondary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
                         <div className="flex items-center justify-between mb-8">
                             <div className="text-foreground transition-colors flex items-center gap-2 text-sm font-medium">
-                                <HardDrive size={16} className="text-accent-blue group-hover:scale-110 transition-transform" />
+                                <HardDrive size={16} className="text-accent group-hover:scale-110 transition-transform" />
                                 <span>Storage</span>
                             </div>
-                            <span className="text-xs font-semibold px-2 py-1 rounded bg-accent-blue/10 text-accent-blue border border-accent-blue/20">Active</span>
+                            <span className="text-xs font-semibold px-2 py-1 rounded bg-accent/10 text-accent border border-accent/20">Active</span>
                         </div>
                         <div className="flex items-baseline gap-2">
                             <h3 className="text-3xl font-semibold tracking-tight text-foreground">18</h3>
-                            <span className="text-sm border-l border-border-subtle pl-2 text-foreground-muted">Repositories</span>
+                            <span className="text-sm border-l border-border-subtle pl-2 text-foreground-muted">Projects</span>
                         </div>
                     </div>
 
-                    <div className="bg-background-secondary border border-border-subtle rounded-xl p-6 hover:border-accent-blue/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent-blue/5 hover:shadow-[0_0_20px_rgba(62,99,221,0.05)] transition-all duration-300 group">
+                    <div className="bg-background-secondary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
                         <div className="flex items-center justify-between mb-8">
                             <div className="text-foreground transition-colors flex items-center gap-2 text-sm font-medium">
-                                <GitBranch size={16} className="text-accent-blue group-hover:scale-110 transition-transform" />
+                                <GitBranch size={16} className="text-accent group-hover:scale-110 transition-transform" />
                                 <span>Version Control</span>
                             </div>
                         </div>
@@ -186,10 +186,10 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    <div className="bg-background-secondary border border-border-subtle rounded-xl p-6 hover:border-accent-blue/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent-blue/5 hover:shadow-[0_0_20px_rgba(62,99,221,0.05)] transition-all duration-300 group">
+                    <div className="bg-background-secondary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
                         <div className="flex items-center justify-between mb-8">
                             <div className="text-foreground transition-colors flex items-center gap-2 text-sm font-medium">
-                                <Users size={16} className="text-accent-blue group-hover:scale-110 transition-transform" />
+                                <Users size={16} className="text-accent group-hover:scale-110 transition-transform" />
                                 <span>Network</span>
                             </div>
                             <div className="flex -space-x-1.5">
@@ -206,7 +206,7 @@ export default function DashboardPage() {
                 </motion.div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Recent Repositories */}
+                    {/* Recent Projects */}
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -215,7 +215,7 @@ export default function DashboardPage() {
                     >
                         <div className="flex items-center justify-between">
                             <h2 className="text-sm font-semibold tracking-wide uppercase text-foreground-muted">
-                                Recent Repositories
+                                Recent Projects
                             </h2>
                             <button className="text-xs text-foreground-muted hover:text-foreground transition-colors flex items-center gap-1">
                                 View all <ChevronRight size={14} />
@@ -223,19 +223,19 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="flex flex-col gap-3">
-                            {RECENT_REPOSITORIES.map((repo, idx) => (
+                            {RECENT_PROJECTS.map((repo, idx) => (
                                 <div
                                     key={repo.id}
-                                    className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-background-secondary border border-border-subtle hover:border-accent-blue/40 hover:bg-gradient-to-r hover:from-background-secondary hover:to-accent-blue/5 hover:shadow-[0_0_15px_rgba(62,99,221,0.05)] transition-all duration-300 cursor-pointer"
+                                    className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-background-secondary border border-border-subtle hover:border-accent/40 hover:bg-gradient-to-r hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_15px_rgba(156,87,223,0.05)] transition-all duration-300 cursor-pointer"
                                 >
                                     <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                                        <div className="h-10 w-10 rounded-md bg-accent-blue/10 flex items-center justify-center border border-accent-blue/20 group-hover:border-accent-blue/40 transition-colors">
-                                            <span className="font-semibold text-accent-blue text-sm group-hover:scale-110 transition-transform">
+                                        <div className="h-10 w-10 rounded-md bg-accent/10 flex items-center justify-center border border-accent/20 group-hover:border-accent/40 transition-colors">
+                                            <span className="font-semibold text-accent text-sm group-hover:scale-110 transition-transform">
                                                 {repo.name.substring(0, 2).toUpperCase()}
                                             </span>
                                         </div>
                                         <div>
-                                            <h3 className="font-medium text-foreground text-base group-hover:text-accent-blue transition-colors">
+                                            <h3 className="font-medium text-foreground text-base group-hover:text-accent transition-colors">
                                                 {repo.name}
                                             </h3>
                                             <div className="flex gap-2 text-xs text-foreground-muted mt-1 items-center">
@@ -286,11 +286,11 @@ export default function DashboardPage() {
                                     return (
                                         <div key={event.id} className="flex gap-4 group cursor-pointer">
                                             <div className="mt-0.5 relative flex flex-col items-center">
-                                                <div className={`h-6 w-6 rounded-md flex items-center justify-center bg-accent-blue/10 border border-accent-blue/20 text-accent-blue group-hover:border-accent-blue/40 group-hover:shadow-[0_0_10px_rgba(62,99,221,0.2)] transition-all duration-300`}>
+                                                <div className={`h-6 w-6 rounded-md flex items-center justify-center bg-accent/10 border border-accent/20 text-accent group-hover:border-accent/40 group-hover:shadow-[0_0_10px_rgba(156,87,223,0.2)] transition-all duration-300`}>
                                                     <Icon size={12} className="group-hover:scale-110 transition-transform duration-300" />
                                                 </div>
                                                 {index < ACTIVITY_FEED.length - 1 && (
-                                                    <div className="w-px h-full bg-border-subtle mt-2 mb-[-16px] group-hover:bg-accent-blue/20 transition-colors duration-300" />
+                                                    <div className="w-px h-full bg-border-subtle mt-2 mb-[-16px] group-hover:bg-accent/20 transition-colors duration-300" />
                                                 )}
                                             </div>
                                             <div className="flex-1 pb-2">
@@ -313,7 +313,7 @@ export default function DashboardPage() {
                                 })}
                             </div>
 
-                            <button className="w-full mt-6 py-2 text-xs font-semibold text-foreground-muted hover:text-accent-blue hover:bg-gradient-to-r hover:from-background hover:to-accent-blue/5 transition-all duration-300 rounded-md border border-transparent hover:border-accent-blue/20">
+                            <button className="w-full mt-6 py-2 text-xs font-semibold text-foreground-muted hover:text-accent hover:bg-gradient-to-r hover:from-background hover:to-accent/5 transition-all duration-300 rounded-md border border-transparent hover:border-accent/20">
                                 View All Logs
                             </button>
                         </div>

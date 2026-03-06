@@ -36,7 +36,7 @@ async def create_version(
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found or you don't have access")
 
-    db_version = Version(**version_in.model_dump(), branch_id=branch_id)
+    db_version = Version(**version_in.model_dump(), branch_id=branch_id, created_by=current_user.id)
     db.add(db_version)
     await db.commit()
     await db.refresh(db_version)

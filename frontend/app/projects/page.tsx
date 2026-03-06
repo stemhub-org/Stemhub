@@ -1,8 +1,10 @@
 "use client";
 
 import type React from "react";
+import { useState } from "react";
 import { useTheme } from "next-themes";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import Sidebar from "@/components/Sidebar";
 import { RepositoryHeader } from "./components/RepositoryHeader";
 import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
 import { RepositoryBranchBar } from "./components/RepositoryBranchBar";
@@ -13,24 +15,55 @@ import { RecentChanges } from "./components/RecentChanges";
 import { ContributionActivity } from "./components/ContributionActivity";
 import { TopContributors } from "./components/TopContributors";
 
-const cardBase =
-    "rounded-xl bg-background-secondary border border-border-subtle transition-all duration-300";
 const cardHoverDark =
-    "hover:border-accent-blue/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent-blue/5 hover:shadow-[0_0_20px_rgba(62,99,221,0.05)]";
+    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
 
 export default function RepositoryPage() {
     const { resolvedTheme } = useTheme();
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const isDark = resolvedTheme === "dark";
+    const cardBase = isDark
+        ? "rounded-xl bg-background-tertiary border border-border-subtle transition-all duration-300"
+        : "rounded-xl bg-background-secondary border border-border-subtle transition-all duration-300";
     const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
     return (
         <div
             className="min-h-screen bg-background text-foreground"
-            style={{ "--accent": "#3E63DD" } as React.CSSProperties}
+            style={{ "--accent": "#9C57DF" } as React.CSSProperties}
         >
-            <RepositoryHeader />
+            <RepositoryHeader
+                onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+                sidebarOpen={sidebarOpen}
+            />
 
-            <div className="p-6 space-y-6">
+            <AnimatePresence>
+                {sidebarOpen && (
+                    <>
+                        <motion.div
+                            key="backdrop"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.25, ease: "easeInOut" }}
+                            className="fixed inset-0 z-30 bg-black/40 lg:bg-black/30 backdrop-blur-sm"
+                            onClick={() => setSidebarOpen(false)}
+                        />
+                        <motion.div
+                            key="sidebar"
+                            initial={{ x: "-100%" }}
+                            animate={{ x: 0 }}
+                            exit={{ x: "-100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="fixed inset-y-0 left-0 z-40 w-64 shadow-xl"
+                        >
+                            <Sidebar isOpen onToggleSidebar={() => setSidebarOpen(false)} />
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            <div className="relative z-10 p-6 space-y-6">
                 <div className={`${cardClass} overflow-hidden`}>
                     <RepositoryPageHeader />
                 </div>

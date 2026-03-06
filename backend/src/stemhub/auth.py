@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse
 
 from .database import get_db
 from .models import User
-from .schemas import LoginRequest, UserCreate, UserResponse, Token
+from .schemas import LoginRequest, UserCreate, UserResponse, Token, UserUpdate
 from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -169,4 +169,30 @@ async def get_current_user(request: Request, token: str | None = Depends(oauth2_
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+@router.put("/me", response_model=UserResponse)
+async def update_me(user_update: UserUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if user_update.username is not None:
+        if user_update.username != current_user.username:
+            result = await db.execute(select(User).where(User.username == user_update.username))
+            if result.scalars().first():
+                raise HTTPException(status_code=400, detail="Username already taken")
+        current_user.username = user_update.username
+
+    if user_update.avatar_url is not None:
+        current_user.avatar_url = user_update.avatar_url
+
+    if user_update.bio is not None:
+        current_user.bio = user_update.bio
+    
+    if user_update.location is not None:
+        current_user.location = user_update.location
+    
+    if user_update.website is not None:
+        current_user.website = user_update.website
+    if user_update.genres is not None:
+        current_user.genres = user_update.genres
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
