@@ -61,11 +61,11 @@ class GCSStorageService(StorageService):
         project: str | None = None,
         credentials_json: str | None = None,
     ) -> None:
-        if _gcs_storage is None:
-            raise StorageConfigurationError("google-cloud-storage is required for STEMHUB_STORAGE_PROVIDER=gcs")
-
         if not bucket_name:
             raise StorageConfigurationError("STEMHUB_GCS_BUCKET is required for STEMHUB_STORAGE_PROVIDER=gcs")
+
+        if _gcs_storage is None:
+            raise StorageConfigurationError("google-cloud-storage is required for STEMHUB_STORAGE_PROVIDER=gcs")
 
         self._bucket_name = bucket_name
 
