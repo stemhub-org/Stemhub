@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <JuceHeader.h>
 #include <optional>
 #include <vector>
@@ -20,6 +21,7 @@ class StemhubAudioProcessor : public juce::AudioProcessor,
 {
 public:
     StemhubAudioProcessor();
+    explicit StemhubAudioProcessor(std::unique_ptr<IProjectApi> apiClient);
     ~StemhubAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
@@ -100,7 +102,7 @@ public:
 
     void setSelectedVersionId(juce::String versionId);
     VersionControlService& getVersionControlService() noexcept { return versionControlService; }
-    ApiClient& getApiClient() noexcept { return apiClient; }
+    IProjectApi& getApiClient() noexcept { return *apiClient; }
 
 private:
     void handleAsyncUpdate() override;
@@ -187,7 +189,7 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
-    ApiClient apiClient;
+    std::unique_ptr<IProjectApi> apiClient;
     juce::String access_tkn;
     juce::String authErrorMessage;
     juce::String projectSelectionStatusMessage;
@@ -202,7 +204,7 @@ private:
     juce::String selectedVersionId;
     SessionState sessionState;
     BackgroundJobCoordinator<BackgroundJobPayload> backgroundJobs { 2 };
-    VersionControlService versionControlService { apiClient };
+    VersionControlService versionControlService;
     juce::File pendingProjectFile;
     juce::File selectedProjectFile;
     juce::File pendingProjectFolder;

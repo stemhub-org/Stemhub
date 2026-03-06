@@ -151,7 +151,7 @@ void ensureSelectedProjectFile(juce::File& selectedFile,
 
 }
 
-StemhubAudioProcessor::StemhubAudioProcessor()
+StemhubAudioProcessor::StemhubAudioProcessor(std::unique_ptr<IProjectApi> apiClientProvider)
 #ifndef JucePlugin_PreferredChannelConfigurations
      : AudioProcessor(BusesProperties()
                      #if ! JucePlugin_IsMidiEffect
@@ -162,6 +162,16 @@ StemhubAudioProcessor::StemhubAudioProcessor()
                      #endif
                        )
 #endif
+{
+    apiClient = std::move(apiClientProvider);
+    if (apiClient == nullptr)
+        apiClient = std::make_unique<ApiClient>();
+
+    versionControlService.setApiClient(*apiClient);
+}
+
+StemhubAudioProcessor::StemhubAudioProcessor()
+    : StemhubAudioProcessor(std::make_unique<ApiClient>())
 {
 }
 
@@ -184,7 +194,7 @@ StemhubAudioProcessor::AuthRequestResult StemhubAudioProcessor::performSignInReq
 {
     AuthRequestResult result;
 
-    auto loginResult = apiClient.login(email, password);
+    auto loginResult = apiClient->login(email, password);
     if (!loginResult.ok())
     {
         result.authErrorMessage = loginResult.error ? loginResult.error->message
@@ -193,7 +203,7 @@ StemhubAudioProcessor::AuthRequestResult StemhubAudioProcessor::performSignInReq
     }
 
     const auto token = loginResult.value->accessToken;
-    auto userResult = apiClient.fetchCurrentUser(token);
+    auto userResult = apiClient->fetchCurrentUser(token);
     if (!userResult.ok() || !userResult.value->isValid())
     {
         result.authErrorMessage = userResult.error ? userResult.error->message
@@ -204,7 +214,7 @@ StemhubAudioProcessor::AuthRequestResult StemhubAudioProcessor::performSignInReq
     result.token = token;
     result.user = std::move(userResult.value);
 
-    auto projectsResult = apiClient.fetchProjects(token);
+    auto projectsResult = apiClient->fetchProjects(token);
     if (projectsResult.ok())
     {
         result.projects = std::move(*projectsResult.value);
@@ -247,7 +257,7 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
         return result;
     }
 
-    const auto branchesResult = apiClient.fetchBranches(projectId, accessToken);
+    const auto branchesResult = apiClient->fetchBranches(projectId, accessToken);
     if (!branchesResult.ok() || !branchesResult.value.has_value() || branchesResult.value->empty())
     {
         result.errorMessage = branchesResult.error ? branchesResult.error->message
@@ -316,7 +326,7 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
         return result;
     }
 
-    const auto createdProject = apiClient.createProject(projectName, accessToken);
+    const auto createdProject = apiClient->createProject(projectName, accessToken);
     if (!createdProject.ok() || !createdProject.value.has_value())
     {
         result.errorMessage = createdProject.error ? createdProject.error->message
@@ -324,11 +334,11 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
         return result;
     }
 
-    auto projectsResult = apiClient.fetchProjects(accessToken);
+    auto projectsResult = apiClient->fetchProjects(accessToken);
     if (projectsResult.ok() && projectsResult.value.has_value())
         result.projects = std::move(*projectsResult.value);
 
-    const auto branchesResult = apiClient.fetchBranches(createdProject.value->id, accessToken);
+    const auto branchesResult = apiClient->fetchBranches(createdProject.value->id, accessToken);
     if (!branchesResult.ok() || !branchesResult.value.has_value() || branchesResult.value->empty())
     {
         result.errorMessage = branchesResult.error ? branchesResult.error->message

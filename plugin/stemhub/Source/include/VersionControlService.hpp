@@ -7,8 +7,14 @@
 class VersionControlService
 {
     public:
-        explicit VersionControlService(ApiClient& apiClientIn) noexcept
-            : apiClient(apiClientIn) {}
+        VersionControlService() noexcept = default;
+        explicit VersionControlService(IProjectApi& apiClientIn) noexcept
+            : apiClient(&apiClientIn) {}
+
+        void setApiClient(IProjectApi& apiClientIn) noexcept
+        {
+            apiClient = &apiClientIn;
+        }
     
         juce::Result pushVersion(const PushVersionRequest& request);
     
@@ -45,8 +51,9 @@ class VersionControlService
         
     private:
         [[nodiscard]] juce::String resolveParentVersionId(const PushVersionRequest& request) const;
-        
-        ApiClient& apiClient;
+        [[nodiscard]] const IProjectApi* getApiClient() const noexcept;
+
+        IProjectApi* apiClient = nullptr;
         ProjectVersionContext context;
         juce::String accessToken;
 };
