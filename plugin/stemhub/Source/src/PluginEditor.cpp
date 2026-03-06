@@ -247,7 +247,7 @@ void StemhubAudioProcessorEditor::launchProjectFolderChooser(const juce::String&
     projectFileChooser = std::make_unique<juce::FileChooser>(
         title,
         audioProcessor.getPendingProjectFolder(),
-        {});
+        juce::String());
 
     constexpr auto flags = juce::FileBrowserComponent::openMode
         | juce::FileBrowserComponent::canSelectDirectories;

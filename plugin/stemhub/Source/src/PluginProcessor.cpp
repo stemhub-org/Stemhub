@@ -42,6 +42,25 @@ juce::String chooseSelectedVersionId(const std::vector<VersionSummary>& versions
     return versions.front().id;
 }
 
+juce::String resolveRestoreProjectName(const std::vector<VersionSummary>& versions,
+                                      const juce::String& versionId,
+                                      const juce::String& fallbackName)
+{
+    const auto it = std::find_if(versions.begin(), versions.end(), [&versionId](const VersionSummary& version)
+    {
+        return version.id == versionId;
+    });
+
+    if (it != versions.end() && it->sourceProjectFilename.isNotEmpty())
+    {
+        const auto sourceProjectName = juce::File(it->sourceProjectFilename).getFileNameWithoutExtension();
+        if (sourceProjectName.isNotEmpty())
+            return sourceProjectName;
+    }
+
+    return fallbackName.isNotEmpty() ? fallbackName : "restored-project";
+}
+
 bool hasProjectAndBranchSelected(const std::optional<Project>& project, const juce::String& branchId)
 {
     return project.has_value() && branchId.isNotEmpty();
@@ -414,6 +433,39 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     return result;
 }
 
+StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRestoreVersionRequest(
+    const juce::String& versionId,
+    const juce::File& destinationFile) const
+{
+    RestoreVersionJobResult result;
+
+    if (versionId.isEmpty())
+    {
+        result.errorMessage = "Select a version before restoring.";
+        return result;
+    }
+
+    if (destinationFile.isDirectory())
+    {
+        result.errorMessage = "Select a valid destination file for restore.";
+        return result;
+    }
+
+    const auto restoreResult = versionControlService.restoreVersion(
+        versionId,
+        destinationFile,
+        versionControlService.getAccessToken());
+    if (restoreResult.failed())
+    {
+        result.errorMessage = restoreResult.getErrorMessage();
+        return result;
+    }
+
+    result.restoredProjectFile = destinationFile;
+    result.activeProjectStatusMessage = "Version restored successfully: " + destinationFile.getFileName();
+    return result;
+}
+
 void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
 {
     if (result.authErrorMessage.isNotEmpty())
@@ -494,6 +546,27 @@ void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
     requestRefreshVersionHistory();
 }
 
+void StemhubAudioProcessor::applyRestoreVersionResult(RestoreVersionJobResult result)
+{
+    if (hasError(result))
+    {
+        setOperationState(OperationState::error);
+        activeProjectStatusMessage = result.errorMessage;
+        return;
+    }
+
+    if (result.restoredProjectFile.existsAsFile())
+    {
+        selectedProjectFile = result.restoredProjectFile;
+        selectedProjectFolder = resolveProjectFolder(result.restoredProjectFile, result.restoredProjectFile);
+        pendingProjectFile = selectedProjectFile;
+        pendingProjectFolder = selectedProjectFolder;
+    }
+
+    setOperationState(OperationState::idle);
+    activeProjectStatusMessage = result.activeProjectStatusMessage;
+}
+
 void StemhubAudioProcessor::applyBackgroundResult(BackgroundJobResult result)
 {
     std::visit([this](auto&& payload)
@@ -508,6 +581,8 @@ void StemhubAudioProcessor::applyBackgroundResult(BackgroundJobResult result)
             applyBranchHistoryResult(std::move(payload));
         else if constexpr (std::is_same_v<Payload, PushVersionJobResult>)
             applyPushVersionResult(std::move(payload));
+        else if constexpr (std::is_same_v<Payload, RestoreVersionJobResult>)
+            applyRestoreVersionResult(std::move(payload));
     }, std::move(result.payload));
 }
 
@@ -756,6 +831,48 @@ void StemhubAudioProcessor::requestPushVersion(juce::String commitMessage, juce:
                            requestedDawName = std::move(dawName)]() mutable -> BackgroundJobPayload
     {
         return performPushVersionRequest(selectedFile, project, selectedBranch, requestedCommitMessage, requestedDawName);
+    });
+}
+
+void StemhubAudioProcessor::requestRestoreVersion(const juce::String& versionId, const juce::File& projectFolder)
+{
+    if (!hasProjectAndBranchSelected(selectedProject, selectedBranchId))
+    {
+        setOperationState(OperationState::error);
+        setActiveProjectStatusMessage("Choose a project before restoring.");
+        return;
+    }
+
+    if (!projectFolder.isDirectory())
+    {
+        setOperationState(OperationState::error);
+        setActiveProjectStatusMessage("Choose a valid restore destination folder.");
+        return;
+    }
+
+    if (versionId.isEmpty())
+    {
+        setOperationState(OperationState::error);
+        setActiveProjectStatusMessage("Select a version before restoring.");
+        return;
+    }
+
+    const auto projectName = selectedProject ? selectedProject->name : juce::String();
+    const auto restoredProjectBase = resolveRestoreProjectName(versionHistory, versionId, projectName);
+    const auto fileName = restoredProjectBase + "-" + versionId.substring(0, juce::jmin(8, versionId.length())) + ".zip";
+    const auto restoreFile = projectFolder.getChildFile(fileName);
+
+    setOperationState(OperationState::pulling);
+    setActiveProjectStatusMessage("Restoring selected version...");
+    sendChangeMessage();
+
+    const auto requestedVersionId = versionId;
+    const auto requestedRestoreFile = restoreFile;
+    enqueueBackgroundTask([this,
+                           requestedVersionId,
+                           requestedRestoreFile]() -> BackgroundJobPayload
+    {
+        return performRestoreVersionRequest(requestedVersionId, requestedRestoreFile);
     });
 }
 

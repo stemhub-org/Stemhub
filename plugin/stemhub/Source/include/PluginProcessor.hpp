@@ -97,6 +97,8 @@ public:
     void requestSelectBranch(juce::String branchId);
     void requestRefreshVersionHistory();
     void requestPushVersion(juce::String commitMessage, juce::String dawName);
+    void requestRestoreVersion(const juce::String& versionId, const juce::File& destinationFolder);
+
     void setSelectedVersionId(juce::String versionId);
     VersionControlService& getVersionControlService() noexcept { return versionControlService; }
     ApiClient& getApiClient() noexcept { return apiClient; }
@@ -147,7 +149,14 @@ private:
         juce::String activeProjectStatusMessage;
     };
 
-    using BackgroundJobPayload = std::variant<AuthRequestResult, ProjectActivationJobResult, BranchHistoryJobResult, PushVersionJobResult>;
+    struct RestoreVersionJobResult
+    {
+        juce::File restoredProjectFile;
+        juce::String errorMessage;
+        juce::String activeProjectStatusMessage;
+    };
+
+    using BackgroundJobPayload = std::variant<AuthRequestResult, ProjectActivationJobResult, BranchHistoryJobResult, PushVersionJobResult, RestoreVersionJobResult>;
 
     struct BackgroundJobResult
     {
@@ -156,6 +165,8 @@ private:
     };
 
     void enqueueBackgroundTask(std::function<BackgroundJobPayload()> job);
+
+    RestoreVersionJobResult performRestoreVersionRequest(const juce::String& versionId, const juce::File& destinationFile) const;
     AuthRequestResult performSignInRequest(const juce::String& email, const juce::String& password) const;
     ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,
                                                          const juce::File& localProjectFile,
@@ -177,6 +188,7 @@ private:
     void applyProjectActivationResult(ProjectActivationJobResult result);
     void applyBranchHistoryResult(BranchHistoryJobResult result);
     void applyPushVersionResult(PushVersionJobResult result);
+    void applyRestoreVersionResult(RestoreVersionJobResult result);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
