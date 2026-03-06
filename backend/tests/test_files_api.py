@@ -68,6 +68,7 @@ def _create_test_client(
     *,
     monkeypatch,
     tmp_path,
+    storage = None,
     current_user: User | None = None,
     owned_version: Version | Exception | None = None,
 ):
@@ -75,13 +76,13 @@ def _create_test_client(
     app.include_router(files_router)
 
     session = DummyAsyncSession()
-    storage = LocalFilesystemStorageService(tmp_path)
+    storage_service = storage if storage is not None else LocalFilesystemStorageService(tmp_path)
 
     async def override_db():
         yield session
 
     app.dependency_overrides[get_db] = override_db
-    app.dependency_overrides[get_storage_service] = lambda: storage
+    app.dependency_overrides[get_storage_service] = lambda: storage_service
 
     if current_user is not None:
         async def override_current_user():
@@ -98,7 +99,7 @@ def _create_test_client(
         monkeypatch.setattr(files_router_module, "_get_owned_version", fake_get_owned_version)
 
     client = TestClient(app)
-    return client, session, storage
+    return client, session, storage_service
 
 
 def test_upload_version_artifact_persists_file_and_metadata(tmp_path, monkeypatch) -> None:
@@ -156,6 +157,41 @@ def test_download_version_artifact_streams_stored_file(tmp_path, monkeypatch) ->
     assert response.status_code == 200
     assert response.content == payload
     assert "filename=\"restored.flp\"" in response.headers["content-disposition"]
+
+
+def test_download_version_artifact_uses_storage_service_for_non_local_reference(tmp_path, monkeypatch) -> None:
+    current_user, version = _build_version()
+    payload = b"remote backend snapshot"
+    gcs_reference = "gcs://demo-bucket/projects/demo/branches/main/versions/external/snapshot/remote.flp"
+
+    class RemoteStorageService:
+        def store_version_artifact(self, **kwargs):
+            raise AssertionError("Store should not be called for download test")
+
+        def resolve_artifact_path(self, artifact_path: str):
+            assert artifact_path == gcs_reference
+            remote_file = tmp_path / "remote.flp"
+            remote_file.write_bytes(payload)
+            return remote_file
+
+    version.artifact_path = gcs_reference
+    version.artifact_size_bytes = len(payload)
+    version.artifact_checksum = "a" * 64
+    version.source_project_filename = "remote.flp"
+
+    client, _, _ = _create_test_client(
+        monkeypatch=monkeypatch,
+        tmp_path=tmp_path,
+        current_user=current_user,
+        owned_version=version,
+        storage=RemoteStorageService(),
+    )
+
+    response = client.get(f"/versions/{version.id}/artifact")
+
+    assert response.status_code == 200
+    assert response.content == payload
+    assert "filename=\"remote.flp\"" in response.headers["content-disposition"]
 
 
 def test_upload_version_artifact_requires_authentication(tmp_path, monkeypatch) -> None:
