@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Eye, Star } from "lucide-react";
+import { Eye, Heart } from "lucide-react";
 
 const PLACEHOLDER_USER = "Skrillex";
 const PLACEHOLDER_REPO = "Dubstep-Track";
@@ -10,6 +11,8 @@ const PLACEHOLDER_DESCRIPTION =
     "Experimental dubstep track • 140 BPM • C minor";
 
 export function RepositoryPageHeader() {
+    const [isFavorite, setIsFavorite] = useState(false);
+
     return (
         <div className="px-6 py-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -62,10 +65,16 @@ export function RepositoryPageHeader() {
                     </button>
                     <button
                         type="button"
-                        className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                        onClick={() => setIsFavorite((prev) => !prev)}
+                        className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white border border-transparent hover:opacity-90 transition-opacity"
                     >
-                        <Star className="size-4" aria-hidden />
-                        Star
+                        <Heart
+                            className={`size-4 ${
+                                isFavorite ? "text-red-500 fill-red-500" : "text-white"
+                            }`}
+                            aria-hidden
+                        />
+                        Favorite
                     </button>
                 </div>
             </div>

@@ -1,24 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Sun, User } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Bell, Sun, User } from "lucide-react";
 import { useTheme } from "next-themes";
 
-type TopNavProps = {
+const REPO_ACCENT = "#9C57DF";
+
+type RepositoryHeaderProps = {
     onToggleSidebar?: () => void;
     sidebarOpen?: boolean;
 };
 
-export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavProps) {
+export function RepositoryHeader({ onToggleSidebar, sidebarOpen = false }: RepositoryHeaderProps) {
     const router = useRouter();
     const { resolvedTheme, setTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
 
+    const handleOpenProfile = () => {
+        router.push("/dashboard/profile");
+    };
+
+    const toggleTheme = () => {
+        setTheme(isDark ? "light" : "dark");
+    };
+
     return (
-        <header className="h-20 border-b border-foreground/[0.08] bg-background-secondary/30 backdrop-blur-xl flex items-center justify-between px-6 lg:px-8 z-10 sticky top-0">
+        <header className="h-20 border-b border-border-subtle bg-background-secondary/30 backdrop-blur-xl flex items-center justify-between px-6 lg:px-8 z-10 sticky top-0">
             <div className="flex items-center gap-3">
-                {onToggleSidebar && !sidebarOpen && (
+                {onToggleSidebar && (
                     <button
                         type="button"
                         onClick={onToggleSidebar}
@@ -39,46 +49,52 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                         </span>
                     </button>
                 )}
-                {onToggleSidebar && !sidebarOpen && (
-                    <Link
-                        href="/dashboard"
-                        className="text-2xl font-medium tracking-tight text-foreground"
-                        style={{ fontFamily: "var(--font-syne)" }}
-                    >
-                        StemHub<span className="text-accent">.</span>
+                {(!onToggleSidebar || !sidebarOpen) && (
+                    <Link href="/dashboard">
+                        <span
+                            className="text-2xl font-medium tracking-tight text-foreground"
+                            style={{ fontFamily: "var(--font-syne)" }}
+                        >
+                            StemHub<span style={{ color: REPO_ACCENT }}>.</span>
+                        </span>
                     </Link>
                 )}
             </div>
 
             <div className="flex items-center gap-4">
                 <button
+                    type="button"
+                    onClick={toggleTheme}
                     className="p-2 rounded-full hover:bg-foreground/5 text-foreground/70 hover:text-foreground transition-colors"
                     aria-label="Toggle theme"
                     title={isDark ? "Light mode" : "Dark mode"}
-                    onClick={() => setTheme(isDark ? "light" : "dark")}
                 >
-                    <Sun size={18} className="text-accent" />
+                    <Sun size={18} style={{ color: REPO_ACCENT }} />
                 </button>
-
-                <button className="relative p-2 rounded-full hover:bg-foreground/5 text-foreground/70 hover:text-foreground transition-colors">
+                <button
+                    type="button"
+                    className="relative p-2 rounded-full hover:bg-foreground/5 text-foreground/70 hover:text-foreground transition-colors"
+                    aria-label="Notifications"
+                >
                     <Bell size={20} />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent border-2 border-background"></span>
+                    <span
+                        className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full border-2 border-background"
+                        style={{ backgroundColor: REPO_ACCENT }}
+                    />
                 </button>
-
-                <div className="h-8 w-px bg-foreground/10 mx-2"></div>
-
+                <div className="h-8 w-px bg-foreground/10" />
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
-                        <span className="text-sm font-medium">Producer</span>
+                        <span className="text-sm font-medium text-foreground">Producer</span>
                         <span className="text-xs text-foreground/50">Free Plan</span>
                     </div>
                     <button
-                        onClick={() => {
-                            router.push("/dashboard/profile");
-                        }}
+                        type="button"
+                        onClick={handleOpenProfile}
                         className="h-10 w-10 rounded-full flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
-                        style={{ background: "linear-gradient(to top right, #9C57DF, #C28CF0)" }}
+                        style={{ background: `linear-gradient(to top right, ${REPO_ACCENT}, #C28CF0)` }}
                         title="View profile"
+                        aria-label="Open profile"
                     >
                         <User size={18} />
                     </button>

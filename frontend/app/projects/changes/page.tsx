@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { RepositoryHeader } from "../components/RepositoryHeader";
@@ -87,25 +88,28 @@ function TypeBadge({ type }: { type: ChangeType }) {
 }
 
 const cardBase =
-    "rounded-xl bg-background-secondary border border-border-subtle p-6 transition-all duration-300";
+    "rounded-xl bg-background-tertiary border border-border-subtle p-6 transition-all duration-300";
 const cardHoverDark =
-    "hover:border-accent-blue/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent-blue/5 hover:shadow-[0_0_20px_rgba(62,99,221,0.05)]";
+    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
 
-export default function RepositoryChangesPage() {
+export default function ProjectChangesPage() {
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
     const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
     return (
-        <div className="min-h-screen bg-background text-foreground">
+        <div
+            className="min-h-screen bg-background text-foreground"
+            style={{ "--accent": "#9C57DF" } as React.CSSProperties}
+        >
             <RepositoryHeader />
             <div className="p-6 space-y-6">
                 <Link
-                    href="/repository"
+                    href="/projects"
                     className="inline-flex items-center gap-2 text-sm text-foreground/70 transition-colors hover:text-foreground"
                 >
                     <ArrowLeft className="size-4" aria-hidden />
-                    Back to repository
+                    Back to projects
                 </Link>
                 <div className={cardClass}>
                     <h1
