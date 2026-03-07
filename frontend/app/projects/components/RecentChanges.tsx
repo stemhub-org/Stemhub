@@ -6,6 +6,7 @@ import type { VersionWithAuthor } from "@/types/project";
 
 interface RecentChangesProps {
     versions: VersionWithAuthor[];
+    projectId?: string | null;
 }
 
 function formatTimeAgo(dateString: string): string {
@@ -27,7 +28,7 @@ function getInitials(username: string): string {
     return username.slice(0, 2).toUpperCase();
 }
 
-export function RecentChanges({ versions }: RecentChangesProps) {
+export function RecentChanges({ versions, projectId }: RecentChangesProps) {
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-2">
@@ -44,7 +45,7 @@ export function RecentChanges({ versions }: RecentChangesProps) {
                     </span>
                 </div>
                 <Link
-                    href="/projects/changes"
+                    href={projectId ? `/projects/changes?id=${projectId}` : "/projects/changes"}
                     className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
                     aria-label="View all changes"
                 >

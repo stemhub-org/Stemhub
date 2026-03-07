@@ -170,7 +170,7 @@ function RepositoryPageContent() {
                             <QuickExport />
                         </div>
                         <div className={`${cardClass} p-6`}>
-                            <RecentChanges versions={summary.recent_versions} />
+                            <RecentChanges versions={summary.recent_versions} projectId={projectId} />
                         </div>
                     </section>
 
