@@ -143,8 +143,29 @@ class CollaboratorResponse(BaseModel):
     created_at: datetime
     user: Optional[UserResponse] = None
 
+
     class Config:
         from_attributes = True
+
+# ── Stats Schemas ──
+
+class DailyActivity(BaseModel):
+    date: str
+    count: int
+
+class ActivityStatsResponse(BaseModel):
+    daily_activity: list[DailyActivity]
+    total_commits: int
+    total_contributors: int
+
+class ContributorStats(BaseModel):
+    user_id: UUID
+    username: str
+    initials: str
+    commits: int
+
+class TopContributorsResponse(BaseModel):
+    contributors: list[ContributorStats]
 
 # ── Auth Schemas ──
 
