@@ -1,32 +1,36 @@
 "use client";
 
 import { TrendingUp } from "lucide-react";
+import type { DailyActivity } from "@/types/project";
 
-const PLACEHOLDER_TOTAL_COMMITS = 282;
-const PLACEHOLDER_CONTRIBUTORS = 3;
+interface ContributionActivityProps {
+    dailyActivity: DailyActivity[];
+    totalCommits: number;
+    totalContributors: number;
+}
 
 const GRID_COLS = 26;
 const GRID_ROWS = 7;
 const CELLS = GRID_COLS * GRID_ROWS;
 
-function seeded(i: number, row: number): number {
-    const n = (i + 1) * 12.9898 + row * 78.233;
-    return ((Math.sin(n) * 43758.5453) % 1 + 1) % 1;
-}
-
-const INTENSITIES = Array.from({ length: CELLS }, (_, i) => {
-    const row = Math.floor(i / GRID_COLS);
-    const r = seeded(i, row);
-    if (r < 0.45) return 0;
-    if (r < 0.65) return 0.25;
-    if (r < 0.8) return 0.5;
-    if (r < 0.92) return 0.75;
-    return 1;
-});
-
 const LEGEND_LEVELS = [0, 0.2, 0.45, 0.7, 1];
 
-export function ContributionActivity() {
+export function ContributionActivity({
+    dailyActivity,
+    totalCommits,
+    totalContributors,
+}: ContributionActivityProps) {
+    // Compute max count for intensity normalization
+    const maxCount = Math.max(1, ...dailyActivity.map((d) => d.count));
+
+    // Map daily activity data to grid cells (last CELLS days)
+    const recentDays = dailyActivity.slice(-CELLS);
+    const intensities = Array.from({ length: CELLS }, (_, i) => {
+        const day = recentDays[i];
+        if (!day || day.count === 0) return 0;
+        return day.count / maxCount;
+    });
+
     return (
         <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
@@ -43,7 +47,7 @@ export function ContributionActivity() {
                 style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))` }}
             >
                 {Array.from({ length: CELLS }, (_, i) => {
-                    const intensity = INTENSITIES[i] ?? 0;
+                    const intensity = intensities[i] ?? 0;
                     return (
                         <div
                             key={i}
@@ -51,7 +55,11 @@ export function ContributionActivity() {
                             style={{
                                 opacity: intensity === 0 ? 0.08 : 0.2 + intensity * 0.8,
                             }}
-                            title={`${Math.round(intensity * 100)}%`}
+                            title={
+                                recentDays[i]
+                                    ? `${recentDays[i].date}: ${recentDays[i].count} changes`
+                                    : "No data"
+                            }
                         />
                     );
                 })}
@@ -77,7 +85,7 @@ export function ContributionActivity() {
                         Total Changes
                     </p>
                     <p className="text-lg font-medium text-foreground">
-                        {PLACEHOLDER_TOTAL_COMMITS}
+                        {totalCommits}
                     </p>
                 </div>
                 <div className="rounded-lg bg-foreground/[0.04] px-3 py-2">
@@ -85,7 +93,7 @@ export function ContributionActivity() {
                         Contributors
                     </p>
                     <p className="text-lg font-medium text-foreground">
-                        {PLACEHOLDER_CONTRIBUTORS}
+                        {totalContributors}
                     </p>
                 </div>
             </div>

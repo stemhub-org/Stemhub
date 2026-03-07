@@ -3,16 +3,33 @@
 import { RepositoryAudioPlayer } from "./RepositoryAudioPlayer";
 import { ContributionActivity } from "./ContributionActivity";
 import { TopContributors } from "./TopContributors";
+import type { DailyActivity, ContributorStats } from "@/types/project";
 
-export function RepositorySidebar() {
+interface RepositorySidebarProps {
+    dailyActivity?: DailyActivity[];
+    totalCommits?: number;
+    totalContributors?: number;
+    contributors?: ContributorStats[];
+}
+
+export function RepositorySidebar({
+    dailyActivity = [],
+    totalCommits = 0,
+    totalContributors = 0,
+    contributors = [],
+}: RepositorySidebarProps) {
     return (
         <div className="flex flex-col gap-8 p-6">
             <RepositoryAudioPlayer />
             <div className="border-t border-foreground/[0.08] pt-6">
-                <ContributionActivity />
+                <ContributionActivity
+                    dailyActivity={dailyActivity}
+                    totalCommits={totalCommits}
+                    totalContributors={totalContributors}
+                />
             </div>
             <div className="border-t border-foreground/[0.08] pt-6">
-                <TopContributors />
+                <TopContributors contributors={contributors} />
             </div>
         </div>
     );
