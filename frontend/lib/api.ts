@@ -18,8 +18,15 @@ export async function authFetch<T>(path: string, init?: RequestInit): Promise<T>
     });
 
     if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `API error ${res.status}`);
+        if (res.status === 401 && typeof window !== "undefined") {
+            // Token is expired or invalid, clear it and redirect to login
+            localStorage.removeItem("token");
+            window.location.href = "/login";
+            throw new Error("Session expired. Please log in again.");
+        }
+
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `API request failed: ${res.statusText}`);
     }
 
     return res.json() as Promise<T>;
