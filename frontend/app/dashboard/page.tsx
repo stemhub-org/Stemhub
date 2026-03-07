@@ -1,116 +1,98 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-    GitCommit,
     GitBranch,
     Clock,
     Plus,
     DownloadCloud,
     Users,
     HardDrive,
-    Activity,
     ChevronRight,
-    Search
+    X,
+    Loader2,
 } from "lucide-react";
+import { authFetch } from "@/lib/api";
 
-const RECENT_PROJECTS = [
-    {
-        id: 1,
-        name: "Synthwave Anthem",
-        daw: "Ableton Live",
-        updatedAt: "2h",
-        branchCount: 3,
-        contributors: 2,
-        size: "1.2 GB"
-    },
-    {
-        id: 2,
-        name: "Acoustic Pop Session",
-        daw: "Logic Pro",
-        updatedAt: "1d",
-        branchCount: 1,
-        contributors: 1,
-        size: "840 MB"
-    },
-    {
-        id: 3,
-        name: "Trap Beat 04",
-        daw: "FL Studio",
-        updatedAt: "3d",
-        branchCount: 5,
-        contributors: 3,
-        size: "2.1 GB"
-    }
-];
+interface ProjectItem {
+    id: string;
+    name: string;
+    description: string | null;
+    category: string;
+    is_public: boolean;
+    owner_id: string;
+    created_at: string;
+    is_deleted: boolean;
+    deleted_at: string | null;
+}
 
-const ACTIVITY_FEED = [
-    {
-        id: 1,
-        user: "Erwan SEYTOR",
-        action: "pushed to",
-        target: "main",
-        repository: "Synthwave Anthem",
-        time: "2h",
-        icon: GitCommit,
-        color: "text-accent"
-    },
-    {
-        id: 2,
-        user: "Gabin RUDIGOZ",
-        action: "created branch",
-        target: "feature/bass",
-        repository: "Synthwave Anthem",
-        time: "5h",
-        icon: GitBranch,
-        color: "text-foreground-muted"
-    },
-    {
-        id: 3,
-        user: "Dryss MARGUERITTE",
-        action: "merged PR",
-        target: "#12",
-        repository: "Trap Beat 04",
-        time: "1d",
-        icon: GitBranch,
-        color: "text-foreground-muted"
-    }
-];
+function formatTimeAgo(dateString: string): string {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffHours < 1) return "just now";
+    if (diffHours < 24) return `${diffHours}h`;
+    if (diffDays < 7) return `${diffDays}d`;
+    return date.toLocaleDateString();
+}
 
 export default function DashboardPage() {
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
+    const [projects, setProjects] = useState<ProjectItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showNewProject, setShowNewProject] = useState(false);
+    const [newProjectName, setNewProjectName] = useState("");
+    const [newProjectDesc, setNewProjectDesc] = useState("");
+    const [newProjectCategory, setNewProjectCategory] = useState("General");
+    const [creating, setCreating] = useState(false);
+
+    const fetchData = useCallback(async () => {
+        try {
+            const [userData, projectsData] = await Promise.all([
+                authFetch<any>("/auth/me"),
+                authFetch<ProjectItem[]>("/projects/"),
+            ]);
+            setUser(userData);
+            setProjects(projectsData);
+        } catch {
+            // If auth fails, user might need to login
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        const fetchUser = async () => {
-            const token = localStorage.getItem("token");
+        fetchData();
+    }, [fetchData]);
 
-            try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-                const response = await fetch(`${apiUrl}/auth/me`, {
-                    headers: token ? {
-                        "Authorization": `Bearer ${token}`
-                    } : {},
-                    credentials: "include"
-                });
-
-                if (!response.ok) {
-                    throw new Error("Session expirée");
-                }
-
-                const data = await response.json();
-                setUser(data);
-            } catch (err) {
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchUser();
-    }, [router]);
+    const handleCreateProject = async () => {
+        if (!newProjectName.trim()) return;
+        setCreating(true);
+        try {
+            const created = await authFetch<ProjectItem>("/projects/", {
+                method: "POST",
+                body: JSON.stringify({
+                    name: newProjectName.trim(),
+                    description: newProjectDesc.trim() || null,
+                    category: newProjectCategory,
+                }),
+            });
+            setProjects((prev) => [created, ...prev]);
+            setShowNewProject(false);
+            setNewProjectName("");
+            setNewProjectDesc("");
+            setNewProjectCategory("General");
+        } catch (err) {
+            alert(err instanceof Error ? err.message : "Failed to create project");
+        } finally {
+            setCreating(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -145,14 +127,17 @@ export default function DashboardPage() {
                             <DownloadCloud size={16} className="text-accent group-hover:scale-110 transition-transform" />
                             <span>Import</span>
                         </button>
-                        <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent text-white hover:bg-accent/90 hover:shadow-[0_0_15px_rgba(156,87,223,0.4)] transition-all duration-300 text-sm font-medium">
+                        <button
+                            onClick={() => setShowNewProject(true)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent text-white hover:bg-accent/90 hover:shadow-[0_0_15px_rgba(156,87,223,0.4)] transition-all duration-300 text-sm font-medium"
+                        >
                             <Plus size={16} />
                             <span>New Project</span>
                         </button>
                     </div>
                 </motion.div>
 
-                {/* Stats Overview - Minimalist Bento Grid */}
+                {/* Stats Overview */}
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -168,7 +153,7 @@ export default function DashboardPage() {
                             <span className="text-xs font-semibold px-2 py-1 rounded bg-accent/10 text-accent border border-accent/20">Active</span>
                         </div>
                         <div className="flex items-baseline gap-2">
-                            <h3 className="text-3xl font-semibold tracking-tight text-foreground">18</h3>
+                            <h3 className="text-3xl font-semibold tracking-tight text-foreground">{projects.length}</h3>
                             <span className="text-sm border-l border-border-subtle pl-2 text-foreground-muted">Projects</span>
                         </div>
                     </div>
@@ -181,8 +166,8 @@ export default function DashboardPage() {
                             </div>
                         </div>
                         <div className="flex items-baseline gap-2">
-                            <h3 className="text-3xl font-semibold tracking-tight text-foreground">42</h3>
-                            <span className="text-sm border-l border-border-subtle pl-2 text-foreground-muted">Total Branches</span>
+                            <h3 className="text-3xl font-semibold tracking-tight text-foreground">{projects.length}</h3>
+                            <span className="text-sm border-l border-border-subtle pl-2 text-foreground-muted">Total Projects</span>
                         </div>
                     </div>
 
@@ -192,134 +177,191 @@ export default function DashboardPage() {
                                 <Users size={16} className="text-accent group-hover:scale-110 transition-transform" />
                                 <span>Network</span>
                             </div>
-                            <div className="flex -space-x-1.5">
-                                {[1, 2, 3].map((i) => (
-                                    <div key={i} className="w-5 h-5 rounded-full bg-background-tertiary border border-border-subtle" />
-                                ))}
-                            </div>
                         </div>
                         <div className="flex items-baseline gap-2">
-                            <h3 className="text-3xl font-semibold tracking-tight text-foreground">6</h3>
+                            <h3 className="text-3xl font-semibold tracking-tight text-foreground">—</h3>
                             <span className="text-sm border-l border-border-subtle pl-2 text-foreground-muted">Collaborators</span>
                         </div>
                     </div>
                 </motion.div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Recent Projects */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.2 }}
-                        className="lg:col-span-2 space-y-4"
-                    >
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-semibold tracking-wide uppercase text-foreground-muted">
-                                Recent Projects
-                            </h2>
-                            <button className="text-xs text-foreground-muted hover:text-foreground transition-colors flex items-center gap-1">
-                                View all <ChevronRight size={14} />
+                {/* Recent Projects — REAL DATA */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.2 }}
+                    className="space-y-4"
+                >
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-semibold tracking-wide uppercase text-foreground-muted">
+                            Your Projects
+                        </h2>
+                    </div>
+
+                    {projects.length === 0 ? (
+                        <div className="rounded-lg bg-background-secondary border border-border-subtle p-8 text-center">
+                            <p className="text-foreground-muted text-sm mb-4">No projects yet. Create your first one!</p>
+                            <button
+                                onClick={() => setShowNewProject(true)}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-accent text-white hover:bg-accent/90 text-sm font-medium transition-all"
+                            >
+                                <Plus size={16} /> New Project
                             </button>
                         </div>
-
+                    ) : (
                         <div className="flex flex-col gap-3">
-                            {RECENT_PROJECTS.map((repo, idx) => (
+                            {projects.map((project) => (
                                 <div
-                                    key={repo.id}
+                                    key={project.id}
+                                    onClick={() => router.push(`/projects?id=${project.id}`)}
                                     className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-background-secondary border border-border-subtle hover:border-accent/40 hover:bg-gradient-to-r hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_15px_rgba(156,87,223,0.05)] transition-all duration-300 cursor-pointer"
                                 >
                                     <div className="flex items-center gap-4 mb-3 sm:mb-0">
                                         <div className="h-10 w-10 rounded-md bg-accent/10 flex items-center justify-center border border-accent/20 group-hover:border-accent/40 transition-colors">
                                             <span className="font-semibold text-accent text-sm group-hover:scale-110 transition-transform">
-                                                {repo.name.substring(0, 2).toUpperCase()}
+                                                {project.name.substring(0, 2).toUpperCase()}
                                             </span>
                                         </div>
                                         <div>
                                             <h3 className="font-medium text-foreground text-base group-hover:text-accent transition-colors">
-                                                {repo.name}
+                                                {project.name}
                                             </h3>
                                             <div className="flex gap-2 text-xs text-foreground-muted mt-1 items-center">
                                                 <span className="flex items-center gap-1">
-                                                    <Clock size={10} /> {repo.updatedAt}
+                                                    <Clock size={10} /> {formatTimeAgo(project.created_at)}
                                                 </span>
-                                                <span className="w-1 h-1 rounded-full bg-border-subtle" />
-                                                <span className="font-medium tracking-wide">
-                                                    {repo.daw}
-                                                </span>
+                                                {project.description && (
+                                                    <>
+                                                        <span className="w-1 h-1 rounded-full bg-border-subtle" />
+                                                        <span className="font-medium tracking-wide truncate max-w-[200px]">
+                                                            {project.description}
+                                                        </span>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center gap-6 text-xs text-foreground-muted font-medium sm:ml-auto">
-                                        <div className="flex items-center gap-1.5" title="Branches">
-                                            <GitBranch size={14} /> {repo.branchCount}
-                                        </div>
-                                        <div className="flex items-center gap-1.5" title="Collaborators">
-                                            <Users size={14} /> {repo.contributors}
-                                        </div>
-                                        <div className="flex items-center gap-1.5" title="Size">
-                                            <HardDrive size={14} /> {repo.size}
-                                        </div>
+                                        <span className="px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 text-[10px]">
+                                            {project.category}
+                                        </span>
+                                        <ChevronRight size={14} className="text-foreground-muted group-hover:text-accent transition-colors" />
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </motion.div>
-
-                    {/* Minimalist Activity Feed */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.3 }}
-                        className="space-y-4"
-                    >
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-semibold tracking-wide uppercase text-foreground-muted">
-                                Activity
-                            </h2>
-                        </div>
-
-                        <div className="rounded-lg bg-background-secondary border border-border-subtle p-5">
-                            <div className="space-y-6">
-                                {ACTIVITY_FEED.map((event, index) => {
-                                    const Icon = event.icon;
-                                    return (
-                                        <div key={event.id} className="flex gap-4 group cursor-pointer">
-                                            <div className="mt-0.5 relative flex flex-col items-center">
-                                                <div className={`h-6 w-6 rounded-md flex items-center justify-center bg-accent/10 border border-accent/20 text-accent group-hover:border-accent/40 group-hover:shadow-[0_0_10px_rgba(156,87,223,0.2)] transition-all duration-300`}>
-                                                    <Icon size={12} className="group-hover:scale-110 transition-transform duration-300" />
-                                                </div>
-                                                {index < ACTIVITY_FEED.length - 1 && (
-                                                    <div className="w-px h-full bg-border-subtle mt-2 mb-[-16px] group-hover:bg-accent/20 transition-colors duration-300" />
-                                                )}
-                                            </div>
-                                            <div className="flex-1 pb-2">
-                                                <p className="text-sm text-foreground-muted leading-snug">
-                                                    <span className="font-medium text-foreground">{event.user}</span>{" "}
-                                                    {event.action}{" "}
-                                                    <span className="font-mono text-xs text-foreground">
-                                                        {event.target}
-                                                    </span>
-                                                </p>
-                                                <div className="flex justify-between items-center mt-1">
-                                                    <p className="text-xs text-foreground-muted">
-                                                        {event.repository}
-                                                    </p>
-                                                    <span className="text-xs text-foreground-muted opacity-50">{event.time}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            <button className="w-full mt-6 py-2 text-xs font-semibold text-foreground-muted hover:text-accent hover:bg-gradient-to-r hover:from-background hover:to-accent/5 transition-all duration-300 rounded-md border border-transparent hover:border-accent/20">
-                                View All Logs
-                            </button>
-                        </div>
-                    </motion.div>
-                </div>
+                    )}
+                </motion.div>
             </div>
+
+            {/* New Project Modal */}
+            <AnimatePresence>
+                {showNewProject && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+                            onClick={() => setShowNewProject(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="w-full max-w-md rounded-xl bg-background-secondary border border-border-subtle p-6 shadow-2xl">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-lg font-medium text-foreground">New Project</h2>
+                                    <button
+                                        onClick={() => setShowNewProject(false)}
+                                        className="text-foreground-muted hover:text-foreground transition-colors"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-1.5">
+                                            Project Name *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newProjectName}
+                                            onChange={(e) => setNewProjectName(e.target.value)}
+                                            placeholder="My Awesome Track"
+                                            className="w-full rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-1.5">
+                                            Description
+                                        </label>
+                                        <textarea
+                                            value={newProjectDesc}
+                                            onChange={(e) => setNewProjectDesc(e.target.value)}
+                                            placeholder="A short description of your project"
+                                            rows={3}
+                                            className="w-full rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors resize-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-1.5">
+                                            Category
+                                        </label>
+                                        <select
+                                            value={newProjectCategory}
+                                            onChange={(e) => setNewProjectCategory(e.target.value)}
+                                            className="w-full rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors"
+                                        >
+                                            <option value="General">General</option>
+                                            <option value="Electronic">Electronic</option>
+                                            <option value="Hip-Hop">Hip-Hop</option>
+                                            <option value="Pop">Pop</option>
+                                            <option value="Rock">Rock</option>
+                                            <option value="Jazz">Jazz</option>
+                                            <option value="Classical">Classical</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button
+                                        onClick={() => setShowNewProject(false)}
+                                        className="px-4 py-2 rounded-lg text-sm font-medium text-foreground-muted hover:text-foreground transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleCreateProject}
+                                        disabled={!newProjectName.trim() || creating}
+                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                    >
+                                        {creating ? (
+                                            <>
+                                                <Loader2 size={16} className="animate-spin" />
+                                                Creating…
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Plus size={16} />
+                                                Create Project
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
