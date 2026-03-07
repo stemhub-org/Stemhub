@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 SECRET_KEY = os.getenv("SECRET_KEY", "temporary-secret-key-change-it")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
     try:
