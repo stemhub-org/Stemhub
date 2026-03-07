@@ -169,6 +169,40 @@ class ContributorStats(BaseModel):
 class TopContributorsResponse(BaseModel):
     contributors: list[ContributorStats]
 
+# ── Project Summary Schemas ──
+
+class OwnerSummary(BaseModel):
+    id: UUID
+    username: str
+
+    class Config:
+        from_attributes = True
+
+class VersionWithAuthor(BaseModel):
+    id: UUID
+    commit_message: Optional[str] = None
+    created_at: datetime
+    branch_name: str
+    author: Optional[OwnerSummary] = None
+
+class ProjectDetail(BaseModel):
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    category: str
+    is_public: bool
+    created_at: datetime
+    owner: OwnerSummary
+
+    class Config:
+        from_attributes = True
+
+class ProjectSummaryResponse(BaseModel):
+    project: ProjectDetail
+    branches: list[BranchResponse]
+    recent_versions: list[VersionWithAuthor]
+    tracks: list[TrackResponse]
+
 # ── Auth Schemas ──
 
 class LoginRequest(BaseModel):
