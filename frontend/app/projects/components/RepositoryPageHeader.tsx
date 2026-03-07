@@ -3,12 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Eye, Heart } from "lucide-react";
+import { AudioUploadButton } from "./AudioUploadButton";
 
 interface RepositoryPageHeaderProps {
     ownerUsername: string;
     projectName: string;
     branchName: string;
     description: string;
+    latestVersionId?: string;
+    onUploadSuccess?: () => void;
 }
 
 export function RepositoryPageHeader({
@@ -16,6 +19,8 @@ export function RepositoryPageHeader({
     projectName,
     branchName,
     description,
+    latestVersionId,
+    onUploadSuccess,
 }: RepositoryPageHeaderProps) {
     const [isFavorite, setIsFavorite] = useState(false);
 
@@ -62,13 +67,7 @@ export function RepositoryPageHeader({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        type="button"
-                        className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                    >
-                        <Eye className="size-4" aria-hidden />
-                        Watch
-                    </button>
+                    <AudioUploadButton versionId={latestVersionId} onSuccess={onUploadSuccess} />
                     <button
                         type="button"
                         onClick={() => setIsFavorite((prev) => !prev)}

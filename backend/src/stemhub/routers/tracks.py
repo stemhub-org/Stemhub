@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List
 from uuid import UUID
+import os
+import shutil
 
 from stemhub.database import get_db
 from stemhub.models import Track, Version, Branch, Project, User
@@ -10,6 +13,10 @@ from stemhub.schemas import TrackCreate, TrackResponse
 from stemhub.auth import get_current_user
 
 router = APIRouter(tags=["tracks"])
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "uploads", "tracks")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 
 async def _get_owned_version(
@@ -51,7 +58,45 @@ async def create_track(
     await db.commit()
     await db.refresh(db_track)
     return db_track
+@router.post("/versions/{version_id}/tracks/upload", response_model=TrackResponse, status_code=status.HTTP_201_CREATED)
+async def upload_track(
+    version_id: UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Upload an audio file to create a new track for a specific version.
+    """
+    await _get_owned_version(version_id=version_id, current_user=current_user, db=db)
 
+    # Secure file name
+    file_ext = os.path.splitext(file.filename)[1] if file.filename else ".wav"
+    db_track = Track(
+        version_id=version_id,
+        name=file.filename or "Untitled Track",
+        file_type=file_ext
+    )
+    db.add(db_track)
+    await db.commit()
+    await db.refresh(db_track)
+
+    # Save physical file
+    file_path = os.path.join(UPLOAD_DIR, f"{db_track.id}{file_ext}")
+    db_track.storage_path = file_path
+    
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        # Rollback DB if file write fails
+        await db.delete(db_track)
+        await db.commit()
+        raise HTTPException(status_code=500, detail="Could not save file")
+
+    await db.commit()
+    await db.refresh(db_track)
+    return db_track
 
 @router.get("/versions/{version_id}/tracks/", response_model=List[TrackResponse])
 async def list_tracks(
@@ -90,6 +135,38 @@ async def get_track(
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
     return track
+
+@router.get("/tracks/{track_id}/audio")
+async def get_track_audio(
+    track_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Stream the actual audio file for a given track.
+    """
+    result = await db.execute(
+        select(Track).join(Version).join(Branch).join(Project).where(
+            Track.id == track_id,
+            Project.owner_id == current_user.id,
+            Version.is_deleted == False,
+            Branch.is_deleted == False,
+            Project.is_deleted == False,
+        )
+    )
+    track = result.scalars().first()
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    
+    if not track.storage_path or not os.path.exists(track.storage_path):
+        raise HTTPException(status_code=404, detail="Audio file not found on disk")
+
+    # Serve the file (supports 206 Partial Content automatically for range requests if appropriate)
+    return FileResponse(
+        path=track.storage_path, 
+        media_type="audio/wav" if track.file_type == ".wav" else "audio/mpeg",
+        filename=track.name
+    )
 
 
 @router.delete("/tracks/{track_id}", status_code=status.HTTP_204_NO_CONTENT)
