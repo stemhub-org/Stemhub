@@ -4,13 +4,19 @@ import { useState } from "react";
 import Link from "next/link";
 import { Eye, Heart } from "lucide-react";
 
-const PLACEHOLDER_USER = "Skrillex";
-const PLACEHOLDER_REPO = "Dubstep-Track";
-const PLACEHOLDER_BRANCH = "main";
-const PLACEHOLDER_DESCRIPTION =
-    "Experimental dubstep track • 140 BPM • C minor";
+interface RepositoryPageHeaderProps {
+    ownerUsername: string;
+    projectName: string;
+    branchName: string;
+    description: string;
+}
 
-export function RepositoryPageHeader() {
+export function RepositoryPageHeader({
+    ownerUsername,
+    projectName,
+    branchName,
+    description,
+}: RepositoryPageHeaderProps) {
     const [isFavorite, setIsFavorite] = useState(false);
 
     return (
@@ -27,19 +33,19 @@ export function RepositoryPageHeader() {
                                     href="/dashboard"
                                     className="transition-colors hover:text-foreground"
                                 >
-                                    {PLACEHOLDER_USER}
+                                    {ownerUsername}
                                 </Link>
                             </li>
                             <span className="text-foreground/40">/</span>
                             <li>
                                 <span className="font-medium text-foreground">
-                                    {PLACEHOLDER_REPO}
+                                    {projectName}
                                 </span>
                             </li>
                             <span className="text-foreground/40">/</span>
                             <li>
                                 <span className="text-foreground/70">
-                                    {PLACEHOLDER_BRANCH}
+                                    {branchName}
                                 </span>
                             </li>
                         </ol>
@@ -48,10 +54,10 @@ export function RepositoryPageHeader() {
                         className="text-xl font-medium tracking-tight text-foreground"
                         style={{ fontFamily: "var(--font-syne)" }}
                     >
-                        {PLACEHOLDER_REPO}
+                        {projectName}
                     </h1>
                     <p className="mt-1 text-sm text-foreground/70">
-                        {PLACEHOLDER_DESCRIPTION}
+                        {description}
                     </p>
                 </div>
 

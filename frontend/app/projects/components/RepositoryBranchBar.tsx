@@ -2,13 +2,20 @@
 
 import { useState, useRef, useEffect } from "react";
 import { GitBranch, ChevronDown } from "lucide-react";
+import type { Branch } from "@/types/project";
 
-const PLACEHOLDER_BRANCHES = ["main", "develop", "feature/vocals", "fix/mix"];
-const PLACEHOLDER_CURRENT_BRANCH = "main";
+interface RepositoryBranchBarProps {
+    branches: Branch[];
+    selectedBranch: string;
+    onBranchChange: (branchName: string) => void;
+}
 
-export function RepositoryBranchBar() {
+export function RepositoryBranchBar({
+    branches,
+    selectedBranch,
+    onBranchChange,
+}: RepositoryBranchBarProps) {
     const [isOpen, setIsOpen] = useState(false);
-    const [selectedBranch, setSelectedBranch] = useState(PLACEHOLDER_CURRENT_BRANCH);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -33,7 +40,7 @@ export function RepositoryBranchBar() {
                     aria-label="Sélectionner la branche"
                 >
                     <GitBranch className="size-4 text-foreground/60" aria-hidden />
-                    <span>{selectedBranch}</span>
+                    <span>{selectedBranch || "main"}</span>
                     <ChevronDown
                         className={`size-4 text-foreground/60 transition-transform ${isOpen ? "rotate-180" : ""}`}
                         aria-hidden
@@ -44,18 +51,18 @@ export function RepositoryBranchBar() {
                         role="listbox"
                         className="absolute left-0 top-full z-10 mt-1 min-w-[12rem] rounded-xl bg-background-secondary border border-border-subtle py-1 shadow-lg"
                     >
-                        {PLACEHOLDER_BRANCHES.map((branch) => (
-                            <li key={branch} role="option">
+                        {branches.map((branch) => (
+                            <li key={branch.id} role="option">
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setSelectedBranch(branch);
+                                        onBranchChange(branch.name);
                                         setIsOpen(false);
                                     }}
-                                    className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-background-tertiary ${selectedBranch === branch ? "font-medium text-accent" : "text-foreground"}`}
+                                    className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-background-tertiary ${selectedBranch === branch.name ? "font-medium text-accent" : "text-foreground"}`}
                                 >
                                     <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden />
-                                    {branch}
+                                    {branch.name}
                                 </button>
                             </li>
                         ))}
@@ -64,7 +71,7 @@ export function RepositoryBranchBar() {
             </div>
             <div className="flex items-center gap-2 text-sm text-foreground/70">
                 <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden />
-                <span>{PLACEHOLDER_BRANCHES.length} Versions</span>
+                <span>{branches.length} {branches.length === 1 ? "Branch" : "Branches"}</span>
             </div>
         </div>
     );
