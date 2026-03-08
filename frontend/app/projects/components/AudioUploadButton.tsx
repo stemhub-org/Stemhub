@@ -19,17 +19,13 @@ export function AudioUploadButton({ versionId, onSuccess }: AudioUploadButtonPro
 
         try {
             setIsUploading(true);
-            const token = localStorage.getItem("token");
-            if (!token) throw new Error("No authentication token found");
 
             const formData = new FormData();
             formData.append("file", file);
 
             const response = await fetch(`${API_URL}/versions/${versionId}/tracks/upload`, {
                 method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                credentials: "include",
                 body: formData,
             });
 
