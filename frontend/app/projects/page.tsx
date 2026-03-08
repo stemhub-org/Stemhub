@@ -143,6 +143,12 @@ function RepositoryPageContent() {
                         projectName={summary.project.name}
                         branchName={selectedBranch || "main"}
                         description={summary.project.description || ""}
+                        latestVersionId={summary.recent_versions?.[0]?.id}
+                        onUploadSuccess={() => {
+                            if (projectId) {
+                                fetchData(projectId);
+                            }
+                        }}
                     />
                 </div>
 
@@ -163,11 +169,11 @@ function RepositoryPageContent() {
                     <section className="flex min-w-0 flex-1 flex-col gap-6 self-start">
                         <div className={cardClass}>
                             <div className="p-8">
-                                <RepositoryAudioPlayer />
+                                <RepositoryAudioPlayer track={summary.tracks?.[0]} />
                             </div>
                         </div>
                         <div className={`${cardClass} p-6`}>
-                            <QuickExport />
+                            <QuickExport track={summary.tracks?.[0]} />
                         </div>
                         <div className={`${cardClass} p-6`}>
                             <RecentChanges versions={summary.recent_versions} projectId={projectId} />
