@@ -137,7 +137,7 @@ class TrackResponse(TrackBase):
 # ── Collaborator Schemas ──
 
 class CollaboratorCreate(BaseModel):
-    user_id: UUID
+    username: str
     role: Optional[str] = "Viewer"
 
 class CollaboratorResponse(BaseModel):
