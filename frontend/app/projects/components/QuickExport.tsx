@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Download, FileAudio, Archive, ChevronDown, Package2 } from "lucide-react";
+import { Download, FileAudio, Package2 } from "lucide-react";
 import { Track } from "@/types/project";
 import { API_URL } from "@/lib/api";
 
