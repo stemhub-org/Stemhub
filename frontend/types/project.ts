@@ -52,6 +52,20 @@ export interface ProjectSummaryResponse {
     tracks: Track[];
 }
 
+// ── Collaborators ──
+export interface Collaborator {
+    project_id: string;
+    user_id: string;
+    role: string;
+    created_at: string;
+    user: {
+        id: string;
+        email: string;
+        username: string;
+        avatar_url: string | null;
+    } | null;
+}
+
 // ── Activity stats ──
 export interface DailyActivity {
     date: string;
