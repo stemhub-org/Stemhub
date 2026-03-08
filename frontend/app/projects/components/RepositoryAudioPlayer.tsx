@@ -3,7 +3,7 @@
 import { Play, Pause } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import { Track } from "@/types/project";
-import { API_URL } from "@/lib/api";
+import { API_URL, authFetch } from "@/lib/api";
 
 function formatTimeAgo(dateString: string | null) {
     if (!dateString) return "Unknown date";
@@ -28,9 +28,6 @@ function formatTimeAgo(dateString: string | null) {
     const years = Math.floor(months / 12);
     return `${years} year${years > 1 ? 's' : ''} ago`;
 }
-
-const PLACEHOLDER_SAMPLE_RATE = "48 kHz";
-const PLACEHOLDER_BIT_DEPTH = "24 bit";
 
 function WaveformPlaceholder({ progress }: { progress: number }) {
     const bars = [
@@ -74,14 +71,36 @@ export function RepositoryAudioPlayer({ track }: { track?: Track }) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
-    const [token, setToken] = useState<string | null>(null);
+    const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
     useEffect(() => {
-        setToken(localStorage.getItem("token"));
-    }, []);
+        if (!track) return;
+
+        let objectUrl: string | null = null;
+        
+        async function loadAudio() {
+            try {
+                // Fetch the audio file as a blob using our authenticated fetch
+                const response = await authFetch<Response>(`/tracks/${track!.id}/audio`);
+                const blob = await response.blob();
+                objectUrl = URL.createObjectURL(blob);
+                setAudioUrl(objectUrl);
+            } catch (err) {
+                console.error("Failed to load audio:", err);
+            }
+        }
+
+        loadAudio();
+
+        return () => {
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+        };
+    }, [track]);
 
     const togglePlay = () => {
-        if (!audioRef.current || !track) return;
+        if (!audioRef.current || !track || !audioUrl) return;
         if (isPlaying) {
             audioRef.current.pause();
         } else {
@@ -100,10 +119,10 @@ export function RepositoryAudioPlayer({ track }: { track?: Track }) {
 
     return (
         <div className="flex flex-col gap-6 relative">
-            {track && token && (
+            {track && audioUrl && (
                 <audio
                     ref={audioRef}
-                    src={`${API_URL}/tracks/${track.id}/audio?token=${token}`}
+                    src={audioUrl}
                     onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                     onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
                     onPlay={() => setIsPlaying(true)}
