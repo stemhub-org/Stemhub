@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Download, FileAudio, Package2, Archive, ChevronDown } from "lucide-react";
 import { Track } from "@/types/project";
-import { API_URL } from "@/lib/api";
+import { authFetch } from "@/lib/api";
 
 const DAW_OPTIONS = [
     { id: "ableton", label: "Ableton Live" },
@@ -14,11 +14,6 @@ const DAW_OPTIONS = [
 export function QuickExport({ track }: { track?: Track }) {
     const [isZipOpen, setIsZipOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const [token, setToken] = useState<string | null>(null);
-
-    useEffect(() => {
-        setToken(localStorage.getItem("token"));
-    }, []);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -29,6 +24,25 @@ export function QuickExport({ track }: { track?: Track }) {
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    const handleDownload = async () => {
+        if (!track) return;
+        try {
+            const response = await authFetch<Response>(`/tracks/${track.id}/audio`);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = track.name;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (err) {
+            console.error("Download failed:", err);
+            alert("Failed to download track");
+        }
+    };
 
     return (
         <div className="relative flex flex-col gap-4">
@@ -42,10 +56,9 @@ export function QuickExport({ track }: { track?: Track }) {
                 </h3>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:[&>*]:h-full">
-                {track && token ? (
-                    <a
-                        href={`${API_URL}/tracks/${track.id}/audio?token=${token}`}
-                        download
+                {track ? (
+                    <button
+                        onClick={handleDownload}
                         className="flex w-full flex-col justify-between rounded-xl border border-border-subtle dark:border-accent/40 bg-background-tertiary/50 dark:bg-foreground/[0.01] px-4 py-3 text-left transition-colors dark:hover:bg-accent/5"
                     >
                         <div className="mb-2 flex items-center justify-between gap-2">
@@ -58,7 +71,7 @@ export function QuickExport({ track }: { track?: Track }) {
                             <span className="text-xs text-foreground/60"><Download className="size-3" /></span>
                         </div>
                         <p className="text-xs text-foreground/60">{track.file_type.toUpperCase().replace('.', '')}</p>
-                    </a>
+                    </button>
                 ) : (
                     <button
                         type="button"
