@@ -5,6 +5,30 @@ import { useRef, useState, useEffect } from "react";
 import { Track } from "@/types/project";
 import { API_URL } from "@/lib/api";
 
+function formatTimeAgo(dateString: string | null) {
+    if (!dateString) return "Unknown date";
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (seconds < 60) return "Just now";
+    
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} day${days > 1 ? 's' : ''} ago`;
+    
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months} month${months > 1 ? 's' : ''} ago`;
+    
+    const years = Math.floor(months / 12);
+    return `${years} year${years > 1 ? 's' : ''} ago`;
+}
+
 const PLACEHOLDER_SAMPLE_RATE = "48 kHz";
 const PLACEHOLDER_BIT_DEPTH = "24 bit";
 
@@ -88,9 +112,16 @@ export function RepositoryAudioPlayer({ track }: { track?: Track }) {
                 />
             )}
             <div>
-                <p className="text-base font-medium text-foreground">
-                    {track ? "Track Preview" : "No Track Available"}
-                </p>
+                <div className="flex items-center justify-between">
+                    <p className="text-base font-medium text-foreground">
+                        {track ? "Track Preview" : "No Track Available"}
+                    </p>
+                    {track && track.created_at && (
+                        <p className="text-sm text-foreground/50">
+                            Uploaded {formatTimeAgo(track.created_at)}
+                        </p>
+                    )}
+                </div>
                 <p className="mt-0.5 text-sm text-foreground/70">
                     {track ? track.name : "Upload an audio file to preview"}
                 </p>

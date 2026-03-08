@@ -30,6 +30,7 @@ export interface Track {
     name: string;
     file_type: string;
     storage_path: string | null;
+    created_at: string | null;
 }
 
 // ── Project detail ──
