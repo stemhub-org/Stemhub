@@ -104,7 +104,9 @@ async def get_project_summary(
     if recent_versions_data:
         latest_version_id = recent_versions_data[0].id
         tracks_result = await db.execute(
-            select(Track).where(Track.version_id == latest_version_id)
+            select(Track)
+            .where(Track.version_id == latest_version_id)
+            .order_by(Track.created_at.desc())
         )
         tracks_data = list(tracks_result.scalars().all())
 
