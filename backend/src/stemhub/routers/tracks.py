@@ -11,6 +11,7 @@ from stemhub.database import get_db
 from stemhub.models import Track, Version, Branch, Project, User
 from stemhub.schemas import TrackCreate, TrackResponse
 from stemhub.auth import get_current_user
+from stemhub.storage import get_storage_service, StorageNotFoundError
 
 router = APIRouter(tags=["tracks"])
 
@@ -158,12 +159,23 @@ async def get_track_audio(
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
     
-    if not track.storage_path or not os.path.exists(track.storage_path):
-        raise HTTPException(status_code=404, detail="Audio file not found on disk")
+    if not track.storage_path:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+        
+    serve_path = track.storage_path
+    
+    if serve_path.startswith("/") and os.path.exists(serve_path):
+        pass # Local file exists
+    else:
+        try:
+            storage_service = get_storage_service()
+            serve_path = storage_service.resolve_artifact_path(serve_path)
+        except StorageNotFoundError:
+            raise HTTPException(status_code=404, detail="Audio file not found in storage")
 
     # Serve the file (supports 206 Partial Content automatically for range requests if appropriate)
     return FileResponse(
-        path=track.storage_path, 
+        path=serve_path, 
         media_type="audio/wav" if track.file_type == ".wav" else "audio/mpeg",
         filename=track.name
     )
