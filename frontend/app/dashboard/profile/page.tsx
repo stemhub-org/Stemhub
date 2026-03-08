@@ -72,14 +72,9 @@ export default function ProfilePage() {
 
     useEffect(() => {
         const fetchUser = async () => {
-            const token = localStorage.getItem("token");
-
             try {
                 const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
                 const response = await fetch(`${apiUrl}/auth/me`, {
-                    headers: token ? {
-                        "Authorization": `Bearer ${token}`
-                    } : {},
                     credentials: "include"
                 });
 
@@ -98,7 +93,6 @@ export default function ProfilePage() {
                     genres: data.genres || []
                 });
             } catch (err) {
-                localStorage.removeItem("token");
                 router.push("/login");
             } finally {
                 setLoading(false);
@@ -152,15 +146,12 @@ export default function ProfilePage() {
     const handleUpdateProfile = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
-        const token = localStorage.getItem("token");
-
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
             const response = await fetch(`${apiUrl}/auth/me`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
-                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify(editForm),
                 credentials: "include"
@@ -183,15 +174,12 @@ export default function ProfilePage() {
 
     const handleSaveGenres = async () => {
         setIsSaving(true);
-        const token = localStorage.getItem("token");
-
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
             const response = await fetch(`${apiUrl}/auth/me`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
-                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({ genres: editForm.genres }),
                 credentials: "include"
