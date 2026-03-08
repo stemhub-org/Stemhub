@@ -147,20 +147,42 @@ async def get_track_audio(
     Stream the actual audio file for a given track.
     """
     result = await db.execute(
-        select(Track).join(Version).join(Branch).join(Project).where(
+        select(Track, Project)
+        .join(Version, Track.version_id == Version.id)
+        .join(Branch, Version.branch_id == Branch.id)
+        .join(Project, Branch.project_id == Project.id)
+        .where(
             Track.id == track_id,
-            Project.owner_id == current_user.id,
             Version.is_deleted == False,
             Branch.is_deleted == False,
             Project.is_deleted == False,
         )
     )
-    track = result.scalars().first()
-    if not track:
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Track not found")
+        
+    track, project = row
     
+    # Access check: owner or collaborator
+    owner_id_str = str(project.owner_id).lower().strip()
+    user_id_str = str(current_user.id).lower().strip()
+    is_owner = owner_id_str == user_id_str
+    
+    if not is_owner:
+        from stemhub.models import Collaborator
+        collab_result = await db.execute(
+            select(Collaborator).where(
+                Collaborator.project_id == project.id,
+                Collaborator.user_id == current_user.id,
+            )
+        )
+        if not collab_result.scalars().first():
+            detail = f"Access denied for user {user_id_str} on project {project.id}"
+            raise HTTPException(status_code=403, detail=detail)
+
     if not track.storage_path:
-        raise HTTPException(status_code=404, detail="Audio file not found")
+        raise HTTPException(status_code=404, detail="Audio file empty storage")
         
     serve_path = track.storage_path
     
