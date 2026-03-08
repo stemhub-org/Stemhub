@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Eye, Heart } from "lucide-react";
+import { Heart } from "lucide-react";
 import { AudioUploadButton } from "./AudioUploadButton";
 
 interface RepositoryPageHeaderProps {
