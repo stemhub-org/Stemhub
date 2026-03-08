@@ -128,6 +128,8 @@ class TrackCreate(TrackBase):
 class TrackResponse(TrackBase):
     id: UUID
     version_id: UUID
+    storage_path: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
