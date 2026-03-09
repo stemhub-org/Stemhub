@@ -11,6 +11,7 @@ from stemhub.database import get_db
 from stemhub.models import Track, Version, Branch, Project, User
 from stemhub.schemas import TrackCreate, TrackResponse
 from stemhub.auth import get_current_user
+from stemhub.storage import get_storage_service, StorageNotFoundError
 
 router = APIRouter(tags=["tracks"])
 
@@ -146,24 +147,57 @@ async def get_track_audio(
     Stream the actual audio file for a given track.
     """
     result = await db.execute(
-        select(Track).join(Version).join(Branch).join(Project).where(
+        select(Track, Project)
+        .join(Version, Track.version_id == Version.id)
+        .join(Branch, Version.branch_id == Branch.id)
+        .join(Project, Branch.project_id == Project.id)
+        .where(
             Track.id == track_id,
-            Project.owner_id == current_user.id,
             Version.is_deleted == False,
             Branch.is_deleted == False,
             Project.is_deleted == False,
         )
     )
-    track = result.scalars().first()
-    if not track:
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Track not found")
+        
+    track, project = row
     
-    if not track.storage_path or not os.path.exists(track.storage_path):
-        raise HTTPException(status_code=404, detail="Audio file not found on disk")
+    # Access check: owner or collaborator
+    owner_id_str = str(project.owner_id).lower().strip()
+    user_id_str = str(current_user.id).lower().strip()
+    is_owner = owner_id_str == user_id_str
+    
+    if not is_owner:
+        from stemhub.models import Collaborator
+        collab_result = await db.execute(
+            select(Collaborator).where(
+                Collaborator.project_id == project.id,
+                Collaborator.user_id == current_user.id,
+            )
+        )
+        if not collab_result.scalars().first():
+            detail = f"Access denied for user {user_id_str} on project {project.id}"
+            raise HTTPException(status_code=403, detail=detail)
+
+    if not track.storage_path:
+        raise HTTPException(status_code=404, detail="Audio file empty storage")
+        
+    serve_path = track.storage_path
+    
+    if serve_path.startswith("/") and os.path.exists(serve_path):
+        pass # Local file exists
+    else:
+        try:
+            storage_service = get_storage_service()
+            serve_path = storage_service.resolve_artifact_path(serve_path)
+        except StorageNotFoundError:
+            raise HTTPException(status_code=404, detail="Audio file not found in storage")
 
     # Serve the file (supports 206 Partial Content automatically for range requests if appropriate)
     return FileResponse(
-        path=track.storage_path, 
+        path=serve_path, 
         media_type="audio/wav" if track.file_type == ".wav" else "audio/mpeg",
         filename=track.name
     )

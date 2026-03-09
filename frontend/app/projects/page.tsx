@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { Loader2, Settings, Code2 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import { RepositoryHeader } from "./components/RepositoryHeader";
 import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
@@ -22,6 +22,7 @@ import type {
     ActivityStatsResponse,
     TopContributorsResponse,
 } from "@/types/project";
+import { ProjectSettings } from "./components/ProjectSettings";
 
 const cardHoverDark =
     "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
@@ -44,19 +45,23 @@ function RepositoryPageContent() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedBranch, setSelectedBranch] = useState<string>("");
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<"Code" | "Settings">("Code");
 
     const fetchData = useCallback(async (projectId: string) => {
         setIsLoading(true);
         setError(null);
         try {
-            const [summaryData, activityData, contributorsData] = await Promise.all([
+            const [summaryData, activityData, contributorsData, userData] = await Promise.all([
                 authFetch<ProjectSummaryResponse>(`/projects/${projectId}/summary`),
                 authFetch<ActivityStatsResponse>(`/projects/${projectId}/stats/activity`),
                 authFetch<TopContributorsResponse>(`/projects/${projectId}/stats/top-contributors`),
+                authFetch<any>(`/auth/me`),
             ]);
             setSummary(summaryData);
             setActivity(activityData);
             setContributors(contributorsData);
+            setCurrentUserId(userData.id);
             if (summaryData.branches.length > 0 && !selectedBranch) {
                 setSelectedBranch(summaryData.branches[0].name);
             }
@@ -66,6 +71,40 @@ function RepositoryPageContent() {
             setIsLoading(false);
         }
     }, [selectedBranch]);
+
+    const handleDeleteBranch = async (branchId: string) => {
+        try {
+            await authFetch(`/branches/${branchId}`, { method: "DELETE" });
+            if (projectId) fetchData(projectId);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : "Failed to delete branch");
+        }
+    };
+
+    const handleCreateBranch = async (branchName: string) => {
+        if (!projectId) return;
+        try {
+            await authFetch(`/projects/${projectId}/branches/`, {
+                method: "POST",
+                body: JSON.stringify({ name: branchName }),
+            });
+            setSelectedBranch(branchName);
+            fetchData(projectId);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : "Failed to create branch");
+            throw err;
+        }
+    };
+
+    const handleDeleteTrack = async (trackId: string) => {
+        if (!projectId) return;
+        try {
+            await authFetch(`/tracks/${trackId}`, { method: "DELETE" });
+            fetchData(projectId);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : "Failed to delete track");
+        }
+    };
 
     useEffect(() => {
         if (projectId) {
@@ -152,52 +191,103 @@ function RepositoryPageContent() {
                     />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4">
-                    <RepositoryBranchBar
-                        branches={summary.branches}
-                        selectedBranch={selectedBranch}
-                        onBranchChange={setSelectedBranch}
-                    />
+                <div className="flex border-b border-border-subtle mt-2 mb-6 gap-6 px-2">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("Code")}
+                        className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors ${
+                            activeTab === "Code"
+                                ? "border-accent text-foreground"
+                                : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
+                        }`}
+                    >
+                        <Code2 className="size-4" />
+                        Code
+                    </button>
+                    {currentUserId && summary.project.owner.id === currentUserId && (
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("Settings")}
+                            className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors ${
+                                activeTab === "Settings"
+                                    ? "border-accent text-foreground"
+                                    : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
+                            }`}
+                        >
+                            <Settings className="size-4" />
+                            Settings
+                        </button>
+                    )}
                 </div>
 
-                <motion.main
-                    className="flex items-start gap-6"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.3 }}
-                >
-                    <section className="flex min-w-0 flex-1 flex-col gap-6 self-start">
-                        <div className={cardClass}>
-                            <div className="p-8">
-                                <RepositoryAudioPlayer track={summary.tracks?.[0]} />
-                            </div>
+                {activeTab === "Code" && (
+                    <>
+                        <div className="flex flex-wrap items-center gap-4 mb-6">
+                            <RepositoryBranchBar
+                                branches={summary.branches}
+                                selectedBranch={selectedBranch}
+                                onBranchChange={setSelectedBranch}
+                                isOwner={currentUserId === summary.project.owner.id}
+                                onDelete={handleDeleteBranch}
+                                onCreate={currentUserId === summary.project.owner.id ? handleCreateBranch : undefined}
+                            />
                         </div>
-                        <div className={`${cardClass} p-6`}>
-                            <QuickExport track={summary.tracks?.[0]} />
-                        </div>
-                        <div className={`${cardClass} p-6`}>
-                            <RecentChanges versions={summary.recent_versions} projectId={projectId} />
-                        </div>
-                    </section>
 
-                    <aside className="w-[28rem] shrink-0 flex flex-col gap-6">
-                        <div className={`${cardClass} overflow-hidden`}>
-                            <RepositoryFileList tracks={summary.tracks} />
-                        </div>
-                        <div className={`${cardClass} p-6 overflow-hidden`}>
-                            <ContributionActivity
-                                dailyActivity={activity?.daily_activity || []}
-                                totalCommits={activity?.total_commits || 0}
-                                totalContributors={activity?.total_contributors || 0}
-                            />
-                        </div>
-                        <div className={`${cardClass} p-6 overflow-hidden`}>
-                            <TopContributors
-                                contributors={contributors?.contributors || []}
-                            />
-                        </div>
-                    </aside>
-                </motion.main>
+                        <motion.main
+                            className="flex items-start gap-6"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            <section className="flex min-w-0 flex-1 flex-col gap-6 self-start">
+                                <div className={cardClass}>
+                                    <div className="p-8">
+                                        <RepositoryAudioPlayer track={summary.tracks?.[0]} />
+                                    </div>
+                                </div>
+                                <div className={`${cardClass} p-6`}>
+                                    <QuickExport track={summary.tracks?.[0]} />
+                                </div>
+                                <div className={`${cardClass} p-6`}>
+                                    <RecentChanges versions={summary.recent_versions} projectId={projectId} />
+                                </div>
+                            </section>
+
+                            <aside className="w-[28rem] shrink-0 flex flex-col gap-6">
+                                <div className={`${cardClass} overflow-hidden`}>
+                                    <RepositoryFileList
+                                        tracks={summary.tracks}
+                                        isOwner={currentUserId === summary.project.owner.id}
+                                        onDeleteTrack={handleDeleteTrack}
+                                    />
+                                </div>
+                                <div className={`${cardClass} p-6 overflow-hidden`}>
+                                    <ContributionActivity
+                                        dailyActivity={activity?.daily_activity || []}
+                                        totalCommits={activity?.total_commits || 0}
+                                        totalContributors={activity?.total_contributors || 0}
+                                    />
+                                </div>
+                                <div className={`${cardClass} p-6 overflow-hidden`}>
+                                    <TopContributors
+                                        contributors={contributors?.contributors || []}
+                                    />
+                                </div>
+                            </aside>
+                        </motion.main>
+                    </>
+                )}
+
+                {activeTab === "Settings" && currentUserId && summary.project.owner.id === currentUserId && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className={`${cardClass} py-6`}
+                    >
+                        <ProjectSettings projectId={projectId!} ownerId={summary.project.owner.id} currentUserId={currentUserId} />
+                    </motion.div>
+                )}
             </div>
         </div>
     );

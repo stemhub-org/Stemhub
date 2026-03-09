@@ -128,6 +128,8 @@ class TrackCreate(TrackBase):
 class TrackResponse(TrackBase):
     id: UUID
     version_id: UUID
+    storage_path: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -135,7 +137,7 @@ class TrackResponse(TrackBase):
 # ── Collaborator Schemas ──
 
 class CollaboratorCreate(BaseModel):
-    user_id: UUID
+    username: str
     role: Optional[str] = "Viewer"
 
 class CollaboratorResponse(BaseModel):

@@ -45,20 +45,20 @@ async def add_collaborator(
     await _get_owned_project(project_id=project_id, current_user=current_user, db=db)
 
     # Check the target user exists
-    result = await db.execute(select(User).where(User.id == collab_in.user_id))
+    result = await db.execute(select(User).where(User.username == collab_in.username))
     target_user = result.scalars().first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Cannot add yourself as collaborator
-    if collab_in.user_id == current_user.id:
+    if target_user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot add yourself as a collaborator")
 
     # Check if already a collaborator
     existing = await db.execute(
         select(Collaborator).where(
             Collaborator.project_id == project_id,
-            Collaborator.user_id == collab_in.user_id,
+            Collaborator.user_id == target_user.id,
         )
     )
     if existing.scalars().first():
@@ -66,7 +66,7 @@ async def add_collaborator(
 
     db_collab = Collaborator(
         project_id=project_id,
-        user_id=collab_in.user_id,
+        user_id=target_user.id,
         role=collab_in.role or "Viewer",
     )
     db.add(db_collab)
@@ -79,7 +79,7 @@ async def add_collaborator(
         .options(selectinload(Collaborator.user))
         .where(
             Collaborator.project_id == project_id,
-            Collaborator.user_id == collab_in.user_id,
+            Collaborator.user_id == target_user.id,
         )
     )
     return result.scalars().first()

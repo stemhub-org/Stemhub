@@ -111,7 +111,7 @@ async def callback_google(request: Request, code: str, state: str | None = None,
         return response
 
 @router.post("/register", response_model=UserResponse)
-async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(user: UserCreate, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
     result_email = await db.execute(select(User).where(User.email == user.email))
     if result_email.scalars().first():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -125,10 +125,22 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
+    
+    # Set cookie on registration too
+    access_token = create_access_token(data={"sub": db_user.email})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=3600 * 24 * 7,
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
+    
     return db_user
 
 @router.post("/swagger-login", response_model=Token)
-async def swagger_login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     # Swagger sends the user input in the "username" field, but we log in with email
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalars().first()
@@ -139,10 +151,20 @@ async def swagger_login(form_data: OAuth2PasswordRequestForm = Depends(), db: As
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token(data={"sub": user.email})
+    
+    # Also set cookie for easier testing even in Swagger
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=3600 * 24, # 24 hours
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
-async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(credentials: LoginRequest, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == credentials.email))
     user = result.scalars().first()
     if not user or not verify_password(credentials.password, user.password_hash):
@@ -153,13 +175,38 @@ async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
         )
     
     access_token = create_access_token(data={"sub": user.email})
+    
+    # Set HttpOnly Cookie
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=3600 * 24 * 7, # 7 days
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
+    
     return {"access_token": access_token, "token_type": "bearer"}
 
-async def get_current_user(request: Request, token: str | None = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+@router.post("/logout")
+async def logout(response: RedirectResponse):
+    response.delete_cookie("access_token")
+    return {"message": "Logged out successfully"}
+
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
+    # Order of priority for tokens:
+    # 1. Query parameter (explicitly passed, e.g. for audio)
+    # 2. HttpOnly Cookie (automatic session)
+    # 3. Authorization Header (Standard/Swagger)
+    
+    token = request.query_params.get("token")
     if not token:
         token = request.cookies.get("access_token")
     if not token:
-        token = request.query_params.get("token")
+        # Fallback to header if neither cookie nor query param exists
+        header_auth = request.headers.get("Authorization")
+        if header_auth and header_auth.startswith("Bearer "):
+            token = header_auth.split(" ")[1]
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

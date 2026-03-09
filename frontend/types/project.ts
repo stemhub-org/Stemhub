@@ -30,6 +30,7 @@ export interface Track {
     name: string;
     file_type: string;
     storage_path: string | null;
+    created_at: string | null;
 }
 
 // ── Project detail ──
@@ -49,6 +50,20 @@ export interface ProjectSummaryResponse {
     branches: Branch[];
     recent_versions: VersionWithAuthor[];
     tracks: Track[];
+}
+
+// ── Collaborators ──
+export interface Collaborator {
+    project_id: string;
+    user_id: string;
+    role: string;
+    created_at: string;
+    user: {
+        id: string;
+        email: string;
+        username: string;
+        avatar_url: string | null;
+    } | null;
 }
 
 // ── Activity stats ──
