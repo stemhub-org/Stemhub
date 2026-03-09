@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect, useRef, ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     User,
@@ -13,7 +14,7 @@ import {
     Trash2,
     ShieldAlert,
     CheckCircle2,
-    Github
+    Loader2
 } from "lucide-react";
 
 const TABS = [
@@ -26,6 +27,39 @@ const TABS = [
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState("profile");
+    const [user, setUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
+
+    const fetchUser = async () => {
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const response = await fetch(`${apiUrl}/auth/me`, {
+                credentials: "include"
+            });
+            if (!response.ok) {
+                throw new Error("Session expirée");
+            }
+            const data = await response.json();
+            setUser(data);
+        } catch (err) {
+            router.push("/login");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUser();
+    }, [router]);
+
+    if (loading) {
+        return (
+            <div className="flex h-[50vh] items-center justify-center">
+                <Loader2 size={32} className="animate-spin text-accent" />
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto space-y-10 pb-12">
@@ -58,8 +92,8 @@ export default function SettingsPage() {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-light ${isActive
-                                        ? "bg-accent/10 text-accent font-medium border border-accent/20"
-                                        : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground border border-transparent"
+                                    ? "bg-accent/10 text-accent font-medium border border-accent/20"
+                                    : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground border border-transparent"
                                     }`}
                             >
                                 <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
@@ -77,11 +111,11 @@ export default function SettingsPage() {
                     className="flex-1 rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 backdrop-blur-xl p-8 min-h-[500px]"
                 >
                     <AnimatePresence mode="wait">
-                        {activeTab === "profile" && <ProfileSettings key="profile" />}
-                        {activeTab === "account" && <AccountSettings key="account" />}
-                        {activeTab === "integrations" && <IntegrationSettings key="integrations" />}
-                        {activeTab === "storage" && <StorageSettings key="storage" />}
-                        {activeTab === "notifications" && <NotificationSettings key="notifications" />}
+                        {activeTab === "profile" && <ProfileSettings key="profile" user={user} onUpdate={fetchUser} />}
+                        {activeTab === "account" && <AccountSettings key="account" user={user} />}
+                        {activeTab === "integrations" && <IntegrationSettings key="integrations" user={user} />}
+                        {activeTab === "storage" && <StorageSettings key="storage" user={user} />}
+                        {activeTab === "notifications" && <NotificationSettings key="notifications" user={user} />}
                     </AnimatePresence>
                 </motion.div>
             </div>
@@ -89,7 +123,50 @@ export default function SettingsPage() {
     );
 }
 
-function ProfileSettings() {
+function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }) {
+    const [form, setForm] = useState({
+        username: user?.username || "",
+        avatar_url: user?.avatar_url || "",
+        bio: user?.bio || "",
+        location: user?.location || "",
+        website: user?.website || ""
+    });
+    const [isSaving, setIsSaving] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setForm(f => ({ ...f, avatar_url: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const res = await fetch(`${apiUrl}/auth/me`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(form),
+                credentials: "include"
+            });
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.detail || "Error updating profile");
+            }
+            onUpdate();
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -104,21 +181,28 @@ function ProfileSettings() {
             </div>
 
             <div className="flex items-center gap-6 pb-6 border-b border-foreground/5">
-                <div className="h-24 w-24 rounded-full bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/20 flex items-center justify-center relative overflow-hidden group cursor-pointer">
-                    <User size={32} className="text-accent/50" />
-                    <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <UploadCloud size={20} className="text-accent mb-1" />
-                        <span className="text-[10px] font-medium text-accent">Upload</span>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    className="hidden"
+                />
+                <div onClick={() => fileInputRef.current?.click()} className="h-24 w-24 rounded-full bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/20 flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer bg-cover bg-center" style={{ backgroundImage: form.avatar_url ? `url(${form.avatar_url})` : 'none' }}>
+                    {!form.avatar_url && <User size={32} className="text-accent/50 group-hover:opacity-0 transition-opacity" />}
+                    <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <UploadCloud size={20} className="text-white mb-1" />
+                        <span className="text-[10px] font-medium text-white">Upload</span>
                     </div>
                 </div>
                 <div>
                     <h3 className="text-sm font-medium mb-1">Profile Picture</h3>
                     <p className="text-xs text-foreground/50 font-light mb-3">JPEG, PNG, or WEBP. Max 2MB.</p>
                     <div className="flex gap-3">
-                        <button className="px-4 py-2 rounded-lg bg-foreground/5 hover:bg-foreground/10 text-xs font-medium transition-colors border border-foreground/10">
+                        <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 rounded-lg bg-foreground/5 hover:bg-foreground/10 text-xs font-medium transition-colors border border-foreground/10">
                             Change
                         </button>
-                        <button className="px-4 py-2 rounded-lg text-red-400 hover:bg-red-400/10 text-xs font-medium transition-colors">
+                        <button onClick={() => setForm(f => ({ ...f, avatar_url: "" }))} className="px-4 py-2 rounded-lg text-red-400 hover:bg-red-400/10 text-xs font-medium transition-colors">
                             Remove
                         </button>
                     </div>
@@ -130,15 +214,28 @@ function ProfileSettings() {
                     <label className="text-sm font-medium text-foreground/80">Username</label>
                     <input
                         type="text"
-                        defaultValue="erwan_prod"
+                        value={form.username}
+                        onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                         className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Artist Name</label>
+                    <label className="text-sm font-medium text-foreground/80">Location</label>
                     <input
                         type="text"
-                        defaultValue="Erwan S."
+                        value={form.location}
+                        onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                        placeholder="e.g. Paris, France"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground/80">Website</label>
+                    <input
+                        type="url"
+                        value={form.website}
+                        onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
+                        placeholder="https://yourwebsite.com"
                         className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
@@ -146,22 +243,25 @@ function ProfileSettings() {
                     <label className="text-sm font-medium text-foreground/80">Bio</label>
                     <textarea
                         rows={4}
-                        defaultValue="Electronic music producer based in Paris. Specializing in Synthwave and Cyberpunk aesthetics."
+                        value={form.bio}
+                        onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
+                        placeholder="Electronic music producer..."
                         className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all resize-none"
                     />
                 </div>
             </div>
 
             <div className="pt-4 flex justify-end">
-                <button className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-white text-sm font-medium transition-all shadow-lg shadow-accent/20">
-                    <Save size={16} /> Save Changes
+                <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-white text-sm font-medium transition-all shadow-lg shadow-accent/20">
+                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    Save Changes
                 </button>
             </div>
         </motion.div>
     );
 }
 
-function AccountSettings() {
+function AccountSettings({ user }: { user: any }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -181,7 +281,7 @@ function AccountSettings() {
                     <div className="flex gap-4">
                         <input
                             type="email"
-                            defaultValue="erwan@stemhub.com"
+                            defaultValue={user?.email || ""}
                             disabled
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background/50 py-3 px-4 text-sm font-light text-foreground/60 cursor-not-allowed"
                         />
@@ -242,7 +342,7 @@ function AccountSettings() {
     );
 }
 
-function IntegrationSettings() {
+function IntegrationSettings({ user }: { user: any }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -277,27 +377,11 @@ function IntegrationSettings() {
                                     <CheckCircle2 size={10} /> Connected
                                 </span>
                             </div>
-                            <p className="text-xs text-foreground/50 font-light mt-0.5">erwan@stemhub.com</p>
+                            <p className="text-xs text-foreground/50 font-light mt-0.5">{user?.email || "Not linked"}</p>
                         </div>
                     </div>
                     <button className="text-xs font-medium text-foreground/50 hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-foreground/10 hover:bg-foreground/5">
                         Disconnect
-                    </button>
-                </div>
-
-                {/* GitHub disconnected state */}
-                <div className="flex items-center justify-between p-5 rounded-xl border border-foreground/[0.08] bg-background-secondary/20">
-                    <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-full bg-[#181717] flex items-center justify-center p-2 text-white">
-                            <Github size={24} />
-                        </div>
-                        <div>
-                            <h4 className="text-sm font-medium text-foreground/80">GitHub</h4>
-                            <p className="text-xs text-foreground/50 font-light mt-0.5">Link repositories directly</p>
-                        </div>
-                    </div>
-                    <button className="text-xs font-medium text-foreground transition-colors px-4 py-2 rounded-lg bg-foreground/5 hover:bg-foreground/10 border border-foreground/10">
-                        Connect
                     </button>
                 </div>
             </div>
@@ -348,7 +432,7 @@ function IntegrationSettings() {
     );
 }
 
-function StorageSettings() {
+function StorageSettings({ user }: { user: any }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -423,7 +507,7 @@ function StorageSettings() {
     );
 }
 
-function NotificationSettings() {
+function NotificationSettings({ user }: { user: any }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
