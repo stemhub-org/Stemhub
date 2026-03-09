@@ -113,25 +113,6 @@ class VersionResponse(VersionBase):
     class Config:
         from_attributes = True
 
-# ── Track Schemas ──
-
-class TrackBase(BaseModel):
-    name: str
-    file_type: str = ".json"
-    storage_path: Optional[str] = None
-
-class TrackCreate(TrackBase):
-    pass
-
-class TrackResponse(TrackBase):
-    id: UUID
-    version_id: UUID
-    storage_path: Optional[str] = None
-    created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
 # ── Collaborator Schemas ──
 
 class CollaboratorCreate(BaseModel):

@@ -107,7 +107,7 @@ async def list_projects(
 
 RECENT_VERSIONS_LIMIT = 10
 
-@router.get("/{project_id}", response_model=ProjectSummaryResponse)
+@router.get("/{project_id}/summary", response_model=ProjectSummaryResponse)
 async def get_project(
     project_id: UUID,
     branch_id: UUID | None = Query(default=None),

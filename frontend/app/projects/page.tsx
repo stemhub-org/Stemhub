@@ -54,8 +54,8 @@ function RepositoryPageContent() {
         setError(null);
         try {
             const summaryPath = branchId
-                ? `/projects/${projectId}?branch_id=${branchId}`
-                : `/projects/${projectId}`;
+                ? `/projects/${projectId}/summary?branch_id=${branchId}`
+                : `/projects/${projectId}/summary`;
             const [summaryData, activityData, contributorsData, userData] = await Promise.all([
                 authFetch<ProjectSummaryResponse>(summaryPath),
                 authFetch<ActivityStatsResponse>(`/projects/${projectId}/stats/activity`),

@@ -33,6 +33,44 @@ class StoredArtifact:
     checksum_sha256: str
 
 
+def _safe_filename(filename: str | None, fallback: str) -> str:
+    candidate = Path(filename).name if filename else ""
+    return candidate or fallback
+
+
+def _rewind_if_possible(source: BinaryIO) -> None:
+    if hasattr(source, "seek"):
+        source.seek(0)
+
+
+def _write_stream_and_hash(source: BinaryIO, destination: Path) -> tuple[int, str]:
+    checksum = hashlib.sha256()
+    size_bytes = 0
+
+    with destination.open("wb") as output:
+        while True:
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
+            checksum.update(chunk)
+            size_bytes += len(chunk)
+            output.write(chunk)
+
+    return size_bytes, checksum.hexdigest()
+
+
+def _delete_files_in_directory(directory: Path) -> bool:
+    if not directory.is_dir():
+        return False
+
+    deleted = False
+    for item in directory.iterdir():
+        if item.is_file():
+            item.unlink()
+            deleted = True
+    return deleted
+
+
 class StorageService(ABC):
     @abstractmethod
     def store_version_artifact(
@@ -114,11 +152,10 @@ class GCSStorageService(StorageService):
         filename: str,
         source: BinaryIO,
     ) -> StoredArtifact:
-        safe_filename = Path(filename).name or "snapshot.bin"
+        safe_filename = _safe_filename(filename, "snapshot.bin")
         artifact_path = self._build_artifact_path(project_id, branch_id, version_id, safe_filename)
 
-        if hasattr(source, "seek"):
-            source.seek(0)
+        _rewind_if_possible(source)
 
         blob = self._bucket.blob(artifact_path)
         
@@ -161,15 +198,14 @@ class GCSStorageService(StorageService):
         filename: str,
         source: BinaryIO,
     ) -> StoredArtifact:
-        safe_filename = Path(filename).name or "preview.wav"
+        safe_filename = _safe_filename(filename, "preview.wav")
         prefix = self._build_project_preview_prefix(project_id)
         artifact_path = f"{prefix}/{safe_filename}"
 
         for old_blob in self._client.list_blobs(self._bucket_name, prefix=f"{prefix}/"):
             old_blob.delete()
 
-        if hasattr(source, "seek"):
-            source.seek(0)
+        _rewind_if_possible(source)
 
         blob = self._bucket.blob(artifact_path)
         blob.upload_from_file(source)
@@ -246,7 +282,7 @@ class LocalFilesystemStorageService(StorageService):
         filename: str,
         source: BinaryIO,
     ) -> StoredArtifact:
-        safe_filename = Path(filename).name or "snapshot.bin"
+        safe_filename = _safe_filename(filename, "snapshot.bin")
         relative_path = (
             Path("projects")/ str(project_id)
             / "branches"/ str(branch_id)
@@ -256,25 +292,13 @@ class LocalFilesystemStorageService(StorageService):
         destination = self.root / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
 
-        checksum = hashlib.sha256()
-        size_bytes = 0
-
-        if hasattr(source, "seek"):
-            source.seek(0)
-
-        with destination.open("wb") as output:
-            while True:
-                chunk = source.read(1024 * 1024)
-                if not chunk:
-                    break
-                checksum.update(chunk)
-                size_bytes += len(chunk)
-                output.write(chunk)
+        _rewind_if_possible(source)
+        size_bytes, checksum_sha256 = _write_stream_and_hash(source, destination)
 
         return StoredArtifact(
             path=relative_path.as_posix(),
             size_bytes=size_bytes,
-            checksum_sha256=checksum.hexdigest(),
+            checksum_sha256=checksum_sha256,
         )
 
     def resolve_artifact_path(self, artifact_path: str) -> Path:
@@ -296,35 +320,21 @@ class LocalFilesystemStorageService(StorageService):
         filename: str,
         source: BinaryIO,
     ) -> StoredArtifact:
-        safe_filename = Path(filename).name or "preview.wav"
+        safe_filename = _safe_filename(filename, "preview.wav")
         relative_dir = Path("projects") / str(project_id) / "preview"
         preview_dir = self.root / relative_dir
         preview_dir.mkdir(parents=True, exist_ok=True)
 
-        for existing in preview_dir.iterdir():
-            if existing.is_file():
-                existing.unlink()
+        _delete_files_in_directory(preview_dir)
 
         destination = preview_dir / safe_filename
-        checksum = hashlib.sha256()
-        size_bytes = 0
-
-        if hasattr(source, "seek"):
-            source.seek(0)
-
-        with destination.open("wb") as output:
-            while True:
-                chunk = source.read(1024 * 1024)
-                if not chunk:
-                    break
-                checksum.update(chunk)
-                size_bytes += len(chunk)
-                output.write(chunk)
+        _rewind_if_possible(source)
+        size_bytes, checksum_sha256 = _write_stream_and_hash(source, destination)
 
         return StoredArtifact(
             path=(relative_dir / safe_filename).as_posix(),
             size_bytes=size_bytes,
-            checksum_sha256=checksum.hexdigest(),
+            checksum_sha256=checksum_sha256,
         )
 
     def has_project_preview(self, project_id: UUID) -> bool:
@@ -347,14 +357,7 @@ class LocalFilesystemStorageService(StorageService):
 
     def delete_project_preview(self, project_id: UUID) -> bool:
         preview_dir = self.root / "projects" / str(project_id) / "preview"
-        if not preview_dir.is_dir():
-            return False
-
-        deleted = False
-        for item in preview_dir.iterdir():
-            if item.is_file():
-                item.unlink()
-                deleted = True
+        deleted = _delete_files_in_directory(preview_dir)
 
         try:
             preview_dir.rmdir()

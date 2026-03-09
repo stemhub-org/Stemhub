@@ -54,7 +54,7 @@ function ProjectChangesContent() {
         (async () => {
             try {
                 const data = await authFetch<{ recent_versions: VersionWithAuthor[] }>(
-                    `/projects/${projectId}`
+                    `/projects/${projectId}/summary`
                 );
                 setVersions(data.recent_versions);
             } catch (err) {
