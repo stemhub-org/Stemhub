@@ -2,32 +2,7 @@
 
 import { Play, Pause } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
-import { Track } from "@/types/project";
-import { API_URL, authFetch } from "@/lib/api";
-
-function formatTimeAgo(dateString: string | null) {
-    if (!dateString) return "Unknown date";
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    if (seconds < 60) return "Just now";
-    
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-    
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days} day${days > 1 ? 's' : ''} ago`;
-    
-    const months = Math.floor(days / 30);
-    if (months < 12) return `${months} month${months > 1 ? 's' : ''} ago`;
-    
-    const years = Math.floor(months / 12);
-    return `${years} year${years > 1 ? 's' : ''} ago`;
-}
+import { authFetch } from "@/lib/api";
 
 function WaveformPlaceholder({ progress }: { progress: number }) {
     const bars = [
@@ -66,7 +41,12 @@ function WaveformPlaceholder({ progress }: { progress: number }) {
     );
 }
 
-export function RepositoryAudioPlayer({ track }: { track?: Track }) {
+interface RepositoryAudioPlayerProps {
+    projectId?: string | null;
+    hasPreview?: boolean;
+}
+
+export function RepositoryAudioPlayer({ projectId, hasPreview }: RepositoryAudioPlayerProps) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -74,19 +54,25 @@ export function RepositoryAudioPlayer({ track }: { track?: Track }) {
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!track) return;
+        if (!projectId || !hasPreview) {
+            setAudioUrl(null);
+            setIsPlaying(false);
+            setCurrentTime(0);
+            setDuration(0);
+            return;
+        }
 
         let objectUrl: string | null = null;
         
         async function loadAudio() {
             try {
-                // Fetch the audio file as a blob using our authenticated fetch
-                const response = await authFetch<Response>(`/tracks/${track!.id}/audio`);
+                const response = await authFetch<Response>(`/projects/${projectId}/preview`);
                 const blob = await response.blob();
                 objectUrl = URL.createObjectURL(blob);
                 setAudioUrl(objectUrl);
             } catch (err) {
                 console.error("Failed to load audio:", err);
+                setAudioUrl(null);
             }
         }
 
@@ -97,10 +83,10 @@ export function RepositoryAudioPlayer({ track }: { track?: Track }) {
                 URL.revokeObjectURL(objectUrl);
             }
         };
-    }, [track]);
+    }, [projectId, hasPreview]);
 
     const togglePlay = () => {
-        if (!audioRef.current || !track || !audioUrl) return;
+        if (!audioRef.current || !hasPreview || !audioUrl) return;
         if (isPlaying) {
             audioRef.current.pause();
         } else {
@@ -119,7 +105,7 @@ export function RepositoryAudioPlayer({ track }: { track?: Track }) {
 
     return (
         <div className="flex flex-col gap-6 relative">
-            {track && audioUrl && (
+            {hasPreview && audioUrl && (
                 <audio
                     ref={audioRef}
                     src={audioUrl}
@@ -133,16 +119,11 @@ export function RepositoryAudioPlayer({ track }: { track?: Track }) {
             <div>
                 <div className="flex items-center justify-between">
                     <p className="text-base font-medium text-foreground">
-                        {track ? "Track Preview" : "No Track Available"}
+                        {hasPreview ? "Project Preview" : "No Preview Available"}
                     </p>
-                    {track && track.created_at && (
-                        <p className="text-sm text-foreground/50">
-                            Uploaded {formatTimeAgo(track.created_at)}
-                        </p>
-                    )}
                 </div>
                 <p className="mt-0.5 text-sm text-foreground/70">
-                    {track ? track.name : "Upload an audio file to preview"}
+                    {hasPreview ? "Current project preview audio" : "Upload an audio file to add a project preview"}
                 </p>
             </div>
             <WaveformPlaceholder progress={progress} />
@@ -150,7 +131,7 @@ export function RepositoryAudioPlayer({ track }: { track?: Track }) {
                 <button
                     type="button"
                     onClick={togglePlay}
-                    disabled={!track}
+                    disabled={!hasPreview || !audioUrl}
                     className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label={isPlaying ? "Pause" : "Play"}
                 >
@@ -163,13 +144,13 @@ export function RepositoryAudioPlayer({ track }: { track?: Track }) {
                 <div className="min-w-0 flex-1">
                     <div className="h-1.5 w-full rounded-full bg-foreground/10 overflow-hidden relative" 
                          onClick={(e) => {
-                             if (!audioRef.current || !track) return;
+                             if (!audioRef.current || !hasPreview || !audioUrl) return;
                              const rect = e.currentTarget.getBoundingClientRect();
                              const x = e.clientX - rect.left;
                              const pct = x / rect.width;
                              audioRef.current.currentTime = pct * duration;
                          }}
-                         style={{ cursor: track ? 'pointer' : 'default' }}
+                         style={{ cursor: hasPreview && audioUrl ? 'pointer' : 'default' }}
                     >
                         <div 
                             className="h-full absolute left-0 top-0 rounded-full bg-accent" 

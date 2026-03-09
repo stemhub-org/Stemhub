@@ -6,8 +6,8 @@ import type { Branch } from "@/types/project";
 
 interface RepositoryBranchBarProps {
     branches: Branch[];
-    selectedBranch: string;
-    onBranchChange: (branchName: string) => void;
+    selectedBranchId: string;
+    onBranchChange: (branchId: string) => void;
     isOwner?: boolean;
     onDelete?: (branchId: string) => void;
     onCreate?: (branchName: string) => Promise<void>;
@@ -15,7 +15,7 @@ interface RepositoryBranchBarProps {
 
 export function RepositoryBranchBar({
     branches,
-    selectedBranch,
+    selectedBranchId,
     onBranchChange,
     isOwner,
     onDelete,
@@ -39,6 +39,8 @@ export function RepositoryBranchBar({
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    const selectedBranchName = branches.find((branch) => branch.id === selectedBranchId)?.name || "main";
+
     return (
         <div className="flex flex-wrap items-center gap-4">
             <div className="relative" ref={dropdownRef}>
@@ -51,7 +53,7 @@ export function RepositoryBranchBar({
                     aria-label="Sélectionner la branche"
                 >
                     <GitBranch className="size-4 text-foreground/60" aria-hidden />
-                    <span>{selectedBranch || "main"}</span>
+                    <span>{selectedBranchName}</span>
                     <ChevronDown
                         className={`size-4 text-foreground/60 transition-transform ${isOpen ? "rotate-180" : ""}`}
                         aria-hidden
@@ -67,10 +69,10 @@ export function RepositoryBranchBar({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        onBranchChange(branch.name);
+                                        onBranchChange(branch.id);
                                         setIsOpen(false);
                                     }}
-                                    className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors ${selectedBranch === branch.name ? "font-medium text-accent" : "text-foreground"}`}
+                                    className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors ${selectedBranchId === branch.id ? "font-medium text-accent" : "text-foreground"}`}
                                 >
                                     <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden />
                                     {branch.name}
