@@ -94,33 +94,23 @@ class GCSStorageService(StorageService):
     ) -> StoredArtifact:
         safe_filename = Path(filename).name or "snapshot.bin"
         artifact_path = self._build_artifact_path(project_id, branch_id, version_id, safe_filename)
-        checksum = hashlib.sha256()
-        size_bytes = 0
 
         if hasattr(source, "seek"):
             source.seek(0)
 
-        with tempfile.NamedTemporaryFile(delete=False) as buffer:
-            temp_path = Path(buffer.name)
-            while True:
-                chunk = source.read(1024 * 1024)
-                if not chunk:
-                    break
-                checksum.update(chunk)
-                size_bytes += len(chunk)
-                buffer.write(chunk)
-
-        try:
-            blob = self._bucket.blob(artifact_path)
-            blob.upload_from_filename(str(temp_path))
-        finally:
-            if temp_path.exists():
-                temp_path.unlink()
+        blob = self._bucket.blob(artifact_path)
+        
+        # Stream the file-like object directly to Google Cloud Storage
+        # This completely avoids writing the file to the local disk.
+        blob.upload_from_file(source)
+        
+        # Reload to get the size and hash computed by GCS
+        blob.reload()
 
         return StoredArtifact(
             path=self._to_reference_path(artifact_path),
-            size_bytes=size_bytes,
-            checksum_sha256=checksum.hexdigest(),
+            size_bytes=blob.size,
+            checksum_sha256=blob.md5_hash, # We use GCS's native md5_hash instead of calculating SHA256 manually
         )
 
     def resolve_artifact_path(self, artifact_path: str) -> Path:
