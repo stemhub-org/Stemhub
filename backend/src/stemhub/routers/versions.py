@@ -7,11 +7,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from stemhub.database import get_db
-from stemhub.models import Version, Branch, Project, User
+from stemhub.models import Collaborator, Version, Branch, Project, User
 from stemhub.schemas import VersionCreate, VersionResponse
 from stemhub.auth import get_current_user
 
 router = APIRouter(tags=["versions"])
+
+
+async def _can_access_project(
+    *,
+    project_id: UUID,
+    current_user: User,
+    db: AsyncSession,
+) -> bool:
+    project_result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.is_deleted == False,
+        )
+    )
+    project = project_result.scalars().first()
+    if not project:
+        return False
+
+    if project.owner_id == current_user.id:
+        return True
+
+    collaborator_result = await db.execute(
+        select(Collaborator).where(
+            Collaborator.project_id == project_id,
+            Collaborator.user_id == current_user.id,
+        )
+    )
+    return collaborator_result.scalars().first() is not None
 
 @router.post("/branches/{branch_id}/versions/", response_model=VersionResponse, status_code=status.HTTP_201_CREATED)
 async def create_version(
@@ -55,12 +83,14 @@ async def list_versions(
     result = await db.execute(
         select(Branch).join(Project).where(
             Branch.id == branch_id,
-            Project.owner_id == current_user.id,
             Branch.is_deleted == False,
             Project.is_deleted == False
         )
     )
-    if not result.scalars().first():
+    branch = result.scalars().first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found or you don't have access")
+    if not await _can_access_project(project_id=branch.project_id, current_user=current_user, db=db):
         raise HTTPException(status_code=404, detail="Branch not found or you don't have access")
 
     result_versions = await db.execute(select(Version).where(Version.branch_id == branch_id, Version.is_deleted == False))
@@ -76,16 +106,18 @@ async def get_version(
     Get a specific version by ID.
     """
     result = await db.execute(
-        select(Version).join(Branch).join(Project).where(
+        select(Version, Branch.project_id).join(Branch).join(Project).where(
             Version.id == version_id,
-            Project.owner_id == current_user.id,
             Version.is_deleted == False,
             Branch.is_deleted == False,
             Project.is_deleted == False
         )
     )
-    version = result.scalars().first()
-    if not version:
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Version not found")
+    version, project_id = row
+    if not await _can_access_project(project_id=project_id, current_user=current_user, db=db):
         raise HTTPException(status_code=404, detail="Version not found")
     return version
 

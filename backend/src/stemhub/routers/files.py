@@ -7,18 +7,19 @@ from sqlalchemy.future import select
 
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
-from stemhub.models import Branch, Project, User, Version
+from stemhub.models import Branch, Collaborator, Project, User, Version
 from stemhub.schemas import VersionResponse
 from stemhub.storage import StorageNotFoundError, StorageService, get_storage_service
 
 router = APIRouter(tags=["files"])
 
 
-async def _get_owned_version(
+async def _get_version_with_access(
     *,
     version_id: UUID,
     current_user: User,
     db: AsyncSession,
+    owner_only: bool = False,
 ) -> Version:
     result = await db.execute(
         select(Version, Branch, Project)
@@ -37,6 +38,20 @@ async def _get_owned_version(
         raise HTTPException(status_code=404, detail="Version not found")
 
     version, branch, project = row
+
+    if owner_only and project.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    if not owner_only and project.owner_id != current_user.id:
+        collab_result = await db.execute(
+            select(Collaborator).where(
+                Collaborator.project_id == project.id,
+                Collaborator.user_id == current_user.id,
+            )
+        )
+        if not collab_result.scalars().first():
+            raise HTTPException(status_code=404, detail="Version not found")
+
     version.branch = branch
     branch.project = project
     return version
@@ -50,7 +65,12 @@ async def upload_artifact(
     db: AsyncSession = Depends(get_db),
     storage: StorageService = Depends(get_storage_service),
 ):
-    version = await _get_owned_version(version_id=version_id, current_user=current_user, db=db)
+    version = await _get_version_with_access(
+        version_id=version_id,
+        current_user=current_user,
+        db=db,
+        owner_only=True,
+    )
 
     if not artifact.filename:
         raise HTTPException(status_code=400, detail="Uploaded artifact must include a filename")
@@ -85,7 +105,11 @@ async def download_artifact(
     db: AsyncSession = Depends(get_db),
     storage: StorageService = Depends(get_storage_service),
 ):
-    version = await _get_owned_version(version_id=version_id, current_user=current_user, db=db)
+    version = await _get_version_with_access(
+        version_id=version_id,
+        current_user=current_user,
+        db=db,
+    )
 
     if not version.artifact_path:
         raise HTTPException(status_code=404, detail="Version artifact not found")

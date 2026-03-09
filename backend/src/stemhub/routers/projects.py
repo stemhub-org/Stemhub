@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 from sqlalchemy.future import select
+from sqlalchemy import or_
 
 from sqlalchemy.orm import joinedload, selectinload
 from stemhub.database import get_db
@@ -99,9 +100,23 @@ async def list_projects(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    List all projects owned by the current user.
+    List all projects the current user can access (owner or collaborator).
     """
-    result = await db.execute(select(Project).where(Project.owner_id == current_user.id, Project.is_deleted == False))
+    result = await db.execute(
+        select(Project)
+        .outerjoin(
+            Collaborator,
+            Collaborator.project_id == Project.id,
+        )
+        .where(
+            Project.is_deleted == False,
+            or_(
+                Project.owner_id == current_user.id,
+                Collaborator.user_id == current_user.id,
+            ),
+        )
+        .distinct()
+    )
     projects = result.scalars().all()
     return projects
 
