@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useState, useEffect } from "react";
 import {
     LayoutDashboard,
     Compass,
@@ -28,7 +29,13 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
     const pathname = usePathname();
     const router = useRouter();
     const { resolvedTheme } = useTheme();
-    const isLight = resolvedTheme === "light";
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    const isLight = mounted && resolvedTheme === "light";
 
     const handleLogout = async () => {
         try {
