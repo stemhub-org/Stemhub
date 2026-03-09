@@ -44,7 +44,7 @@ public:
     [[nodiscard]] juce::String getSelectedProjectId() const;
     void resized() override;
 
-    std::function<void()> onChooseProjectFile;
+    std::function<void()> onChooseProjectFolder;
     std::function<void()> onOpenProject;
     std::function<void()> onCreateProject;
     std::function<void()> onSignOut;
@@ -57,7 +57,7 @@ private:
     juce::Label projectFileLabel;
     juce::Label existingProjectsLabel;
     juce::ComboBox projectComboBox;
-    juce::TextButton chooseProjectFileButton { "Choose Project File" };
+    juce::TextButton chooseProjectFileButton { "Choose Project Folder" };
     juce::TextButton openProjectButton { "Open Project" };
     juce::TextButton createProjectButton { "Create Project" };
     juce::TextButton signOutButton { "Sign Out" };
@@ -78,6 +78,8 @@ public:
     void setVersions(const std::vector<juce::String>& versionLabels,
                      const std::vector<juce::String>& versionIds,
                      const juce::String& selectedVersionId);
+    void setPackagedFiles(const juce::String& rootLabel,
+                          const std::vector<juce::String>& relativeFilePaths);
     [[nodiscard]] juce::String getSelectedBranchId() const;
     [[nodiscard]] juce::String getSelectedVersionId() const;
     [[nodiscard]] juce::String getCommitMessage() const noexcept { return commitMessageInput.getText().trim(); }
@@ -108,8 +110,10 @@ private:
     juce::TextButton backToProjectsButton { "< Projects" };
     juce::TextEditor commitMessageInput;
     juce::TextButton saveChanges { "Save" };
-    juce::TextButton syncButton { "Refresh History" };
-    juce::TextButton changeBranch { "Load Branch" };
+    juce::TextButton syncButton { "Pull" };
+    juce::TextButton changeBranch { "Load" };
     juce::TextButton signOutButton { "Sign Out" };
-    juce::TextButton restoreButton { "Restore Selected Version" };
+    juce::TextButton restoreButton { "Restore" };
+    juce::Label packagedFilesLabel;
+    juce::TreeView packagedFilesTree;
 };

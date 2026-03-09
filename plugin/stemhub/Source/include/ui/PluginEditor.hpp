@@ -22,7 +22,7 @@ private:
     void refreshSessionUi();
     void refreshProjectSelectionUi();
     void refreshDashboardUi();
-    void handleChooseProjectFileClick();
+    void handleChooseProjectFolderClick();
     void handleOpenProjectClick();
     void handleCreateProjectClick();
     void handleSignInClick();
@@ -34,8 +34,6 @@ private:
     void handleBackToProjectsClick();
     void handleRestoreClick();
 
-    void launchProjectFileChooser(const juce::String& title,
-                                  std::function<void(const juce::File&)> onFileChosen);
     void launchProjectFolderChooser(const juce::String& title,
                                    std::function<void(const juce::File&)> onFolderChosen);
     void triggerPushVersion(const juce::String& commitMessage);

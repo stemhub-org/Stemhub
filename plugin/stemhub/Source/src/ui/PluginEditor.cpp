@@ -1,10 +1,14 @@
 #include "ui/PluginEditor.hpp"
+#include <algorithm>
+#include <array>
 
 namespace
 {
 constexpr auto kDefaultCommitMessage = "Save from plugin";
 constexpr auto kDawName = "FL Studio";
-constexpr auto kProjectFilePattern = "*.flp;*.als";
+constexpr std::array<const char*, 9> kBundledAssetExtensions = {
+    "wav", "mp3", "flac", "ogg", "aiff", "aif", "m4a", "mid", "midi"
+};
 
 juce::String getLoginMessage(const StemhubAudioProcessor& processor)
 {
@@ -26,7 +30,7 @@ juce::String getProjectSelectionMessage(const StemhubAudioProcessor& processor)
         return processor.getProjectSelectionStatusMessage();
 
     if (processor.getProjects().empty())
-        return "Choose a DAW file to create your first project.";
+        return "Choose a DAW project folder to create your first project.";
 
     return "Choose an existing project or create a new one.";
 }
@@ -65,6 +69,161 @@ juce::String formatVersionLabel(const VersionSummary& version)
 
 const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
 const auto kStemhubPurple = juce::Colour::fromRGB(0x9C, 0x57, 0xDF);
+
+bool isBackupPath(const juce::File& candidateFile, const juce::File& rootFolder)
+{
+    const auto relativePath = candidateFile.getRelativePathFrom(rootFolder).replaceCharacter('\\', '/');
+    if (relativePath.isEmpty())
+        return false;
+
+    juce::StringArray parts;
+    parts.addTokens(relativePath, "/", "");
+    for (int i = 0; i < parts.size() - 1; ++i)
+    {
+        if (parts[i].equalsIgnoreCase("backup"))
+            return true;
+    }
+
+    return false;
+}
+
+std::vector<juce::File> collectProjectFileCandidates(const juce::File& folder, bool recursive)
+{
+    std::vector<juce::File> candidates;
+    if (!folder.isDirectory())
+        return candidates;
+
+    juce::Array<juce::File> flpFiles;
+    juce::Array<juce::File> alsFiles;
+    folder.findChildFiles(flpFiles, juce::File::findFiles, recursive, "*.flp");
+    folder.findChildFiles(alsFiles, juce::File::findFiles, recursive, "*.als");
+
+    candidates.reserve(static_cast<size_t>(flpFiles.size() + alsFiles.size()));
+
+    for (const auto& file : flpFiles)
+    {
+        if (file.existsAsFile() && (!recursive || !isBackupPath(file, folder)))
+            candidates.push_back(file);
+    }
+
+    for (const auto& file : alsFiles)
+    {
+        if (file.existsAsFile() && (!recursive || !isBackupPath(file, folder)))
+            candidates.push_back(file);
+    }
+
+    return candidates;
+}
+
+int extensionPriority(const juce::File& file)
+{
+    return file.hasFileExtension("flp") ? 0 : 1;
+}
+
+juce::File chooseBestCandidate(const juce::File& folder, std::vector<juce::File> candidates)
+{
+    if (candidates.empty())
+        return {};
+
+    const auto folderName = folder.getFileName();
+    for (const auto& candidate : candidates)
+    {
+        if (candidate.getFileNameWithoutExtension().equalsIgnoreCase(folderName))
+            return candidate;
+    }
+
+    std::sort(candidates.begin(), candidates.end(), [](const juce::File& lhs, const juce::File& rhs)
+    {
+        const auto lhsPriority = extensionPriority(lhs);
+        const auto rhsPriority = extensionPriority(rhs);
+        if (lhsPriority != rhsPriority)
+            return lhsPriority < rhsPriority;
+
+        const auto lhsTime = lhs.getLastModificationTime().toMilliseconds();
+        const auto rhsTime = rhs.getLastModificationTime().toMilliseconds();
+        if (lhsTime != rhsTime)
+            return lhsTime > rhsTime;
+
+        return lhs.getFileName().compareNatural(rhs.getFileName()) < 0;
+    });
+
+    return candidates.front();
+}
+
+juce::File resolvePrimaryProjectFileFromFolder(const juce::File& folder)
+{
+    if (!folder.isDirectory())
+        return {};
+
+    auto topLevelCandidates = collectProjectFileCandidates(folder, false);
+    auto selectedCandidate = chooseBestCandidate(folder, std::move(topLevelCandidates));
+    if (selectedCandidate.existsAsFile())
+        return selectedCandidate;
+
+    auto recursiveCandidates = collectProjectFileCandidates(folder, true);
+    return chooseBestCandidate(folder, std::move(recursiveCandidates));
+}
+
+// Mirror the same root folder choice used by snapshot bundling so the UI preview matches saved artifacts.
+juce::File resolveBundleRootDirectory(const StemhubAudioProcessor& processor, const juce::File& effectiveProjectFile)
+{
+    const auto selectedFolder = processor.getSelectedProjectFolder();
+    if (selectedFolder.isDirectory())
+        return selectedFolder;
+
+    if (effectiveProjectFile.existsAsFile())
+        return effectiveProjectFile.getParentDirectory();
+
+    const auto pendingFolder = processor.getPendingProjectFolder();
+    if (pendingFolder.isDirectory())
+        return pendingFolder;
+
+    return {};
+}
+
+std::vector<juce::String> collectPackagedRelativeFilePaths(const juce::File& bundleRootDirectory,
+                                                           const juce::File& sourceProjectFile)
+{
+    std::vector<juce::String> relativePaths;
+    if (!bundleRootDirectory.isDirectory())
+        return relativePaths;
+
+    juce::Array<juce::File> discoveredFiles;
+    bundleRootDirectory.findChildFiles(discoveredFiles, juce::File::findFiles, true);
+    relativePaths.reserve(static_cast<size_t>(discoveredFiles.size()));
+
+    for (const auto& file : discoveredFiles)
+    {
+        if (!file.existsAsFile())
+            continue;
+
+        if (file != sourceProjectFile)
+        {
+            bool hasAllowedExtension = false;
+            for (const auto* ext : kBundledAssetExtensions)
+            {
+                if (file.hasFileExtension(ext))
+                {
+                    hasAllowedExtension = true;
+                    break;
+                }
+            }
+
+            if (!hasAllowedExtension || isBackupPath(file, bundleRootDirectory))
+                continue;
+        }
+
+        const auto relativePath = file.getRelativePathFrom(bundleRootDirectory).replaceCharacter('\\', '/');
+        if (relativePath.isNotEmpty())
+            relativePaths.push_back(relativePath);
+    }
+
+    std::sort(relativePaths.begin(), relativePaths.end(), [](const juce::String& lhs, const juce::String& rhs)
+    {
+        return lhs.compareNatural(rhs) < 0;
+    });
+    return relativePaths;
+}
 }
 
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
@@ -74,7 +233,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     setWantsKeyboardFocus(true);
     addKeyListener(this);
 
-    setSize(600, 400);
+    setSize(780, 430);
     audioProcessor.addChangeListener(this);
 
     addAndMakeVisible(loginView);
@@ -82,7 +241,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
     addAndMakeVisible(dashboardView);
 
     loginView.onSignIn = [this] { handleSignInClick(); };
-    projectSelectionView.onChooseProjectFile = [this] { handleChooseProjectFileClick(); };
+    projectSelectionView.onChooseProjectFolder = [this] { handleChooseProjectFolderClick(); };
     projectSelectionView.onOpenProject = [this] { handleOpenProjectClick(); };
     projectSelectionView.onCreateProject = [this] { handleCreateProjectClick(); };
     projectSelectionView.onSignOut = [this] { handleSignOutClick(); };
@@ -158,13 +317,24 @@ void StemhubAudioProcessorEditor::refreshProjectSelectionUi()
         projectIds.push_back(project.id);
     }
 
-    const auto hasSelectedProjectFile = audioProcessor.getPendingProjectFile().existsAsFile();
+    const auto pendingFolder = audioProcessor.getPendingProjectFolder();
+    const auto effectiveProjectFile = getEffectiveProjectFile();
+    const auto hasSelectedProjectFile = effectiveProjectFile.existsAsFile();
     projectSelectionView.setHasExistingProjects(!projects.empty());
     projectSelectionView.setCanCreateProject(hasSelectedProjectFile);
     projectSelectionView.setMessage(getProjectSelectionMessage(audioProcessor));
-    projectSelectionView.setSelectedProjectFileMessage(hasSelectedProjectFile
-        ? audioProcessor.getPendingProjectFile().getFullPathName()
-        : "No project file selected.");
+    if (pendingFolder.isDirectory())
+    {
+        const auto fileSuffix = hasSelectedProjectFile ? (" -> " + effectiveProjectFile.getFileName())
+                                                       : " (no .flp/.als found)";
+        projectSelectionView.setSelectedProjectFileMessage("Folder: " + pendingFolder.getFullPathName() + fileSuffix);
+    }
+    else
+    {
+        projectSelectionView.setSelectedProjectFileMessage(hasSelectedProjectFile
+            ? effectiveProjectFile.getFullPathName()
+            : "No project folder selected.");
+    }
     projectSelectionView.setProjects(projectNames,
                                      projectIds,
                                      audioProcessor.getSelectedProject() ? audioProcessor.getSelectedProject()->id : juce::String());
@@ -210,34 +380,21 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
     dashboardView.setSelectedProjectFileMessage(fileToDisplay.existsAsFile()
         ? fileToDisplay.getFullPathName()
         : "No project file selected.");
+
+    const auto bundleRootDirectory = resolveBundleRootDirectory(audioProcessor, fileToDisplay);
+    dashboardView.setPackagedFiles(bundleRootDirectory.getFullPathName(),
+                                   collectPackagedRelativeFilePaths(bundleRootDirectory, fileToDisplay));
 }
 
-void StemhubAudioProcessorEditor::handleChooseProjectFileClick()
+void StemhubAudioProcessorEditor::handleChooseProjectFolderClick()
 {
-    launchProjectFileChooser("Select a DAW project file", [this](const juce::File& file)
+    launchProjectFolderChooser("Select a DAW project folder", [this](const juce::File& folder)
     {
-        audioProcessor.setPendingProjectFile(file);
-    });
-}
+        audioProcessor.setPendingProjectFolder(folder);
 
-void StemhubAudioProcessorEditor::launchProjectFileChooser(const juce::String& title,
-                                                           std::function<void(const juce::File&)> onFileChosen)
-{
-    projectFileChooser = std::make_unique<juce::FileChooser>(
-        title,
-        audioProcessor.getPendingProjectFile(),
-        kProjectFilePattern);
-
-    constexpr auto flags = juce::FileBrowserComponent::openMode
-        | juce::FileBrowserComponent::canSelectFiles;
-
-    projectFileChooser->launchAsync(flags, [this, fileChosenCallback = std::move(onFileChosen)](const juce::FileChooser& chooser)
-    {
-        const auto file = chooser.getResult();
-        if (file.existsAsFile() && fileChosenCallback != nullptr)
-            fileChosenCallback(file);
-
-        projectFileChooser.reset();
+        const auto projectFile = resolvePrimaryProjectFileFromFolder(folder);
+        if (projectFile.existsAsFile())
+            audioProcessor.setPendingProjectFile(projectFile);
     });
 }
 
@@ -274,23 +431,34 @@ void StemhubAudioProcessorEditor::handleOpenProjectClick()
         return;
     }
 
-    const auto pendingFile = audioProcessor.getPendingProjectFile();
-    audioProcessor.requestOpenProject(projectId, pendingFile);
+    const auto projectFile = getEffectiveProjectFile();
+    if (!projectFile.existsAsFile())
+    {
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Open project",
+            "Choose a project folder containing a .flp or .als file first.");
+        return;
+    }
+
+    audioProcessor.setPendingProjectFile(projectFile);
+    audioProcessor.requestOpenProject(projectId, projectFile);
     refreshSessionUi();
 }
 
 void StemhubAudioProcessorEditor::handleCreateProjectClick()
 {
-    const auto selectedFile = audioProcessor.getPendingProjectFile();
+    const auto selectedFile = getEffectiveProjectFile();
     if (!selectedFile.existsAsFile())
     {
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::WarningIcon,
             "Create project",
-            "Choose a project file first.");
+            "Choose a project folder containing a .flp or .als file first.");
         return;
     }
 
+    audioProcessor.setPendingProjectFile(selectedFile);
     audioProcessor.requestCreateProject(selectedFile);
     refreshSessionUi();
 }
@@ -362,11 +530,24 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
         ? trimmedCommitMessage
         : juce::String(kDefaultCommitMessage);
 
-    if (!getEffectiveProjectFile().existsAsFile())
+    const auto effectiveProjectFile = getEffectiveProjectFile();
+    if (!effectiveProjectFile.existsAsFile())
     {
-        launchProjectFileChooser("Select a DAW project file before saving", [this, effectiveCommitMessage](const juce::File& file)
+        launchProjectFolderChooser("Select a project folder before saving", [this, effectiveCommitMessage](const juce::File& folder)
         {
-            audioProcessor.setPendingProjectFile(file);
+            audioProcessor.setPendingProjectFolder(folder);
+            const auto projectFile = resolvePrimaryProjectFileFromFolder(folder);
+            if (!projectFile.existsAsFile())
+            {
+                juce::AlertWindow::showMessageBoxAsync(
+                    juce::AlertWindow::WarningIcon,
+                    "Save version",
+                    "No .flp or .als file found in this folder.");
+                refreshSessionUi();
+                return;
+            }
+
+            audioProcessor.setPendingProjectFile(projectFile);
             triggerPushVersion(effectiveCommitMessage);
         });
 
@@ -374,6 +555,7 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
         return;
     }
 
+    audioProcessor.setPendingProjectFile(effectiveProjectFile);
     triggerPushVersion(effectiveCommitMessage);
 }
 
@@ -394,7 +576,11 @@ juce::File StemhubAudioProcessorEditor::getEffectiveProjectFile() const
     if (selectedProjectFile.existsAsFile())
         return selectedProjectFile;
 
-    return audioProcessor.getPendingProjectFile();
+    const auto pendingProjectFile = audioProcessor.getPendingProjectFile();
+    if (pendingProjectFile.existsAsFile())
+        return pendingProjectFile;
+
+    return resolvePrimaryProjectFileFromFolder(audioProcessor.getPendingProjectFolder());
 }
 
 void StemhubAudioProcessorEditor::handleSyncClick()
@@ -407,13 +593,7 @@ void StemhubAudioProcessorEditor::handleChangeBranchClick()
 {
     const auto selectedBranchId = dashboardView.getSelectedBranchId();
     if (selectedBranchId.isEmpty())
-    {
-        juce::AlertWindow::showMessageBoxAsync(
-            juce::AlertWindow::WarningIcon,
-            "Branch selection",
-            "Select a branch before loading history.");
         return;
-    }
 
     audioProcessor.requestSelectBranch(selectedBranchId);
     refreshSessionUi();

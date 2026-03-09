@@ -137,16 +137,72 @@ juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
     return juce::Result::ok();
 }
 
-void ensureSelectedProjectFile(juce::File& selectedFile,
-                               juce::File& selectedFolder,
-                               const juce::File& pendingFile,
-                               const juce::File& pendingFolder)
+juce::File resolveEffectiveProjectFile(const juce::File& selectedFile,
+                                       const juce::File& pendingFile)
 {
-    if (selectedFile.existsAsFile() || !pendingFile.existsAsFile())
-        return;
+    if (selectedFile.existsAsFile())
+        return selectedFile;
 
-    selectedFile = pendingFile;
-    selectedFolder = pendingFolder.exists() ? pendingFolder : selectedFile.getParentDirectory();
+    if (pendingFile.existsAsFile())
+        return pendingFile;
+
+    return {};
+}
+
+juce::File resolveEffectiveProjectFolder(const juce::File& selectedFolder,
+                                         const juce::File& pendingFolder,
+                                         const juce::File& effectiveProjectFile)
+{
+    if (selectedFolder.isDirectory())
+        return selectedFolder;
+
+    if (pendingFolder.isDirectory())
+        return pendingFolder;
+
+    if (effectiveProjectFile.existsAsFile())
+        return effectiveProjectFile.getParentDirectory();
+
+    return {};
+}
+
+juce::File findPreviewWavSource(const juce::File& projectRootDirectory)
+{
+    if (!projectRootDirectory.isDirectory())
+        return {};
+
+    juce::Array<juce::File> wavFiles;
+    projectRootDirectory.findChildFiles(wavFiles, juce::File::findFiles, true, "*.wav");
+
+    if (wavFiles.isEmpty())
+        return {};
+
+    std::sort(wavFiles.begin(), wavFiles.end(), [](const juce::File& lhs, const juce::File& rhs)
+    {
+        return lhs.getFullPathName() < rhs.getFullPathName();
+    });
+
+    return wavFiles[0];
+}
+
+juce::File copyPreviewTrackToTemp(const juce::File& sourceFile)
+{
+    if (!sourceFile.existsAsFile())
+        return {};
+
+    const auto tempRoot = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getChildFile("stemhub-previews");
+
+    if ((!tempRoot.exists() && !tempRoot.createDirectory()) || !tempRoot.isDirectory())
+        return {};
+
+    const auto previewFile = tempRoot.getChildFile("preview_" + juce::Uuid().toString() + ".wav");
+    if (previewFile.existsAsFile())
+        previewFile.deleteFile();
+
+    if (!sourceFile.copyFileTo(previewFile))
+        return {};
+
+    return previewFile;
 }
 
 }
@@ -421,6 +477,7 @@ StemhubAudioProcessor::BranchHistoryJobResult StemhubAudioProcessor::performFetc
 
 StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVersionRequest(
     const juce::File& projectFile,
+    const juce::File& projectRootDirectory,
     const std::optional<Project>& project,
     const juce::String& branchId,
     const juce::String& commitMessage,
@@ -440,6 +497,12 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
         return result;
     }
 
+    if (!projectRootDirectory.isDirectory())
+    {
+        result.errorMessage = "Choose a valid project folder before saving.";
+        return result;
+    }
+
     ProjectVersionContext context;
     context.projectId = project->id;
     context.branchId = branchId;
@@ -451,11 +514,14 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     request.commitMessage = commitMessage;
     request.dawName = dawName;
 
+    const auto sourcePreview = findPreviewWavSource(projectRootDirectory);
+    juce::File previewTrackFile = copyPreviewTrackToTemp(sourcePreview);
+
     SnapshotBundleRequest bundleRequest;
     bundleRequest.sourceProjectFile = projectFile;
     bundleRequest.sourceDaw = dawName;
-    bundleRequest.projectRootDirectory = selectedProjectFolder.exists() ? selectedProjectFolder
-                                                                        : projectFile.getParentDirectory();
+    bundleRequest.projectRootDirectory = projectRootDirectory;
+    bundleRequest.previewTrackFile = previewTrackFile;
 
     SnapshotBundler bundle;
     SnapshotBundleResult bundleOutput;
@@ -464,6 +530,8 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     if (bundleStatus.failed())
     {
         result.errorMessage = bundleStatus.getErrorMessage();
+        if (previewTrackFile.existsAsFile())
+            previewTrackFile.deleteFile();
         return result;
     }
 
@@ -477,14 +545,30 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
         result.errorMessage = pushResult.getErrorMessage();
         if (bundleOutput.bundleFile.existsAsFile())
             bundleOutput.bundleFile.deleteFile();
+        if (previewTrackFile.existsAsFile())
+            previewTrackFile.deleteFile();
         return result;
+    }
+
+    const auto pushedVersionId = versionControlService.getLastVersionId();
+    juce::String statusMessage = "Version pushed successfully.";
+    if (previewTrackFile.existsAsFile() && pushedVersionId.isNotEmpty())
+    {
+        const auto previewUploadResult = versionControlService.uploadVersionTrackAudio(
+            pushedVersionId,
+            previewTrackFile,
+            versionControlService.getAccessToken());
+        if (previewUploadResult.failed())
+            statusMessage = "Version pushed successfully. Preview upload failed: " + previewUploadResult.getErrorMessage();
     }
 
     if (bundleOutput.bundleFile.existsAsFile())
         bundleOutput.bundleFile.deleteFile();
+    if (previewTrackFile.existsAsFile())
+        previewTrackFile.deleteFile();
 
-    result.pushedVersionId = versionControlService.getLastVersionId();
-    result.activeProjectStatusMessage = "Version pushed successfully.";
+    result.pushedVersionId = pushedVersionId;
+    result.activeProjectStatusMessage = statusMessage;
     return result;
 }
 
@@ -616,7 +700,14 @@ void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
     }
 
     versionControlService.setLastVersionId(std::move(result.pushedVersionId));
-    activeProjectStatusMessage = "Version pushed successfully. Refreshing history...";
+    if (result.activeProjectStatusMessage.isNotEmpty())
+    {
+        activeProjectStatusMessage = result.activeProjectStatusMessage + " Refreshing history...";
+    }
+    else
+    {
+        activeProjectStatusMessage = "Version pushed successfully. Refreshing history...";
+    }
     requestRefreshVersionHistory();
 }
 
@@ -734,6 +825,7 @@ void StemhubAudioProcessor::setPendingProjectFile(const juce::File& file)
 void StemhubAudioProcessor::setPendingProjectFolder(const juce::File& folder)
 {
     pendingProjectFolder = folder;
+    pendingProjectFile = juce::File();
     sendChangeMessage();
 }
 
@@ -889,22 +981,29 @@ void StemhubAudioProcessor::requestRefreshVersionHistory()
 
 void StemhubAudioProcessor::requestPushVersion(juce::String commitMessage, juce::String dawName)
 {
-    ensureSelectedProjectFile(selectedProjectFile, selectedProjectFolder, pendingProjectFile, pendingProjectFolder);
-
     setOperationState(OperationState::committing);
     sendChangeMessage();
 
-    const auto projectFile = selectedProjectFile;
+    const auto projectFile = resolveEffectiveProjectFile(selectedProjectFile, pendingProjectFile);
+    const auto projectRootDirectory = resolveEffectiveProjectFolder(selectedProjectFolder,
+                                                                    pendingProjectFolder,
+                                                                    projectFile);
     const auto project = selectedProject;
     const auto branchId = selectedBranchId;
     enqueueBackgroundTask([this,
                            selectedFile = std::move(projectFile),
+                           selectedProjectRoot = std::move(projectRootDirectory),
                            project,
                            selectedBranch = std::move(branchId),
                            requestedCommitMessage = std::move(commitMessage),
                            requestedDawName = std::move(dawName)]() mutable -> BackgroundJobPayload
     {
-        return performPushVersionRequest(selectedFile, project, selectedBranch, requestedCommitMessage, requestedDawName);
+        return performPushVersionRequest(selectedFile,
+                                         selectedProjectRoot,
+                                         project,
+                                         selectedBranch,
+                                         requestedCommitMessage,
+                                         requestedDawName);
     });
 }
 

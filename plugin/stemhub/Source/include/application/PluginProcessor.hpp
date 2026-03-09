@@ -176,6 +176,7 @@ private:
                                                             const juce::String& preferredVersionId,
                                                             const juce::String& accessToken) const;
     PushVersionJobResult performPushVersionRequest(const juce::File& projectFile,
+                                                   const juce::File& projectRootDirectory,
                                                    const std::optional<Project>& project,
                                                    const juce::String& branchId,
                                                    const juce::String& commitMessage,

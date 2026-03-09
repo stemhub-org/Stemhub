@@ -101,6 +101,30 @@ juce::Result VersionControlService::pushVersion(const PushVersionRequest& reques
     return juce::Result::ok();
 }
 
+juce::Result VersionControlService::uploadVersionTrackAudio(const juce::String& versionId,
+                                                           const juce::File& trackFile,
+                                                           const juce::String& bearerToken) const
+{
+    if (versionId.isEmpty())
+        return juce::Result::fail("A version ID is required to upload a track.");
+
+    if (!trackFile.existsAsFile())
+        return juce::Result::fail("Track file does not exist.");
+
+    if (bearerToken.isEmpty())
+        return juce::Result::fail("An access token is required to upload tracks.");
+
+    const auto* api = getApiClient();
+    if (api == nullptr)
+        return juce::Result::fail("VersionControlService API client is not configured.");
+
+    const auto uploadResult = api->uploadFile("/versions/" + versionId + "/tracks/upload", trackFile, "file", bearerToken);
+    if (!uploadResult.ok())
+        return juce::Result::fail(buildApiErrorMessage(uploadResult.error, "Failed to upload preview track."));
+
+    return juce::Result::ok();
+}
+
 ApiResult<std::vector<VersionSummary>> VersionControlService::fetchVersionHistory(
     const juce::String& branchId,
     const juce::String& bearerToken) const
