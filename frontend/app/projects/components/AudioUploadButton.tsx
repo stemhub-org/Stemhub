@@ -23,7 +23,7 @@ export function AudioUploadButton({ versionId, onSuccess }: AudioUploadButtonPro
             const formData = new FormData();
             formData.append("file", file);
 
-            const response = await fetch(`${API_URL}/versions/${versionId}/tracks/upload`, {
+            const response = await fetch(`${API_URL}/versions/${versionId}/audio-stems`, {
                 method: "POST",
                 credentials: "include",
                 body: formData,

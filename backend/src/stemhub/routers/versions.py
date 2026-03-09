@@ -8,7 +8,7 @@ from sqlalchemy.future import select
 
 from stemhub.database import get_db
 from stemhub.models import Version, Branch, Project, User
-from stemhub.schemas import VersionCreate, VersionUpdate, VersionResponse
+from stemhub.schemas import VersionCreate, VersionResponse
 from stemhub.auth import get_current_user
 
 router = APIRouter(tags=["versions"])
@@ -87,37 +87,6 @@ async def get_version(
     version = result.scalars().first()
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
-    return version
-
-@router.put("/versions/{version_id}", response_model=VersionResponse)
-async def update_version(
-    version_id: UUID,
-    version_in: VersionUpdate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Update mutable version metadata.
-    """
-    result = await db.execute(
-        select(Version).join(Branch).join(Project).where(
-            Version.id == version_id,
-            Project.owner_id == current_user.id,
-            Version.is_deleted == False,
-            Branch.is_deleted == False,
-            Project.is_deleted == False
-        )
-    )
-    version = result.scalars().first()
-    if not version:
-        raise HTTPException(status_code=404, detail="Version not found")
-
-    update_data = version_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(version, field, value)
-
-    await db.commit()
-    await db.refresh(version)
     return version
 
 @router.delete("/versions/{version_id}", status_code=status.HTTP_204_NO_CONTENT)

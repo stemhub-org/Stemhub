@@ -8,6 +8,8 @@ This backend depends on `PyFLP_enhanced` through a Git submodule, so StemHub doe
 ./backend/scripts/bootstrap-backend.sh
 ```
 
+> **Note:** The backend no longer creates database tables automatically on startup. You must ensure all Alembic migrations are applied before starting the server. `bootstrap-backend.sh` handles this for local development.
+
 ## Artifact storage configuration
 
 The backend reads `STEMHUB_STORAGE_PROVIDER` from the environment:
