@@ -21,7 +21,7 @@ export function AudioUploadButton({ projectId, onSuccess }: AudioUploadButtonPro
             setIsUploading(true);
 
             const formData = new FormData();
-            formData.append("file", file);
+            formData.append("preview", file);
 
             const response = await fetch(`${API_URL}/projects/${projectId}/preview`, {
                 method: "POST",
