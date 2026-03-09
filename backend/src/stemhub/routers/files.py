@@ -43,7 +43,7 @@ async def _get_owned_version(
 
 
 @router.post("/versions/{version_id}/artifact", response_model=VersionResponse, status_code=status.HTTP_200_OK)
-async def upload_version_artifact(
+async def upload_artifact(
     version_id: UUID,
     artifact: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -79,7 +79,7 @@ async def upload_version_artifact(
 
 
 @router.get("/versions/{version_id}/artifact")
-async def download_version_artifact(
+async def download_artifact(
     version_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

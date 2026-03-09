@@ -53,7 +53,7 @@ function RepositoryPageContent() {
         setError(null);
         try {
             const [summaryData, activityData, contributorsData, userData] = await Promise.all([
-                authFetch<ProjectSummaryResponse>(`/projects/${projectId}/summary`),
+                authFetch<ProjectSummaryResponse>(`/projects/${projectId}`),
                 authFetch<ActivityStatsResponse>(`/projects/${projectId}/stats/activity`),
                 authFetch<TopContributorsResponse>(`/projects/${projectId}/stats/top-contributors`),
                 authFetch<any>(`/auth/me`),

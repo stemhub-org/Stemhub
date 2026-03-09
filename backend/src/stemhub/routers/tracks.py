@@ -41,26 +41,8 @@ async def _get_owned_version(
     return version
 
 
-@router.post("/versions/{version_id}/tracks/", response_model=TrackResponse, status_code=status.HTTP_201_CREATED)
-async def create_track(
-    version_id: UUID,
-    track_in: TrackCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Create a new track for a specific version.
-    """
-    await _get_owned_version(version_id=version_id, current_user=current_user, db=db)
-
-    track_data = track_in.model_dump(exclude_none=True)
-    db_track = Track(**track_data, version_id=version_id)
-    db.add(db_track)
-    await db.commit()
-    await db.refresh(db_track)
-    return db_track
-@router.post("/versions/{version_id}/tracks/upload", response_model=TrackResponse, status_code=status.HTTP_201_CREATED)
-async def upload_track(
+@router.post("/versions/{version_id}/audio-stems", response_model=TrackResponse, status_code=status.HTTP_201_CREATED)
+async def upload_audio_stems(
     version_id: UUID,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),

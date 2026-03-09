@@ -101,8 +101,6 @@ class VersionBase(BaseModel):
 class VersionCreate(VersionBase):
     pass
 
-class VersionUpdate(BaseModel):
-    commit_message: Optional[str] = None
 
 class VersionResponse(VersionBase):
     id: UUID
