@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Download, FileAudio, Package2, Archive, ChevronDown } from "lucide-react";
-import { authFetch } from "@/lib/api";
+import { API_URL, authFetch } from "@/lib/api";
 
 const DAW_OPTIONS = [
     { id: "ableton", label: "Ableton Live" },
@@ -12,12 +12,30 @@ const DAW_OPTIONS = [
 
 interface QuickExportProps {
     projectId?: string | null;
+    projectName?: string;
+    branchName?: string;
     latestVersionId?: string | null;
     hasPreview?: boolean;
     hasArtifact?: boolean;
 }
 
-export function QuickExport({ projectId, latestVersionId, hasPreview, hasArtifact }: QuickExportProps) {
+function sanitizeFilenamePart(value: string): string {
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") || "project";
+}
+
+export function QuickExport({
+    projectId,
+    projectName,
+    branchName,
+    latestVersionId,
+    hasPreview,
+    hasArtifact,
+}: QuickExportProps) {
     const [isZipOpen, setIsZipOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -54,19 +72,41 @@ export function QuickExport({ projectId, latestVersionId, hasPreview, hasArtifac
         if (!latestVersionId || !hasArtifact) return;
 
         try {
-            const response = await authFetch<Response>(`/versions/${latestVersionId}/artifact`);
+            const response = await fetch(`${API_URL}/versions/${latestVersionId}/artifact`, {
+                method: "GET",
+                credentials: "include",
+            });
+
+            if (response.status === 401) {
+                alert("Your session expired. Please sign in again.");
+                return;
+            }
+
+            if (response.status === 404) {
+                alert("Artifact ZIP not found for this version.");
+                return;
+            }
+
+            if (!response.ok) {
+                alert("Failed to download artifact ZIP. Please try again.");
+                return;
+            }
+
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `project-${latestVersionId.substring(0, 8)}.zip`;
+            const safeProject = sanitizeFilenamePart(projectName || "project");
+            const safeBranch = sanitizeFilenamePart(branchName || "main");
+            const versionShort = latestVersionId.substring(0, 8);
+            a.download = `${safeProject}-${safeBranch}-${versionShort}.zip`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } catch (err) {
             console.error("Artifact download failed:", err);
-            alert("Failed to download artifact ZIP");
+            alert("Network error while downloading artifact ZIP.");
         }
     };
 
