@@ -5,25 +5,25 @@ import { UploadCloud, Loader2 } from "lucide-react";
 import { API_URL } from "@/lib/api";
 
 interface AudioUploadButtonProps {
-    versionId?: string;
+    projectId?: string;
     onSuccess?: () => void;
 }
 
-export function AudioUploadButton({ versionId, onSuccess }: AudioUploadButtonProps) {
+export function AudioUploadButton({ projectId, onSuccess }: AudioUploadButtonProps) {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-        if (!file || !versionId) return;
+        if (!file || !projectId) return;
 
         try {
             setIsUploading(true);
 
             const formData = new FormData();
-            formData.append("file", file);
+            formData.append("preview", file);
 
-            const response = await fetch(`${API_URL}/versions/${versionId}/audio-stems`, {
+            const response = await fetch(`${API_URL}/projects/${projectId}/preview`, {
                 method: "POST",
                 credentials: "include",
                 body: formData,
@@ -40,7 +40,7 @@ export function AudioUploadButton({ versionId, onSuccess }: AudioUploadButtonPro
             }
         } catch (error) {
             console.error("Upload error:", error);
-            alert("Failed to upload audio file. Please try again.");
+            alert("Failed to upload project preview. Please try again.");
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) {
@@ -57,13 +57,13 @@ export function AudioUploadButton({ versionId, onSuccess }: AudioUploadButtonPro
                 onChange={handleFileChange}
                 accept="audio/mpeg, audio/wav, audio/mp3, .mp3, .wav"
                 className="hidden"
-                disabled={!versionId || isUploading}
+                disabled={!projectId || isUploading}
                 aria-hidden="true"
             />
             <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={!versionId || isUploading}
+                disabled={!projectId || isUploading}
                 className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {isUploading ? (
@@ -71,7 +71,7 @@ export function AudioUploadButton({ versionId, onSuccess }: AudioUploadButtonPro
                 ) : (
                     <UploadCloud className="size-4" aria-hidden />
                 )}
-                {isUploading ? "Uploading..." : "Upload Audio"}
+                {isUploading ? "Uploading..." : "Upload Preview"}
             </button>
         </>
     );

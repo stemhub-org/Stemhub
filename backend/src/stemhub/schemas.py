@@ -113,25 +113,6 @@ class VersionResponse(VersionBase):
     class Config:
         from_attributes = True
 
-# ── Track Schemas ──
-
-class TrackBase(BaseModel):
-    name: str
-    file_type: str = ".json"
-    storage_path: Optional[str] = None
-
-class TrackCreate(TrackBase):
-    pass
-
-class TrackResponse(TrackBase):
-    id: UUID
-    version_id: UUID
-    storage_path: Optional[str] = None
-    created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
 # ── Collaborator Schemas ──
 
 class CollaboratorCreate(BaseModel):
@@ -184,6 +165,7 @@ class VersionWithAuthor(BaseModel):
     created_at: datetime
     branch_name: str
     author: Optional[OwnerSummary] = None
+    has_artifact: bool = False
 
 class ProjectDetail(BaseModel):
     id: UUID
@@ -201,11 +183,11 @@ class ProjectSummaryResponse(BaseModel):
     project: ProjectDetail
     branches: list[BranchResponse]
     recent_versions: list[VersionWithAuthor]
-    tracks: list[TrackResponse]
+    latest_version_id: UUID | None = None
+    has_preview: bool = False
 
 # ── Auth Schemas ──
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-

@@ -10,7 +10,6 @@ import Sidebar from "@/components/Sidebar";
 import { RepositoryHeader } from "./components/RepositoryHeader";
 import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
 import { RepositoryBranchBar } from "./components/RepositoryBranchBar";
-import { RepositoryFileList } from "./components/RepositoryFileList";
 import { RepositoryAudioPlayer } from "./components/RepositoryAudioPlayer";
 import { QuickExport } from "./components/QuickExport";
 import { RecentChanges } from "./components/RecentChanges";
@@ -44,18 +43,21 @@ function RepositoryPageContent() {
     const [contributors, setContributors] = useState<TopContributorsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedBranch, setSelectedBranch] = useState<string>("");
+    const [selectedBranchId, setSelectedBranchId] = useState<string>("");
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
     const [currentUsername, setCurrentUsername] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"Project" | "Settings">("Project");
 
-    const fetchData = useCallback(async (projectId: string) => {
+    const fetchData = useCallback(async (projectId: string, branchId?: string) => {
         setIsLoading(true);
         setError(null);
         try {
+            const summaryPath = branchId
+                ? `/projects/${projectId}/summary?branch_id=${branchId}`
+                : `/projects/${projectId}/summary`;
             const [summaryData, activityData, contributorsData, userData] = await Promise.all([
-                authFetch<ProjectSummaryResponse>(`/projects/${projectId}`),
+                authFetch<ProjectSummaryResponse>(summaryPath),
                 authFetch<ActivityStatsResponse>(`/projects/${projectId}/stats/activity`),
                 authFetch<TopContributorsResponse>(`/projects/${projectId}/stats/top-contributors`),
                 authFetch<any>(`/auth/me`),
@@ -66,15 +68,18 @@ function RepositoryPageContent() {
             setCurrentUserId(userData.id);
             setCurrentUserAvatar(userData.avatar_url || null);
             setCurrentUsername(userData.username || null);
-            if (summaryData.branches.length > 0 && !selectedBranch) {
-                setSelectedBranch(summaryData.branches[0].name);
-            }
+            setSelectedBranchId((current) => {
+                if (summaryData.branches.length === 0) return "";
+                if (current && summaryData.branches.some((branch) => branch.id === current)) return current;
+                if (branchId && summaryData.branches.some((branch) => branch.id === branchId)) return branchId;
+                return summaryData.branches[0].id;
+            });
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load project data");
         } finally {
             setIsLoading(false);
         }
-    }, [selectedBranch]);
+    }, []);
 
     const handleDeleteBranch = async (branchId: string) => {
         try {
@@ -88,36 +93,26 @@ function RepositoryPageContent() {
     const handleCreateBranch = async (branchName: string) => {
         if (!projectId) return;
         try {
-            await authFetch(`/projects/${projectId}/branches/`, {
+            const createdBranch = await authFetch<{ id: string }>(`/projects/${projectId}/branches/`, {
                 method: "POST",
                 body: JSON.stringify({ name: branchName }),
             });
-            setSelectedBranch(branchName);
-            fetchData(projectId);
+            setSelectedBranchId(createdBranch.id);
+            fetchData(projectId, createdBranch.id);
         } catch (err) {
             alert(err instanceof Error ? err.message : "Failed to create branch");
             throw err;
         }
     };
 
-    const handleDeleteTrack = async (trackId: string) => {
-        if (!projectId) return;
-        try {
-            await authFetch(`/tracks/${trackId}`, { method: "DELETE" });
-            fetchData(projectId);
-        } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to delete track");
-        }
-    };
-
     useEffect(() => {
         if (projectId) {
-            fetchData(projectId);
+            fetchData(projectId, selectedBranchId || undefined);
         } else {
             setIsLoading(false);
             setError("No project ID provided. Add ?id=<project-uuid> to the URL.");
         }
-    }, [fetchData, projectId]);
+    }, [fetchData, projectId, selectedBranchId]);
 
     if (isLoading) {
         return (
@@ -142,6 +137,8 @@ function RepositoryPageContent() {
     }
 
     if (!summary) return null;
+    const selectedBranchName = summary.branches.find((branch) => branch.id === selectedBranchId)?.name || "main";
+    const latestVersion = summary.recent_versions?.[0];
 
     return (
         <div
@@ -186,12 +183,12 @@ function RepositoryPageContent() {
                     <RepositoryPageHeader
                         ownerUsername={summary.project.owner.username}
                         projectName={summary.project.name}
-                        branchName={selectedBranch || "main"}
+                        branchName={selectedBranchName}
                         description={summary.project.description || ""}
-                        latestVersionId={summary.recent_versions?.[0]?.id}
+                        projectId={projectId || undefined}
                         onUploadSuccess={() => {
                             if (projectId) {
-                                fetchData(projectId);
+                                fetchData(projectId, selectedBranchId || undefined);
                             }
                         }}
                     />
@@ -241,6 +238,17 @@ function RepositoryPageContent() {
 
                 {activeTab === "Project" && (
                     <>
+                        <div className="flex flex-wrap items-center gap-4 mb-6">
+                            <RepositoryBranchBar
+                                branches={summary.branches}
+                                selectedBranchId={selectedBranchId}
+                                onBranchChange={setSelectedBranchId}
+                                isOwner={currentUserId === summary.project.owner.id}
+                                onDelete={handleDeleteBranch}
+                                onCreate={currentUserId === summary.project.owner.id ? handleCreateBranch : undefined}
+                            />
+                        </div>
+
                         <motion.main
                             className="flex items-start gap-6"
                             initial={{ opacity: 0 }}
@@ -250,11 +258,19 @@ function RepositoryPageContent() {
                             <section className="flex min-w-0 flex-1 flex-col gap-6 self-start">
                                 <div className={cardClass}>
                                     <div className="p-8">
-                                        <RepositoryAudioPlayer track={summary.tracks?.[0]} />
+                                        <RepositoryAudioPlayer
+                                            projectId={projectId}
+                                            hasPreview={summary.has_preview}
+                                        />
                                     </div>
                                 </div>
                                 <div className={`${cardClass} p-6`}>
-                                    <QuickExport track={summary.tracks?.[0]} />
+                                    <QuickExport
+                                        projectId={projectId}
+                                        latestVersionId={summary.latest_version_id}
+                                        hasPreview={summary.has_preview}
+                                        hasArtifact={Boolean(latestVersion?.has_artifact)}
+                                    />
                                 </div>
                                 <div className={`${cardClass} p-6`}>
                                     <RecentChanges versions={summary.recent_versions} projectId={projectId} />
@@ -262,13 +278,6 @@ function RepositoryPageContent() {
                             </section>
 
                             <aside className="w-[28rem] shrink-0 flex flex-col gap-6">
-                                <div className={`${cardClass} overflow-hidden`}>
-                                    <RepositoryFileList
-                                        tracks={summary.tracks}
-                                        isOwner={currentUserId === summary.project.owner.id}
-                                        onDeleteTrack={handleDeleteTrack}
-                                    />
-                                </div>
                                 <div className={`${cardClass} p-6 overflow-hidden`}>
                                     <ContributionActivity
                                         dailyActivity={activity?.daily_activity || []}

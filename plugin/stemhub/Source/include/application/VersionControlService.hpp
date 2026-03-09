@@ -25,9 +25,6 @@ class VersionControlService
         ApiResult<VersionSummary> fetchVersion(
             const juce::String& versionId,
             const juce::String& accessToken) const;
-        juce::Result uploadVersionTrackAudio(const juce::String& versionId,
-                                            const juce::File& trackFile,
-                                            const juce::String& bearerToken) const;
         
         juce::Result downloadVersion(
             const juce::String& versionId,

@@ -21,6 +21,7 @@ export interface VersionWithAuthor {
     created_at: string;
     branch_name: string;
     author: OwnerSummary | null;
+    has_artifact: boolean;
 }
 
 // ── Track ──
@@ -49,7 +50,8 @@ export interface ProjectSummaryResponse {
     project: ProjectDetail;
     branches: Branch[];
     recent_versions: VersionWithAuthor[];
-    tracks: Track[];
+    latest_version_id: string | null;
+    has_preview: boolean;
 }
 
 // ── Collaborators ──

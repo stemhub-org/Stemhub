@@ -10,7 +10,7 @@ interface RepositoryPageHeaderProps {
     projectName: string;
     branchName: string;
     description: string;
-    latestVersionId?: string;
+    projectId?: string;
     onUploadSuccess?: () => void;
 }
 
@@ -19,7 +19,7 @@ export function RepositoryPageHeader({
     projectName,
     branchName,
     description,
-    latestVersionId,
+    projectId,
     onUploadSuccess,
 }: RepositoryPageHeaderProps) {
     const [isFavorite, setIsFavorite] = useState(false);
@@ -67,7 +67,7 @@ export function RepositoryPageHeader({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <AudioUploadButton versionId={latestVersionId} onSuccess={onUploadSuccess} />
+                    <AudioUploadButton projectId={projectId} onSuccess={onUploadSuccess} />
                     <button
                         type="button"
                         onClick={() => setIsFavorite((prev) => !prev)}
