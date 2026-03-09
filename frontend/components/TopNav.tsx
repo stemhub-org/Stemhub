@@ -76,7 +76,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                         onClick={() => {
                             router.push("/dashboard/profile");
                         }}
-                        className="h-10 w-10 rounded-full flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
+                        className={`h-10 w-10 rounded-full flex items-center justify-center text-white border-2 shadow-sm hover:opacity-90 transition-opacity ${isDark ? "border-transparent" : "border-white"}`}
                         style={{ background: "linear-gradient(to top right, #9C57DF, #C28CF0)" }}
                         title="View profile"
                     >

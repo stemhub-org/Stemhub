@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import {
     MapPin,
@@ -32,6 +33,8 @@ const GENRE_GROUPS = [
 
 export default function ProfilePage() {
     const router = useRouter();
+    const { resolvedTheme } = useTheme();
+    const isDark = resolvedTheme === "dark";
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -210,7 +213,7 @@ export default function ProfilePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
-                className="flex flex-col md:flex-row gap-8 items-start relative rounded-2xl border border-foreground/[0.08] bg-background-tertiary p-8 backdrop-blur-xl"
+                className="flex flex-col md:flex-row gap-8 items-start relative rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-8 backdrop-blur-xl"
             >
                 <div className="absolute right-8 top-8 z-10">
                     {!isEditModalOpen ? (
@@ -262,7 +265,9 @@ export default function ProfilePage() {
                             <img
                                 src={isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url}
                                 alt={username}
-                                className={`h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 border-background-secondary shadow-xl transition-all ${isEditModalOpen ? "cursor-pointer hover:brightness-75" : ""}`}
+                                className={`h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 shadow-xl transition-all ${
+                                    isDark ? "border-accent" : "border-white"
+                                } ${isEditModalOpen ? "cursor-pointer hover:brightness-75" : ""}`}
                                 onClick={() => isEditModalOpen && fileInputRef.current?.click()}
                             />
                             {isEditModalOpen && (
@@ -277,7 +282,9 @@ export default function ProfilePage() {
                         </div>
                     ) : (
                         <div
-                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl relative ${isEditModalOpen ? "cursor-pointer hover:brightness-90" : ""}`}
+                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl relative border-4 ${
+                                isDark ? "border-accent" : "border-white"
+                            } ${isEditModalOpen ? "cursor-pointer hover:brightness-90" : ""}`}
                             onClick={() => isEditModalOpen && fileInputRef.current?.click()}
                         >
                             {initials}
@@ -402,7 +409,7 @@ export default function ProfilePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
-                className="rounded-2xl border border-foreground/[0.08] bg-background-tertiary p-6 backdrop-blur-xl"
+                className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 backdrop-blur-xl"
             >
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
@@ -560,7 +567,7 @@ export default function ProfilePage() {
                     <div className="space-y-4">
                         {/* Project Card 1 */}
                         <div
-                            className="rounded-2xl border border-foreground/[0.08] bg-background-tertiary p-6 hover:bg-background-secondary/30 transition-all cursor-pointer backdrop-blur-xl group"
+                            className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 hover:opacity-95 dark:hover:bg-background-secondary/60 transition-all cursor-pointer backdrop-blur-xl group"
                             onClick={() => router.push("/projects")}
                         >
                             <div className="flex items-start justify-between mb-4">
@@ -605,7 +612,7 @@ export default function ProfilePage() {
                         </div>
 
                         {/* Project Card 2 */}
-                        <div className="rounded-2xl border border-foreground/[0.08] bg-background-tertiary p-6 hover:bg-background-secondary/30 transition-all cursor-pointer backdrop-blur-xl group">
+                        <div className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 hover:opacity-95 dark:hover:bg-background-secondary/60 transition-all cursor-pointer backdrop-blur-xl group">
                             <div className="flex items-start justify-between mb-4">
                                 <div>
                                     <h3 className="text-lg font-medium flex items-center gap-2 group-hover:text-accent transition-colors">
@@ -648,7 +655,7 @@ export default function ProfilePage() {
                         </div>
 
                         {/* Project Card 3 */}
-                        <div className="rounded-2xl border border-foreground/[0.08] bg-background-tertiary p-6 hover:bg-background-secondary/30 transition-all cursor-pointer backdrop-blur-xl group">
+                        <div className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 hover:opacity-95 dark:hover:bg-background-secondary/60 transition-all cursor-pointer backdrop-blur-xl group">
                             <div className="flex items-start justify-between mb-4">
                                 <div>
                                     <h3 className="text-lg font-medium flex items-center gap-2 group-hover:text-accent transition-colors">
@@ -704,7 +711,7 @@ export default function ProfilePage() {
                         <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Activity</h2>
                     </div>
 
-                    <div className="rounded-2xl border border-foreground/[0.08] bg-background-tertiary p-6 backdrop-blur-xl">
+                    <div className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 backdrop-blur-xl">
                         <div className="flex flex-col gap-1 mb-6">
                             <span className="text-xs text-foreground/50 font-light">Last year</span>
                             <span className="text-3xl font-medium tracking-tight">696 <span className="text-sm font-light text-foreground/50 tracking-normal">contributions</span></span>
@@ -738,11 +745,11 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-tertiary p-5 backdrop-blur-xl hover:bg-background-secondary/30 transition-colors cursor-pointer">
+                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-secondary/60 transition-colors cursor-pointer">
                             <span className="text-xs text-foreground/50 font-light">Projects</span>
                             <p className="text-2xl font-medium mt-1 tracking-tight">24</p>
                         </div>
-                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-tertiary p-5 backdrop-blur-xl hover:bg-background-secondary/30 transition-colors cursor-pointer">
+                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-secondary/60 transition-colors cursor-pointer">
                             <span className="text-xs text-foreground/50 font-light">Collaborations</span>
                             <p className="text-2xl font-medium mt-1 tracking-tight">18</p>
                         </div>

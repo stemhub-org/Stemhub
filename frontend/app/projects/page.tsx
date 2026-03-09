@@ -35,7 +35,7 @@ function RepositoryPageContent() {
     const isDark = resolvedTheme === "dark";
     const cardBase = isDark
         ? "rounded-xl bg-background-tertiary border border-border-subtle transition-all duration-300"
-        : "rounded-xl bg-background-secondary border border-border-subtle transition-all duration-300";
+        : "rounded-xl bg-[#FAFAFA] border border-border-subtle transition-all duration-300";
     const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
     // ── Data state ──
@@ -46,6 +46,8 @@ function RepositoryPageContent() {
     const [error, setError] = useState<string | null>(null);
     const [selectedBranch, setSelectedBranch] = useState<string>("");
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
+    const [currentUsername, setCurrentUsername] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"Code" | "Settings">("Code");
 
     const fetchData = useCallback(async (projectId: string) => {
@@ -62,6 +64,8 @@ function RepositoryPageContent() {
             setActivity(activityData);
             setContributors(contributorsData);
             setCurrentUserId(userData.id);
+            setCurrentUserAvatar(userData.avatar_url || null);
+            setCurrentUsername(userData.username || null);
             if (summaryData.branches.length > 0 && !selectedBranch) {
                 setSelectedBranch(summaryData.branches[0].name);
             }
@@ -147,6 +151,8 @@ function RepositoryPageContent() {
             <RepositoryHeader
                 onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
                 sidebarOpen={sidebarOpen}
+                userAvatarUrl={currentUserAvatar}
+                username={currentUsername || "Producer"}
             />
 
             <AnimatePresence>

@@ -3,8 +3,10 @@
 import type React from "react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
-import { Heart, GitBranch, Clock, Activity, Folder, Search, Plus, User, Loader2 } from "lucide-react";
+import { Heart, GitBranch, Clock, Activity, Folder, Search, Plus, User, Loader2, X } from "lucide-react";
+import { authFetch } from "@/lib/api";
 
 interface UserProfile {
     id: string;
@@ -38,7 +40,12 @@ export default function DashboardProjectsPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [favorites, setFavorites] = useState<Record<string, boolean>>({});
-    
+    const [showNewProject, setShowNewProject] = useState(false);
+    const [newProjectName, setNewProjectName] = useState("");
+    const [newProjectDesc, setNewProjectDesc] = useState("");
+    const [newProjectCategory, setNewProjectCategory] = useState("General");
+    const [creating, setCreating] = useState(false);
+
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
 
@@ -46,53 +53,25 @@ export default function DashboardProjectsPage() {
         const fetchData = async () => {
             setIsLoading(true);
             setError(null);
-            
+
             try {
-                // Determine API base URL
-                const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-                
-                // Keep compatibility with localStorage tokens if cookies are not exclusively used
-                const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-                const headers: HeadersInit = {};
-                if (token) {
-                    headers["Authorization"] = `Bearer ${token}`; // Backend expects "Bearer <token>"
-                }
-                
-                const fetchOptions: RequestInit = {
-                    credentials: "include", // Ensure session cookies are sent
-                    headers,
-                };
-                
                 const [userRes, projectsRes] = await Promise.all([
-                    fetch(`${API_URL}/auth/me`, fetchOptions),
-                    fetch(`${API_URL}/projects/`, fetchOptions)
+                    authFetch<UserProfile>("/auth/me"),
+                    authFetch<Project[]>("/projects/")
                 ]);
 
-                if (!userRes.ok) {
-                    if (userRes.status === 401) {
-                        throw new Error("You are not authenticated. Please log in.");
-                    }
-                    throw new Error("Failed to fetch user profile");
-                }
-                
-                const userData = await userRes.json();
-                setUser(userData);
+                setUser(userRes);
 
-                if (projectsRes.ok) {
-                    const projectsData = await projectsRes.json();
-                    
-                    // Filter out logically deleted projects just in case
-                    const activeProjects = Array.isArray(projectsData) 
-                        ? projectsData.filter((p: Project) => !p.is_deleted)
-                        : [];
-                        
-                    // Sort descending by created_at
-                    activeProjects.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-                    
-                    setProjects(activeProjects);
-                } else {
-                    console.error("Failed to fetch projects");
-                }
+                const projectsData = Array.isArray(projectsRes)
+                    ? projectsRes.filter((p: Project) => !p.is_deleted)
+                    : [];
+
+                projectsData.sort(
+                    (a, b) =>
+                        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                );
+
+                setProjects(projectsData);
             } catch (err: any) {
                 console.error("Error fetching dashboard data:", err);
                 setError(err.message || "An error occurred while fetching data.");
@@ -103,6 +82,30 @@ export default function DashboardProjectsPage() {
 
         fetchData();
     }, []);
+
+    const handleCreateProject = async () => {
+        if (!newProjectName.trim()) return;
+        setCreating(true);
+        try {
+            const created = await authFetch<Project>("/projects/", {
+                method: "POST",
+                body: JSON.stringify({
+                    name: newProjectName.trim(),
+                    description: newProjectDesc.trim() || null,
+                    category: newProjectCategory,
+                }),
+            });
+            setProjects((prev) => [created, ...prev]);
+            setShowNewProject(false);
+            setNewProjectName("");
+            setNewProjectDesc("");
+            setNewProjectCategory("General");
+        } catch (err: any) {
+            alert(err.message || "Failed to create project");
+        } finally {
+            setCreating(false);
+        }
+    };
 
     const filteredProjects = projects.filter(p => 
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -154,7 +157,7 @@ export default function DashboardProjectsPage() {
             <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10">
                 <aside className="w-full md:w-62 flex-shrink-0">
                     <div className="flex flex-col items-center md:items-start gap-4">
-                        <div className="h-60 w-60 overflow-hidden rounded-full bg-gradient-to-tr from-accent to-accent/40 border border-border-subtle flex items-center justify-center">
+                        <div className={`h-60 w-60 overflow-hidden rounded-full bg-gradient-to-tr from-accent to-accent/40 flex items-center justify-center border-2 ${isDark ? "border-transparent" : "border-white"}`}>
                             {user?.avatar_url ? (
                                 <img src={user.avatar_url} alt={`${user.username}'s avatar`} className="h-full w-full object-cover rounded-full" />
                             ) : (
@@ -175,15 +178,16 @@ export default function DashboardProjectsPage() {
                                 <span className="font-medium text-foreground">0</span> followers ·{" "}
                                 <span className="font-medium text-foreground">0</span> following
                             </p>
-                            <button
-                                className={`mt-2 w-full rounded-lg border border-border-subtle px-4 py-2 text-sm font-medium transition-colors ${
+                            <Link
+                                href="/dashboard/profile"
+                                className={`mt-2 inline-block w-full rounded-lg border border-border-subtle px-4 py-2 text-center text-sm font-medium transition-colors ${
                                     isDark
                                         ? "bg-background-tertiary text-foreground hover:bg-background-tertiary/80 hover:border-accent/40"
                                         : "bg-background-secondary text-foreground hover:bg-background-tertiary hover:border-accent/40"
                                 }`}
                             >
                                 View profile
-                            </button>
+                            </Link>
                         </div>
                     </div>
                 </aside>
@@ -204,6 +208,7 @@ export default function DashboardProjectsPage() {
                         </div>
                         <button
                             type="button"
+                            onClick={() => setShowNewProject(true)}
                             className="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 text-base font-medium text-foreground dark:text-white bg-accent/25 border border-accent/35 backdrop-blur-xl shadow-[0_0_24px_rgba(156,87,223,0.18)] hover:bg-accent/35 hover:border-accent/50 transition-all duration-300"
                         >
                             <Plus className="size-4" aria-hidden />
@@ -288,6 +293,114 @@ export default function DashboardProjectsPage() {
                     </ul>
                 </section>
             </div>
+
+            {/* New Project Modal — shared design with dashboard */}
+            <AnimatePresence>
+                {showNewProject && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+                            onClick={() => setShowNewProject(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="w-full max-w-md rounded-xl bg-background-secondary border border-border-subtle p-6 shadow-2xl">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-lg font-medium text-foreground">New Project</h2>
+                                    <button
+                                        onClick={() => setShowNewProject(false)}
+                                        className="text-foreground-muted hover:text-foreground transition-colors"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-1.5">
+                                            Project Name *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newProjectName}
+                                            onChange={(e) => setNewProjectName(e.target.value)}
+                                            placeholder="My Awesome Track"
+                                            className="w-full rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-1.5">
+                                            Description
+                                        </label>
+                                        <textarea
+                                            value={newProjectDesc}
+                                            onChange={(e) => setNewProjectDesc(e.target.value)}
+                                            placeholder="A short description of your project"
+                                            rows={3}
+                                            className="w-full rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors resize-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-1.5">
+                                            Category
+                                        </label>
+                                        <select
+                                            value={newProjectCategory}
+                                            onChange={(e) => setNewProjectCategory(e.target.value)}
+                                            className="w-full rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors"
+                                        >
+                                            <option value="General">General</option>
+                                            <option value="Electronic">Electronic</option>
+                                            <option value="Hip-Hop">Hip-Hop</option>
+                                            <option value="Pop">Pop</option>
+                                            <option value="Rock">Rock</option>
+                                            <option value="Jazz">Jazz</option>
+                                            <option value="Classical">Classical</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button
+                                        onClick={() => setShowNewProject(false)}
+                                        className="px-4 py-2 rounded-lg text-sm font-medium text-foreground-muted hover:text-foreground transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleCreateProject}
+                                        disabled={!newProjectName.trim() || creating}
+                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                    >
+                                        {creating ? (
+                                            <>
+                                                <Loader2 size={16} className="animate-spin" />
+                                                Creating…
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Plus size={16} />
+                                                Create Project
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

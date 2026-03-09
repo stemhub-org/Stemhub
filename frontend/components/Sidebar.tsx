@@ -1,16 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
     LayoutDashboard,
     Compass,
     Settings,
     FolderDot,
-    Sun,
-    Moon,
     ChevronLeft,
+    LogOut,
 } from "lucide-react";
 
 const navigation = [
@@ -27,9 +26,27 @@ type SidebarProps = {
 
 export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps) {
     const pathname = usePathname();
-    const { resolvedTheme, setTheme } = useTheme();
-    const isDark = resolvedTheme === "dark";
+    const router = useRouter();
+    const { resolvedTheme } = useTheme();
     const isLight = resolvedTheme === "light";
+
+    const handleLogout = async () => {
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            await fetch(`${apiUrl}/auth/logout`, {
+                method: "POST",
+                credentials: "include",
+            }).catch(() => {
+                // Ignore network errors to still allow client-side logout
+            });
+
+            if (typeof window !== "undefined") {
+                localStorage.removeItem("token");
+            }
+        } finally {
+            router.push("/login");
+        }
+    };
 
     return (
         <div
@@ -89,25 +106,18 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
 
                     <div className="p-6 border-t border-border-subtle space-y-3">
                         <button
-                            onClick={() => setTheme(isDark ? "light" : "dark")}
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border-subtle bg-background-secondary hover:border-accent/30 hover:bg-background-tertiary transition-all duration-300 group"
-                            aria-label="Toggle theme"
+                            onClick={handleLogout}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border-subtle bg-background-secondary hover:border-red-500/40 hover:bg-red-500/5 transition-all duration-300 group"
+                            aria-label="Log out"
                         >
-                            <span className="text-xs font-medium text-foreground-muted group-hover:text-foreground transition-colors">
-                                {isDark ? "Light Mode" : "Dark Mode"}
+                            <span className="text-xs font-medium text-foreground-muted group-hover:text-red-500 transition-colors">
+                                Log out
                             </span>
-                            <div className="h-6 w-6 rounded-md bg-background border border-border-subtle flex items-center justify-center group-hover:border-accent/30 transition-colors">
-                                {isDark ? (
-                                    <Sun
-                                        size={13}
-                                        className="text-foreground-muted group-hover:text-accent transition-colors"
-                                    />
-                                ) : (
-                                    <Moon
-                                        size={13}
-                                        className="text-foreground-muted group-hover:text-accent transition-colors"
-                                    />
-                                )}
+                            <div className="h-6 w-6 rounded-md bg-background border border-border-subtle flex items-center justify-center group-hover:border-red-500/40 transition-colors">
+                                <LogOut
+                                    size={13}
+                                    className="text-foreground-muted group-hover:text-red-500 transition-colors"
+                                />
                             </div>
                         </button>
 
