@@ -1,12 +1,53 @@
 #include <algorithm>
+#include <array>
 
 #include "application/SnapshotBundler.hpp"
 
 namespace
 {
+    constexpr std::array<const char*, 9> kBundledAssetExtensions = {
+        "wav", "mp3", "flac", "ogg", "aiff", "aif", "m4a", "mid", "midi"
+    };
+
     juce::String toArchivePath(const juce::File& file, const juce::File& rootDirectory)
     {
         return file.getRelativePathFrom(rootDirectory).replaceCharacter('\\', '/');
+    }
+
+    bool isBackupPath(const juce::File& candidateFile, const juce::File& rootFolder)
+    {
+        const auto relativePath = candidateFile.getRelativePathFrom(rootFolder).replaceCharacter('\\', '/');
+        if (relativePath.isEmpty())
+            return false;
+
+        juce::StringArray parts;
+        parts.addTokens(relativePath, "/", "");
+        for (int i = 0; i < parts.size() - 1; ++i)
+        {
+            if (parts[i].equalsIgnoreCase("backup"))
+                return true;
+        }
+
+        return false;
+    }
+
+    bool shouldIncludeInSnapshot(const juce::File& candidateFile,
+                                 const juce::File& rootDirectory,
+                                 const juce::File& sourceProjectFile)
+    {
+        if (!candidateFile.existsAsFile())
+            return false;
+
+        if (candidateFile == sourceProjectFile)
+            return true;
+
+        for (const auto* ext : kBundledAssetExtensions)
+        {
+            if (candidateFile.hasFileExtension(ext))
+                return !isBackupPath(candidateFile, rootDirectory);
+        }
+
+        return false;
     }
 
     bool isSourceFileWithinRoot(const juce::File& sourceFile, const juce::File& rootDirectory)
@@ -61,7 +102,7 @@ juce::Result SnapshotBundler::bundleProject(const SnapshotBundleRequest& request
 
     for (const auto& file : discoveredFiles)
     {
-        if (!file.existsAsFile())
+        if (!shouldIncludeInSnapshot(file, request.projectRootDirectory, request.sourceProjectFile))
             continue;
 
         const auto archivePath = toArchivePath(file, request.projectRootDirectory);
@@ -76,6 +117,16 @@ juce::Result SnapshotBundler::bundleProject(const SnapshotBundleRequest& request
         manifestFiles.add(juce::var(fileEntry.get()));
     }
 
+    if (request.previewTrackFile.existsAsFile())
+    {
+        const auto previewArchivePath = "preview/latest_track.wav";
+        zipBuilder.addFile(request.previewTrackFile, 9, previewArchivePath);
+        juce::DynamicObject::Ptr previewEntry = new juce::DynamicObject();
+        previewEntry->setProperty("relative_path", previewArchivePath);
+        previewEntry->setProperty("size_bytes", request.previewTrackFile.getSize());
+        manifestFiles.add(juce::var(previewEntry.get()));
+    }
+
     if (manifestFiles.isEmpty())
         return juce::Result::fail("Project root directory does not contain files to bundle.");
 
@@ -85,6 +136,8 @@ juce::Result SnapshotBundler::bundleProject(const SnapshotBundleRequest& request
     manifestObject->setProperty("source_daw", request.sourceDaw);
     manifestObject->setProperty("project_name", request.sourceProjectFile.getFileNameWithoutExtension());
     manifestObject->setProperty("flp_relative_path", toArchivePath(request.sourceProjectFile, request.projectRootDirectory));
+    if (request.previewTrackFile.existsAsFile())
+        manifestObject->setProperty("preview_track_path", "preview/latest_track.wav");
     manifestObject->setProperty("file_count", manifestFiles.size());
     manifestObject->setProperty("files", juce::var(manifestFiles));
 
