@@ -1,4 +1,6 @@
 #include "ui/Views.hpp"
+#include <algorithm>
+#include <utility>
 
 namespace
 {
@@ -90,6 +92,139 @@ juce::String getMappedComboSelection(const juce::ComboBox& combo, const std::vec
     return mappedIds[static_cast<size_t>(selectedIndex)];
 }
 
+struct FileTreeNode
+{
+    juce::String name;
+    bool isFile { false };
+    std::vector<FileTreeNode> children;
+};
+
+class PackagedFilesTreeItem final : public juce::TreeViewItem
+{
+public:
+    PackagedFilesTreeItem(juce::String textToShow, juce::String uniqueNameToUse, bool isDirectoryItem)
+        : text(std::move(textToShow)),
+          uniqueName(std::move(uniqueNameToUse)),
+          isDirectory(isDirectoryItem)
+    {
+    }
+
+    [[nodiscard]] bool mightContainSubItems() override
+    {
+        return getNumSubItems() > 0;
+    }
+
+    [[nodiscard]] juce::String getUniqueName() const override
+    {
+        return uniqueName;
+    }
+
+    void paintItem(juce::Graphics& g, int width, int height) override
+    {
+        if (isSelected())
+            g.fillAll(kStemhubPurple.withAlpha(0.18f));
+
+        g.setColour(kStemhubLight.withAlpha(isDirectory ? 0.95f : 0.78f));
+        g.setFont(juce::FontOptions(isDirectory ? 13.0f : 12.5f,
+                                    isDirectory ? juce::Font::bold : juce::Font::plain));
+        g.drawText(text, 2, 0, width - 4, height, juce::Justification::centredLeft, true);
+    }
+
+private:
+    juce::String text;
+    juce::String uniqueName;
+    bool isDirectory { false };
+};
+
+FileTreeNode* findOrCreateChild(FileTreeNode& parent, const juce::String& childName)
+{
+    auto it = std::find_if(parent.children.begin(), parent.children.end(), [&childName](const FileTreeNode& child)
+    {
+        return child.name == childName;
+    });
+
+    if (it != parent.children.end())
+        return &(*it);
+
+    parent.children.push_back(FileTreeNode{ childName, false, {} });
+    return &parent.children.back();
+}
+
+void insertRelativePath(FileTreeNode& root, const juce::String& relativePath)
+{
+    juce::StringArray pathParts;
+    pathParts.addTokens(relativePath.replaceCharacter('\\', '/'), "/", "");
+
+    if (pathParts.isEmpty())
+        return;
+
+    auto* currentNode = &root;
+    for (int i = 0; i < pathParts.size(); ++i)
+    {
+        auto* child = findOrCreateChild(*currentNode, pathParts[i]);
+        child->isFile = (i == pathParts.size() - 1);
+        currentNode = child;
+    }
+}
+
+void sortTree(FileTreeNode& node)
+{
+    std::sort(node.children.begin(), node.children.end(), [](const FileTreeNode& lhs, const FileTreeNode& rhs)
+    {
+        const bool lhsIsDirectory = !lhs.children.empty() || !lhs.isFile;
+        const bool rhsIsDirectory = !rhs.children.empty() || !rhs.isFile;
+
+        if (lhsIsDirectory != rhsIsDirectory)
+            return lhsIsDirectory;
+
+        return lhs.name.compareNatural(rhs.name) < 0;
+    });
+
+    for (auto& child : node.children)
+        sortTree(child);
+}
+
+void addTreeItemsRecursively(const FileTreeNode& node, juce::TreeViewItem& parent, const juce::String& parentPath)
+{
+    for (const auto& child : node.children)
+    {
+        const auto childPath = parentPath.isEmpty() ? child.name : parentPath + "/" + child.name;
+        const bool isDirectory = !child.children.empty() || !child.isFile;
+        auto* childItem = new PackagedFilesTreeItem(child.name, childPath, isDirectory);
+        parent.addSubItem(childItem);
+
+        if (!child.children.empty())
+        {
+            addTreeItemsRecursively(child, *childItem, childPath);
+            childItem->setOpen(true);
+        }
+    }
+}
+
+juce::TreeViewItem* createPackagedFilesRootItem(const std::vector<juce::String>& relativeFilePaths)
+{
+    auto* rootItem = new PackagedFilesTreeItem("__root__", "__root__", true);
+
+    if (relativeFilePaths.empty())
+    {
+        rootItem->addSubItem(new PackagedFilesTreeItem("No files detected", "__empty__", false));
+        return rootItem;
+    }
+
+    FileTreeNode rootNode;
+    rootNode.name = "__root__";
+
+    for (const auto& relativePath : relativeFilePaths)
+    {
+        if (relativePath.isNotEmpty())
+            insertRelativePath(rootNode, relativePath);
+    }
+
+    sortTree(rootNode);
+    addTreeItemsRecursively(rootNode, *rootItem, {});
+    return rootItem;
+}
+
 }
 
 ProjectSelectionView::ProjectSelectionView()
@@ -118,7 +253,7 @@ ProjectSelectionView::ProjectSelectionView()
     styleSecondaryButton(chooseProjectFileButton);
     chooseProjectFileButton.onClick = [this]
     {
-        invokeIfBound(onChooseProjectFile);
+        invokeIfBound(onChooseProjectFolder);
     };
 
     addAndMakeVisible(openProjectButton);
@@ -286,6 +421,10 @@ DashboardView::DashboardView()
     addAndMakeVisible(branchComboBox);
     branchComboBox.setTextWhenNothingSelected("No branch available");
     styleComboBox(branchComboBox);
+    branchComboBox.onChange = [this]
+    {
+        invokeIfBound(onBranchChange);
+    };
 
     addAndMakeVisible(versionLabel);
     versionLabel.setText("Version history", juce::dontSendNotification);
@@ -323,25 +462,6 @@ DashboardView::DashboardView()
     commitMessageInput.setColour(juce::TextEditor::outlineColourId, kStemhubLight.withAlpha(0.45f));
     commitMessageInput.setColour(juce::CaretComponent::caretColourId, kStemhubLight);
 
-    addAndMakeVisible(branchLabel);
-    branchLabel.setText("Branch", juce::dontSendNotification);
-    branchLabel.setJustificationType(juce::Justification::centredLeft);
-
-    addAndMakeVisible(branchComboBox);
-    branchComboBox.setTextWhenNothingSelected("No branch available");
-
-    addAndMakeVisible(versionLabel);
-    versionLabel.setText("Version history", juce::dontSendNotification);
-    versionLabel.setJustificationType(juce::Justification::centredLeft);
-
-    addAndMakeVisible(versionComboBox);
-    versionComboBox.setTextWhenNothingSelected("No versions available");
-    versionComboBox.onChange = [this]
-    {
-        if (onVersionSelectionChange != nullptr)
-            onVersionSelectionChange();
-    };
-
     addAndMakeVisible(saveChanges);
     stylePrimaryButton(saveChanges);
     saveChanges.onClick = [this]
@@ -362,6 +482,7 @@ DashboardView::DashboardView()
     {
         invokeIfBound(onBranchChange);
     };
+    changeBranch.setVisible(false);
 
     addAndMakeVisible(signOutButton);
     styleCompactTopButton(signOutButton);
@@ -376,6 +497,18 @@ DashboardView::DashboardView()
     {
         invokeIfBound(onRestore);
     };
+
+    addAndMakeVisible(packagedFilesLabel);
+    packagedFilesLabel.setText("Packaged files", juce::dontSendNotification);
+    packagedFilesLabel.setJustificationType(juce::Justification::centredLeft);
+    packagedFilesLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.9f));
+    packagedFilesLabel.setFont(juce::FontOptions(14.0f, juce::Font::bold));
+
+    addAndMakeVisible(packagedFilesTree);
+    packagedFilesTree.setRootItemVisible(false);
+    packagedFilesTree.setIndentSize(14);
+    packagedFilesTree.setColour(juce::TreeView::backgroundColourId, kStemhubSurface.withAlpha(0.88f));
+    packagedFilesTree.setRootItem(createPackagedFilesRootItem({}));
 }
 
 void DashboardView::setBranches(const std::vector<juce::String>& branchNames,
@@ -392,6 +525,23 @@ void DashboardView::setVersions(const std::vector<juce::String>& versionLabels,
     setMappedComboItems(versionComboBox, comboVersionIds, versionLabels, versionIds, selectedVersionId);
 }
 
+void DashboardView::setPackagedFiles(const juce::String& rootLabel,
+                                     const std::vector<juce::String>& relativeFilePaths)
+{
+    auto labelText = juce::String("Packaged files");
+    if (!relativeFilePaths.empty())
+        labelText += " (" + juce::String(static_cast<int>(relativeFilePaths.size())) + ")";
+
+    packagedFilesLabel.setText(labelText, juce::dontSendNotification);
+    packagedFilesTree.setRootItem(createPackagedFilesRootItem(relativeFilePaths));
+    if (auto* rootItem = packagedFilesTree.getRootItem())
+        rootItem->setOpen(true);
+
+    packagedFilesTree.setTooltip(rootLabel.isNotEmpty()
+        ? "Bundle root: " + rootLabel
+        : "No project root selected.");
+}
+
 juce::String DashboardView::getSelectedBranchId() const
 {
     return getMappedComboSelection(branchComboBox, comboBranchIds);
@@ -404,83 +554,80 @@ juce::String DashboardView::getSelectedVersionId() const
 
 void DashboardView::resized()
 {
-    auto area = getLocalBounds().reduced(20);
-    const int fieldWidth = 280;
-    const int x = (getWidth() - fieldWidth) / 2;
+    auto area = getLocalBounds().reduced(18);
     const int contentLeft = area.getX();
     const int contentRight = area.getRight();
 
-    auto topActionsRow = area.removeFromTop(22);
-    const int backButtonWidth = 112;
-    const int signOutButtonWidth = 46;
+    auto topActionsRow = area.removeFromTop(24);
+    const int backButtonWidth = 104;
+    const int signOutButtonWidth = 78;
     backToProjectsButton.setBounds(contentLeft, topActionsRow.getY(), backButtonWidth, topActionsRow.getHeight());
     signOutButton.setBounds(contentRight - signOutButtonWidth, topActionsRow.getY(), signOutButtonWidth, topActionsRow.getHeight());
 
-    area.removeFromTop(4);
+    area.removeFromTop(6);
 
-    auto projectStatusRow = area.removeFromTop(24);
-    projectStatusLabel.setBounds(x, projectStatusRow.getY(), fieldWidth, projectStatusRow.getHeight());
+    auto projectStatusRow = area.removeFromTop(22);
+    projectStatusLabel.setBounds(projectStatusRow);
 
-    area.removeFromTop(4);
+    area.removeFromTop(8);
 
-    auto projectNameRow = area.removeFromTop(22);
-    projectNameLabel.setBounds(x - 80, projectNameRow.getY(), fieldWidth + 160, projectNameRow.getHeight());
+    auto contentRow = area;
+    const int leftColumnWidth = juce::jmin(320, juce::jmax(260, static_cast<int>(contentRow.getWidth() * 0.46f)));
+    auto leftColumn = contentRow.removeFromLeft(leftColumnWidth);
+    contentRow.removeFromLeft(12);
+    auto rightColumn = contentRow;
 
-    area.removeFromTop(1);
+    const int controlX = leftColumn.getX();
+    const int controlWidth = juce::jmax(210, leftColumn.getWidth() - 8);
+    const int controlHeight = 24;
 
-    auto branchNameRow = area.removeFromTop(22);
-    branchNameLabel.setBounds(x - 80, branchNameRow.getY(), fieldWidth + 160, branchNameRow.getHeight());
+    auto projectNameRow = leftColumn.removeFromTop(20);
+    projectNameLabel.setBounds(controlX, projectNameRow.getY(), controlWidth, projectNameRow.getHeight());
 
-    area.removeFromTop(4);
+    auto branchNameRow = leftColumn.removeFromTop(20);
+    branchNameLabel.setBounds(controlX, branchNameRow.getY(), controlWidth, branchNameRow.getHeight());
 
-    auto projectFileRow = area.removeFromTop(28);
-    projectFileLabel.setBounds(x - 80, projectFileRow.getY(), fieldWidth + 160, projectFileRow.getHeight());
+    leftColumn.removeFromTop(2);
+    auto projectFileRow = leftColumn.removeFromTop(22);
+    projectFileLabel.setBounds(controlX, projectFileRow.getY(), controlWidth, projectFileRow.getHeight());
 
-    area.removeFromTop(4);
+    leftColumn.removeFromTop(8);
+    auto branchLabelRow = leftColumn.removeFromTop(18);
+    branchLabel.setBounds(controlX, branchLabelRow.getY(), controlWidth, branchLabelRow.getHeight());
 
-    auto branchLabelRow = area.removeFromTop(18);
-    branchLabel.setBounds(x, branchLabelRow.getY(), fieldWidth, branchLabelRow.getHeight());
+    auto branchRow = leftColumn.removeFromTop(controlHeight);
+    branchComboBox.setBounds(controlX, branchRow.getY(), controlWidth, branchRow.getHeight());
+    changeBranch.setBounds(0, 0, 0, 0);
 
-    area.removeFromTop(1);
+    leftColumn.removeFromTop(6);
+    auto versionLabelRow = leftColumn.removeFromTop(18);
+    versionLabel.setBounds(controlX, versionLabelRow.getY(), controlWidth, versionLabelRow.getHeight());
 
-    auto branchComboRow = area.removeFromTop(24);
-    branchComboBox.setBounds(x, branchComboRow.getY(), fieldWidth, branchComboRow.getHeight());
+    auto versionRow = leftColumn.removeFromTop(controlHeight);
+    versionComboBox.setBounds(controlX, versionRow.getY(), controlWidth, versionRow.getHeight());
 
-    area.removeFromTop(4);
+    leftColumn.removeFromTop(6);
+    auto commitMessageLabelRow = leftColumn.removeFromTop(18);
+    commitMessageLabel.setBounds(controlX, commitMessageLabelRow.getY(), controlWidth, commitMessageLabelRow.getHeight());
 
-    auto branchRow = area.removeFromTop(26);
-    changeBranch.setBounds(x, branchRow.getY(), fieldWidth, branchRow.getHeight());
+    auto commitMessageRow = leftColumn.removeFromTop(controlHeight);
+    commitMessageInput.setBounds(controlX, commitMessageRow.getY(), controlWidth, commitMessageRow.getHeight());
 
-    area.removeFromTop(5);
+    leftColumn.removeFromTop(8);
+    auto saveRow = leftColumn.removeFromTop(controlHeight + 2);
+    saveChanges.setBounds(controlX, saveRow.getY(), controlWidth, saveRow.getHeight());
 
-    auto versionLabelRow = area.removeFromTop(18);
-    versionLabel.setBounds(x, versionLabelRow.getY(), fieldWidth, versionLabelRow.getHeight());
+    leftColumn.removeFromTop(6);
+    auto utilitiesRow = leftColumn.removeFromTop(controlHeight);
+    const int utilityButtonWidth = juce::jmax(100, (controlWidth - 6) / 2);
+    syncButton.setBounds(controlX, utilitiesRow.getY(), utilityButtonWidth, utilitiesRow.getHeight());
+    restoreButton.setBounds(controlX + utilityButtonWidth + 6,
+                            utilitiesRow.getY(),
+                            controlWidth - utilityButtonWidth - 6,
+                            utilitiesRow.getHeight());
 
-    area.removeFromTop(1);
-
-    auto versionComboRow = area.removeFromTop(24);
-    versionComboBox.setBounds(x, versionComboRow.getY(), fieldWidth, versionComboRow.getHeight());
-
-    area.removeFromTop(4);
-
-    auto commitMessageLabelRow = area.removeFromTop(18);
-    commitMessageLabel.setBounds(x, commitMessageLabelRow.getY(), fieldWidth, commitMessageLabelRow.getHeight());
-
-    area.removeFromTop(1);
-
-    auto commitMessageRow = area.removeFromTop(24);
-    commitMessageInput.setBounds(x, commitMessageRow.getY(), fieldWidth, commitMessageRow.getHeight());
-
-    area.removeFromTop(4);
-
-    auto saveRow = area.removeFromTop(26);
-    saveChanges.setBounds(x, saveRow.getY(), fieldWidth, saveRow.getHeight());
-
-    area.removeFromTop(4);
-
-    auto syncRow = area.removeFromTop(26);
-    syncButton.setBounds(x, syncRow.getY(), fieldWidth, syncRow.getHeight());
-
-    auto restoreRow = area.removeFromTop(26);
-    restoreButton.setBounds(x, restoreRow.getY(), fieldWidth, restoreRow.getHeight());
+    auto filesLabelRow = rightColumn.removeFromTop(18);
+    packagedFilesLabel.setBounds(rightColumn.getX(), filesLabelRow.getY(), rightColumn.getWidth(), filesLabelRow.getHeight());
+    rightColumn.removeFromTop(4);
+    packagedFilesTree.setBounds(rightColumn);
 }
