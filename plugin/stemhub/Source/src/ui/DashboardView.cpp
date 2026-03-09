@@ -253,7 +253,7 @@ ProjectSelectionView::ProjectSelectionView()
     styleSecondaryButton(chooseProjectFileButton);
     chooseProjectFileButton.onClick = [this]
     {
-        invokeIfBound(onChooseProjectFolder);
+        invokeIfBound(onChooseProjectFile);
     };
 
     addAndMakeVisible(openProjectButton);

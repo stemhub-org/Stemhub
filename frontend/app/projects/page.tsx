@@ -209,18 +209,18 @@ function RepositoryPageContent() {
                             Project
                         </button>
                         {currentUserId && summary.project.owner.id === currentUserId && (
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab("Settings")}
-                                className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                                    activeTab === "Settings"
-                                        ? "border-accent text-foreground"
-                                        : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
-                                }`}
-                            >
-                                <Settings className="size-4" />
-                                Settings
-                            </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("Settings")}
+                            className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                                activeTab === "Settings"
+                                    ? "border-accent text-foreground"
+                                    : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
+                            }`}
+                        >
+                            <Settings className="size-4" />
+                            Settings
+                        </button>
                         )}
                     </div>
                 </div>
@@ -253,6 +253,8 @@ function RepositoryPageContent() {
                                 <div className={`${cardClass} p-6`}>
                                     <QuickExport
                                         projectId={projectId}
+                                        projectName={summary.project.name}
+                                        branchName={selectedBranchName}
                                         latestVersionId={summary.latest_version_id}
                                         hasPreview={summary.has_preview}
                                         hasArtifact={Boolean(latestVersion?.has_artifact)}
