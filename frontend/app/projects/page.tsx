@@ -194,20 +194,21 @@ function RepositoryPageContent() {
                     />
                 </div>
 
-                <div className="flex items-center gap-4 border-b border-border-subtle justify-end mt-4 mb-6 px-2">
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab("Project")}
-                        className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                            activeTab === "Project"
-                                ? "border-accent text-foreground"
-                                : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
-                        }`}
-                    >
-                        <FileText className="size-4" />
-                        Project
-                    </button>
-                    {currentUserId && summary.project.owner.id === currentUserId && (
+                <div className="flex flex-wrap items-center justify-end gap-4 mt-4 mb-6 px-2">
+                    <div className="flex items-center gap-4 border-b border-border-subtle flex-1 justify-end">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("Project")}
+                            className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                                activeTab === "Project"
+                                    ? "border-accent text-foreground"
+                                    : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
+                            }`}
+                        >
+                            <FileText className="size-4" />
+                            Project
+                        </button>
+                        {currentUserId && summary.project.owner.id === currentUserId && (
                         <button
                             type="button"
                             onClick={() => setActiveTab("Settings")}
@@ -220,22 +221,12 @@ function RepositoryPageContent() {
                             <Settings className="size-4" />
                             Settings
                         </button>
-                    )}
+                        )}
+                    </div>
                 </div>
 
                 {activeTab === "Project" && (
                     <>
-                        <div className="flex flex-wrap items-center gap-4 mb-6">
-                            <RepositoryBranchBar
-                                branches={summary.branches}
-                                selectedBranchId={selectedBranchId}
-                                onBranchChange={setSelectedBranchId}
-                                isOwner={currentUserId === summary.project.owner.id}
-                                onDelete={handleDeleteBranch}
-                                onCreate={currentUserId === summary.project.owner.id ? handleCreateBranch : undefined}
-                            />
-                        </div>
-
                         <motion.main
                             className="flex items-start gap-6"
                             initial={{ opacity: 0 }}
@@ -243,6 +234,14 @@ function RepositoryPageContent() {
                             transition={{ duration: 0.3 }}
                         >
                             <section className="flex min-w-0 flex-1 flex-col gap-6 self-start">
+                                <RepositoryBranchBar
+                                    branches={summary.branches}
+                                    selectedBranchId={selectedBranchId}
+                                    onBranchChange={setSelectedBranchId}
+                                    isOwner={currentUserId === summary.project.owner.id}
+                                    onDelete={handleDeleteBranch}
+                                    onCreate={currentUserId === summary.project.owner.id ? handleCreateBranch : undefined}
+                                />
                                 <div className={cardClass}>
                                     <div className="p-8">
                                         <RepositoryAudioPlayer
