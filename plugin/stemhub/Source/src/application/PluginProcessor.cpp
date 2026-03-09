@@ -551,16 +551,6 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     }
 
     const auto pushedVersionId = versionControlService.getLastVersionId();
-    juce::String statusMessage = "Version pushed successfully.";
-    if (previewTrackFile.existsAsFile() && pushedVersionId.isNotEmpty())
-    {
-        const auto previewUploadResult = versionControlService.uploadVersionTrackAudio(
-            pushedVersionId,
-            previewTrackFile,
-            versionControlService.getAccessToken());
-        if (previewUploadResult.failed())
-            statusMessage = "Version pushed successfully. Preview upload failed: " + previewUploadResult.getErrorMessage();
-    }
 
     if (bundleOutput.bundleFile.existsAsFile())
         bundleOutput.bundleFile.deleteFile();
@@ -568,7 +558,7 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
         previewTrackFile.deleteFile();
 
     result.pushedVersionId = pushedVersionId;
-    result.activeProjectStatusMessage = statusMessage;
+    result.activeProjectStatusMessage = "Version pushed successfully.";
     return result;
 }
 
