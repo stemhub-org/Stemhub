@@ -69,7 +69,6 @@ async def upload_artifact(
         version_id=version_id,
         current_user=current_user,
         db=db,
-        owner_only=True,
     )
 
     if not artifact.filename:

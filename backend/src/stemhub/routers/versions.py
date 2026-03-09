@@ -55,13 +55,14 @@ async def create_version(
     result = await db.execute(
         select(Branch).join(Project).where(
             Branch.id == branch_id,
-            Project.owner_id == current_user.id,
             Branch.is_deleted == False,
             Project.is_deleted == False
         )
     )
     branch = result.scalars().first()
     if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found or you don't have access")
+    if not await _can_access_project(project_id=branch.project_id, current_user=current_user, db=db):
         raise HTTPException(status_code=404, detail="Branch not found or you don't have access")
 
     db_version = Version(**version_in.model_dump(), branch_id=branch_id, created_by=current_user.id)
