@@ -118,7 +118,7 @@ juce::Result VersionControlService::uploadVersionTrackAudio(const juce::String& 
     if (api == nullptr)
         return juce::Result::fail("VersionControlService API client is not configured.");
 
-    const auto uploadResult = api->uploadFile("/versions/" + versionId + "/tracks/upload", trackFile, "file", bearerToken);
+    const auto uploadResult = api->uploadFile("/versions/" + versionId + "/audio-stems", trackFile, "file", bearerToken);
     if (!uploadResult.ok())
         return juce::Result::fail(buildApiErrorMessage(uploadResult.error, "Failed to upload preview track."));
 
