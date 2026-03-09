@@ -33,15 +33,14 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
 
     return (
         <div
-            className={`h-full flex flex-col border-r border-border-subtle relative transition-[width,opacity] duration-300 ease-in-out ${
-                isLight ? "bg-white" : "bg-background-tertiary"
-            } ${isOpen ? "w-64 opacity-100" : "w-0 opacity-0 pointer-events-none overflow-hidden"}`}
+            className={`h-full flex flex-col border-r border-border-subtle relative transition-[width,opacity] duration-300 ease-in-out ${isLight ? "bg-white" : "bg-background-tertiary"
+                } ${isOpen ? "w-64 opacity-100" : "w-0 opacity-0 pointer-events-none overflow-hidden"}`}
             style={isLight ? { backgroundColor: "#ffffff" } : undefined}
         >
             {isOpen && (
                 <>
                     <div className="h-20 flex items-center justify-between px-8 border-b border-border-subtle">
-                        <Link href="/">
+                        <Link href="/dashboard">
                             <span
                                 className="text-2xl font-medium tracking-tight text-foreground"
                                 style={{ fontFamily: "var(--font-syne)" }}
@@ -69,20 +68,18 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                                 <Link
                                     key={item.name}
                                     href={item.href}
-                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 group ${
-                                        isActive
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 group ${isActive
                                             ? "bg-accent/10 text-accent border border-accent/20 shadow-[0_0_15px_rgba(156,87,223,0.1)]"
                                             : "text-foreground-muted hover:text-foreground hover:bg-gradient-to-r hover:from-background-secondary hover:to-accent/5 border border-transparent hover:border-accent/20"
-                                    }`}
+                                        }`}
                                 >
                                     <Icon
                                         size={18}
                                         strokeWidth={isActive ? 2 : 1.5}
-                                        className={`${
-                                            isActive
+                                        className={`${isActive
                                                 ? "text-accent"
                                                 : "group-hover:text-accent transition-colors"
-                                        }`}
+                                            }`}
                                     />
                                     <span className="text-sm font-medium">{item.name}</span>
                                 </Link>
