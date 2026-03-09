@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Settings, Code2 } from "lucide-react";
+import { Loader2, Settings, FileText } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import { RepositoryHeader } from "./components/RepositoryHeader";
 import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
@@ -48,7 +48,7 @@ function RepositoryPageContent() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
     const [currentUsername, setCurrentUsername] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<"Code" | "Settings">("Code");
+    const [activeTab, setActiveTab] = useState<"Project" | "Settings">("Project");
 
     const fetchData = useCallback(async (projectId: string) => {
         setIsLoading(true);
@@ -197,48 +197,50 @@ function RepositoryPageContent() {
                     />
                 </div>
 
-                <div className="flex border-b border-border-subtle mt-2 mb-6 gap-6 px-2">
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab("Code")}
-                        className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors ${
-                            activeTab === "Code"
-                                ? "border-accent text-foreground"
-                                : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
-                        }`}
-                    >
-                        <Code2 className="size-4" />
-                        Code
-                    </button>
-                    {currentUserId && summary.project.owner.id === currentUserId && (
+                <div className="flex flex-wrap items-center justify-between gap-4 mt-4 mb-6 px-2">
+                    {activeTab === "Project" && (
+                        <RepositoryBranchBar
+                            branches={summary.branches}
+                            selectedBranch={selectedBranch}
+                            onBranchChange={setSelectedBranch}
+                            isOwner={currentUserId === summary.project.owner.id}
+                            onDelete={handleDeleteBranch}
+                            onCreate={currentUserId === summary.project.owner.id ? handleCreateBranch : undefined}
+                        />
+                    )}
+
+                    <div className="flex items-center gap-4 border-b border-border-subtle flex-1 justify-end">
                         <button
                             type="button"
-                            onClick={() => setActiveTab("Settings")}
-                            className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors ${
-                                activeTab === "Settings"
+                            onClick={() => setActiveTab("Project")}
+                            className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                                activeTab === "Project"
                                     ? "border-accent text-foreground"
                                     : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
                             }`}
                         >
-                            <Settings className="size-4" />
-                            Settings
+                            <FileText className="size-4" />
+                            Project
                         </button>
-                    )}
+                        {currentUserId && summary.project.owner.id === currentUserId && (
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("Settings")}
+                                className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                                    activeTab === "Settings"
+                                        ? "border-accent text-foreground"
+                                        : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
+                                }`}
+                            >
+                                <Settings className="size-4" />
+                                Settings
+                            </button>
+                        )}
+                    </div>
                 </div>
 
-                {activeTab === "Code" && (
+                {activeTab === "Project" && (
                     <>
-                        <div className="flex flex-wrap items-center gap-4 mb-6">
-                            <RepositoryBranchBar
-                                branches={summary.branches}
-                                selectedBranch={selectedBranch}
-                                onBranchChange={setSelectedBranch}
-                                isOwner={currentUserId === summary.project.owner.id}
-                                onDelete={handleDeleteBranch}
-                                onCreate={currentUserId === summary.project.owner.id ? handleCreateBranch : undefined}
-                            />
-                        </div>
-
                         <motion.main
                             className="flex items-start gap-6"
                             initial={{ opacity: 0 }}
