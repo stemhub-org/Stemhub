@@ -70,7 +70,7 @@ def _create_test_client(
     tmp_path,
     storage = None,
     current_user: User | None = None,
-    owned_version: Version | Exception | None = None,
+    accessible_version: Version | Exception | None = None,
 ):
     app = FastAPI()
     app.include_router(files_router)
@@ -90,13 +90,14 @@ def _create_test_client(
 
         app.dependency_overrides[get_current_user] = override_current_user
 
-    if owned_version is not None:
-        async def fake_get_owned_version(*, version_id, current_user, db):
-            if isinstance(owned_version, Exception):
-                raise owned_version
-            return owned_version
+    if accessible_version is not None:
+        async def fake_get_version_with_access(*, version_id, current_user, db, owner_only=False):
+            del version_id, current_user, db, owner_only
+            if isinstance(accessible_version, Exception):
+                raise accessible_version
+            return accessible_version
 
-        monkeypatch.setattr(files_router_module, "_get_owned_version", fake_get_owned_version)
+        monkeypatch.setattr(files_router_module, "_get_version_with_access", fake_get_version_with_access)
 
     client = TestClient(app)
     return client, session, storage_service
@@ -108,7 +109,7 @@ def test_upload_version_artifact_persists_file_and_metadata(tmp_path, monkeypatc
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
     )
 
     response = client.post(
@@ -149,7 +150,7 @@ def test_download_version_artifact_streams_stored_file(tmp_path, monkeypatch) ->
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
     )
 
     response = client.get(f"/versions/{version.id}/artifact")
@@ -183,7 +184,7 @@ def test_download_version_artifact_uses_storage_service_for_non_local_reference(
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
         storage=RemoteStorageService(),
     )
 
@@ -217,7 +218,7 @@ def test_upload_version_artifact_rejects_second_upload(tmp_path, monkeypatch) ->
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
     )
 
     response = client.post(
@@ -239,7 +240,7 @@ def test_download_version_artifact_returns_404_when_file_is_missing(tmp_path, mo
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
     )
 
     response = client.get(f"/versions/{version.id}/artifact")
@@ -264,7 +265,7 @@ def test_download_version_artifact_maps_storage_errors_to_404(tmp_path, monkeypa
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
         storage=ErrorStorageService(),
     )
 
@@ -280,7 +281,7 @@ def test_upload_version_artifact_returns_404_for_unowned_version(tmp_path, monke
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=HTTPException(status_code=404, detail="Version not found"),
+        accessible_version=HTTPException(status_code=404, detail="Version not found"),
     )
 
     response = client.post(
