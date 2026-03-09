@@ -44,7 +44,7 @@ public:
     [[nodiscard]] juce::String getSelectedProjectId() const;
     void resized() override;
 
-    std::function<void()> onChooseProjectFolder;
+    std::function<void()> onChooseProjectFile;
     std::function<void()> onOpenProject;
     std::function<void()> onCreateProject;
     std::function<void()> onSignOut;
@@ -57,7 +57,7 @@ private:
     juce::Label projectFileLabel;
     juce::Label existingProjectsLabel;
     juce::ComboBox projectComboBox;
-    juce::TextButton chooseProjectFileButton { "Choose Project Folder" };
+    juce::TextButton chooseProjectFileButton { "Choose Project File" };
     juce::TextButton openProjectButton { "Open Project" };
     juce::TextButton createProjectButton { "Create Project" };
     juce::TextButton signOutButton { "Sign Out" };

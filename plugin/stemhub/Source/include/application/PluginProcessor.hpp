@@ -73,8 +73,6 @@ public:
     [[nodiscard]] const juce::String& getActiveProjectStatusMessage() const noexcept { return activeProjectStatusMessage; }
     [[nodiscard]] const juce::File& getPendingProjectFile() const noexcept { return pendingProjectFile; }
     [[nodiscard]] const juce::File& getSelectedProjectFile() const noexcept { return selectedProjectFile; }
-    [[nodiscard]] const juce::File& getPendingProjectFolder() const noexcept { return pendingProjectFolder; }
-    [[nodiscard]] const juce::File& getSelectedProjectFolder() const noexcept { return selectedProjectFolder; }
 
     void setCurrentUser(std::optional<User> newUser) noexcept { currentUser = std::move(newUser); }
     void signIn(User newUser) noexcept;
@@ -88,8 +86,7 @@ public:
     void setProjectSelectionStatusMessage(juce::String message);
     void setActiveProjectStatusMessage(juce::String message);
     void setPendingProjectFile(const juce::File& file);
-    void setPendingProjectFolder(const juce::File& folder);
-    void selectProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile, juce::File projectFolder);
+    void selectProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile);
     void clearSelectedProject() noexcept;
     
     void requestSignIn(const juce::String& email, const juce::String& password);
@@ -208,6 +205,4 @@ private:
     VersionControlService versionControlService;
     juce::File pendingProjectFile;
     juce::File selectedProjectFile;
-    juce::File pendingProjectFolder;
-    juce::File selectedProjectFolder;
 };
