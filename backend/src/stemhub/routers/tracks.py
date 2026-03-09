@@ -127,28 +127,6 @@ async def list_tracks(
     return result.scalars().all()
 
 
-@router.get("/tracks/{track_id}", response_model=TrackResponse)
-async def get_track(
-    track_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Get a specific track by ID.
-    """
-    result = await db.execute(
-        select(Track).join(Version).join(Branch).join(Project).where(
-            Track.id == track_id,
-            Project.owner_id == current_user.id,
-            Version.is_deleted == False,
-            Branch.is_deleted == False,
-            Project.is_deleted == False,
-        )
-    )
-    track = result.scalars().first()
-    if not track:
-        raise HTTPException(status_code=404, detail="Track not found")
-    return track
 
 @router.get("/tracks/{track_id}/audio")
 async def get_track_audio(
