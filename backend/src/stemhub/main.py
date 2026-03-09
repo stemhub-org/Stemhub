@@ -11,12 +11,20 @@ from .routers.tracks import router as tracks_router
 from .routers.collaborators import router as collaborators_router
 from .routers.stats import router as stats_router
 from .routers.project_summary import router as project_summary_router
-from .database import engine, Base
+from .database import engine
+from .migrations import check_migrations_async
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Check that database schema is up to date before starting the application
+    # This prevents starting the app with pending migrations, avoiding schema drift
+    try:
+        await check_migrations_async()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Startup failed due to pending migrations: {e}")
+        raise RuntimeError("Pending migrations found. Please run 'alembic upgrade head' before starting the application.") from e
+        
     yield
 
 app = FastAPI(title="StemHub API", lifespan=lifespan)
