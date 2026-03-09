@@ -69,10 +69,37 @@ async def upload_track(
     """
     Upload an audio file to create a new track for a specific version.
     """
-    await _get_owned_version(version_id=version_id, current_user=current_user, db=db)
+    # Fetch all relevant Project constraints to verify access and generate the storage path 
+    result = await db.execute(
+        select(Version, Branch, Project)
+        .join(Branch, Version.branch_id == Branch.id)
+        .join(Project, Branch.project_id == Project.id)
+        .where(
+            Version.id == version_id,
+            Project.owner_id == current_user.id,
+            Version.is_deleted == False,
+            Branch.is_deleted == False,
+            Project.is_deleted == False,
+        )
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Version not found")
+    version, branch, project = row
 
-    # Secure file name
-    file_ext = os.path.splitext(file.filename)[1] if file.filename else ".wav"
+    # Secure file name and validate type
+    file_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ".wav"
+    allowed_extensions = {".wav", ".mp3", ".ogg", ".flac"}
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Unsupported audio format")
+
+    # Validate size without reading entire file into memory (Max 50MB) 
+    MAX_FILE_SIZE = 50 * 1024 * 1024
+    file.file.seek(0, os.SEEK_END)
+    if file.file.tell() > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large")
+    file.file.seek(0)
+
     db_track = Track(
         version_id=version_id,
         name=file.filename or "Untitled Track",
@@ -82,18 +109,22 @@ async def upload_track(
     await db.commit()
     await db.refresh(db_track)
 
-    # Save physical file
-    file_path = os.path.join(UPLOAD_DIR, f"{db_track.id}{file_ext}")
-    db_track.storage_path = file_path
-    
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # Stream file directly to GCS, avoiding any local disk writes
+        storage_service = get_storage_service()
+        stored_artifact = storage_service.store_version_artifact(
+            project_id=project.id,
+            branch_id=branch.id,
+            version_id=version.id,
+            filename=f"{db_track.id}{file_ext}",
+            source=file.file,
+        )
+        db_track.storage_path = stored_artifact.path
     except Exception as e:
-        # Rollback DB if file write fails
+        # Rollback DB if file write fails or upload fails
         await db.delete(db_track)
         await db.commit()
-        raise HTTPException(status_code=500, detail="Could not save file")
+        raise HTTPException(status_code=500, detail="Could not save file to storage")
 
     await db.commit()
     await db.refresh(db_track)
