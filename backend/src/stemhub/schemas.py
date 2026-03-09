@@ -184,6 +184,7 @@ class VersionWithAuthor(BaseModel):
     created_at: datetime
     branch_name: str
     author: Optional[OwnerSummary] = None
+    has_artifact: bool = False
 
 class ProjectDetail(BaseModel):
     id: UUID
@@ -201,11 +202,11 @@ class ProjectSummaryResponse(BaseModel):
     project: ProjectDetail
     branches: list[BranchResponse]
     recent_versions: list[VersionWithAuthor]
-    tracks: list[TrackResponse]
+    latest_version_id: UUID | None = None
+    has_preview: bool = False
 
 # ── Auth Schemas ──
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-
