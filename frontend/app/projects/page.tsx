@@ -23,6 +23,12 @@ import type {
 } from "@/types/project";
 import { ProjectSettings } from "./components/ProjectSettings";
 
+type CurrentUserSummary = {
+    id: string;
+    avatar_url: string | null;
+    username: string | null;
+};
+
 const cardHoverDark =
     "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
 
@@ -59,7 +65,7 @@ function RepositoryPageContent() {
                 authFetch<ProjectSummaryResponse>(summaryPath),
                 authFetch<ActivityStatsResponse>(`/projects/${projectId}/stats/activity`),
                 authFetch<TopContributorsResponse>(`/projects/${projectId}/stats/top-contributors`),
-                authFetch<any>(`/auth/me`),
+                authFetch<CurrentUserSummary>(`/auth/me`),
             ]);
             setSummary(summaryData);
             setActivity(activityData);
@@ -260,7 +266,11 @@ function RepositoryPageContent() {
                                     />
                                 </div>
                                 <div className={`${cardClass} p-6`}>
-                                    <RecentChanges versions={summary.recent_versions} projectId={projectId} />
+                                    <RecentChanges
+                                        versions={summary.recent_versions}
+                                        projectId={projectId}
+                                        branchId={selectedBranchId || undefined}
+                                    />
                                 </div>
                             </section>
 

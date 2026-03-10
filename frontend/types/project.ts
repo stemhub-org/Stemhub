@@ -22,6 +22,8 @@ export interface VersionWithAuthor {
     branch_name: string;
     author: OwnerSummary | null;
     has_artifact: boolean;
+    source_daw: string | null;
+    source_project_filename: string | null;
 }
 
 // ── Track ──

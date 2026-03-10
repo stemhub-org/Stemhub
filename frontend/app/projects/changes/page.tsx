@@ -3,13 +3,14 @@
 import type React from "react";
 import Link from "next/link";
 import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
 import { RepositoryHeader } from "../components/RepositoryHeader";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, GitCompareArrows, Info } from "lucide-react";
 import { authFetch } from "@/lib/api";
-import type { VersionWithAuthor } from "@/types/project";
+import type { ProjectSummaryResponse, VersionWithAuthor } from "@/types/project";
+import { RepositoryBranchBar } from "../components/RepositoryBranchBar";
 
 function formatTimeAgo(dateString: string): string {
     const now = new Date();
@@ -29,6 +30,13 @@ function getInitials(username: string): string {
     return username.slice(0, 2).toUpperCase();
 }
 
+function buildVersionLabel(version: VersionWithAuthor): string {
+    const message = version.commit_message || "No message";
+    const timestamp = formatTimeAgo(version.created_at);
+    const filename = version.source_project_filename ? ` • ${version.source_project_filename}` : "";
+    return `${message} • ${timestamp}${filename}`;
+}
+
 const cardBase =
     "rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle p-6 transition-all duration-300";
 const cardHoverDark =
@@ -36,14 +44,24 @@ const cardHoverDark =
 
 function ProjectChangesContent() {
     const { resolvedTheme } = useTheme();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const projectId = searchParams.get("id");
+    const branchIdFromQuery = searchParams.get("branch_id") || "";
     const isDark = resolvedTheme === "dark";
     const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
-    const [versions, setVersions] = useState<VersionWithAuthor[]>([]);
+    const [summary, setSummary] = useState<ProjectSummaryResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [selectedBranchId, setSelectedBranchId] = useState(branchIdFromQuery);
+    const [baseVersionId, setBaseVersionId] = useState("");
+    const [targetVersionId, setTargetVersionId] = useState("");
+    const [compareLaunchMessage, setCompareLaunchMessage] = useState<string | null>(null);
+
+    useEffect(() => {
+        setSelectedBranchId(branchIdFromQuery);
+    }, [branchIdFromQuery]);
 
     useEffect(() => {
         if (!projectId) {
@@ -51,19 +69,80 @@ function ProjectChangesContent() {
             setError("No project ID provided.");
             return;
         }
+
+        let cancelled = false;
+
         (async () => {
+            setLoading(true);
+            setError(null);
             try {
-                const data = await authFetch<{ recent_versions: VersionWithAuthor[] }>(
-                    `/projects/${projectId}/summary`
-                );
-                setVersions(data.recent_versions);
+                const summaryPath = selectedBranchId
+                    ? `/projects/${projectId}/summary?branch_id=${selectedBranchId}`
+                    : `/projects/${projectId}/summary`;
+                const data = await authFetch<ProjectSummaryResponse>(summaryPath);
+
+                if (cancelled) return;
+
+                if (!selectedBranchId && data.branches.length > 0) {
+                    const fallbackBranchId = data.branches[0].id;
+                    setSelectedBranchId(fallbackBranchId);
+                    router.replace(`/projects/changes?id=${projectId}&branch_id=${fallbackBranchId}`);
+                    return;
+                }
+
+                setSummary(data);
             } catch (err) {
+                if (cancelled) return;
                 setError(err instanceof Error ? err.message : "Failed to load changes");
             } finally {
-                setLoading(false);
+                if (!cancelled) {
+                    setLoading(false);
+                }
             }
         })();
-    }, [projectId]);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [projectId, router, selectedBranchId]);
+
+    const versions = summary?.recent_versions || [];
+    const branches = summary?.branches || [];
+    const comparableVersions = versions.filter(
+        (version) => version.has_artifact && version.source_daw === "FL Studio"
+    );
+
+    useEffect(() => {
+        setCompareLaunchMessage(null);
+        if (comparableVersions.length === 0) {
+            setBaseVersionId("");
+            setTargetVersionId("");
+            return;
+        }
+
+        const versionIds = new Set(comparableVersions.map((version) => version.id));
+        const nextBaseId = versionIds.has(baseVersionId) ? baseVersionId : comparableVersions[0].id;
+        let nextTargetId = versionIds.has(targetVersionId) ? targetVersionId : "";
+
+        if (!nextTargetId || nextTargetId === nextBaseId) {
+            nextTargetId = comparableVersions.find((version) => version.id !== nextBaseId)?.id || "";
+        }
+
+        if (nextBaseId !== baseVersionId) {
+            setBaseVersionId(nextBaseId);
+        }
+        if (nextTargetId !== targetVersionId) {
+            setTargetVersionId(nextTargetId);
+        }
+    }, [baseVersionId, comparableVersions, targetVersionId]);
+
+    const handleBranchChange = (branchId: string) => {
+        setCompareLaunchMessage(null);
+        setSelectedBranchId(branchId);
+        if (projectId) {
+            router.replace(`/projects/changes?id=${projectId}&branch_id=${branchId}`);
+        }
+    };
 
     if (loading) {
         return (
@@ -89,19 +168,112 @@ function ProjectChangesContent() {
             <RepositoryHeader />
             <div className="p-6 space-y-6">
                 <Link
-                    href={`/projects?id=${projectId}`}
+                    href={`/projects?id=${projectId}${selectedBranchId ? `&branch_id=${selectedBranchId}` : ""}`}
                     className="inline-flex items-center gap-2 text-sm text-foreground/70 transition-colors hover:text-foreground"
                 >
                     <ArrowLeft className="size-4" aria-hidden />
                     Back to project
                 </Link>
                 <div className={cardClass}>
-                    <h1
-                        className="mb-6 pb-1 text-lg font-medium leading-relaxed text-foreground"
-                        style={{ fontFamily: "var(--font-syne)" }}
-                    >
-                        Changes
-                    </h1>
+                    <div className="mb-6 flex flex-col gap-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h1
+                                    className="pb-1 text-lg font-medium leading-relaxed text-foreground"
+                                    style={{ fontFamily: "var(--font-syne)" }}
+                                >
+                                    Changes
+                                </h1>
+                                <p className="text-sm text-foreground/60">
+                                    Select a branch and two FL Studio versions to prepare a mixer diff.
+                                </p>
+                            </div>
+                            <div className="inline-flex items-center gap-2 rounded-xl border border-accent/20 bg-accent/10 px-3 py-2 text-xs font-medium text-accent">
+                                <Info className="size-3.5" aria-hidden />
+                                FL Studio mixer diff only
+                            </div>
+                        </div>
+
+                        <RepositoryBranchBar
+                            branches={branches}
+                            selectedBranchId={selectedBranchId}
+                            onBranchChange={handleBranchChange}
+                        />
+                    </div>
+
+                    <div className="mb-6 rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-5">
+                        {comparableVersions.length < 2 ? (
+                            <div className="space-y-2">
+                                <h2 className="text-sm font-medium text-foreground">Compare setup</h2>
+                                <p className="text-sm text-foreground/60">
+                                    This branch needs at least two FL Studio versions with artifacts before compare can be launched.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+                                    <label className="flex flex-col gap-2 text-sm">
+                                        <span className="font-medium text-foreground">Base version</span>
+                                        <select
+                                            value={baseVersionId}
+                                            onChange={(event) => {
+                                                setBaseVersionId(event.target.value);
+                                                setCompareLaunchMessage(null);
+                                            }}
+                                            className="rounded-xl border border-border-subtle bg-background-secondary dark:bg-background-tertiary px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-accent"
+                                        >
+                                            {comparableVersions.map((version) => (
+                                                <option key={version.id} value={version.id}>
+                                                    {buildVersionLabel(version)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+
+                                    <label className="flex flex-col gap-2 text-sm">
+                                        <span className="font-medium text-foreground">Target version</span>
+                                        <select
+                                            value={targetVersionId}
+                                            onChange={(event) => {
+                                                setTargetVersionId(event.target.value);
+                                                setCompareLaunchMessage(null);
+                                            }}
+                                            className="rounded-xl border border-border-subtle bg-background-secondary dark:bg-background-tertiary px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-accent"
+                                        >
+                                            {comparableVersions.map((version) => (
+                                                <option
+                                                    key={version.id}
+                                                    value={version.id}
+                                                    disabled={version.id === baseVersionId}
+                                                >
+                                                    {buildVersionLabel(version)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCompareLaunchMessage(
+                                                "Compare request is configured. Result fetching and rendering lands in the next iteration."
+                                            );
+                                        }}
+                                        disabled={!baseVersionId || !targetVersionId || baseVersionId === targetVersionId}
+                                        className="inline-flex h-[50px] items-center justify-center gap-2 rounded-xl bg-accent px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <GitCompareArrows className="size-4" aria-hidden />
+                                        Compare versions
+                                    </button>
+                                </div>
+
+                                {compareLaunchMessage && (
+                                    <p className="text-sm text-foreground/60">{compareLaunchMessage}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     {versions.length === 0 ? (
                         <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-6 text-center">
                             <p className="text-sm text-foreground/50">No changes yet</p>
@@ -142,6 +314,12 @@ function ProjectChangesContent() {
                                                     <p className="mt-0.5 font-mono text-xs text-foreground/60">
                                                         {version.branch_name}
                                                     </p>
+                                                    {version.source_daw && (
+                                                        <p className="mt-0.5 text-xs text-foreground/50">
+                                                            {version.source_daw}
+                                                            {version.source_project_filename ? ` • ${version.source_project_filename}` : ""}
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
