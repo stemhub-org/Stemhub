@@ -46,6 +46,7 @@ target_sources(stemhub
         Source/src/ui/DashboardView.cpp
         Source/src/ui/LoginView.cpp
         Source/src/application/PluginProcessor.cpp
+        Source/src/application/ProjectFileService.cpp
         Source/src/application/SessionCache.cpp
         Source/src/application/SnapshotBundler.cpp
         Source/src/network/ApiClient.cpp
