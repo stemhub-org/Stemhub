@@ -109,6 +109,7 @@ class Track(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)  # e.g. Kick, Lead Synth
     file_type: Mapped[str] = mapped_column(String(50), default=".json")
     storage_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=True)
 
     # ── Relationships ──
     version: Mapped["Version"] = relationship("Version", back_populates="tracks")

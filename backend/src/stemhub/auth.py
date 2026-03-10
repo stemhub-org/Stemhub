@@ -15,7 +15,8 @@ from .schemas import LoginRequest, UserCreate, UserResponse, Token, UserUpdate
 from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/swagger-login", auto_error=False)
+INACTIVE_ACCOUNT_MESSAGE = "Your account is deactivated."
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -34,6 +35,8 @@ GOOGLE_REDIRECT_URI = ensure_https(os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_U
 
 @router.get("/login/google")
 async def login_google():
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google OAuth is not configured (GOOGLE_CLIENT_ID missing).")
     state = secrets.token_urlsafe(32)
     response = RedirectResponse(
         url=f"https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id={GOOGLE_CLIENT_ID}&redirect_uri={GOOGLE_REDIRECT_URI}&scope=openid%20profile%20email&access_type=offline&prompt=select_account&state={state}"
@@ -50,6 +53,8 @@ async def login_google():
 
 @router.get("/callback/google")
 async def callback_google(request: Request, code: str, state: str | None = None, db: AsyncSession = Depends(get_db)):
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Google OAuth is not configured (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET missing).")
     cookie_state = request.cookies.get("oauth_state")
     if not state or not cookie_state or not secrets.compare_digest(state, cookie_state):
         raise HTTPException(status_code=400, detail="Invalid state parameter")
@@ -64,6 +69,14 @@ async def callback_google(request: Request, code: str, state: str | None = None,
             "redirect_uri": GOOGLE_REDIRECT_URI
         })
         token_data = token_res.json()
+        if token_data.get("error"):
+            error_code = token_data.get("error")
+            error_description = token_data.get("error_description") or "OAuth token exchange failed."
+            raise HTTPException(
+                status_code=400,
+                detail=f"{error_code}: {error_description}"
+            )
+
         access_token = token_data.get("access_token")
 
         if not access_token:
@@ -80,6 +93,7 @@ async def callback_google(request: Request, code: str, state: str | None = None,
 
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalars().first()
+        reactivated = False
 
         if not user:
             base_username = name.replace(" ", "").lower() if name else email.split("@")[0]
@@ -95,6 +109,14 @@ async def callback_google(request: Request, code: str, state: str | None = None,
             password_hash = get_password_hash(urllib.parse.quote(email) + "oauth_dummy")
             user = User(email=email, username=username, password_hash=password_hash, avatar_url=avatar_url)
             db.add(user)
+            reactivated = True
+        else:
+            user.avatar_url = avatar_url
+            if not user.is_active:
+                user.is_active = True
+                reactivated = True
+
+        if reactivated:
             await db.commit()
             await db.refresh(user)
 
@@ -111,7 +133,7 @@ async def callback_google(request: Request, code: str, state: str | None = None,
         return response
 
 @router.post("/register", response_model=UserResponse)
-async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(user: UserCreate, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
     result_email = await db.execute(select(User).where(User.email == user.email))
     if result_email.scalars().first():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -125,12 +147,60 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
+    
+    # Set cookie on registration too
+    access_token = create_access_token(data={"sub": db_user.email})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=3600 * 24 * 7,
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
+    
     return db_user
 
+@router.post("/swagger-login", response_model=Token)
+async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    # Swagger sends the user input in the "username" field, but we log in with email
+    result = await db.execute(select(User).where(User.email == form_data.username))
+    user = result.scalars().first()
+    if user and not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=INACTIVE_ACCOUNT_MESSAGE,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user or not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(data={"sub": user.email})
+    
+    # Also set cookie for easier testing even in Swagger
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=3600 * 24, # 24 hours
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
 @router.post("/login", response_model=Token)
-async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(credentials: LoginRequest, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == credentials.email))
     user = result.scalars().first()
+    if user and not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=INACTIVE_ACCOUNT_MESSAGE,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -139,11 +209,38 @@ async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
         )
     
     access_token = create_access_token(data={"sub": user.email})
+    
+    # Set HttpOnly Cookie
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=3600 * 24 * 7, # 7 days
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
+    
     return {"access_token": access_token, "token_type": "bearer"}
 
-async def get_current_user(request: Request, token: str | None = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+@router.post("/logout")
+async def logout(response: RedirectResponse):
+    response.delete_cookie("access_token")
+    return {"message": "Logged out successfully"}
+
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
+    # Order of priority for tokens:
+    # 1. Query parameter (explicitly passed, e.g. for audio)
+    # 2. HttpOnly Cookie (automatic session)
+    # 3. Authorization Header (Standard/Swagger)
+    
+    token = request.query_params.get("token")
     if not token:
         token = request.cookies.get("access_token")
+    if not token:
+        # Fallback to header if neither cookie nor query param exists
+        header_auth = request.headers.get("Authorization")
+        if header_auth and header_auth.startswith("Bearer "):
+            token = header_auth.split(" ")[1]
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -161,7 +258,7 @@ async def get_current_user(request: Request, token: str | None = Depends(oauth2_
     except jwt.PyJWTError:
         raise credentials_exception
         
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).where(User.email == email, User.is_active == True))
     user = result.scalars().first()
     if user is None:
         raise credentials_exception

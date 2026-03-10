@@ -1,25 +1,15 @@
 "use client";
 
 import { Users } from "lucide-react";
+import type { ContributorStats } from "@/types/project";
 
-type Contributor = {
-    id: string;
-    name: string;
-    initials: string;
-    commits: number;
-};
+interface TopContributorsProps {
+    contributors: ContributorStats[];
+}
 
-const PLACEHOLDER_CONTRIBUTORS: Contributor[] = [
-    { id: "1", name: "Skrillex", initials: "SK", commits: 143 },
-    { id: "2", name: "Metro Boomin", initials: "MB", commits: 87 },
-    { id: "3", name: "deadmau5", initials: "D5", commits: 52 },
-];
+export function TopContributors({ contributors }: TopContributorsProps) {
+    const maxCommits = Math.max(1, ...contributors.map((c) => c.commits));
 
-const MAX_COMMITS = Math.max(
-    ...PLACEHOLDER_CONTRIBUTORS.map((c) => c.commits)
-);
-
-export function TopContributors() {
     return (
         <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
@@ -31,34 +21,38 @@ export function TopContributors() {
                     Top Contributors
                 </h3>
             </div>
-            <ul className="flex flex-col gap-3" role="list">
-                {PLACEHOLDER_CONTRIBUTORS.map((contributor) => (
-                    <li key={contributor.id} className="flex items-center gap-3">
-                        <div
-                            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-medium text-accent"
-                            aria-hidden
-                        >
-                            {contributor.initials}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">
-                                {contributor.name}
-                            </p>
-                            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
-                                <div
-                                    className="h-full rounded-full bg-accent"
-                                    style={{
-                                        width: `${(contributor.commits / MAX_COMMITS) * 100}%`,
-                                    }}
-                                />
+            {contributors.length === 0 ? (
+                <p className="text-sm text-foreground/50">No contributors yet</p>
+            ) : (
+                <ul className="flex flex-col gap-3" role="list">
+                    {contributors.map((contributor) => (
+                        <li key={contributor.user_id} className="flex items-center gap-3">
+                            <div
+                                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-medium text-accent"
+                                aria-hidden
+                            >
+                                {contributor.initials}
                             </div>
-                        </div>
-                        <span className="shrink-0 text-sm text-foreground/70">
-                            {contributor.commits} changes
-                        </span>
-                    </li>
-                ))}
-            </ul>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                    {contributor.username}
+                                </p>
+                                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
+                                    <div
+                                        className="h-full rounded-full bg-accent"
+                                        style={{
+                                            width: `${(contributor.commits / maxCommits) * 100}%`,
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            <span className="shrink-0 text-sm text-foreground/70">
+                                {contributor.commits} changes
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
 }

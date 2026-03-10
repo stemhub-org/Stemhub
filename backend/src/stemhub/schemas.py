@@ -101,8 +101,6 @@ class VersionBase(BaseModel):
 class VersionCreate(VersionBase):
     pass
 
-class VersionUpdate(BaseModel):
-    commit_message: Optional[str] = None
 
 class VersionResponse(VersionBase):
     id: UUID
@@ -115,27 +113,10 @@ class VersionResponse(VersionBase):
     class Config:
         from_attributes = True
 
-# ── Track Schemas ──
-
-class TrackBase(BaseModel):
-    name: str
-    file_type: str = ".json"
-    storage_path: Optional[str] = None
-
-class TrackCreate(TrackBase):
-    pass
-
-class TrackResponse(TrackBase):
-    id: UUID
-    version_id: UUID
-
-    class Config:
-        from_attributes = True
-
 # ── Collaborator Schemas ──
 
 class CollaboratorCreate(BaseModel):
-    user_id: UUID
+    username: str
     role: Optional[str] = "Viewer"
 
 class CollaboratorResponse(BaseModel):
@@ -145,8 +126,65 @@ class CollaboratorResponse(BaseModel):
     created_at: datetime
     user: Optional[UserResponse] = None
 
+
     class Config:
         from_attributes = True
+
+# ── Stats Schemas ──
+
+class DailyActivity(BaseModel):
+    date: str
+    count: int
+
+class ActivityStatsResponse(BaseModel):
+    daily_activity: list[DailyActivity]
+    total_commits: int
+    total_contributors: int
+
+class ContributorStats(BaseModel):
+    user_id: UUID
+    username: str
+    initials: str
+    commits: int
+
+class TopContributorsResponse(BaseModel):
+    contributors: list[ContributorStats]
+
+# ── Project Summary Schemas ──
+
+class OwnerSummary(BaseModel):
+    id: UUID
+    username: str
+
+    class Config:
+        from_attributes = True
+
+class VersionWithAuthor(BaseModel):
+    id: UUID
+    commit_message: Optional[str] = None
+    created_at: datetime
+    branch_name: str
+    author: Optional[OwnerSummary] = None
+    has_artifact: bool = False
+
+class ProjectDetail(BaseModel):
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    category: str
+    is_public: bool
+    created_at: datetime
+    owner: OwnerSummary
+
+    class Config:
+        from_attributes = True
+
+class ProjectSummaryResponse(BaseModel):
+    project: ProjectDetail
+    branches: list[BranchResponse]
+    recent_versions: list[VersionWithAuthor]
+    latest_version_id: UUID | None = None
+    has_preview: bool = False
 
 # ── Auth Schemas ──
 

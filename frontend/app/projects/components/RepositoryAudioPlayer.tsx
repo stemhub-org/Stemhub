@@ -1,15 +1,10 @@
 "use client";
 
-import { Play } from "lucide-react";
+import { Play, Pause } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { authFetch } from "@/lib/api";
 
-const PLACEHOLDER_TRACK_LABEL = "Master Track Preview";
-const PLACEHOLDER_TRACK_FILE = "Master_v3.wav";
-const PLACEHOLDER_CURRENT_TIME = "1:34";
-const PLACEHOLDER_DURATION = "4:27";
-const PLACEHOLDER_SAMPLE_RATE = "48 kHz";
-const PLACEHOLDER_BIT_DEPTH = "24 bit";
-
-function WaveformPlaceholder() {
+function WaveformPlaceholder({ progress }: { progress: number }) {
     const bars = [
         0.4, 0.7, 0.9, 0.6, 0.3, 0.5, 0.8, 0.9, 0.7, 0.4, 0.3, 0.5, 0.6, 0.8,
         0.9, 0.7, 0.5, 0.4, 0.6, 0.9, 0.8, 0.6, 0.3, 0.4, 0.5, 0.7, 0.9, 0.8,
@@ -17,7 +12,6 @@ function WaveformPlaceholder() {
         0.4, 0.3, 0.5, 0.7, 0.9, 0.8, 0.6, 0.4,
     ];
 
-    const progress = 0.4;
     const progressIndex = Math.floor(bars.length * progress);
 
     return (
@@ -47,38 +41,126 @@ function WaveformPlaceholder() {
     );
 }
 
-export function RepositoryAudioPlayer() {
+interface RepositoryAudioPlayerProps {
+    projectId?: string | null;
+    hasPreview?: boolean;
+}
+
+export function RepositoryAudioPlayer({ projectId, hasPreview }: RepositoryAudioPlayerProps) {
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!projectId || !hasPreview) {
+            setAudioUrl(null);
+            setIsPlaying(false);
+            setCurrentTime(0);
+            setDuration(0);
+            return;
+        }
+
+        let objectUrl: string | null = null;
+        
+        async function loadAudio() {
+            try {
+                const response = await authFetch<Response>(`/projects/${projectId}/preview`);
+                const blob = await response.blob();
+                objectUrl = URL.createObjectURL(blob);
+                setAudioUrl(objectUrl);
+            } catch (err) {
+                console.error("Failed to load audio:", err);
+                setAudioUrl(null);
+            }
+        }
+
+        loadAudio();
+
+        return () => {
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+        };
+    }, [projectId, hasPreview]);
+
+    const togglePlay = () => {
+        if (!audioRef.current || !hasPreview || !audioUrl) return;
+        if (isPlaying) {
+            audioRef.current.pause();
+        } else {
+            audioRef.current.play().catch(console.error);
+        }
+    };
+
+    const formatTime = (time: number) => {
+        if (!time || isNaN(time)) return "0:00";
+        const minutes = Math.floor(time / 60);
+        const seconds = Math.floor(time % 60);
+        return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+    };
+
+    const progress = duration > 0 ? currentTime / duration : 0;
+
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 relative">
+            {hasPreview && audioUrl && (
+                <audio
+                    ref={audioRef}
+                    src={audioUrl}
+                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                    onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onEnded={() => setIsPlaying(false)}
+                />
+            )}
             <div>
-                <p className="text-base font-medium text-foreground">
-                    {PLACEHOLDER_TRACK_LABEL}
-                </p>
+                <div className="flex items-center justify-between">
+                    <p className="text-base font-medium text-foreground">
+                        {hasPreview ? "Project Preview" : "No Preview Available"}
+                    </p>
+                </div>
                 <p className="mt-0.5 text-sm text-foreground/70">
-                    {PLACEHOLDER_TRACK_FILE}
+                    {hasPreview ? "Current project preview audio" : "Upload an audio file to add a project preview"}
                 </p>
             </div>
-            <WaveformPlaceholder />
+            <WaveformPlaceholder progress={progress} />
             <div className="flex items-center gap-4">
                 <button
                     type="button"
-                    className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-opacity hover:opacity-90"
-                    aria-label="Play"
+                    onClick={togglePlay}
+                    disabled={!hasPreview || !audioUrl}
+                    className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label={isPlaying ? "Pause" : "Play"}
                 >
-                    <Play className="size-6 fill-current" aria-hidden />
+                    {isPlaying ? (
+                        <Pause className="size-6 fill-current" aria-hidden />
+                    ) : (
+                        <Play className="size-6 fill-current ml-1" aria-hidden />
+                    )}
                 </button>
                 <div className="min-w-0 flex-1">
-                    <div className="h-1.5 w-full rounded-full bg-foreground/10">
-                        <div className="h-full w-2/5 rounded-full bg-accent" />
+                    <div className="h-1.5 w-full rounded-full bg-foreground/10 overflow-hidden relative" 
+                         onClick={(e) => {
+                             if (!audioRef.current || !hasPreview || !audioUrl) return;
+                             const rect = e.currentTarget.getBoundingClientRect();
+                             const x = e.clientX - rect.left;
+                             const pct = x / rect.width;
+                             audioRef.current.currentTime = pct * duration;
+                         }}
+                         style={{ cursor: hasPreview && audioUrl ? 'pointer' : 'default' }}
+                    >
+                        <div 
+                            className="h-full absolute left-0 top-0 rounded-full bg-accent" 
+                            style={{ width: `${progress * 100}%` }}
+                        />
                     </div>
                     <p className="mt-1 text-sm text-foreground/60">
-                        {PLACEHOLDER_CURRENT_TIME} / {PLACEHOLDER_DURATION}
+                        {formatTime(currentTime)} / {formatTime(duration)}
                     </p>
                 </div>
-            </div>
-            <div className="flex flex-wrap gap-4 text-sm text-foreground/70">
-                <span>Sample Rate {PLACEHOLDER_SAMPLE_RATE}</span>
-                <span>Bit Depth {PLACEHOLDER_BIT_DEPTH}</span>
             </div>
         </div>
     );

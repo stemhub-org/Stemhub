@@ -21,6 +21,7 @@ export default function LoginPage() {
     try {
       const response = await fetch(`${apiUrl}/auth/login`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -31,8 +32,6 @@ export default function LoginPage() {
         throw new Error("Identifiants incorrects");
       }
 
-      const data = await response.json();
-      localStorage.setItem("token", data.access_token);
       router.push("/dashboard");
     } catch (err: unknown) {
       const isNetworkError =

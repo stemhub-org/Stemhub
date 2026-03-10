@@ -10,9 +10,16 @@ const REPO_ACCENT = "#9C57DF";
 type RepositoryHeaderProps = {
     onToggleSidebar?: () => void;
     sidebarOpen?: boolean;
+    userAvatarUrl?: string | null;
+    username?: string;
 };
 
-export function RepositoryHeader({ onToggleSidebar, sidebarOpen = false }: RepositoryHeaderProps) {
+export function RepositoryHeader({
+    onToggleSidebar,
+    sidebarOpen = false,
+    userAvatarUrl,
+    username = "Producer",
+}: RepositoryHeaderProps) {
     const router = useRouter();
     const { resolvedTheme, setTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
@@ -26,7 +33,7 @@ export function RepositoryHeader({ onToggleSidebar, sidebarOpen = false }: Repos
     };
 
     return (
-        <header className="flex items-center justify-between py-4 px-6 border-b border-border-subtle bg-background">
+        <header className="h-20 border-b border-border-subtle bg-background-secondary/30 backdrop-blur-xl flex items-center justify-between px-6 lg:px-8 z-10 sticky top-0">
             <div className="flex items-center gap-3">
                 {onToggleSidebar && (
                     <button
@@ -85,18 +92,28 @@ export function RepositoryHeader({ onToggleSidebar, sidebarOpen = false }: Repos
                 <div className="h-8 w-px bg-foreground/10" />
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
-                        <span className="text-sm font-medium text-foreground">Producer</span>
+                        <span className="text-sm font-medium text-foreground">{username}</span>
                         <span className="text-xs text-foreground/50">Free Plan</span>
                     </div>
                     <button
                         type="button"
                         onClick={handleOpenProfile}
-                        className="h-10 w-10 rounded-full flex items-center justify-center text-white border-2 border-background shadow-sm hover:opacity-90 transition-opacity"
-                        style={{ background: `linear-gradient(to top right, ${REPO_ACCENT}, #C28CF0)` }}
+                        className={`h-10 w-10 rounded-full flex items-center justify-center text-white shadow-sm hover:opacity-90 transition-opacity overflow-hidden border-2 ${
+                            isDark ? "border-transparent" : "border-white"
+                        }`}
+                        style={!userAvatarUrl ? { background: `linear-gradient(to top right, ${REPO_ACCENT}, #C28CF0)` } : undefined}
                         title="View profile"
                         aria-label="Open profile"
                     >
-                        <User size={18} />
+                        {userAvatarUrl ? (
+                            <img
+                                src={userAvatarUrl}
+                                alt={username}
+                                className="h-full w-full object-cover"
+                            />
+                        ) : (
+                            <User size={18} />
+                        )}
                     </button>
                 </div>
             </div>

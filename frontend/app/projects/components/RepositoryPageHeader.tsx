@@ -2,15 +2,26 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Eye, Heart } from "lucide-react";
+import { Heart } from "lucide-react";
+import { AudioUploadButton } from "./AudioUploadButton";
 
-const PLACEHOLDER_USER = "Skrillex";
-const PLACEHOLDER_REPO = "Dubstep-Track";
-const PLACEHOLDER_BRANCH = "main";
-const PLACEHOLDER_DESCRIPTION =
-    "Experimental dubstep track • 140 BPM • C minor";
+interface RepositoryPageHeaderProps {
+    ownerUsername: string;
+    projectName: string;
+    branchName: string;
+    description: string;
+    projectId?: string;
+    onUploadSuccess?: () => void;
+}
 
-export function RepositoryPageHeader() {
+export function RepositoryPageHeader({
+    ownerUsername,
+    projectName,
+    branchName,
+    description,
+    projectId,
+    onUploadSuccess,
+}: RepositoryPageHeaderProps) {
     const [isFavorite, setIsFavorite] = useState(false);
 
     return (
@@ -27,19 +38,19 @@ export function RepositoryPageHeader() {
                                     href="/dashboard"
                                     className="transition-colors hover:text-foreground"
                                 >
-                                    {PLACEHOLDER_USER}
+                                    {ownerUsername}
                                 </Link>
                             </li>
                             <span className="text-foreground/40">/</span>
                             <li>
                                 <span className="font-medium text-foreground">
-                                    {PLACEHOLDER_REPO}
+                                    {projectName}
                                 </span>
                             </li>
                             <span className="text-foreground/40">/</span>
                             <li>
                                 <span className="text-foreground/70">
-                                    {PLACEHOLDER_BRANCH}
+                                    {branchName}
                                 </span>
                             </li>
                         </ol>
@@ -48,21 +59,15 @@ export function RepositoryPageHeader() {
                         className="text-xl font-medium tracking-tight text-foreground"
                         style={{ fontFamily: "var(--font-syne)" }}
                     >
-                        {PLACEHOLDER_REPO}
+                        {projectName}
                     </h1>
                     <p className="mt-1 text-sm text-foreground/70">
-                        {PLACEHOLDER_DESCRIPTION}
+                        {description}
                     </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        type="button"
-                        className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                    >
-                        <Eye className="size-4" aria-hidden />
-                        Watch
-                    </button>
+                    <AudioUploadButton projectId={projectId} onSuccess={onUploadSuccess} />
                     <button
                         type="button"
                         onClick={() => setIsFavorite((prev) => !prev)}

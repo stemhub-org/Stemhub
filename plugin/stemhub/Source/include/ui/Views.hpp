@@ -78,6 +78,8 @@ public:
     void setVersions(const std::vector<juce::String>& versionLabels,
                      const std::vector<juce::String>& versionIds,
                      const juce::String& selectedVersionId);
+    void setPackagedFiles(const juce::String& rootLabel,
+                          const std::vector<juce::String>& relativeFilePaths);
     [[nodiscard]] juce::String getSelectedBranchId() const;
     [[nodiscard]] juce::String getSelectedVersionId() const;
     [[nodiscard]] juce::String getCommitMessage() const noexcept { return commitMessageInput.getText().trim(); }
@@ -91,6 +93,7 @@ public:
     std::function<void()> onVersionSelectionChange;
     std::function<void()> onBackToProjects;
     std::function<void()> onSignOut;
+    std::function<void()> onRestore;
 
 private:
     std::vector<juce::String> comboBranchIds;
@@ -107,7 +110,10 @@ private:
     juce::TextButton backToProjectsButton { "< Projects" };
     juce::TextEditor commitMessageInput;
     juce::TextButton saveChanges { "Save" };
-    juce::TextButton syncButton { "Refresh History" };
-    juce::TextButton changeBranch { "Load Branch" };
+    juce::TextButton syncButton { "Pull" };
+    juce::TextButton changeBranch { "Load" };
     juce::TextButton signOutButton { "Sign Out" };
+    juce::TextButton restoreButton { "Restore" };
+    juce::Label packagedFilesLabel;
+    juce::TreeView packagedFilesTree;
 };

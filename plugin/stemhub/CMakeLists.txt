@@ -42,13 +42,17 @@ juce_generate_juce_header(stemhub)
 
 target_sources(stemhub
     PRIVATE
-        Source/src/PluginEditor.cpp
-        Source/src/PluginProcessor.cpp
-        Source/src/DashboardView.cpp
-        Source/src/LoginView.cpp
-        Source/src/ApiClient.cpp
-        Source/src/VersionControlService.cpp
-        Source/src/SnapshotBundler.cpp)
+        Source/src/ui/PluginEditor.cpp
+        Source/src/ui/DashboardView.cpp
+        Source/src/ui/LoginView.cpp
+        Source/src/application/PluginProcessor.cpp
+        Source/src/application/SnapshotBundler.cpp
+        Source/src/network/ApiClient.cpp
+        Source/src/network/VersionControlService.cpp)
+
+target_include_directories(stemhub
+    PRIVATE
+        Source/include)
 
 target_compile_definitions(stemhub
     PRIVATE

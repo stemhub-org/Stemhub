@@ -6,11 +6,39 @@ from typing import List
 from uuid import UUID
 
 from stemhub.database import get_db
-from stemhub.models import Branch, Project, User
+from stemhub.models import Branch, Collaborator, Project, User
 from stemhub.schemas import BranchCreate, BranchUpdate, BranchResponse
 from stemhub.auth import get_current_user
 
 router = APIRouter(tags=["branches"])
+
+
+async def _can_access_project(
+    *,
+    project_id: UUID,
+    current_user: User,
+    db: AsyncSession,
+) -> bool:
+    project_result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.is_deleted == False,
+        )
+    )
+    project = project_result.scalars().first()
+    if not project:
+        return False
+
+    if project.owner_id == current_user.id:
+        return True
+
+    collaborator_result = await db.execute(
+        select(Collaborator).where(
+            Collaborator.project_id == project_id,
+            Collaborator.user_id == current_user.id,
+        )
+    )
+    return collaborator_result.scalars().first() is not None
 
 @router.post("/projects/{project_id}/branches/", response_model=BranchResponse, status_code=status.HTTP_201_CREATED)
 async def create_branch(
@@ -44,8 +72,7 @@ async def list_branches(
     List all branches for a specific project.
     """
     # Verify project access
-    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id, Project.is_deleted == False))
-    if not result.scalars().first():
+    if not await _can_access_project(project_id=project_id, current_user=current_user, db=db):
         raise HTTPException(status_code=404, detail="Project not found or you don't have access")
 
     result_branches = await db.execute(select(Branch).where(Branch.project_id == project_id, Branch.is_deleted == False))
@@ -61,15 +88,18 @@ async def get_branch(
     Get a specific branch by ID.
     """
     result = await db.execute(
-        select(Branch).join(Project).where(
+        select(Branch)
+        .join(Project)
+        .where(
             Branch.id == branch_id,
-            Project.owner_id == current_user.id,
             Branch.is_deleted == False,
-            Project.is_deleted == False
+            Project.is_deleted == False,
         )
     )
     branch = result.scalars().first()
     if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+    if not await _can_access_project(project_id=branch.project_id, current_user=current_user, db=db):
         raise HTTPException(status_code=404, detail="Branch not found")
     return branch
 

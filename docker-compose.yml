@@ -21,6 +21,12 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - STEMHUB_STORAGE_PROVIDER=${STEMHUB_STORAGE_PROVIDER}
+      - STEMHUB_ARTIFACTS_ROOT=${STEMHUB_ARTIFACTS_ROOT}
+      - STEMHUB_GCS_BUCKET=${STEMHUB_GCS_BUCKET}
+      - STEMHUB_GCS_PROJECT=${STEMHUB_GCS_PROJECT}
+      - STEMHUB_GCS_CREDENTIALS_JSON=${STEMHUB_GCS_CREDENTIALS_JSON}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
     ports:
       - "8000:8000"
     volumes:
@@ -35,8 +41,14 @@ services:
     restart: always
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - WATCHPACK_POLLING=true
     ports:
       - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
     depends_on:
       - backend
 

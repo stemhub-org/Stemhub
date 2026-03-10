@@ -10,7 +10,7 @@ from stemhub.database import get_db
 from stemhub.models import Branch, Project, User, Version
 from stemhub.routers import files as files_router_module
 from stemhub.routers.files import router as files_router
-from stemhub.storage import LocalFilesystemStorageService, get_storage_service
+from stemhub.storage import LocalFilesystemStorageService, StorageNotFoundError, get_storage_service
 
 
 class DummyAsyncSession:
@@ -68,20 +68,21 @@ def _create_test_client(
     *,
     monkeypatch,
     tmp_path,
+    storage = None,
     current_user: User | None = None,
-    owned_version: Version | Exception | None = None,
+    accessible_version: Version | Exception | None = None,
 ):
     app = FastAPI()
     app.include_router(files_router)
 
     session = DummyAsyncSession()
-    storage = LocalFilesystemStorageService(tmp_path)
+    storage_service = storage if storage is not None else LocalFilesystemStorageService(tmp_path)
 
     async def override_db():
         yield session
 
     app.dependency_overrides[get_db] = override_db
-    app.dependency_overrides[get_storage_service] = lambda: storage
+    app.dependency_overrides[get_storage_service] = lambda: storage_service
 
     if current_user is not None:
         async def override_current_user():
@@ -89,16 +90,17 @@ def _create_test_client(
 
         app.dependency_overrides[get_current_user] = override_current_user
 
-    if owned_version is not None:
-        async def fake_get_owned_version(*, version_id, current_user, db):
-            if isinstance(owned_version, Exception):
-                raise owned_version
-            return owned_version
+    if accessible_version is not None:
+        async def fake_get_version_with_access(*, version_id, current_user, db, owner_only=False):
+            del version_id, current_user, db, owner_only
+            if isinstance(accessible_version, Exception):
+                raise accessible_version
+            return accessible_version
 
-        monkeypatch.setattr(files_router_module, "_get_owned_version", fake_get_owned_version)
+        monkeypatch.setattr(files_router_module, "_get_version_with_access", fake_get_version_with_access)
 
     client = TestClient(app)
-    return client, session, storage
+    return client, session, storage_service
 
 
 def test_upload_version_artifact_persists_file_and_metadata(tmp_path, monkeypatch) -> None:
@@ -107,7 +109,7 @@ def test_upload_version_artifact_persists_file_and_metadata(tmp_path, monkeypatc
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
     )
 
     response = client.post(
@@ -148,7 +150,7 @@ def test_download_version_artifact_streams_stored_file(tmp_path, monkeypatch) ->
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
     )
 
     response = client.get(f"/versions/{version.id}/artifact")
@@ -156,6 +158,41 @@ def test_download_version_artifact_streams_stored_file(tmp_path, monkeypatch) ->
     assert response.status_code == 200
     assert response.content == payload
     assert "filename=\"restored.flp\"" in response.headers["content-disposition"]
+
+
+def test_download_version_artifact_uses_storage_service_for_non_local_reference(tmp_path, monkeypatch) -> None:
+    current_user, version = _build_version()
+    payload = b"remote backend snapshot"
+    gcs_reference = "gcs://demo-bucket/projects/demo/branches/main/versions/external/snapshot/remote.flp"
+
+    class RemoteStorageService:
+        def store_version_artifact(self, **kwargs):
+            raise AssertionError("Store should not be called for download test")
+
+        def resolve_artifact_path(self, artifact_path: str):
+            assert artifact_path == gcs_reference
+            remote_file = tmp_path / "remote.flp"
+            remote_file.write_bytes(payload)
+            return remote_file
+
+    version.artifact_path = gcs_reference
+    version.artifact_size_bytes = len(payload)
+    version.artifact_checksum = "a" * 64
+    version.source_project_filename = "remote.flp"
+
+    client, _, _ = _create_test_client(
+        monkeypatch=monkeypatch,
+        tmp_path=tmp_path,
+        current_user=current_user,
+        accessible_version=version,
+        storage=RemoteStorageService(),
+    )
+
+    response = client.get(f"/versions/{version.id}/artifact")
+
+    assert response.status_code == 200
+    assert response.content == payload
+    assert "filename=\"remote.flp\"" in response.headers["content-disposition"]
 
 
 def test_upload_version_artifact_requires_authentication(tmp_path, monkeypatch) -> None:
@@ -181,7 +218,7 @@ def test_upload_version_artifact_rejects_second_upload(tmp_path, monkeypatch) ->
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
     )
 
     response = client.post(
@@ -203,7 +240,7 @@ def test_download_version_artifact_returns_404_when_file_is_missing(tmp_path, mo
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=version,
+        accessible_version=version,
     )
 
     response = client.get(f"/versions/{version.id}/artifact")
@@ -212,13 +249,39 @@ def test_download_version_artifact_returns_404_when_file_is_missing(tmp_path, mo
     assert response.json()["detail"] == "Artifact file not found"
 
 
+def test_download_version_artifact_maps_storage_errors_to_404(tmp_path, monkeypatch) -> None:
+    current_user, version = _build_version()
+    version.artifact_path = "gcs://demo-bucket/projects/demo/branches/main/versions/external/snapshot/missing.flp"
+
+    class ErrorStorageService:
+        def store_version_artifact(self, **kwargs):
+            raise AssertionError("Store should not be called for download test")
+
+        def resolve_artifact_path(self, artifact_path: str):
+            del artifact_path
+            raise StorageNotFoundError("Remote artifact not found")
+
+    client, _, _ = _create_test_client(
+        monkeypatch=monkeypatch,
+        tmp_path=tmp_path,
+        current_user=current_user,
+        accessible_version=version,
+        storage=ErrorStorageService(),
+    )
+
+    response = client.get(f"/versions/{version.id}/artifact")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Remote artifact not found"
+
+
 def test_upload_version_artifact_returns_404_for_unowned_version(tmp_path, monkeypatch) -> None:
     current_user = _build_user()
     client, _, _ = _create_test_client(
         monkeypatch=monkeypatch,
         tmp_path=tmp_path,
         current_user=current_user,
-        owned_version=HTTPException(status_code=404, detail="Version not found"),
+        accessible_version=HTTPException(status_code=404, detail="Version not found"),
     )
 
     response = client.post(
