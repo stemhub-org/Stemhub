@@ -277,6 +277,7 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
     dashboardView.setProjectStatusMessage(getDashboardMessage(audioProcessor));
     dashboardView.setBranches(branchNames, branchIds, audioProcessor.getSelectedBranchId());
     dashboardView.setVersions(versionLabels, versionIds, audioProcessor.getSelectedVersionId());
+    dashboardView.setCurrentVersionId(audioProcessor.getCurrentOpenedVersionLabel());
     dashboardView.setProjectNameMessage(audioProcessor.getSelectedProject()
         ? "Project: " + audioProcessor.getSelectedProject()->name
         : "Project: No project selected");
@@ -365,7 +366,7 @@ void StemhubAudioProcessorEditor::handleOpenProjectClick()
     if (projectFile.existsAsFile())
         audioProcessor.setPendingProjectFile(projectFile);
 
-    audioProcessor.requestOpenProject(projectId, projectFile);
+    audioProcessor.requestOpenProject(projectId, projectFile, true);
     refreshSessionUi();
 }
 
@@ -414,7 +415,16 @@ void StemhubAudioProcessorEditor::handleSaveChangesClick()
 
 void StemhubAudioProcessorEditor::handleRestoreClick()
 {
-    const auto selectedVersionId = dashboardView.getSelectedVersionId();
+    const auto selectedVersionId = audioProcessor.getSelectedVersionId().isNotEmpty()
+        ? audioProcessor.getSelectedVersionId()
+        : dashboardView.getSelectedVersionId();
+
+    juce::Logger::writeToLog("[Restore] UI -> request started. processorSelectedVersionId="
+                             + audioProcessor.getSelectedVersionId()
+                             + ", dropdownVersionId="
+                             + dashboardView.getSelectedVersionId()
+                             + ", resolvedVersionId=" + selectedVersionId);
+
     if (selectedVersionId.isEmpty())
     {
         juce::AlertWindow::showMessageBoxAsync(
@@ -424,19 +434,51 @@ void StemhubAudioProcessorEditor::handleRestoreClick()
         return;
     }
 
-    const auto shouldRestore = juce::AlertWindow::showOkCancelBox(
-        juce::AlertWindow::WarningIcon,
-        "Restore version",
-        "Restoring will replace the currently selected local project file in the plugin context.\n\n"
-        "Do you want to continue?",
-        "Yes",
-        "No",
-        nullptr,
-        nullptr
-    );
+    const auto editorRef = juce::Component::SafePointer<StemhubAudioProcessorEditor>(this);
+    const auto confirmAndRestore = [editorRef](const juce::File& folder, const juce::String& versionToRestore)
+    {
+        if (editorRef == nullptr)
+            return;
 
-    if (!shouldRestore)
-        return;
+        auto* editor = editorRef.getComponent();
+        if (editor == nullptr)
+            return;
+
+        juce::AlertWindow::showOkCancelBox(
+            juce::AlertWindow::WarningIcon,
+            "Restore version",
+            "Restoring will replace the currently selected local project file in the plugin context.\n\n"
+            "Do you want to continue?",
+            "Yes",
+            "No",
+            editor,
+            juce::ModalCallbackFunction::create([editorRef, folder, versionToRestore](const int result)
+            {
+                if (editorRef == nullptr)
+                    return;
+
+                auto* mutableEditor = editorRef.getComponent();
+                if (mutableEditor == nullptr)
+                    return;
+
+                juce::Logger::writeToLog("[Restore] UI -> confirm result=" + juce::String(result));
+
+                if (result != 1)
+                {
+                    juce::Logger::writeToLog("[Restore] UI -> user cancelled restore.");
+                    return;
+                }
+
+                mutableEditor->audioProcessor.setSelectedVersionId(versionToRestore);
+                juce::Logger::writeToLog("[Restore] UI -> syncing selectedVersionId before restore: "
+                                         + versionToRestore);
+                juce::Logger::writeToLog("[Restore] UI -> requesting restore from confirmation callback: "
+                                         + folder.getFullPathName() + ", version="
+                                         + versionToRestore);
+                mutableEditor->audioProcessor.requestRestoreVersion(versionToRestore, folder);
+                mutableEditor->refreshSessionUi();
+            }));
+    };
 
     auto restoreFolder = getEffectiveProjectFile().getParentDirectory();
     if (!restoreFolder.isDirectory())
@@ -444,19 +486,17 @@ void StemhubAudioProcessorEditor::handleRestoreClick()
 
     if (!restoreFolder.isDirectory())
     {
-        launchProjectFolderChooser("Select where to restore version snapshot", [this, selectedVersionId](const juce::File& folder)
+        launchProjectFolderChooser("Select where to restore version snapshot", [selectedVersionId, confirmAndRestore](const juce::File& folder)
         {
             if (!folder.isDirectory())
                 return;
 
-            audioProcessor.requestRestoreVersion(selectedVersionId, folder);
-            refreshSessionUi();
+            confirmAndRestore(folder, selectedVersionId);
         });
         return;
     }
 
-    audioProcessor.requestRestoreVersion(selectedVersionId, restoreFolder);
-    refreshSessionUi();
+    confirmAndRestore(restoreFolder, selectedVersionId);
 }
 
 void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String commitMessage)
