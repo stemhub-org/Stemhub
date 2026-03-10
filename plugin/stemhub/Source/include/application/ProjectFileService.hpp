@@ -19,6 +19,8 @@ juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
 juce::File resolveEffectiveProjectFile(const juce::File& selectedFile,
                                        const juce::File& pendingFile);
 
+bool isManagedRestoreCacheFile(const juce::File& file);
+
 bool openInSystem(const juce::File& file);
 
 juce::String tryRestoreLatestVersionToCache(const std::vector<VersionSummary>& versions,
@@ -27,4 +29,3 @@ juce::String tryRestoreLatestVersionToCache(const std::vector<VersionSummary>& v
                                             const VersionControlService& versionControlService,
                                             juce::File& restoredProjectFile);
 }
-

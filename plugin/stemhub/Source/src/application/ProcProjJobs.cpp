@@ -129,23 +129,34 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     result.branchName = selectedBranch.name;
 
     const auto versionsResult = versionControlService.fetchVersionHistory(selectedBranch.id, accessToken);
+    bool didAutoRestoreLatest = false;
     if (versionsResult.ok() && versionsResult.value.has_value())
     {
         result.versions = std::move(*versionsResult.value);
         sortVersionHistoryNewestFirst(result.versions);
         result.selectedVersionId = chooseSelectedVersionId(result.versions, {});
 
-        juce::File autoRestoredFile;
-        const auto autoRestoreMessage = stemhub::projectfiles::tryRestoreLatestVersionToCache(
-            result.versions,
-            projectIt->id,
-            selectedBranch.id,
-            versionControlService,
-            autoRestoredFile);
-        if (autoRestoredFile.existsAsFile())
-            result.projectFile = autoRestoredFile;
-        else if (autoRestoreMessage.isNotEmpty())
-            result.activeProjectStatusMessage = autoRestoreMessage;
+        const auto shouldAutoRestoreLatest = !localProjectFile.existsAsFile()
+            || stemhub::projectfiles::isManagedRestoreCacheFile(localProjectFile);
+        if (shouldAutoRestoreLatest)
+        {
+            juce::File autoRestoredFile;
+            const auto autoRestoreMessage = stemhub::projectfiles::tryRestoreLatestVersionToCache(
+                result.versions,
+                projectIt->id,
+                selectedBranch.id,
+                versionControlService,
+                autoRestoredFile);
+            if (autoRestoredFile.existsAsFile())
+            {
+                result.projectFile = autoRestoredFile;
+                didAutoRestoreLatest = true;
+            }
+            else if (autoRestoreMessage.isNotEmpty())
+            {
+                result.activeProjectStatusMessage = autoRestoreMessage;
+            }
+        }
     }
 
     const juce::String projectReadyMessage = localProjectFile.existsAsFile()
@@ -163,10 +174,15 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     }
     else
     {
-        if (result.projectFile.existsAsFile())
+        if (didAutoRestoreLatest && result.projectFile.existsAsFile())
         {
             result.activeProjectStatusMessage = "Project ready. Latest version restored locally: "
                 + result.projectFile.getFileName();
+        }
+        else if (localProjectFile.existsAsFile())
+        {
+            result.activeProjectStatusMessage = "Project ready. Using local project file: "
+                + localProjectFile.getFileName();
         }
         else if (result.activeProjectStatusMessage.isEmpty())
         {
@@ -277,7 +293,10 @@ StemhubAudioProcessor::BranchHistoryJobResult StemhubAudioProcessor::performFetc
     result.selectedVersionId = chooseSelectedVersionId(result.versions, preferredVersionId);
 
     const auto projectId = selectedProject ? selectedProject->id : juce::String();
-    if (projectId.isNotEmpty())
+    const auto effectiveProjectFile = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile, pendingProjectFile);
+    const auto shouldAutoRestoreLatest = !effectiveProjectFile.existsAsFile()
+        || stemhub::projectfiles::isManagedRestoreCacheFile(effectiveProjectFile);
+    if (projectId.isNotEmpty() && shouldAutoRestoreLatest)
     {
         juce::File autoRestoredFile;
         const auto autoRestoreMessage = stemhub::projectfiles::tryRestoreLatestVersionToCache(

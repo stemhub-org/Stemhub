@@ -122,13 +122,24 @@ juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
 juce::File resolveEffectiveProjectFile(const juce::File& selectedFile,
                                        const juce::File& pendingFile)
 {
-    if (selectedFile.existsAsFile())
-        return selectedFile;
-
     if (pendingFile.existsAsFile())
         return pendingFile;
 
+    if (selectedFile.existsAsFile())
+        return selectedFile;
+
     return {};
+}
+
+bool isManagedRestoreCacheFile(const juce::File& file)
+{
+    if (file == juce::File())
+        return false;
+
+    const auto cacheRoot = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                               .getChildFile("Stemhub")
+                               .getChildFile("restore-cache");
+    return file == cacheRoot || file.isAChildOf(cacheRoot);
 }
 
 bool openInSystem(const juce::File& file)
@@ -186,4 +197,3 @@ juce::String tryRestoreLatestVersionToCache(const std::vector<VersionSummary>& v
     return {};
 }
 }
-

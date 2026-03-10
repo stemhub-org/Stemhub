@@ -1,4 +1,5 @@
 #include "ui/PluginEditor.hpp"
+#include "application/ProjectFileService.hpp"
 #include <algorithm>
 #include <array>
 
@@ -437,7 +438,7 @@ void StemhubAudioProcessorEditor::handleRestoreClick()
     if (!shouldRestore)
         return;
 
-    auto restoreFolder = audioProcessor.getSelectedProjectFile().getParentDirectory();
+    auto restoreFolder = getEffectiveProjectFile().getParentDirectory();
     if (!restoreFolder.isDirectory())
         restoreFolder = audioProcessor.getPendingProjectFile().getParentDirectory();
 
@@ -507,15 +508,9 @@ bool StemhubAudioProcessorEditor::hasActiveProjectSelection() const
 
 juce::File StemhubAudioProcessorEditor::getEffectiveProjectFile() const
 {
-    const auto selectedProjectFile = audioProcessor.getSelectedProjectFile();
-    if (selectedProjectFile.existsAsFile())
-        return selectedProjectFile;
-
-    const auto pendingProjectFile = audioProcessor.getPendingProjectFile();
-    if (pendingProjectFile.existsAsFile())
-        return pendingProjectFile;
-
-    return {};
+    return stemhub::projectfiles::resolveEffectiveProjectFile(
+        audioProcessor.getSelectedProjectFile(),
+        audioProcessor.getPendingProjectFile());
 }
 
 void StemhubAudioProcessorEditor::handleSyncClick()
