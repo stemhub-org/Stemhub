@@ -28,9 +28,9 @@ feature/fix branch → (Pull Request + Review) → dev → main
 ### Database Migration Strategy
 
 **Handling Schema Changes:**
-- **Prisma Migrate** manages database schema evolution
-- Migrations tracked in version control with descriptive names
-- Backward-compatible migrations deployed first to avoid breaking running services
+- **Alembic** manages database schema evolution (PostgreSQL).
+- Migrations tracked in version control in `backend/alembic/versions`.
+- **Startup Guard**: The application lifespan checks for pending migrations and refuses to start if the schema is out of date.
 
 **Migration Process (V1.0 → V1.2):**
 1. Deploy migration scripts that add new columns/tables without removing old ones
@@ -44,15 +44,8 @@ feature/fix branch → (Pull Request + Review) → dev → main
 -- V1.0: projects table has 'storage_path' column
 -- V1.2: need to migrate to 'storage_metadata' JSONB column
 
--- Step 1: Add new column (non-breaking)
-ALTER TABLE projects ADD COLUMN storage_metadata JSONB;
-
--- Step 2: Backfill data from old column
-UPDATE projects SET storage_metadata = 
-  jsonb_build_object('path', storage_path, 'provider', 'cloudflare_r2');
-
--- Step 3: After validation, mark old column for deprecation
--- Step 4: In V1.3, remove old column after all services updated
+-- Step 1: Add new migration via:
+-- docker compose exec backend alembic revision --autogenerate -m "add storage_metadata"
 ```
 
 ---
@@ -66,9 +59,9 @@ UPDATE projects SET storage_metadata =
 | Component | SPOF Risk | Mitigation |
 |-----------|-----------|------------|
 | PostgreSQL Database | High - Single instance failure stops entire system | **Primary-Replica Replication**: PostgreSQL with automated failover; Read replicas for query load distribution |
-| Cloudflare R2 Storage | Medium - Storage unavailable = no file access | **Multi-region redundancy** built into Cloudflare R2; Local cache layer for frequently accessed files |
+| Google Cloud Storage (GCS) | Medium - Storage unavailable = no file access | **Multi-region redundancy** built into GCS; Local cache layer for frequently accessed files |
 | Backend API Server | High - Single container = no requests processed | **Horizontal scaling**: Multiple container instances behind load balancer; Auto-scaling based on CPU/memory |
-| Authentication Service | Critical - Auth down = users locked out | **Redundant instances** + **cached JWT validation** for temporary auth during outages |
+| Authentication Service | Critical - Auth down = users locked out | **Redundant instances** + **secure JWT validation** via shared secret |
 | JUCE Plugin Update Server | Low - Users can continue working offline | **CDN distribution** of plugin updates; Plugin checks for updates but functions without connection |
 
 ### Backup Strategy
@@ -80,9 +73,9 @@ UPDATE projects SET storage_metadata =
 - **Point-in-time recovery** available for the last 7 days
 
 **File Storage Backups:**
-- **Project files versioned** in Cloudflare R2 with immutable snapshots
-- **Version history** retained for 90 days (configurable per user tier)
-- **Deleted file recovery** possible within 30 days
+- **Project files versioned** in GCS with immutable snapshots.
+- **Version history** retained for 90 days (configurable per user tier).
+- **Deleted file recovery** possible within 30 days via GCS bucket versioning.
 
 **Configuration & Code:**
 - **Infrastructure as Code** (IaC) stored in Git repository

@@ -29,9 +29,9 @@ This document outlines the Technical, Legal, and Security audit for the StemHub 
 
 | Component | Technical Choice & Justification |
 |:---|:---|
-| **Storage** | **AWS S3** is preferred over "Self-hosted" solutions for its resilience and ISO 27001 certification. |
+| **Storage** | **Google Cloud Storage (GCS)** is preferred over "Self-hosted" solutions for its resilience and ISO 27001 certification. |
 | **Encryption** | **AES-256** (Banking Standard) to protect data at rest. |
-| **Access Control** | **MFA** (Multi-Factor Authentication) is mandatory to prevent account hijacking. |
+| **Access Control** | **HttpOnly Cookies + JWT** for secure session management. MFA planned for critical account actions. |
 
 ---
 
