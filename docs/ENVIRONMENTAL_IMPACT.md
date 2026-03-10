@@ -19,10 +19,10 @@ We analyzed our architecture through the three pillars of Eco-Conception:
 Cloud servers and data centers are energy-intensive.
 
 **StemHub Strategy:**  
-We strategically select **AWS Regions with low carbon intensity** (e.g., `eu-west-3` Paris) to host our **S3 Buckets** and **PostgreSQL** database.
+We strategically select **Google Cloud Regions with low carbon intensity** (e.g., `europe-west9` Paris - Carbon Free Energy) to host our **GCS Buckets** and **PostgreSQL** database.
 
 **Impact:**  
-By leveraging grids powered by nuclear or hydroelectric energy, we significantly reduce the carbon footprint of our storage compared to coal-heavy regions.
+By leveraging Google's commitment to 24/7 carbon-free energy, we significantly reduce the carbon footprint of our storage and compute compared to traditional data centers.
 
 ---
 
@@ -32,16 +32,10 @@ By leveraging grids powered by nuclear or hydroelectric energy, we significantly
 Transferring heavy audio files (`.wav`, stems) consumes massive network energy.
 
 **StemHub Strategy:**  
-We implemented **Signed URLs for Direct S3 Uploads** (bypassing the Python backend).
+We use **Streaming Processing** in our Python backend. Files are streamed directly from the client through the server to **Google Cloud Storage (GCS)** without saving temporary copies on disk.
 
 **Impact:**  
-Files travel directly from:
-
-Client → Storage (**1 Hop**)  
-instead of  
-Client → Server → Storage (**2 Hops**)
-
-This halves the network hops, reducing energy consumption by approximately **50% per upload**.
+This avoids extra "Disk Write/Read" cycles on the server, saving I/O-related energy. While it adds a server hop for validation (Security/Consistency), the lack of intermediate disk persistence keeps the energy footprint per GB optimized.
 
 ---
 
@@ -56,7 +50,7 @@ Server-side processing of audio visuals is CPU-heavy.
   We use React and Wavesurfer.js to render waveforms directly on the user's device, relieving our servers of graphical processing.
 
 - **Backend:**  
-  We use FastAPI with optimized libraries (`struct`, `PyFLP`) to parse binary files efficiently, minimizing CPU cycles required per request.
+  We use FastAPI with optimized libraries (`struct`, `PyFLP_enhanced`) and **Alembic** managed migrations to ensure efficient execution and minimal database overhead.
 
 ---
 
@@ -67,8 +61,8 @@ To validate our strategy, we utilize the following tools:
 - **EcoIndex:**  
   To audit our React frontend performance and aim for a score of **B or higher (70/100)**.
 
-- **AWS Customer Carbon Footprint Tool:**  
-  To estimate the CO2eq emissions of our AWS infrastructure.
+- **Google Cloud Carbon Footprint:**  
+  To monitor and minimize the CO2eq emissions of our GCP infrastructure.
 
 ---
 
@@ -76,8 +70,8 @@ To validate our strategy, we utilize the following tools:
 
 | Category | Optimization Choice | Environmental Impact |
 |----------|--------------------|----------------------|
-| Hosting | AWS `eu-west-3` (Paris) | Drastic reduction of CO2eq emissions via nuclear power mix |
-| Network | S3 Signed URLs | ~50% network energy reduction by bypassing the Python server |
+| Hosting | GCP `europe-west9` (Paris) | 100% carbon-neutral energy (matched) |
+| Network | Streaming Uploads | Zero intermediate disk I/O, optimized energy per GB |
 | Compute | Client-Side Rendering | Offloads energy cost to client devices; reduces server heat/AC needs |
-| Parsing | Binary Structs (PyFLP) | Minimizes CPU cycles/electricity required for file analysis |
-| Storage | Lifecycle Policies | Automated cleanup of temporary files to reduce storage waste |
+| Parsing | Binary Structs (PyFLP_enhanced) | Minimizes CPU cycles/electricity required for file analysis |
+| Storage | GCS Lifecycle Policies | Automated cleanup of temporary files to reduce storage waste |

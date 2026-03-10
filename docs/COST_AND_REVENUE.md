@@ -10,15 +10,15 @@ This page outlines StemHub's infrastructure costs across three scenarios, consid
 
 | Category | Service | Cost |
 |----------|---------|------|
-| Compute | AWS EC2 t3.micro (Free Tier) | $0 |
-| Database | AWS RDS PostgreSQL (Free Tier) | $0 |
+| Compute | GCP Compute Engine (Free Tier / e2-micro) | $0 |
+| Database | GCP Cloud SQL (PostgreSQL - Student Credits) | $0 |
 | Frontend | Vercel (Hobby Plan) | $0 |
-| Storage | Cloudflare R2 — 30 GB | $6/year |
-| Auth | Auth0 (Free — up to 7,500 MAU) | $0 |
-| CI/CD | GitHub (Student Plan) | $0 |
+| Storage | Google Cloud Storage (GCS) — 30 GB | $0.70/month |
+| Auth | Custom JWT + HttpOnly Cookies | $0 |
+| CI/CD | GitHub Actions (Free) | $0 |
 | Domain | stemhub.com | $12/year |
 
-**Total: ~$18/year ($1.50/month)**
+**Total: ~$20/year ($1.60/month)**
 
 > Student plans and free tiers cover nearly all costs at this stage. Infrastructure becomes a real expense only after the MVP.
 
@@ -30,18 +30,18 @@ This page outlines StemHub's infrastructure costs across three scenarios, consid
 
 | Category | Service | Monthly Cost |
 |----------|---------|-------------|
-| Compute | 2× AWS EC2 t3.medium | $60 |
-| Database | AWS RDS db.t3.small | $30 |
+| Compute | 2× GCP Compute Engine (e2-medium) | $50 |
+| Database | GCP Cloud SQL (db-f1-micro) | $20 |
 | Frontend | Vercel Pro | $20 |
-| CDN | Cloudflare Pro | $20 |
-| Storage | Cloudflare R2 — 1.25 TB | $19 |
-| Auth | Auth0 Essentials | $25 |
-| Monitoring | Sentry + Datadog | $41 |
+| CDN | Google Cloud CDN | $15 |
+| Storage | Google Cloud Storage (Standard) — 1.25 TB | $25 |
+| Auth | Custom Implementation | $0 |
+| Monitoring | Sentry + Google Cloud Monitoring | $30 |
 | Email | SendGrid Starter | $10 |
 | Backup | Automated snapshots | $5 |
-| Misc | Bandwidth, domain | $11 |
+| Misc | Bandwidth, domain | $15 |
 
-**Total: ~$241/month — $2,892/year**
+**Total: ~$190/month — $2,280/year**
 **Cost per user: $0.24/month**
 
 ---
@@ -52,25 +52,25 @@ This page outlines StemHub's infrastructure costs across three scenarios, consid
 
 | Category | Service | Monthly Cost |
 |----------|---------|-------------|
-| Compute | 4× AWS EC2 c5.xlarge (auto-scaling) | $550 |
-| Database | RDS m5.large + Read Replica | $280 |
-| Cache | Redis ElastiCache | $50 |
-| Load Balancer | AWS ALB | $25 |
+| Compute | 4× GCP Compute Engine (n2-standard-4) | $480 |
+| Database | GCP Cloud SQL (8 vCPU, 30 GB RAM) | $260 |
+| Cache | GCP Memorystore (Redis) | $45 |
+| Load Balancer | Google Cloud Load Balancer | $20 |
 | Frontend | Vercel Pro | $20 |
-| CDN | Cloudflare Business | $200 |
-| Storage | Cloudflare R2 — ~9 TB (optimized) | $220 |
-| Auth | Auth0 Professional | $240 |
-| Monitoring | Sentry + Datadog + Logging | $260 |
+| CDN | Google Cloud CDN | $150 |
+| Storage | Google Cloud Storage (Nearline) — ~9 TB | $180 |
+| Auth | Custom Implementation (Scaled) | $0 |
+| Monitoring | Sentry + Google Cloud Suite | $220 |
 | Email | SendGrid Pro | $90 |
-| Security | WAF + audits + backups | $200 |
-| Misc | Bandwidth, status page | $199 |
+| Security | Cloud Armor + audits + backups | $180 |
+| Misc | Bandwidth (Egress), status page | $250 |
 
-**Total: ~$2,334/month — $28,008/year**
+**Total: ~$1,895/month — $22,740/year**
 **Cost per user: $0.23/month**
 
 > **Key optimization:** FLAC compression + file deduplication + lifecycle policies reduce storage from 24 TB to ~9 TB, saving ~$140/month.
 
-> **Key infrastructure choice:** Cloudflare R2 offers **free egress**, saving ~$1,800/month compared to AWS S3 at this scale.
+> **Key infrastructure choice:** Using **Google Cloud Storage (GCS)** lifecycle policies and **Nearline storage** for older versions ensures cost-efficiency at scale.
 
 ---
 
