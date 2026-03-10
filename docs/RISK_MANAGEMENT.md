@@ -10,7 +10,7 @@ You must identify risks and classify them based on **Probability** (Likelihood) 
 | Risk | Probability (1-5) | Impact (1-5) | Criticality (P*I) | Mitigation Strategy |
 | :--- | :---: | :---: | :---: | :--- |
 | **Technical** | | | | |
-| Dependence on external services (e.g., Cloudflare R2, Stripe) reliability or cost changes | 2 | 5 | **10** | Plan a proxy service or abstraction layer to switch providers easily if needed. |
+| Dependence on external services (e.g., Google Cloud Storage, GitHub) reliability or cost changes | 2 | 5 | **10** | Plan a proxy service or abstraction layer to switch providers easily if needed. |
 | Critical bug in audio processing/merging affecting project integrity | 3 | 5 | **15** | Implement comprehensive unit and integration tests; manual review of audio processing logic. |
 | Large file handling (Stems/Projects) causing slow uploads/performance issues | 4 | 3 | **12** | Implement chunked uploads; Use CDN caching (Cloudflare); Background processing for audio analysis. |
 | Browser compatibility issues with Web Audio API features | 3 | 4 | **12** | Extensive cross-browser testing (Chrome, Firefox, Safari); Graceful degradation for unsupported features. |
@@ -33,6 +33,6 @@ For each critical risk, you need a plan:
 *   **Reduce**: Take action to lower the probability or impact.
     *   *Example*: Implement automated backups to reduce the impact of data loss.
 *   **Transfer**: Insure against the risk or outsource it.
-    *   *Example*: Use managed services (like AWS RDS, Auth0) to transfer infrastructure management risks.
+    - *Example*: Use managed services (like GCS, Managed PostgreSQL) to transfer infrastructure management risks.
 *   **Accept**: Acknowledge the risk (if low criticality) and monitor it.
     *   *Example*: Accept minor UI glitches in beta release to focus on core functionality.
