@@ -120,7 +120,7 @@ export function RepositoryBranchBar({
                                             value={newBranchName} 
                                             onChange={e => setNewBranchName(e.target.value)} 
                                             placeholder="New branch name..."
-                                            className="w-full bg-background-tertiary border border-border-subtle rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
+                                            className="w-full bg-background-secondary border border-border-subtle rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
                                             disabled={isSubmitting}
                                             autoFocus
                                         />

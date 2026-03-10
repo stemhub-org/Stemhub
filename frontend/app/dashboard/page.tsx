@@ -144,7 +144,7 @@ export default function DashboardPage() {
                     transition={{ duration: 0.4, delay: 0.1 }}
                     className="grid grid-cols-1 md:grid-cols-3 gap-4"
                 >
-                    <div className="bg-[#FAFAFA] dark:bg-background-tertiary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-[#FAFAFA] dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
+                    <div className="bg-background-secondary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
                         <div className="flex items-center justify-between mb-8">
                             <div className="text-foreground transition-colors flex items-center gap-2 text-sm font-medium">
                                 <HardDrive size={16} className="text-accent group-hover:scale-110 transition-transform" />
@@ -158,7 +158,7 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    <div className="bg-[#FAFAFA] dark:bg-background-tertiary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-[#FAFAFA] dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
+                    <div className="bg-background-secondary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
                         <div className="flex items-center justify-between mb-8">
                             <div className="text-foreground transition-colors flex items-center gap-2 text-sm font-medium">
                                 <GitBranch size={16} className="text-accent group-hover:scale-110 transition-transform" />
@@ -171,7 +171,7 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    <div className="bg-[#FAFAFA] dark:bg-background-tertiary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-[#FAFAFA] dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
+                    <div className="bg-background-secondary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
                         <div className="flex items-center justify-between mb-8">
                             <div className="text-foreground transition-colors flex items-center gap-2 text-sm font-medium">
                                 <Users size={16} className="text-accent group-hover:scale-110 transition-transform" />
@@ -199,7 +199,7 @@ export default function DashboardPage() {
                     </div>
 
                     {projects.length === 0 ? (
-                        <div className="rounded-lg bg-[#FAFAFA] dark:bg-background-tertiary border border-border-subtle p-8 text-center">
+                        <div className="rounded-lg bg-background-secondary border border-border-subtle p-8 text-center">
                             <p className="text-foreground-muted text-sm mb-4">No projects yet. Create your first one!</p>
                             <button
                                 onClick={() => setShowNewProject(true)}
@@ -214,7 +214,7 @@ export default function DashboardPage() {
                                 <div
                                     key={project.id}
                                     onClick={() => router.push(`/projects?id=${project.id}`)}
-                                    className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-[#FAFAFA] dark:bg-background-tertiary border border-border-subtle hover:border-accent/40 hover:bg-gradient-to-r hover:from-[#FAFAFA] dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_15px_rgba(156,87,223,0.05)] transition-all duration-300 cursor-pointer"
+                                    className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-background-secondary border border-border-subtle hover:border-accent/40 hover:bg-gradient-to-r hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_15px_rgba(156,87,223,0.05)] transition-all duration-300 cursor-pointer"
                                 >
                                     <div className="flex items-center gap-4 mb-3 sm:mb-0">
                                         <div className="h-10 w-10 rounded-md bg-accent/10 flex items-center justify-center border border-accent/20 group-hover:border-accent/40 transition-colors">

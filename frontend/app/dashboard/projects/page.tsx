@@ -181,9 +181,7 @@ export default function DashboardProjectsPage() {
                             <Link
                                 href="/dashboard/profile"
                                 className={`mt-2 inline-block w-full rounded-lg border border-border-subtle px-4 py-2 text-center text-sm font-medium transition-colors ${
-                                    isDark
-                                        ? "bg-background-tertiary text-foreground hover:bg-background-tertiary/80 hover:border-accent/40"
-                                        : "bg-background-secondary text-foreground hover:bg-background-tertiary hover:border-accent/40"
+                                    "bg-background-secondary text-foreground hover:bg-background-tertiary hover:border-accent/40"
                                 }`}
                             >
                                 View profile

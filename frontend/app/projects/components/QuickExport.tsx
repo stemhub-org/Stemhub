@@ -125,7 +125,7 @@ export function QuickExport({
                 {hasPreview ? (
                     <button
                         onClick={handleDownloadPreview}
-                        className="flex w-full flex-col justify-between rounded-xl border border-border-subtle dark:border-accent/40 bg-background-tertiary/50 dark:bg-foreground/[0.01] px-4 py-3 text-left transition-colors dark:hover:bg-accent/5"
+                        className="flex w-full flex-col justify-between rounded-xl border border-border-subtle dark:border-accent/40 bg-background-secondary/50 dark:bg-foreground/[0.01] px-4 py-3 text-left transition-colors dark:hover:bg-accent/5"
                     >
                         <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
@@ -142,7 +142,7 @@ export function QuickExport({
                     <button
                         type="button"
                         disabled
-                        className="flex w-full flex-col justify-between rounded-xl border border-border-subtle bg-background-tertiary/20 px-4 py-3 text-left opacity-50 cursor-not-allowed"
+                        className="flex w-full flex-col justify-between rounded-xl border border-border-subtle bg-background-secondary/20 px-4 py-3 text-left opacity-50 cursor-not-allowed"
                     >
                         <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
@@ -159,7 +159,7 @@ export function QuickExport({
                         type="button"
                         disabled={!latestVersionId || !hasArtifact}
                         onClick={() => setIsZipOpen((prev) => !prev)}
-                        className="flex h-full w-full flex-col justify-between rounded-xl border border-border-subtle bg-background-tertiary/50 dark:bg-foreground/[0.01] px-4 py-3 text-left transition-colors dark:hover:bg-foreground/[0.03] disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex h-full w-full flex-col justify-between rounded-xl border border-border-subtle bg-background-secondary/50 dark:bg-foreground/[0.01] px-4 py-3 text-left transition-colors dark:hover:bg-foreground/[0.03] disabled:opacity-50 disabled:cursor-not-allowed"
                         aria-expanded={isZipOpen}
                         aria-haspopup="true"
                     >

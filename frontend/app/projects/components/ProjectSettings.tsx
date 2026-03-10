@@ -110,7 +110,7 @@ export function ProjectSettings({ projectId, ownerId, currentUserId }: ProjectSe
                         placeholder="Username to invite..."
                         value={inviteUsername}
                         onChange={(e) => setInviteUsername(e.target.value)}
-                        className="flex-1 bg-background-tertiary border border-border-subtle rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                        className="flex-1 bg-background-secondary border border-border-subtle rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
                         disabled={loading}
                     />
                     <button

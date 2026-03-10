@@ -32,9 +32,8 @@ function RepositoryPageContent() {
     const projectId = searchParams.get("id");
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const isDark = resolvedTheme === "dark";
-    const cardBase = isDark
-        ? "rounded-xl bg-background-tertiary border border-border-subtle transition-all duration-300"
-        : "rounded-xl bg-[#FAFAFA] border border-border-subtle transition-all duration-300";
+    const cardBase =
+        "rounded-xl bg-background-secondary border border-border-subtle transition-all duration-300";
     const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
     // ── Data state ──
