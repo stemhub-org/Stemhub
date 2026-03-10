@@ -45,6 +45,8 @@ target_sources(stemhub
         Source/src/ui/PluginEditor.cpp
         Source/src/ui/DashboardView.cpp
         Source/src/ui/LoginView.cpp
+        Source/src/application/PluginProcessor.Audio.cpp
+        Source/src/application/PluginProcessorStateMachine.cpp
         Source/src/application/PluginProcessor.cpp
         Source/src/application/ProjectFileService.cpp
         Source/src/application/SessionCache.cpp
