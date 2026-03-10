@@ -942,15 +942,10 @@ void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
     }
 
     versionControlService.setLastVersionId(std::move(result.pushedVersionId));
-    if (result.activeProjectStatusMessage.isNotEmpty())
-    {
-        activeProjectStatusMessage = result.activeProjectStatusMessage + " Refreshing history...";
-    }
-    else
-    {
-        activeProjectStatusMessage = "Version pushed successfully. Refreshing history...";
-    }
-    requestRefreshVersionHistory();
+    setOperationState(OperationState::idle);
+    activeProjectStatusMessage = result.activeProjectStatusMessage.isNotEmpty()
+        ? result.activeProjectStatusMessage
+        : "Version pushed successfully.";
 }
 
 void StemhubAudioProcessor::applyRestoreVersionResult(RestoreVersionJobResult result)
