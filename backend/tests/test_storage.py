@@ -114,12 +114,6 @@ def test_gcs_storage_service_roundtrip(monkeypatch) -> None:
         def blob(self, path: str) -> FakeBlob:
             return FakeBlob(path)
 
-    class PathReader:
-        @staticmethod
-        def read(path: str) -> bytes:
-            with open(path, "rb") as file:
-                return file.read()
-
     class FakeClient:
         def __init__(self, *args, **kwargs) -> None:
             del args, kwargs
