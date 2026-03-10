@@ -79,13 +79,16 @@ erDiagram
 The backend provides a RESTful API built with **FastAPI**. All communication is via JSON.
 
 ### A. Authentication
-Secure access using OAuth2 / JWT.
+Secure access using OAuth2 / JWT with **HttpOnly cookies** for session management.
 
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
-| `/auth/register` | `POST` | Create a new account. |
-| `/auth/login` | `POST` | Get JWT tokens. |
+| `/auth/register` | `POST` | Create a new account. Sets `access_token` cookie. |
+| `/auth/login` | `POST` | Get JWT tokens and set `access_token` HttpOnly cookie. |
+| `/auth/login/google` | `GET` | Initiate Google OAuth2 login flow. |
+| `/auth/logout` | `POST` | Clear the session cookie. |
 | `/auth/me` | `GET` | Get the authenticated user profile. |
+| `/auth/me` | `PUT` | Update user profile (username, bio, avatar, etc.). |
 
 **Example Request (`POST /auth/login`):**
 ```json
@@ -116,7 +119,10 @@ Endpoints for CRUD operations on projects.
 | :--- | :--- | :--- | :--- |
 | `/projects` | `GET` | | List projects for the user. |
 | `/projects` | `POST` | | Create a new project. |
-| `/projects/{id}` | `GET` | `id` | Get project details. |
+| `/projects/{id}/summary` | `GET` | `id` | Get optimized project summary (branches, recent versions). |
+| `/projects/{id}/preview` | `POST` | `id` | **Upload project audio preview.** |
+| `/projects/{id}/preview` | `GET` | `id` | **Download project audio preview.** |
+| `/projects/{id}/preview` | `DELETE`| `id` | Remove project preview. |
 
 **Example Response (`GET /projects/{id}`):**
 ```json
@@ -136,10 +142,11 @@ The core engine of StemHub for DAW project synchronization (Git-like workflow).
 
 | Endpoint | Method | Params | Description |
 | :--- | :--- | :--- | :--- |
-| `/projects/{id}/branches` | `GET` | `id` | List branches (e.g., `main`, `feature`). |
-| `/branches/{id}/versions` | `GET` | `id` | Get history of versions for a branch. |
-| `/versions/{version_id}/artifact` | `POST` | `artifact` | **Upload version snapshot/artifact.** |
-| `/versions/{version_id}/artifact` | `GET` | | **Download version snapshot/artifact.** |
+| `/projects/{id}/branches/` | `GET` | `id` | List branches (e.g., `main`, `feature`). |
+| `/branches/{id}/versions/` | `GET` | `id` | Get history of versions for a branch. |
+| `/branches/{id}/versions/` | `POST` | `id` | Create a new version record. |
+| `/versions/{id}/artifact` | `POST` | `id` | **Upload version snapshot/artifact.** |
+| `/versions/{id}/artifact` | `GET` | `id` | **Download version snapshot/artifact.** |
 
 **Flow for New Version (Push):**
 1. Client calls `POST /branches/{id}/versions` with metadata to create a version record.

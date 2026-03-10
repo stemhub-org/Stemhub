@@ -11,7 +11,7 @@ This document lists the features identified for the StemHub project. They are pr
 |:---|:---|:---|:---|
 | **US-01** | **Secure Authentication** | As a **Producer**, I want **to log in securely (MFA/Auth0)** so that **I protect my unreleased tracks from leaks**. | `[x] Done` |
 | **US-02** | **Project Upload** | As a **Musician**, I want **to backup my DAW project to the cloud (AWS S3/GCP)** so that **I never lose my source files**. | `[x] Done` |
-| **US-03** | **Version Restoration** | As a **Sound Engineer**, I want **to download a specific previous version** so that **I can revert changes after a destructive error**. | `[ ] In Progress` |
+| **US-03** | **Version Restoration** | As a **Sound Engineer**, I want **to download a specific previous version** so that **I can revert changes after a destructive error**. | `[x] Done` |
 | **US-04** | **Audio Format Support** | As a **User**, I want **the system to support .wav and .mp3 files** so that **I can manage my audio exports effectively**. | `[x] Done` |
 
 ---

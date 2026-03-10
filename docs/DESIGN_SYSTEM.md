@@ -80,6 +80,19 @@ The musical equivalent of a GitHub Pull Request. Collaborators can leave timesta
 
 ---
 
+## Technical Implementation: SSR Hydration Resilience
+
+Since StemHub uses Next.js, we enforce a **strict client-side mounting pattern** for components that depend on dynamic browser data (like theme, local storage, or audio contexts).
+
+```tsx
+const [mounted, setMounted] = useState(false);
+useEffect(() => setMounted(true), []);
+if (!mounted) return <LoadingState />; // or null
+```
+This ensures zero hydration mismatches and a smooth visual transition after the initial server render.
+
+---
+
 ## Design Principles
 
 The interface deliberately adopts patterns familiar to developers (repository structure, branches, commits, pull requests) while replacing code-specific terminology and visuals with music production equivalents. The goal is to make the learning curve minimal for producers who already collaborate via Discord or WeTransfer, without requiring any knowledge of Git.
