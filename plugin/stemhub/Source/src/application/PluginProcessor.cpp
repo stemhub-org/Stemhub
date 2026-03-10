@@ -2,6 +2,7 @@
 #include <type_traits>
 
 #include "application/PluginProcessor.hpp"
+#include "application/SessionCache.hpp"
 #include "ui/PluginEditor.hpp"
 #include "application/VersionControlService.hpp"
 #include "application/SnapshotBundler.hpp"
@@ -182,74 +183,6 @@ juce::File copyPreviewTrackToTemp(const juce::File& sourceFile)
         return {};
 
     return previewFile;
-}
-
-juce::File resolveSessionCacheFile()
-{
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("Stemhub")
-        .getChildFile("session.json");
-}
-
-juce::var loadCachedSessionJson()
-{
-    const auto sessionFile = resolveSessionCacheFile();
-    if (!sessionFile.existsAsFile())
-        return {};
-
-    return juce::JSON::parse(sessionFile.loadFileAsString());
-}
-
-juce::String loadCachedAccessToken()
-{
-    const auto jsonValue = loadCachedSessionJson();
-    const auto* sessionObject = jsonValue.getDynamicObject();
-    if (sessionObject == nullptr)
-        return {};
-
-    return sessionObject->getProperty("access_token").toString();
-}
-
-juce::String loadCachedProjectId()
-{
-    const auto jsonValue = loadCachedSessionJson();
-    const auto* sessionObject = jsonValue.getDynamicObject();
-    if (sessionObject == nullptr)
-        return {};
-
-    return sessionObject->getProperty("last_project_id").toString();
-}
-
-void saveCachedSession(const juce::String& token, const juce::String& projectId)
-{
-    const auto sessionFile = resolveSessionCacheFile();
-    const auto sessionDirectory = sessionFile.getParentDirectory();
-    if ((!sessionDirectory.exists() && !sessionDirectory.createDirectory()) || !sessionDirectory.isDirectory())
-        return;
-
-    juce::DynamicObject::Ptr sessionObject = new juce::DynamicObject();
-    sessionObject->setProperty("access_token", token);
-    sessionObject->setProperty("last_project_id", projectId);
-
-    const auto sessionJson = juce::JSON::toString(juce::var(sessionObject.get()), true);
-    sessionFile.replaceWithText(sessionJson);
-}
-
-void saveCachedAccessToken(const juce::String& token)
-{
-    saveCachedSession(token, loadCachedProjectId());
-}
-
-void saveCachedProjectId(const juce::String& projectId)
-{
-    saveCachedSession(loadCachedAccessToken(), projectId);
-}
-
-void clearCachedAccessToken()
-{
-    const auto sessionFile = resolveSessionCacheFile();
-    if (sessionFile.existsAsFile())
-        sessionFile.deleteFile();
 }
 
 bool openFileInSystem(const juce::File& file)
@@ -835,7 +768,7 @@ void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
     {
         if (fromCachedSession)
         {
-            clearCachedAccessToken();
+            stemhub::sessioncache::clear();
             currentUser.reset();
             access_tkn.clear();
             versionControlService.clearAccessToken();
@@ -855,7 +788,7 @@ void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
     activeProjectStatusMessage.clear();
     projects = std::move(result.projects);
     access_tkn = std::move(result.token);
-    saveCachedAccessToken(access_tkn);
+    stemhub::sessioncache::saveAccessToken(access_tkn);
     versionControlService.setAccessToken(access_tkn);
     signIn(std::move(*result.user));
 
@@ -1007,7 +940,7 @@ void StemhubAudioProcessor::signOut() noexcept
     currentUser.reset();
     access_tkn.clear();
     versionControlService.clearAccessToken();
-    clearCachedAccessToken();
+    stemhub::sessioncache::clear();
     authErrorMessage.clear();
     projectSelectionStatusMessage.clear();
     activeProjectStatusMessage.clear();
@@ -1071,7 +1004,7 @@ void StemhubAudioProcessor::selectProject(Project project, juce::String branchId
     selectedProjectFile = std::move(projectFile);
     pendingProjectFile = selectedProjectFile;
     if (selectedProject.has_value())
-        saveCachedProjectId(selectedProject->id);
+        stemhub::sessioncache::saveProjectId(selectedProject->id);
     versionControlService.setCurrentProjectContext(makeProjectVersionContext(selectedProject,
                                                                              selectedBranchId,
                                                                              versionHistory));
@@ -1123,7 +1056,7 @@ void StemhubAudioProcessor::requestRestoreCachedSession()
     if (sessionState.authState == AuthState::signedIn || sessionState.authState == AuthState::signingIn)
         return;
 
-    const auto cachedToken = loadCachedAccessToken().trim();
+    const auto cachedToken = stemhub::sessioncache::loadAccessToken().trim();
     if (cachedToken.isEmpty())
         return;
 
@@ -1144,7 +1077,7 @@ void StemhubAudioProcessor::requestRestoreCachedProjectContext()
     if (selectedProject.has_value() || access_tkn.isEmpty() || projects.empty())
         return;
 
-    const auto cachedProjectId = loadCachedProjectId().trim();
+    const auto cachedProjectId = stemhub::sessioncache::loadProjectId().trim();
     if (cachedProjectId.isEmpty())
         return;
 
