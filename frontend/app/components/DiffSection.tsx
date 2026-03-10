@@ -143,7 +143,7 @@ export default function DiffSection() {
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className="overflow-hidden rounded-2xl border border-foreground/[0.06] bg-background-secondary/80 backdrop-blur-sm">
+            <div className="overflow-hidden rounded-2xl border border-foreground/[0.06] bg-background-secondary/80 dark:bg-background-tertiary/80 backdrop-blur-sm">
               {/* Terminal header */}
               <div className="flex items-center gap-2 border-b border-foreground/[0.06] px-5 py-3.5">
                 <div className="h-2.5 w-2.5 rounded-full bg-foreground/10" />
@@ -164,7 +164,7 @@ export default function DiffSection() {
           {/* Floating elements with parallax */}
           <div className="relative hidden lg:col-span-5 lg:block">
             <motion.div
-              className="absolute top-0 right-0 rounded-2xl border border-foreground/[0.06] bg-background-secondary/60 p-6 backdrop-blur-sm"
+              className="absolute top-0 right-0 rounded-2xl border border-foreground/[0.06] bg-background-secondary/60 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
               style={{ y: floatY1 }}
             >
               <GitBranch size={20} strokeWidth={1.5} className="mb-3 text-accent" />
@@ -177,7 +177,7 @@ export default function DiffSection() {
             </motion.div>
 
             <motion.div
-              className="absolute top-40 left-8 rounded-2xl border border-foreground/[0.06] bg-background-secondary/60 p-6 backdrop-blur-sm"
+              className="absolute top-40 left-8 rounded-2xl border border-foreground/[0.06] bg-background-secondary/60 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
               style={{ y: floatY2 }}
             >
               <GitCommit size={20} strokeWidth={1.5} className="mb-3 text-accent" />
@@ -190,7 +190,7 @@ export default function DiffSection() {
             </motion.div>
 
             <motion.div
-              className="absolute top-80 right-12 rounded-2xl border border-foreground/[0.06] bg-background-secondary/60 p-6 backdrop-blur-sm"
+              className="absolute top-80 right-12 rounded-2xl border border-foreground/[0.06] bg-background-secondary/60 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
               style={{ y: floatY3 }}
             >
               <GitMerge size={20} strokeWidth={1.5} className="mb-3 text-accent" />

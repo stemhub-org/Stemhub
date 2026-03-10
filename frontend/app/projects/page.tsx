@@ -24,7 +24,7 @@ import type {
 import { ProjectSettings } from "./components/ProjectSettings";
 
 const cardHoverDark =
-    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
+    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
 
 function RepositoryPageContent() {
     const { resolvedTheme } = useTheme();
@@ -32,9 +32,8 @@ function RepositoryPageContent() {
     const projectId = searchParams.get("id");
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const isDark = resolvedTheme === "dark";
-    const cardBase = isDark
-        ? "rounded-xl bg-background-tertiary border border-border-subtle transition-all duration-300"
-        : "rounded-xl bg-[#FAFAFA] border border-border-subtle transition-all duration-300";
+    const cardBase =
+        "rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle transition-all duration-300";
     const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
     // ── Data state ──

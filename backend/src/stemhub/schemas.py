@@ -191,3 +191,10 @@ class ProjectSummaryResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class EmailChangeRequest(BaseModel):
+    new_email: EmailStr

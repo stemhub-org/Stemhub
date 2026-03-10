@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse
 
 from .database import get_db
 from .models import User
-from .schemas import LoginRequest, UserCreate, UserResponse, Token, UserUpdate
+from .schemas import LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -290,6 +290,29 @@ async def update_me(user_update: UserUpdate, current_user: User = Depends(get_cu
         current_user.website = user_update.website
     if user_update.genres is not None:
         current_user.genres = user_update.genres
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
+
+@router.put("/me/password")
+async def update_password(password_data: PasswordChangeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if not verify_password(password_data.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="L'ancien mot de passe est incorrect")
+    
+    current_user.password_hash = get_password_hash(password_data.new_password)
+    await db.commit()
+    return {"message": "Mot de passe mis à jour avec succès"}
+
+@router.put("/me/email", response_model=UserResponse)
+async def update_email(email_data: EmailChangeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if email_data.new_email == current_user.email:
+        raise HTTPException(status_code=400, detail="C'est déjà votre adresse email")
+    
+    result = await db.execute(select(User).where(User.email == email_data.new_email))
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail="Cet email est déjà pris")
+        
+    current_user.email = email_data.new_email
     await db.commit()
     await db.refresh(current_user)
     return current_user

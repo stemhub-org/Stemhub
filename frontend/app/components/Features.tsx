@@ -88,7 +88,7 @@ function FeatureCard({
   return (
     <motion.div
       ref={cardRef}
-      className={`group relative overflow-hidden rounded-2xl border border-foreground/[0.06] bg-background-secondary/50 transition-all duration-500 hover:scale-[1.02] hover:border-accent/20 ${
+      className={`group relative overflow-hidden rounded-2xl border border-foreground/[0.06] bg-background-secondary/50 dark:bg-background-tertiary/50 transition-all duration-500 hover:scale-[1.02] hover:border-accent/20 ${
         isLarge ? "col-span-1 md:col-span-2 p-10" : "col-span-1 p-8"
       }`}
       onMouseMove={handleMouseMove}
