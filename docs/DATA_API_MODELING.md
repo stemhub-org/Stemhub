@@ -138,29 +138,28 @@ The core engine of StemHub for DAW project synchronization (Git-like workflow).
 | :--- | :--- | :--- | :--- |
 | `/projects/{id}/branches` | `GET` | `id` | List branches (e.g., `main`, `feature`). |
 | `/branches/{id}/versions` | `GET` | `id` | Get history of versions for a branch. |
-| `/files/upload-url` | `POST` | `filename` | **Get pre-signed Cloudflare R2 upload URL.** |
-| `/files/download-url` | `GET` | `file_path` | **Get pre-signed url for restoration.** |
+| `/versions/{version_id}/artifact` | `POST` | `artifact` | **Upload version snapshot/artifact.** |
+| `/versions/{version_id}/artifact` | `GET` | | **Download version snapshot/artifact.** |
 
 **Flow for New Version (Push):**
-1. Client calls `/files/upload-url` with metadata.
-2. Server returns a Signed URL (Cloudflare R2).
-3. Client uploads file directly to R2.
-4. Client calls `POST /branches/{id}/versions` to confirm the commit.
+1. Client calls `POST /branches/{id}/versions` with metadata to create a version record.
+2. Server returns the new `version_id`.
+3. Client uploads the file artifact via `POST /versions/{version_id}/artifact`.
 
-**Example Request (`POST /files/upload-url`):**
+**Example Request (`POST /branches/{id}/versions`):**
 ```json
 {
-  "project_id": "uuid",
-  "filename": "project_v2.als",
-  "content_type": "application/octet-stream"
+  "commit_message": "Added lead synth",
+  "source_daw": "Ableton Live"
 }
 ```
 
 **Example Response:**
 ```json
 {
-  "upload_url": "https://pub-<id>.r2.dev/stemhub/temp-upload-id?X-Amz-Signature=...",
-  "file_id": "file_8872"
+  "id": "abc-123",
+  "branch_id": "def-456",
+  "commit_message": "Added lead synth"
 }
 ```
 

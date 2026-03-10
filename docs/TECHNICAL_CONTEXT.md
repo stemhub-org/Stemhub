@@ -55,8 +55,8 @@ For a detailed visual representation and API contract, see the [Data & API Model
 - **Why?** Need for strict relations (A Project has multiple Versions, a Version has multiple Tracks). NoSQL (Mongo) would be too messy to manage precise versioning history (Git-like).
 
 ## File Storage (Audio): AWS S3 (or equivalent like MinIO/Google Cloud Storage)
-- **Imperative**: Never store audio files on the web server itself.
-- **Generate "Signed URLs"** so the user's browser uploads directly to S3 (to avoid overloading your Python server).
+- **Imperative**: Heavy audio and snapshots files should be stored securely in the Cloud.
+- **Upload Architecture**: Uploads are now routed through the Python server which streams/stores them to the Cloud storage service, giving the backend more control over validation and metadata generation.
 
 ---
 
@@ -98,14 +98,15 @@ For a detailed visual representation and API contract, see the [Data & API Model
 - **UX/UI**: Design inspired by standards (Splice/Drive) for rapid adoption by musicians.
 
 ## 2. Backend (Logic & API)
-- **Language**: Python (FastAPI or Django Framework).
+- **Language**: Python (FastAPI).
+- **Database Migrations**: Alembic for robust schema evolution (no more automatic startup schema creation).
 - **Key Library**: PyFLP (to parse FL Studio files) and struct libraries (for binary analysis).
 - **Role**: Manages authentication, project metadata, and versioning logic.
 
 ## 3. Infrastructure & Storage (Cloud)
 - **Database**: PostgreSQL (Relational) to store links between Artists, Projects, and Versions.
-- **Heavy File Storage**: AWS S3 (Simple Storage Service).
-- **Upload Architecture**: "Signed URLs" for direct upload from browser to S3 (bypassing the Python server for performance).
+- **Heavy File Storage**: AWS S3 / Google Cloud Storage.
+- **Upload Architecture**: Direct upload to FastAPI which proxies/streams the snapshot artifact to Cloud Storage.
 
 ## 4. Security & DevOps
 - **Authentication**: OAuth2 / Auth0 (MFA, Google/Apple Connection).
