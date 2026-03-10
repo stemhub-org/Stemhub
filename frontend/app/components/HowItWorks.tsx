@@ -83,7 +83,7 @@ export default function HowItWorks() {
                 }}
               >
                 {/* Step number + icon */}
-                <div className="relative mb-8 flex h-16 w-16 items-center justify-center rounded-2xl border border-foreground/[0.06] bg-background-secondary/50 transition-all duration-500 group-hover:border-accent/20 group-hover:bg-accent/5">
+                <div className="relative mb-8 flex h-16 w-16 items-center justify-center rounded-2xl border border-foreground/[0.06] bg-background-secondary/50 dark:bg-background-tertiary/50 transition-all duration-500 group-hover:border-accent/20 group-hover:bg-accent/5">
                   <Icon
                     size={22}
                     strokeWidth={1.5}

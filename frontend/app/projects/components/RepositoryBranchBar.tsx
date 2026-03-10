@@ -47,7 +47,7 @@ export function RepositoryBranchBar({
                 <button
                     type="button"
                     onClick={() => setIsOpen((prev) => !prev)}
-                    className="flex items-center gap-2 rounded-xl bg-background-secondary border border-border-subtle px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-background-tertiary"
+                    className="flex items-center gap-2 rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-background-tertiary"
                     aria-expanded={isOpen}
                     aria-haspopup="listbox"
                     aria-label="Sélectionner la branche"
@@ -62,7 +62,7 @@ export function RepositoryBranchBar({
                 {isOpen && (
                     <ul
                         role="listbox"
-                        className="absolute left-0 top-full z-10 mt-1 min-w-[12rem] rounded-xl bg-background-secondary border border-border-subtle py-1 shadow-lg"
+                        className="absolute left-0 top-full z-10 mt-1 min-w-[12rem] rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle py-1 shadow-lg"
                     >
                         {branches.map((branch) => (
                             <li key={branch.id} role="option" className="flex items-center justify-between hover:bg-background-tertiary">
@@ -120,7 +120,7 @@ export function RepositoryBranchBar({
                                             value={newBranchName} 
                                             onChange={e => setNewBranchName(e.target.value)} 
                                             placeholder="New branch name..."
-                                            className="w-full bg-background-secondary border border-border-subtle rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
+                                            className="w-full bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
                                             disabled={isSubmitting}
                                             autoFocus
                                         />

@@ -30,9 +30,9 @@ function getInitials(username: string): string {
 }
 
 const cardBase =
-    "rounded-xl bg-background-secondary border border-border-subtle p-6 transition-all duration-300";
+    "rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle p-6 transition-all duration-300";
 const cardHoverDark =
-    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
+    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
 
 function ProjectChangesContent() {
     const { resolvedTheme } = useTheme();

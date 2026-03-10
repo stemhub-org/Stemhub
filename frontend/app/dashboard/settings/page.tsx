@@ -108,7 +108,7 @@ export default function SettingsPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4, delay: 0.2 }}
-                    className="flex-1 rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 backdrop-blur-xl p-8 min-h-[500px]"
+                    className="flex-1 rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 backdrop-blur-xl p-8 min-h-[500px]"
                 >
                     <AnimatePresence mode="wait">
                         {activeTab === "profile" && <ProfileSettings key="profile" user={user} onUpdate={fetchUser} />}
@@ -216,7 +216,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                         type="text"
                         value={form.username}
                         onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="space-y-2">
@@ -226,7 +226,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                         value={form.location}
                         onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
                         placeholder="e.g. Paris, France"
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="space-y-2">
@@ -236,7 +236,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                         value={form.website}
                         onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
                         placeholder="https://yourwebsite.com"
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="space-y-2">
@@ -246,7 +246,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                         value={form.bio}
                         onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
                         placeholder="Electronic music producer..."
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all resize-none"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all resize-none"
                     />
                 </div>
             </div>
@@ -358,7 +358,7 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                             type="email"
                             value={emailForm}
                             onChange={(e) => setEmailForm(e.target.value)}
-                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                         />
                         <button 
                             onClick={handleUpdateEmail}
@@ -377,7 +377,7 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                         placeholder="••••••••"
                         value={passwordForm.current_password}
                         onChange={(e) => setPasswordForm(f => ({ ...f, current_password: e.target.value }))}
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -388,7 +388,7 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                             placeholder="••••••••"
                             value={passwordForm.new_password}
                             onChange={(e) => setPasswordForm(f => ({ ...f, new_password: e.target.value }))}
-                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                         />
                     </div>
                     <div className="space-y-2">
@@ -398,7 +398,7 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                             placeholder="••••••••"
                             value={passwordForm.confirm_password}
                             onChange={(e) => setPasswordForm(f => ({ ...f, confirm_password: e.target.value }))}
-                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                         />
                     </div>
                 </div>
@@ -508,7 +508,7 @@ function IntegrationSettings({ user }: { user: any }) {
                     </div>
 
                     {/* FL Studio */}
-                    <div className="p-5 rounded-xl border border-foreground/[0.08] bg-background-secondary/20 flex flex-col justify-between h-32">
+                    <div className="p-5 rounded-xl border border-foreground/[0.08] bg-background-secondary/20 dark:bg-background-tertiary/20 flex flex-col justify-between h-32">
                         <div className="flex justify-between items-start">
                             <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 bg-[#FF6A00] rounded-md flex items-center justify-center text-white p-1">
@@ -678,7 +678,7 @@ function ToggleRow({ title, description, defaultChecked }: { title: string, desc
     const [checked, setChecked] = useState(defaultChecked);
 
     return (
-        <div className="flex items-center justify-between p-4 rounded-xl border border-foreground/[0.04] bg-background-secondary/10 hover:bg-background-secondary/30 transition-colors cursor-pointer" onClick={() => setChecked(!checked)}>
+        <div className="flex items-center justify-between p-4 rounded-xl border border-foreground/[0.04] bg-background-secondary/10 dark:bg-background-tertiary/10 hover:bg-background-secondary/30 dark:hover:bg-background-tertiary/30 transition-colors cursor-pointer" onClick={() => setChecked(!checked)}>
             <div>
                 <h4 className="text-sm font-medium text-foreground/90">{title}</h4>
                 <p className="text-xs text-foreground/50 font-light mt-0.5">{description}</p>

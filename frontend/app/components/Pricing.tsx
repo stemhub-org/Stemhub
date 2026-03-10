@@ -83,8 +83,8 @@ export default function Pricing() {
               key={plan.name}
               className={`relative overflow-hidden rounded-2xl border p-8 transition-all duration-500 ${
                 plan.highlighted
-                  ? "border-accent/20 bg-background-secondary/80"
-                  : "border-foreground/[0.06] bg-background-secondary/40"
+                  ? "border-accent/20 bg-background-secondary/80 dark:bg-background-tertiary/80"
+                  : "border-foreground/[0.06] bg-background-secondary/40 dark:bg-background-tertiary/40"
               }`}
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}

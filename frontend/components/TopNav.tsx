@@ -39,7 +39,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
     }, []);
 
     return (
-        <header className="h-20 border-b border-foreground/[0.08] bg-background-secondary/30 backdrop-blur-xl flex items-center justify-between px-6 lg:px-8 z-10 sticky top-0">
+        <header className="h-20 border-b border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 backdrop-blur-xl flex items-center justify-between px-6 lg:px-8 z-10 sticky top-0">
             <div className="flex items-center gap-3">
                 {onToggleSidebar && !sidebarOpen && (
                     <button
@@ -97,7 +97,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                         onClick={() => {
                             router.push("/dashboard/profile");
                         }}
-                        className={`h-10 w-10 rounded-full flex items-center justify-center text-white border-2 shadow-sm hover:opacity-90 transition-opacity bg-background-secondary overflow-hidden ${isDark ? "border-transparent" : "border-white"}`}
+                        className={`h-10 w-10 rounded-full flex items-center justify-center text-white border-2 shadow-sm hover:opacity-90 transition-opacity bg-background-secondary dark:bg-background-tertiary overflow-hidden ${isDark ? "border-transparent" : "border-white"}`}
                         style={!userData?.avatar_url ? { background: "linear-gradient(to top right, #9C57DF, #C28CF0)" } : {}}
                         title="View profile"
                     >
