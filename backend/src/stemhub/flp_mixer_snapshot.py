@@ -41,6 +41,31 @@ class MixerProjectSnapshot:
     inserts: tuple[MixerInsertSnapshot, ...]
 
 
+@dataclass(frozen=True)
+class MixerDiffChange:
+    type: str
+    insert_iid: int
+    insert_name: str | None
+    slot_index: int | None
+    before: Any
+    after: Any
+    message: str
+
+
+@dataclass(frozen=True)
+class MixerDiffSummary:
+    total_changes: int
+    inserts_changed: int
+    slots_changed: int
+    parameter_changes: int
+
+
+@dataclass(frozen=True)
+class MixerDiffResult:
+    summary: MixerDiffSummary
+    changes: tuple[MixerDiffChange, ...]
+
+
 def load_fl_studio_mixer_snapshot(
     *,
     artifact_path: str,
@@ -127,6 +152,140 @@ def build_mixer_snapshot(project: Any) -> MixerProjectSnapshot:
     return MixerProjectSnapshot(inserts=tuple(inserts))
 
 
+def diff_mixer_project_snapshots(
+    base_snapshot: MixerProjectSnapshot,
+    target_snapshot: MixerProjectSnapshot,
+) -> MixerDiffResult:
+    changes: list[MixerDiffChange] = []
+    base_inserts = {insert.iid: insert for insert in base_snapshot.inserts}
+    target_inserts = {insert.iid: insert for insert in target_snapshot.inserts}
+
+    for insert_iid in sorted(set(base_inserts) | set(target_inserts)):
+        base_insert = base_inserts.get(insert_iid)
+        target_insert = target_inserts.get(insert_iid)
+
+        if base_insert is None and target_insert is not None:
+            changes.append(
+                MixerDiffChange(
+                    type="insert_added",
+                    insert_iid=insert_iid,
+                    insert_name=target_insert.name,
+                    slot_index=None,
+                    before=None,
+                    after=_serialize_insert(target_insert),
+                    message=f'{_format_insert_label(insert_iid, target_insert.name)} added',
+                )
+            )
+            continue
+
+        if base_insert is not None and target_insert is None:
+            changes.append(
+                MixerDiffChange(
+                    type="insert_removed",
+                    insert_iid=insert_iid,
+                    insert_name=base_insert.name,
+                    slot_index=None,
+                    before=_serialize_insert(base_insert),
+                    after=None,
+                    message=f'{_format_insert_label(insert_iid, base_insert.name)} removed',
+                )
+            )
+            continue
+
+        if base_insert is None or target_insert is None:
+            continue
+
+        insert_name = target_insert.name or base_insert.name
+
+        if base_insert.name != target_insert.name:
+            changes.append(
+                MixerDiffChange(
+                    type="insert_renamed",
+                    insert_iid=insert_iid,
+                    insert_name=insert_name,
+                    slot_index=None,
+                    before=base_insert.name,
+                    after=target_insert.name,
+                    message=(
+                        f'{_format_insert_label(insert_iid, base_insert.name)} renamed: '
+                        f'{_format_text_value(base_insert.name)} -> {_format_text_value(target_insert.name)}'
+                    ),
+                )
+            )
+
+        if base_insert.enabled != target_insert.enabled:
+            changes.append(
+                MixerDiffChange(
+                    type="insert_enabled_changed",
+                    insert_iid=insert_iid,
+                    insert_name=insert_name,
+                    slot_index=None,
+                    before=base_insert.enabled,
+                    after=target_insert.enabled,
+                    message=(
+                        f'{_format_insert_label(insert_iid, insert_name)} enabled changed: '
+                        f'{_format_bool_value(base_insert.enabled)} -> {_format_bool_value(target_insert.enabled)}'
+                    ),
+                )
+            )
+
+        if base_insert.volume != target_insert.volume:
+            changes.append(
+                MixerDiffChange(
+                    type="insert_volume_changed",
+                    insert_iid=insert_iid,
+                    insert_name=insert_name,
+                    slot_index=None,
+                    before=base_insert.volume,
+                    after=target_insert.volume,
+                    message=(
+                        f'{_format_insert_label(insert_iid, insert_name)} volume changed: '
+                        f'{_format_scalar_value(base_insert.volume)} -> {_format_scalar_value(target_insert.volume)}'
+                    ),
+                )
+            )
+
+        if base_insert.pan != target_insert.pan:
+            changes.append(
+                MixerDiffChange(
+                    type="insert_pan_changed",
+                    insert_iid=insert_iid,
+                    insert_name=insert_name,
+                    slot_index=None,
+                    before=base_insert.pan,
+                    after=target_insert.pan,
+                    message=(
+                        f'{_format_insert_label(insert_iid, insert_name)} pan changed: '
+                        f'{_format_scalar_value(base_insert.pan)} -> {_format_scalar_value(target_insert.pan)}'
+                    ),
+                )
+            )
+
+        changes.extend(_diff_insert_slots(base_insert, target_insert))
+
+    insert_changes = {change.insert_iid for change in changes if change.type.startswith("insert_")}
+    slot_changes = {
+        (change.insert_iid, change.slot_index)
+        for change in changes
+        if change.type.startswith("slot_") and change.slot_index is not None
+    }
+    parameter_change_types = {
+        "insert_enabled_changed",
+        "insert_volume_changed",
+        "insert_pan_changed",
+        "slot_enabled_changed",
+        "slot_mix_changed",
+    }
+
+    summary = MixerDiffSummary(
+        total_changes=len(changes),
+        inserts_changed=len(insert_changes),
+        slots_changed=len(slot_changes),
+        parameter_changes=sum(1 for change in changes if change.type in parameter_change_types),
+    )
+    return MixerDiffResult(summary=summary, changes=tuple(changes))
+
+
 def _build_slot_snapshots(insert: Any) -> tuple[MixerSlotSnapshot, ...]:
     slots: list[MixerSlotSnapshot] = []
 
@@ -154,6 +313,107 @@ def _build_slot_snapshots(insert: Any) -> tuple[MixerSlotSnapshot, ...]:
 
     slots.sort(key=lambda item: item.index)
     return tuple(slots)
+
+
+def _diff_insert_slots(
+    base_insert: MixerInsertSnapshot,
+    target_insert: MixerInsertSnapshot,
+) -> list[MixerDiffChange]:
+    changes: list[MixerDiffChange] = []
+    base_slots = {slot.index: slot for slot in base_insert.slots}
+    target_slots = {slot.index: slot for slot in target_insert.slots}
+    insert_name = target_insert.name or base_insert.name
+
+    for slot_index in sorted(set(base_slots) | set(target_slots)):
+        base_slot = base_slots.get(slot_index)
+        target_slot = target_slots.get(slot_index)
+
+        if base_slot is None and target_slot is not None:
+            changes.append(
+                MixerDiffChange(
+                    type="slot_added",
+                    insert_iid=target_insert.iid,
+                    insert_name=insert_name,
+                    slot_index=slot_index,
+                    before=None,
+                    after=_serialize_slot(target_slot),
+                    message=(
+                        f'{_format_slot_label(target_insert.iid, insert_name, slot_index)} added: '
+                        f'{_format_text_value(target_slot.plugin_key or target_slot.name)}'
+                    ),
+                )
+            )
+            continue
+
+        if base_slot is not None and target_slot is None:
+            changes.append(
+                MixerDiffChange(
+                    type="slot_removed",
+                    insert_iid=base_insert.iid,
+                    insert_name=insert_name,
+                    slot_index=slot_index,
+                    before=_serialize_slot(base_slot),
+                    after=None,
+                    message=(
+                        f'{_format_slot_label(base_insert.iid, insert_name, slot_index)} removed: '
+                        f'{_format_text_value(base_slot.plugin_key or base_slot.name)}'
+                    ),
+                )
+            )
+            continue
+
+        if base_slot is None or target_slot is None:
+            continue
+
+        if base_slot.plugin_key != target_slot.plugin_key:
+            changes.append(
+                MixerDiffChange(
+                    type="slot_plugin_changed",
+                    insert_iid=target_insert.iid,
+                    insert_name=insert_name,
+                    slot_index=slot_index,
+                    before=base_slot.plugin_key,
+                    after=target_slot.plugin_key,
+                    message=(
+                        f'{_format_slot_label(target_insert.iid, insert_name, slot_index)} plugin changed: '
+                        f'{_format_text_value(base_slot.plugin_key)} -> {_format_text_value(target_slot.plugin_key)}'
+                    ),
+                )
+            )
+
+        if base_slot.enabled != target_slot.enabled:
+            changes.append(
+                MixerDiffChange(
+                    type="slot_enabled_changed",
+                    insert_iid=target_insert.iid,
+                    insert_name=insert_name,
+                    slot_index=slot_index,
+                    before=base_slot.enabled,
+                    after=target_slot.enabled,
+                    message=(
+                        f'{_format_slot_label(target_insert.iid, insert_name, slot_index)} enabled changed: '
+                        f'{_format_bool_value(base_slot.enabled)} -> {_format_bool_value(target_slot.enabled)}'
+                    ),
+                )
+            )
+
+        if base_slot.mix != target_slot.mix:
+            changes.append(
+                MixerDiffChange(
+                    type="slot_mix_changed",
+                    insert_iid=target_insert.iid,
+                    insert_name=insert_name,
+                    slot_index=slot_index,
+                    before=base_slot.mix,
+                    after=target_slot.mix,
+                    message=(
+                        f'{_format_slot_label(target_insert.iid, insert_name, slot_index)} mix changed: '
+                        f'{_format_scalar_value(base_slot.mix)} -> {_format_scalar_value(target_slot.mix)}'
+                    ),
+                )
+            )
+
+    return changes
 
 
 def _resolve_slot_plugin_key(
@@ -231,6 +491,57 @@ def _coerce_optional_bool(value: Any) -> bool | None:
     if value is None:
         return None
     return bool(value)
+
+
+def _serialize_insert(insert: MixerInsertSnapshot) -> dict[str, Any]:
+    return {
+        "iid": insert.iid,
+        "name": insert.name,
+        "enabled": insert.enabled,
+        "volume": insert.volume,
+        "pan": insert.pan,
+        "slots": [_serialize_slot(slot) for slot in insert.slots],
+    }
+
+
+def _serialize_slot(slot: MixerSlotSnapshot) -> dict[str, Any]:
+    return {
+        "index": slot.index,
+        "name": slot.name,
+        "internal_name": slot.internal_name,
+        "enabled": slot.enabled,
+        "mix": slot.mix,
+        "plugin_key": slot.plugin_key,
+    }
+
+
+def _format_insert_label(insert_iid: int, insert_name: str | None) -> str:
+    label = f"Insert {insert_iid}"
+    if insert_name:
+        return f'{label} "{insert_name}"'
+    return label
+
+
+def _format_slot_label(insert_iid: int, insert_name: str | None, slot_index: int) -> str:
+    return f"{_format_insert_label(insert_iid, insert_name)} slot {slot_index}"
+
+
+def _format_text_value(value: str | None) -> str:
+    if value is None:
+        return "None"
+    return f'"{value}"'
+
+
+def _format_bool_value(value: bool | None) -> str:
+    if value is None:
+        return "None"
+    return "on" if value else "off"
+
+
+def _format_scalar_value(value: int | None) -> str:
+    if value is None:
+        return "None"
+    return str(value)
 
 
 @contextmanager
