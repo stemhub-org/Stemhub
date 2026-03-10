@@ -184,6 +184,167 @@ juce::File copyPreviewTrackToTemp(const juce::File& sourceFile)
     return previewFile;
 }
 
+juce::File resolveSessionCacheFile()
+{
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("Stemhub")
+        .getChildFile("session.json");
+}
+
+juce::var loadCachedSessionJson()
+{
+    const auto sessionFile = resolveSessionCacheFile();
+    if (!sessionFile.existsAsFile())
+        return {};
+
+    return juce::JSON::parse(sessionFile.loadFileAsString());
+}
+
+juce::String loadCachedAccessToken()
+{
+    const auto jsonValue = loadCachedSessionJson();
+    const auto* sessionObject = jsonValue.getDynamicObject();
+    if (sessionObject == nullptr)
+        return {};
+
+    return sessionObject->getProperty("access_token").toString();
+}
+
+juce::String loadCachedProjectId()
+{
+    const auto jsonValue = loadCachedSessionJson();
+    const auto* sessionObject = jsonValue.getDynamicObject();
+    if (sessionObject == nullptr)
+        return {};
+
+    return sessionObject->getProperty("last_project_id").toString();
+}
+
+void saveCachedSession(const juce::String& token, const juce::String& projectId)
+{
+    const auto sessionFile = resolveSessionCacheFile();
+    const auto sessionDirectory = sessionFile.getParentDirectory();
+    if ((!sessionDirectory.exists() && !sessionDirectory.createDirectory()) || !sessionDirectory.isDirectory())
+        return;
+
+    juce::DynamicObject::Ptr sessionObject = new juce::DynamicObject();
+    sessionObject->setProperty("access_token", token);
+    sessionObject->setProperty("last_project_id", projectId);
+
+    const auto sessionJson = juce::JSON::toString(juce::var(sessionObject.get()), true);
+    sessionFile.replaceWithText(sessionJson);
+}
+
+void saveCachedAccessToken(const juce::String& token)
+{
+    saveCachedSession(token, loadCachedProjectId());
+}
+
+void saveCachedProjectId(const juce::String& projectId)
+{
+    saveCachedSession(loadCachedAccessToken(), projectId);
+}
+
+void clearCachedAccessToken()
+{
+    const auto sessionFile = resolveSessionCacheFile();
+    if (sessionFile.existsAsFile())
+        sessionFile.deleteFile();
+}
+
+bool openFileInSystem(const juce::File& file)
+{
+    if (!file.existsAsFile())
+        return false;
+
+    if (file.startAsProcess())
+        return true;
+
+   #if JUCE_MAC
+    juce::ChildProcess openProcess;
+    const auto escapedPath = file.getFullPathName().replace("\"", "\\\"");
+    return openProcess.start("open \"" + escapedPath + "\"");
+   #else
+    return false;
+   #endif
+}
+
+juce::String sanitizePathSegment(const juce::String& value, const juce::String& fallback)
+{
+    juce::String output;
+    for (auto ch : value)
+    {
+        const auto isAllowed = juce::CharacterFunctions::isLetterOrDigit(ch)
+            || ch == '-'
+            || ch == '_'
+            || ch == '.';
+        output += isAllowed ? juce::String::charToString(ch) : "-";
+    }
+
+    output = output.trim().replace("--", "-");
+    while (output.contains("--"))
+        output = output.replace("--", "-");
+    output = output.trimCharactersAtStart("-").trimCharactersAtEnd("-");
+    return output.isNotEmpty() ? output : fallback;
+}
+
+juce::File buildAutoRestoreCacheRoot(const juce::String& projectId, const juce::String& branchId)
+{
+    auto root = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                    .getChildFile("Stemhub")
+                    .getChildFile("restore-cache")
+                    .getChildFile(sanitizePathSegment(projectId, "project"))
+                    .getChildFile(sanitizePathSegment(branchId, "branch"));
+    return root;
+}
+
+juce::File buildAutoRestoreZipPath(const juce::String& projectId,
+                                   const juce::String& branchId,
+                                   const juce::String& versionId)
+{
+    const auto shortVersion = versionId.substring(0, juce::jmin(8, versionId.length()));
+    auto root = buildAutoRestoreCacheRoot(projectId, branchId);
+    return root.getChildFile("version-" + sanitizePathSegment(shortVersion, "latest") + ".zip");
+}
+
+juce::String tryRestoreLatestVersionToCache(const std::vector<VersionSummary>& versions,
+                                            const juce::String& projectId,
+                                            const juce::String& branchId,
+                                            const VersionControlService& versionControlService,
+                                            juce::File& restoredProjectFile)
+{
+    restoredProjectFile = juce::File();
+
+    if (versions.empty())
+        return {};
+
+    const auto& latest = versions.front();
+    if (!latest.hasArtifact || latest.id.isEmpty())
+        return {};
+
+    const auto zipPath = buildAutoRestoreZipPath(projectId, branchId, latest.id);
+    const auto cacheRoot = zipPath.getParentDirectory();
+    if ((!cacheRoot.exists() && !cacheRoot.createDirectory()) || !cacheRoot.isDirectory())
+        return "Project ready, but failed to prepare local restore cache.";
+
+    const auto restoreResult = versionControlService.restoreVersion(
+        latest.id,
+        zipPath,
+        versionControlService.getAccessToken());
+    if (restoreResult.failed())
+        return "Project ready, but failed to auto-restore latest version: " + restoreResult.getErrorMessage();
+
+    const auto restoreDirectory = zipPath.getParentDirectory().getChildFile(zipPath.getFileNameWithoutExtension());
+    if (restoreDirectory.exists() && !restoreDirectory.deleteRecursively())
+        return "Project ready, but failed to clear previous local restore cache.";
+
+    auto extractResult = resolveRestoreResult(zipPath, restoreDirectory, restoredProjectFile);
+    if (extractResult.failed())
+        return "Project ready, but failed to extract latest version locally: " + extractResult.getErrorMessage();
+
+    return {};
+}
+
 }
 
 StemhubAudioProcessor::StemhubAudioProcessor(std::unique_ptr<IProjectApi> apiClientProvider)
@@ -266,6 +427,39 @@ StemhubAudioProcessor::AuthRequestResult StemhubAudioProcessor::performSignInReq
     return result;
 }
 
+StemhubAudioProcessor::AuthRequestResult StemhubAudioProcessor::performRestoreCachedSessionRequest(
+    const juce::String& token) const
+{
+    AuthRequestResult result;
+    result.fromCachedSession = true;
+    result.token = token;
+
+    const auto userResult = apiClient->fetchCurrentUser(token);
+    if (!userResult.ok() || !userResult.value->isValid())
+    {
+        result.authErrorMessage = "Cached session is no longer valid.";
+        return result;
+    }
+
+    result.user = std::move(userResult.value);
+
+    auto projectsResult = apiClient->fetchProjects(token);
+    if (projectsResult.ok())
+    {
+        result.projects = std::move(*projectsResult.value);
+        result.projectSelectionStatusMessage = result.projects.empty()
+            ? "No projects found."
+            : "Loaded " + juce::String(static_cast<int>(result.projects.size())) + " project(s).";
+    }
+    else
+    {
+        result.projectSelectionStatusMessage = projectsResult.error ? projectsResult.error->message
+                                                                    : "Failed to load projects.";
+    }
+
+    return result;
+}
+
 StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::performOpenProjectRequest(
     const juce::String& projectId,
     const juce::File& localProjectFile,
@@ -318,6 +512,18 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
         result.versions = std::move(*versionsResult.value);
         sortVersionHistoryNewestFirst(result.versions);
         result.selectedVersionId = chooseSelectedVersionId(result.versions, {});
+
+        juce::File autoRestoredFile;
+        const auto autoRestoreMessage = tryRestoreLatestVersionToCache(
+            result.versions,
+            projectIt->id,
+            selectedBranch.id,
+            versionControlService,
+            autoRestoredFile);
+        if (autoRestoredFile.existsAsFile())
+            result.projectFile = autoRestoredFile;
+        else if (autoRestoreMessage.isNotEmpty())
+            result.activeProjectStatusMessage = autoRestoreMessage;
     }
 
     const juce::String projectReadyMessage = localProjectFile.existsAsFile()
@@ -335,9 +541,17 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     }
     else
     {
-        result.activeProjectStatusMessage = "Project ready. Loaded "
-            + juce::String(static_cast<int>(result.versions.size()))
-            + " version(s).";
+        if (result.projectFile.existsAsFile())
+        {
+            result.activeProjectStatusMessage = "Project ready. Latest version restored locally: "
+                + result.projectFile.getFileName();
+        }
+        else if (result.activeProjectStatusMessage.isEmpty())
+        {
+            result.activeProjectStatusMessage = "Project ready. Loaded "
+                + juce::String(static_cast<int>(result.versions.size()))
+                + " version(s).";
+        }
     }
 
     return result;
@@ -440,11 +654,31 @@ StemhubAudioProcessor::BranchHistoryJobResult StemhubAudioProcessor::performFetc
     sortVersionHistoryNewestFirst(result.versions);
     result.selectedVersionId = chooseSelectedVersionId(result.versions, preferredVersionId);
 
+    const auto projectId = selectedProject ? selectedProject->id : juce::String();
+    if (projectId.isNotEmpty())
+    {
+        juce::File autoRestoredFile;
+        const auto autoRestoreMessage = tryRestoreLatestVersionToCache(
+            result.versions,
+            projectId,
+            branchId,
+            versionControlService,
+            autoRestoredFile);
+        if (autoRestoredFile.existsAsFile())
+            result.projectFile = autoRestoredFile;
+        else if (autoRestoreMessage.isNotEmpty())
+            result.activeProjectStatusMessage = autoRestoreMessage;
+    }
+
     if (result.versions.empty())
     {
         result.activeProjectStatusMessage = "Loaded branch \"" + branchName + "\". No versions yet.";
     }
-    else
+    else if (result.projectFile.existsAsFile())
+    {
+        result.activeProjectStatusMessage = "Loaded latest version for branch \"" + branchName + "\".";
+    }
+    else if (result.activeProjectStatusMessage.isEmpty())
     {
         result.activeProjectStatusMessage = "Loaded "
             + juce::String(static_cast<int>(result.versions.size()))
@@ -595,8 +829,22 @@ StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRes
 
 void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
 {
+    const auto fromCachedSession = result.fromCachedSession;
+
     if (result.authErrorMessage.isNotEmpty())
     {
+        if (fromCachedSession)
+        {
+            clearCachedAccessToken();
+            currentUser.reset();
+            access_tkn.clear();
+            versionControlService.clearAccessToken();
+            authErrorMessage.clear();
+            sessionState = {};
+            sendChangeMessage();
+            return;
+        }
+
         authErrorMessage = result.authErrorMessage;
         setAuthState(AuthState::authError);
         return;
@@ -607,8 +855,12 @@ void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
     activeProjectStatusMessage.clear();
     projects = std::move(result.projects);
     access_tkn = std::move(result.token);
+    saveCachedAccessToken(access_tkn);
     versionControlService.setAccessToken(access_tkn);
     signIn(std::move(*result.user));
+
+    if (fromCachedSession)
+        requestRestoreCachedProjectContext();
 }
 
 void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobResult result)
@@ -633,6 +885,15 @@ void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobRes
     selectedVersionId = chooseSelectedVersionId(versionHistory, result.selectedVersionId);
     selectProject(*result.selectedProject, result.branchId, result.branchName,
             std::move(result.projectFile));
+
+    if (result.shouldAutoOpenLocalFile && selectedProjectFile.existsAsFile() && !openFileInSystem(selectedProjectFile))
+    {
+        setOperationState(OperationState::error);
+        activeProjectStatusMessage = "Project loaded, but failed to open local project file: "
+            + selectedProjectFile.getFullPathName();
+        return;
+    }
+
     setOperationState(OperationState::idle);
     activeProjectStatusMessage = std::move(result.activeProjectStatusMessage);
 }
@@ -653,6 +914,19 @@ void StemhubAudioProcessor::applyBranchHistoryResult(BranchHistoryJobResult resu
     versionControlService.setCurrentProjectContext(makeProjectVersionContext(selectedProject,
                                                                              selectedBranchId,
                                                                              versionHistory));
+    if (result.projectFile.existsAsFile())
+    {
+        selectedProjectFile = result.projectFile;
+        pendingProjectFile = selectedProjectFile;
+
+        if (!openFileInSystem(selectedProjectFile))
+        {
+            setOperationState(OperationState::error);
+            activeProjectStatusMessage = "Branch loaded, but failed to open local project file: "
+                + selectedProjectFile.getFullPathName();
+            return;
+        }
+    }
 
     setOperationState(OperationState::idle);
     activeProjectStatusMessage = std::move(result.activeProjectStatusMessage);
@@ -692,6 +966,13 @@ void StemhubAudioProcessor::applyRestoreVersionResult(RestoreVersionJobResult re
     {
         selectedProjectFile = result.restoredProjectFile;
         pendingProjectFile = selectedProjectFile;
+        if (!openFileInSystem(selectedProjectFile))
+        {
+            setOperationState(OperationState::error);
+            activeProjectStatusMessage = "Version restored, but failed to open project file: "
+                + selectedProjectFile.getFullPathName();
+            return;
+        }
     }
 
     setOperationState(OperationState::idle);
@@ -731,6 +1012,7 @@ void StemhubAudioProcessor::signOut() noexcept
     currentUser.reset();
     access_tkn.clear();
     versionControlService.clearAccessToken();
+    clearCachedAccessToken();
     authErrorMessage.clear();
     projectSelectionStatusMessage.clear();
     activeProjectStatusMessage.clear();
@@ -793,6 +1075,8 @@ void StemhubAudioProcessor::selectProject(Project project, juce::String branchId
     selectedBranchName = std::move(branchName);
     selectedProjectFile = std::move(projectFile);
     pendingProjectFile = selectedProjectFile;
+    if (selectedProject.has_value())
+        saveCachedProjectId(selectedProject->id);
     versionControlService.setCurrentProjectContext(makeProjectVersionContext(selectedProject,
                                                                              selectedBranchId,
                                                                              versionHistory));
@@ -832,6 +1116,61 @@ void StemhubAudioProcessor::requestSignIn(const juce::String& email, const juce:
     enqueueBackgroundTask([this, email, password]() -> BackgroundJobPayload
     {
         return performSignInRequest(email, password);
+    });
+}
+
+void StemhubAudioProcessor::requestRestoreCachedSession()
+{
+    if (didAttemptCachedSessionRestore)
+        return;
+
+    didAttemptCachedSessionRestore = true;
+    if (sessionState.authState == AuthState::signedIn || sessionState.authState == AuthState::signingIn)
+        return;
+
+    const auto cachedToken = loadCachedAccessToken().trim();
+    if (cachedToken.isEmpty())
+        return;
+
+    setAuthState(AuthState::signingIn);
+    authErrorMessage.clear();
+    projectSelectionStatusMessage = "Restoring session...";
+    activeProjectStatusMessage.clear();
+    sendChangeMessage();
+
+    enqueueBackgroundTask([this, token = cachedToken]() -> BackgroundJobPayload
+    {
+        return performRestoreCachedSessionRequest(token);
+    });
+}
+
+void StemhubAudioProcessor::requestRestoreCachedProjectContext()
+{
+    if (selectedProject.has_value() || access_tkn.isEmpty() || projects.empty())
+        return;
+
+    const auto cachedProjectId = loadCachedProjectId().trim();
+    if (cachedProjectId.isEmpty())
+        return;
+
+    const auto projectIt = std::find_if(projects.begin(), projects.end(), [&cachedProjectId](const Project& project)
+    {
+        return project.id == cachedProjectId;
+    });
+    if (projectIt == projects.end())
+        return;
+
+    setOperationState(OperationState::loadingProjects);
+    projectSelectionStatusMessage = "Restoring last opened project...";
+    sendChangeMessage();
+
+    const auto projectsSnapshot = projects;
+    const auto token = access_tkn;
+    enqueueBackgroundTask([this, cachedProjectId, projectsSnapshot, token]() -> BackgroundJobPayload
+    {
+        auto result = performOpenProjectRequest(cachedProjectId, {}, projectsSnapshot, token);
+        result.shouldAutoOpenLocalFile = false;
+        return result;
     });
 }
 

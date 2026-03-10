@@ -90,6 +90,7 @@ public:
     void clearSelectedProject() noexcept;
     
     void requestSignIn(const juce::String& email, const juce::String& password);
+    void requestRestoreCachedSession();
     void requestOpenProject(juce::String projectId, juce::File localProjectFile);
     void requestCreateProject(juce::File localProjectFile);
     void requestSelectBranch(juce::String branchId);
@@ -112,6 +113,7 @@ private:
         juce::String token;
         juce::String authErrorMessage;
         juce::String projectSelectionStatusMessage;
+        bool fromCachedSession { false };
     };
 
     struct ProjectActivationJobResult
@@ -128,6 +130,7 @@ private:
         juce::String projectSelectionStatusMessage;
         juce::String activeProjectStatusMessage;
         bool refreshProjects { false };
+        bool shouldAutoOpenLocalFile { true };
     };
 
     struct BranchHistoryJobResult
@@ -136,6 +139,7 @@ private:
         juce::String branchId;
         juce::String branchName;
         juce::String selectedVersionId;
+        juce::File projectFile;
         juce::String errorMessage;
         juce::String activeProjectStatusMessage;
     };
@@ -162,6 +166,7 @@ private:
 
     RestoreVersionJobResult performRestoreVersionRequest(const juce::String& versionId, const juce::File& destinationFile) const;
     AuthRequestResult performSignInRequest(const juce::String& email, const juce::String& password) const;
+    AuthRequestResult performRestoreCachedSessionRequest(const juce::String& token) const;
     ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,
                                                          const juce::File& localProjectFile,
                                                          const std::vector<Project>& availableProjects,
@@ -184,6 +189,7 @@ private:
     void applyBranchHistoryResult(BranchHistoryJobResult result);
     void applyPushVersionResult(PushVersionJobResult result);
     void applyRestoreVersionResult(RestoreVersionJobResult result);
+    void requestRestoreCachedProjectContext();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
@@ -205,4 +211,5 @@ private:
     VersionControlService versionControlService;
     juce::File pendingProjectFile;
     juce::File selectedProjectFile;
+    bool didAttemptCachedSessionRestore { false };
 };
