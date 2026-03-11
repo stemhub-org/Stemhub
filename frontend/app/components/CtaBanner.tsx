@@ -33,7 +33,7 @@ export default function CtaBanner() {
         </motion.h2>
 
         <motion.p
-          className="mx-auto mb-10 max-w-md text-base font-light leading-relaxed text-foreground/45"
+          className="mx-auto mb-10 max-w-md text-base font-light leading-relaxed text-foreground"
           style={{ fontFamily: "var(--font-jakarta)" }}
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -62,7 +62,7 @@ export default function CtaBanner() {
 
           <a
             href="#product"
-            className="rounded-full border border-foreground/10 px-8 py-4 text-sm font-light tracking-wide text-foreground/60 transition-all duration-300 hover:border-accent/30 hover:text-accent"
+            className="rounded-full border border-foreground/20 px-8 py-4 text-sm font-light tracking-wide text-foreground transition-all duration-300 hover:bg-foreground/5 hover:border-foreground/30"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
             Learn more
