@@ -177,7 +177,7 @@ function RepositoryPageContent() {
                 )}
             </AnimatePresence>
 
-            <div className="relative z-10 p-6 space-y-6">
+            <div className="relative z-0 p-6 space-y-6">
                 <div className={`${cardClass} overflow-hidden`}>
                     <RepositoryPageHeader
                         ownerUsername={summary.project.owner.username}
