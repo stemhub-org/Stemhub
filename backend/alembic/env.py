@@ -14,8 +14,11 @@ config = context.config
 database_url = os.getenv("DATABASE_URL")
 if database_url:
     # Ensure the URL uses the asyncpg driver for async Alembic migrations
+    # Railway may provide postgres:// or postgresql:// — normalize both
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+asyncpg://", 1)
     config.set_main_option("sqlalchemy.url", database_url)
 
 # Setup loggers
