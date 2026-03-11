@@ -44,12 +44,12 @@ export function RepositoryHeader({
                     >
                         <span className="flex flex-col justify-center gap-1 items-center">
                             <span
-                                className={`block h-[2px] min-h-[2px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
+                                className={`block h-[1.5px] min-h-[1.5px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
                                     sidebarOpen ? "translate-y-[2px] rotate-45" : ""
                                 }`}
                             />
                             <span
-                                className={`block h-[2px] min-h-[2px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
+                                className={`block h-[1.5px] min-h-[1.5px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
                                     sidebarOpen ? "-translate-y-[2px] -rotate-45" : ""
                                 }`}
                             />
