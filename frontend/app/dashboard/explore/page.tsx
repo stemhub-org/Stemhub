@@ -17,16 +17,17 @@ import {
 export default function ExplorePage() {
     return (
         <div className="min-h-full bg-background">
-            <div className="max-w-7xl mx-auto space-y-8 pb-12 pt-8 px-4 lg:px-8">
+            <div className="w-full mx-auto space-y-8 pb-12 pt-8 px-4 lg:px-8 2xl:px-12">
 
 
 
-                <div className="flex flex-col xl:flex-row justify-between gap-8">
+                <div className="w-full flex flex-col xl:flex-row justify-between gap-8">
                     {/* Left Spacer to perfectly center the activity feed */}
                     <div className="hidden xl:block xl:w-80 shrink-0"></div>
 
-                    {/* Center Main Content: Activity Feed */}
-                    <div className="flex-1 max-w-3xl w-full mx-auto space-y-6">
+                    {/* Activity Feed Container */}
+                    <div className="flex-1 flex justify-center">
+                        <div className="w-full max-w-[850px] space-y-6">
                         <div className="flex items-center gap-2 mb-6">
                             <Activity size={20} className="text-accent" />
                             <h2 className="text-xl font-semibold tracking-tight text-foreground">Activity Feed</h2>
@@ -210,6 +211,7 @@ export default function ExplorePage() {
                                 </div>
                             </div>
                         </motion.div>
+                        </div>
                     </div>
 
                     {/* Right Sidebar */}
