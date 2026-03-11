@@ -33,10 +33,10 @@ export default function Footer() {
               className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground/30"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
-              Produit
+              Product
             </h3>
             <ul className="space-y-3">
-              {["Fonctionnalités", "Tarifs", "Changelog", "Roadmap"].map((item) => (
+              {["Features", "Pricing", "Changelog", "Roadmap"].map((item) => (
                 <li key={item}>
                   <a
                     href="#"
@@ -55,10 +55,10 @@ export default function Footer() {
               className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground/30"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
-              Ressources
+              Resources
             </h3>
             <ul className="space-y-3">
-              {["Documentation", "API", "Guides", "Communauté"].map((item) => (
+              {["Documentation", "API", "Guides", "Community"].map((item) => (
                 <li key={item}>
                   <a
                     href="#"
@@ -77,10 +77,10 @@ export default function Footer() {
               className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground/30"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
-              Entreprise
+              Company
             </h3>
             <ul className="space-y-3">
-              {["À propos", "Blog", "Carrières", "Contact"].map((item) => (
+              {["About", "Blog", "Careers", "Contact"].map((item) => (
                 <li key={item}>
                   <a
                     href="#"
@@ -104,10 +104,10 @@ export default function Footer() {
             className="text-xs font-light text-foreground/30"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            &copy; 2025 StemHub. Tous droits réservés.
+            &copy; 2025 StemHub. All rights reserved.
           </p>
           <div className="flex gap-6">
-            {["Confidentialité", "CGU"].map((item) => (
+            {["Privacy", "Terms"].map((item) => (
               <a
                 key={item}
                 href="#"
