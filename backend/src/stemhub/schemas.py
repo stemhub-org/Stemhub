@@ -198,3 +198,62 @@ class PasswordChangeRequest(BaseModel):
 
 class EmailChangeRequest(BaseModel):
     new_email: EmailStr
+
+# ── Explore & Community Schemas ──
+
+class ExploreProjectResponse(BaseModel):
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    category: str
+    tags: Optional[list[str]] = None
+    like_count: int = 0
+    bpm: Optional[int] = None
+    key: Optional[str] = None
+    created_at: datetime
+    owner: OwnerSummary
+
+    class Config:
+        from_attributes = True
+
+class ExploreFeedResponse(BaseModel):
+    id: UUID
+    action_type: str
+    project_id: UUID
+    project_name: str
+    producer: OwnerSummary
+    created_at: datetime
+    
+class ProducerResponse(BaseModel):
+    id: UUID
+    username: str
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    follower_count: int = 0
+    genres: Optional[list[str]] = None
+
+    class Config:
+        from_attributes = True
+
+class ChallengeResponse(BaseModel):
+    id: UUID
+    title: str
+    description: str
+    level: str
+    prize: str
+    ends_at: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class EventResponse(BaseModel):
+    id: UUID
+    type: str
+    title: str
+    host_name: str
+    event_date: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
