@@ -90,7 +90,8 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     const bool preferRemoteLatest) const
 {
     ProjectActivationJobResult result;
-    result.projectFile = localProjectFile;
+    auto effectiveLocalProjectFile = localProjectFile;
+    result.projectFile = effectiveLocalProjectFile;
 
     if (projectId.isEmpty())
     {
@@ -129,13 +130,35 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
 
+    if (stemhub::projectfiles::isManagedRestoreCacheFile(effectiveLocalProjectFile))
+    {
+        juce::File localizedWorkingFile;
+        const auto localizeResult = stemhub::projectfiles::materializeRestoredSnapshotAsWorkingCopy(
+            effectiveLocalProjectFile,
+            projectIt->id,
+            selectedBranch.id,
+            localizedWorkingFile);
+        if (localizeResult.wasOk())
+        {
+            juce::Logger::writeToLog("[Restore] OpenProject -> localized managed restore file to working copy: "
+                                     + localizedWorkingFile.getFullPathName());
+            effectiveLocalProjectFile = localizedWorkingFile;
+            result.projectFile = effectiveLocalProjectFile;
+        }
+        else
+        {
+            juce::Logger::writeToLog("[Restore] OpenProject -> failed to localize managed restore file: "
+                                     + localizeResult.getErrorMessage());
+        }
+    }
+
     const auto versionsResult = versionControlService.fetchVersionHistory(selectedBranch.id, accessToken);
     bool didAutoRestoreLatest = false;
     if (versionsResult.ok() && versionsResult.value.has_value())
     {
         result.versions = std::move(*versionsResult.value);
         sortVersionHistoryNewestFirst(result.versions);
-        const auto hintedVersionId = resolveVersionIdFromProjectPath(localProjectFile, result.versions);
+        const auto hintedVersionId = resolveVersionIdFromProjectPath(effectiveLocalProjectFile, result.versions);
         result.selectedVersionId = chooseSelectedVersionId(result.versions, hintedVersionId);
         juce::Logger::writeToLog("[Restore] OpenProject -> hintedVersionId="
                                  + hintedVersionId
@@ -144,10 +167,14 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
         if (hintedVersionId.isNotEmpty())
             result.workingVersionId = hintedVersionId;
 
-        const auto hasExplicitLocalVersionHint = hasVersionHintInProjectPath(localProjectFile);
+        const auto hasLocalProjectFile = effectiveLocalProjectFile.existsAsFile();
+        const auto hasExplicitLocalVersionHint = hasVersionHintInProjectPath(effectiveLocalProjectFile);
+        const auto isLocalWorkingCopyClean = hasLocalProjectFile
+            ? hasCleanWorkingCopy(effectiveLocalProjectFile)
+            : true;
         const auto shouldAutoRestoreLatest = preferRemoteLatest
-            || !localProjectFile.existsAsFile()
-            || !hasExplicitLocalVersionHint;
+            || !hasLocalProjectFile
+            || (!hasExplicitLocalVersionHint && isLocalWorkingCopyClean);
         if (shouldAutoRestoreLatest)
         {
             juce::File autoRestoredFile;
@@ -157,12 +184,21 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
                 selectedBranch.id,
                 versionControlService,
                 autoRestoredFile);
-        if (autoRestoredFile.existsAsFile())
-        {
-            result.projectFile = autoRestoredFile;
-            didAutoRestoreLatest = true;
-            result.workingVersionId = result.selectedVersionId;
-        }
+            if (autoRestoredFile.existsAsFile())
+            {
+                juce::File localWorkingFile;
+                const auto localizeResult = stemhub::projectfiles::materializeRestoredSnapshotAsWorkingCopy(
+                    autoRestoredFile,
+                    projectIt->id,
+                    selectedBranch.id,
+                    localWorkingFile);
+                result.projectFile = localizeResult.wasOk() ? localWorkingFile : autoRestoredFile;
+                didAutoRestoreLatest = true;
+                result.workingVersionId = result.selectedVersionId;
+                if (localizeResult.failed() && result.activeProjectStatusMessage.isEmpty())
+                    result.activeProjectStatusMessage = "Latest version restored, but failed to prepare local working copy: "
+                        + localizeResult.getErrorMessage();
+            }
             else if (autoRestoreMessage.isNotEmpty())
             {
                 result.activeProjectStatusMessage = autoRestoreMessage;
@@ -170,7 +206,7 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
         }
     }
 
-    const juce::String projectReadyMessage = localProjectFile.existsAsFile()
+    const juce::String projectReadyMessage = effectiveLocalProjectFile.existsAsFile()
         ? juce::String("Project ready.")
         : juce::String("Project ready. Choose a local project file before saving.");
 
@@ -190,10 +226,10 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
             result.activeProjectStatusMessage = "Project ready. Latest version restored locally: "
                 + result.projectFile.getFileName();
         }
-        else if (localProjectFile.existsAsFile())
+        else if (effectiveLocalProjectFile.existsAsFile())
         {
             result.activeProjectStatusMessage = "Project ready. Using local project file: "
-                + localProjectFile.getFileName();
+                + effectiveLocalProjectFile.getFileName();
         }
         else if (result.activeProjectStatusMessage.isEmpty())
         {
@@ -345,8 +381,17 @@ StemhubAudioProcessor::BranchHistoryJobResult StemhubAudioProcessor::performFetc
             autoRestoredFile);
         if (autoRestoredFile.existsAsFile())
         {
-            result.projectFile = autoRestoredFile;
+            juce::File localWorkingFile;
+            const auto localizeResult = stemhub::projectfiles::materializeRestoredSnapshotAsWorkingCopy(
+                autoRestoredFile,
+                projectId,
+                branchId,
+                localWorkingFile);
+            result.projectFile = localizeResult.wasOk() ? localWorkingFile : autoRestoredFile;
             result.workingVersionId = result.selectedVersionId;
+            if (localizeResult.failed() && result.activeProjectStatusMessage.isEmpty())
+                result.activeProjectStatusMessage = "Latest version restored, but failed to prepare local working copy: "
+                    + localizeResult.getErrorMessage();
         }
         else if (autoRestoreMessage.isNotEmpty())
             result.activeProjectStatusMessage = autoRestoreMessage;

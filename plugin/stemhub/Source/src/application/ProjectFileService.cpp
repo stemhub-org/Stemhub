@@ -61,6 +61,16 @@ juce::File buildAutoRestoreCacheRoot(const juce::String& projectId, const juce::
     return root;
 }
 
+juce::File buildWorkingCopyRoot(const juce::String& projectId, const juce::String& branchId)
+{
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("Stemhub")
+        .getChildFile("working-copy")
+        .getChildFile(sanitizePathSegment(projectId, "project"))
+        .getChildFile(sanitizePathSegment(branchId, "branch"))
+        .getChildFile("current");
+}
+
 juce::File buildAutoRestoreZipPath(const juce::String& projectId,
                                    const juce::String& branchId,
                                    const juce::String& versionId)
@@ -188,6 +198,62 @@ juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
     return juce::Result::ok();
 }
 
+juce::Result materializeRestoredSnapshotAsWorkingCopy(const juce::File& restoredProjectFile,
+                                                      const juce::String& projectId,
+                                                      const juce::String& branchId,
+                                                      juce::File& workingProjectFile)
+{
+    workingProjectFile = juce::File();
+
+    if (!restoredProjectFile.existsAsFile())
+        return juce::Result::fail("Restored project file is missing.");
+
+    const auto restoredRootDirectory = restoredProjectFile.getParentDirectory();
+    if (!restoredRootDirectory.isDirectory())
+        return juce::Result::fail("Restored project folder is missing.");
+
+    auto relativeProjectPath = restoredProjectFile.getRelativePathFrom(restoredRootDirectory).replaceCharacter('\\', '/');
+    if (relativeProjectPath.isEmpty())
+        relativeProjectPath = restoredProjectFile.getFileName();
+
+    const auto workingRoot = buildWorkingCopyRoot(projectId, branchId);
+    if (workingRoot.exists() && !workingRoot.deleteRecursively())
+        return juce::Result::fail("Failed to clear previous local working copy.");
+
+    if (!workingRoot.createDirectory())
+        return juce::Result::fail("Failed to create local working copy folder.");
+
+    juce::Array<juce::File> restoredFiles;
+    restoredRootDirectory.findChildFiles(restoredFiles, juce::File::findFiles, true, "*");
+
+    for (const auto& file : restoredFiles)
+    {
+        const auto relativePath = file.getRelativePathFrom(restoredRootDirectory).replaceCharacter('\\', '/');
+        if (relativePath.isEmpty())
+            continue;
+
+        const auto destinationFile = workingRoot.getChildFile(relativePath);
+        const auto destinationParent = destinationFile.getParentDirectory();
+        if ((!destinationParent.exists() && !destinationParent.createDirectory()) || !destinationParent.isDirectory())
+            return juce::Result::fail("Failed to create local working copy subfolder.");
+
+        if (destinationFile.existsAsFile() && !destinationFile.deleteFile())
+            return juce::Result::fail("Failed to overwrite file in local working copy.");
+
+        if (!file.copyFileTo(destinationFile))
+            return juce::Result::fail("Failed to copy restored files into local working copy.");
+    }
+
+    workingProjectFile = workingRoot.getChildFile(relativeProjectPath);
+    if (!workingProjectFile.existsAsFile())
+        return juce::Result::fail("Local working copy project file is missing.");
+
+    juce::Logger::writeToLog("[Restore] ProjectFileService -> materialized local working copy file="
+                             + workingProjectFile.getFullPathName());
+
+    return juce::Result::ok();
+}
+
 juce::File resolveEffectiveProjectFile(const juce::File& selectedFile,
                                        const juce::File& pendingFile)
 {
@@ -198,6 +264,17 @@ juce::File resolveEffectiveProjectFile(const juce::File& selectedFile,
         return selectedFile;
 
     return {};
+}
+
+bool isManagedRestoreCacheFile(const juce::File& file)
+{
+    if (!file.existsAsFile())
+        return false;
+
+    const auto cacheRoot = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                               .getChildFile("Stemhub")
+                               .getChildFile("restore-cache");
+    return file.isAChildOf(cacheRoot);
 }
 
 bool openInSystem(const juce::File& file)

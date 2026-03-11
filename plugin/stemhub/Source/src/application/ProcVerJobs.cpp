@@ -78,6 +78,18 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
         return result;
     }
 
+    juce::Logger::writeToLog("[Save] Push -> source project file=" + projectFile.getFullPathName()
+                             + ", size=" + juce::String(projectFile.getSize())
+                             + ", modifiedMs=" + juce::String(projectFile.getLastModificationTime().toMilliseconds())
+                             + ", baselineVersionId=" + workingCopyVersionId);
+
+    if (hasCleanWorkingCopy(projectFile))
+    {
+        juce::Logger::writeToLog("[Save] Push -> blocked: project file unchanged on disk since baseline");
+        result.errorMessage = "No local project file changes detected on disk. Save the project in FL Studio first, then click Save again.";
+        return result;
+    }
+
     ProjectVersionContext context;
     context.projectId = project->id;
     context.branchId = branchId;
