@@ -3,13 +3,12 @@
 import type React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Settings, Shield } from "lucide-react";
+import { LayoutDashboard, Users, Shield } from "lucide-react";
 import AdminGuard from "@/components/AdminGuard";
 
 const NAV_ITEMS = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/users", label: "Utilisateurs", icon: Users },
-    { href: "/admin/settings", label: "Paramètres", icon: Settings },
 ];
 
 function AdminSidebar() {

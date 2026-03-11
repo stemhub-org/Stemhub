@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, ShieldOff, UserX, UserCheck, FolderGit2 } from "lucide-react";
 import { authFetch } from "@/lib/api";
 
 interface User {
@@ -13,6 +13,7 @@ interface User {
     is_active: boolean;
     is_admin: boolean;
     avatar_url: string | null;
+    project_count: number;
 }
 
 function formatDate(iso: string) {
@@ -25,19 +26,45 @@ function formatDate(iso: string) {
 
 function Avatar({ user }: { user: User }) {
     if (user.avatar_url) {
-        return (
-            <img
-                src={user.avatar_url}
-                alt={user.username}
-                className="w-8 h-8 rounded-full object-cover"
-            />
-        );
+        return <img src={user.avatar_url} alt={user.username} className="w-8 h-8 rounded-full object-cover" />;
     }
-    const initials = user.username.slice(0, 2).toUpperCase();
     return (
         <div className="w-8 h-8 rounded-full bg-[#9C57DF]/15 text-[#9C57DF] text-xs font-semibold flex items-center justify-center">
-            {initials}
+            {user.username.slice(0, 2).toUpperCase()}
         </div>
+    );
+}
+
+function ActionButton({
+    onClick,
+    loading,
+    title,
+    children,
+    danger = false,
+}: {
+    onClick: () => void;
+    loading: boolean;
+    title: string;
+    children: React.ReactNode;
+    danger?: boolean;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={loading}
+            title={title}
+            className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${
+                danger
+                    ? "text-red-400 hover:bg-red-50 hover:text-red-600"
+                    : "text-[#1A1A1A]/30 hover:bg-[#9C57DF]/8 hover:text-[#9C57DF]"
+            }`}
+        >
+            {loading ? (
+                <div className="w-3.5 h-3.5 rounded-full border border-current border-t-transparent animate-spin" />
+            ) : (
+                children
+            )}
+        </button>
     );
 }
 
@@ -45,12 +72,35 @@ export default function AdminUsersPage() {
     const [users, setUsers] = useState<User[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState("");
+    const [loadingId, setLoadingId] = useState<string | null>(null);
 
     useEffect(() => {
-        authFetch<User[]>("/api/admin/users")
-            .then(setUsers)
-            .catch((err) => setError(err.message));
+        authFetch<User[]>("/api/admin/users").then(setUsers).catch((e) => setError(e.message));
     }, []);
+
+    async function toggleAdmin(user: User) {
+        setLoadingId(`admin-${user.id}`);
+        try {
+            const updated = await authFetch<User>(`/api/admin/users/${user.id}/toggle-admin`, { method: "PATCH" });
+            setUsers((prev) => prev?.map((u) => (u.id === user.id ? { ...u, ...updated } : u)) ?? null);
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Erreur");
+        } finally {
+            setLoadingId(null);
+        }
+    }
+
+    async function toggleActive(user: User) {
+        setLoadingId(`active-${user.id}`);
+        try {
+            const updated = await authFetch<User>(`/api/admin/users/${user.id}/toggle-active`, { method: "PATCH" });
+            setUsers((prev) => prev?.map((u) => (u.id === user.id ? { ...u, ...updated } : u)) ?? null);
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Erreur");
+        } finally {
+            setLoadingId(null);
+        }
+    }
 
     const filtered = users
         ? users.filter(
@@ -84,7 +134,7 @@ export default function AdminUsersPage() {
             </motion.div>
 
             {error && (
-                <div className="mb-6 px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-sm text-red-600">
+                <div className="mb-4 px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-sm text-red-600">
                     {error}
                 </div>
             )}
@@ -101,8 +151,10 @@ export default function AdminUsersPage() {
                         <tr className="border-b border-[#1A1A1A]/8">
                             <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">Utilisateur</th>
                             <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">Email</th>
+                            <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">Projets</th>
                             <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">Inscrit le</th>
                             <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">Statut</th>
+                            <th className="px-5 py-3.5" />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[#1A1A1A]/6">
@@ -116,12 +168,14 @@ export default function AdminUsersPage() {
                                           </div>
                                       </td>
                                       <td className="px-5 py-3.5"><div className="w-36 h-3.5 rounded bg-[#1A1A1A]/8 animate-pulse" /></td>
+                                      <td className="px-5 py-3.5"><div className="w-8 h-3.5 rounded bg-[#1A1A1A]/8 animate-pulse" /></td>
                                       <td className="px-5 py-3.5"><div className="w-20 h-3.5 rounded bg-[#1A1A1A]/8 animate-pulse" /></td>
                                       <td className="px-5 py-3.5"><div className="w-16 h-5 rounded-full bg-[#1A1A1A]/8 animate-pulse" /></td>
+                                      <td className="px-5 py-3.5" />
                                   </tr>
                               ))
                             : filtered.map((user) => (
-                                  <tr key={user.id} className="hover:bg-[#1A1A1A]/2 transition-colors">
+                                  <tr key={user.id} className="hover:bg-[#1A1A1A]/[0.015] transition-colors">
                                       <td className="px-5 py-3.5">
                                           <div className="flex items-center gap-3">
                                               <Avatar user={user} />
@@ -132,6 +186,12 @@ export default function AdminUsersPage() {
                                           </div>
                                       </td>
                                       <td className="px-5 py-3.5 text-[#1A1A1A]/60">{user.email}</td>
+                                      <td className="px-5 py-3.5">
+                                          <span className="flex items-center gap-1.5 text-[#1A1A1A]/50">
+                                              <FolderGit2 size={13} />
+                                              {user.project_count}
+                                          </span>
+                                      </td>
                                       <td className="px-5 py-3.5 text-[#1A1A1A]/50">{formatDate(user.created_at)}</td>
                                       <td className="px-5 py-3.5">
                                           <span
@@ -144,11 +204,30 @@ export default function AdminUsersPage() {
                                               {user.is_active ? "Actif" : "Inactif"}
                                           </span>
                                       </td>
+                                      <td className="px-5 py-3.5">
+                                          <div className="flex items-center gap-1 justify-end">
+                                              <ActionButton
+                                                  onClick={() => toggleAdmin(user)}
+                                                  loading={loadingId === `admin-${user.id}`}
+                                                  title={user.is_admin ? "Retirer admin" : "Promouvoir admin"}
+                                              >
+                                                  {user.is_admin ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
+                                              </ActionButton>
+                                              <ActionButton
+                                                  onClick={() => toggleActive(user)}
+                                                  loading={loadingId === `active-${user.id}`}
+                                                  title={user.is_active ? "Désactiver" : "Réactiver"}
+                                                  danger={user.is_active}
+                                              >
+                                                  {user.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
+                                              </ActionButton>
+                                          </div>
+                                      </td>
                                   </tr>
                               ))}
                         {filtered !== null && filtered.length === 0 && (
                             <tr>
-                                <td colSpan={4} className="px-5 py-10 text-center text-sm text-[#1A1A1A]/30">
+                                <td colSpan={6} className="px-5 py-10 text-center text-sm text-[#1A1A1A]/30">
                                     Aucun résultat pour « {search} »
                                 </td>
                             </tr>
