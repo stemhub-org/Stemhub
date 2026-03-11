@@ -142,14 +142,14 @@ export default function DiffSection() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <div className="overflow-hidden rounded-2xl border border-foreground/[0.06] bg-background-secondary/80 dark:bg-background-tertiary/80 backdrop-blur-sm">
+            >
+            <div className="overflow-hidden rounded-2xl border border-accent/20 bg-accent/15 dark:bg-background-tertiary/80 backdrop-blur-sm">
               {/* Terminal header */}
-              <div className="flex items-center gap-2 border-b border-foreground/[0.06] px-5 py-3.5">
-                <div className="h-2.5 w-2.5 rounded-full bg-foreground/10" />
-                <div className="h-2.5 w-2.5 rounded-full bg-foreground/10" />
-                <div className="h-2.5 w-2.5 rounded-full bg-foreground/10" />
-                <span className="ml-3 font-mono text-xs text-foreground/30">
+              <div className="flex items-center gap-2 border-b border-accent/20 px-5 py-3.5">
+                <div className="h-2.5 w-2.5 rounded-full bg-accent/30" />
+                <div className="h-2.5 w-2.5 rounded-full bg-accent/30" />
+                <div className="h-2.5 w-2.5 rounded-full bg-accent/30" />
+                <span className="ml-3 font-mono text-xs text-accent/70">
                   stemhub — terminal
                 </span>
               </div>
@@ -164,40 +164,40 @@ export default function DiffSection() {
           {/* Floating elements with parallax */}
           <div className="relative hidden lg:col-span-5 lg:block">
             <motion.div
-              className="absolute top-0 right-0 rounded-2xl border border-foreground/[0.06] bg-background-secondary/60 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
+              className="absolute top-0 right-0 rounded-2xl border border-accent/20 bg-accent/15 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
               style={{ y: floatY1 }}
             >
               <GitBranch size={20} strokeWidth={1.5} className="mb-3 text-accent" />
-              <p className="text-sm font-light text-foreground/60" style={{ fontFamily: "var(--font-jakarta)" }}>
+              <p className="text-sm font-light text-accent/90" style={{ fontFamily: "var(--font-jakarta)" }}>
                 Unlimited versions
               </p>
-              <p className="mt-1 text-xs text-foreground/30" style={{ fontFamily: "var(--font-jakarta)" }}>
+              <p className="mt-1 text-xs text-accent/70" style={{ fontFamily: "var(--font-jakarta)" }}>
                 Explore without risk
               </p>
             </motion.div>
 
             <motion.div
-              className="absolute top-40 left-8 rounded-2xl border border-foreground/[0.06] bg-background-secondary/60 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
+              className="absolute top-40 left-8 rounded-2xl border border-accent/20 bg-accent/15 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
               style={{ y: floatY2 }}
             >
               <GitCommit size={20} strokeWidth={1.5} className="mb-3 text-accent" />
-              <p className="text-sm font-light text-foreground/60" style={{ fontFamily: "var(--font-jakarta)" }}>
+              <p className="text-sm font-light text-accent/90" style={{ fontFamily: "var(--font-jakarta)" }}>
                 Granular commits
               </p>
-              <p className="mt-1 text-xs text-foreground/30" style={{ fontFamily: "var(--font-jakarta)" }}>
+              <p className="mt-1 text-xs text-accent/70" style={{ fontFamily: "var(--font-jakarta)" }}>
                 Track by track
               </p>
             </motion.div>
 
             <motion.div
-              className="absolute top-80 right-12 rounded-2xl border border-foreground/[0.06] bg-background-secondary/60 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
+              className="absolute top-80 right-12 rounded-2xl border border-accent/20 bg-accent/15 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
               style={{ y: floatY3 }}
             >
               <GitMerge size={20} strokeWidth={1.5} className="mb-3 text-accent" />
-              <p className="text-sm font-light text-foreground/60" style={{ fontFamily: "var(--font-jakarta)" }}>
+              <p className="text-sm font-light text-accent/90" style={{ fontFamily: "var(--font-jakarta)" }}>
                 Smart merges
               </p>
-              <p className="mt-1 text-xs text-foreground/30" style={{ fontFamily: "var(--font-jakarta)" }}>
+              <p className="mt-1 text-xs text-accent/70" style={{ fontFamily: "var(--font-jakarta)" }}>
                 Merge your sessions
               </p>
             </motion.div>
