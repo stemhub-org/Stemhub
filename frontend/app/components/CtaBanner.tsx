@@ -27,9 +27,9 @@ export default function CtaBanner() {
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          Prêt à ne plus jamais
+          Ready to never
           <br />
-          <span className="text-accent">perdre une idée ?</span>
+          <span className="text-accent">lose an idea again?</span>
         </motion.h2>
 
         <motion.p
@@ -40,8 +40,8 @@ export default function CtaBanner() {
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.8, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
         >
-          Rejoignez les producteurs qui ne laissent plus le hasard décider
-          de leurs projets.
+          Join producers who no longer let chance decide
+          the fate of their projects.
         </motion.p>
 
         <motion.div
@@ -56,16 +56,16 @@ export default function CtaBanner() {
             className="flex items-center gap-2 rounded-full bg-foreground px-8 py-4 text-sm font-light tracking-wide text-background transition-all duration-300 hover:bg-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Créer un compte
+            Create an account
             <ArrowRight size={16} strokeWidth={1.5} />
           </Link>
 
           <a
-            href="#produit"
+            href="#product"
             className="rounded-full border border-foreground/10 px-8 py-4 text-sm font-light tracking-wide text-foreground/60 transition-all duration-300 hover:border-accent/30 hover:text-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            En savoir plus
+            Learn more
           </a>
         </motion.div>
       </div>
