@@ -32,6 +32,10 @@ export default function LoginPage() {
         throw new Error("Invalid credentials");
       }
 
+      const data = await response.json();
+      if (data.access_token) {
+        localStorage.setItem("access_token", data.access_token);
+      }
       router.push("/dashboard");
     } catch (err: unknown) {
       const isNetworkError =
