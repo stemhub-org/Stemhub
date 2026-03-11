@@ -21,7 +21,7 @@ const steps = [
   {
     number: "03",
     icon: GitBranch,
-    title: "Créez des branches",
+    title: "Créez des versions",
     description:
       "Testez un nouveau mix sans toucher à l'original. Comparez, revenez en arrière, fusionnez.",
   },
@@ -30,7 +30,7 @@ const steps = [
     icon: Share2,
     title: "Collaborez",
     description:
-      "Partagez une branche avec votre équipe ou vos clients. Chacun travaille sur sa version.",
+      "Partagez une version avec votre équipe ou vos clients. Chacun travaille sur sa version.",
   },
 ];
 

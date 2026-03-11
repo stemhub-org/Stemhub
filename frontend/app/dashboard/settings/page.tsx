@@ -630,8 +630,8 @@ function NotificationSettings({ user }: { user: any }) {
                             defaultChecked={true}
                         />
                         <ToggleRow
-                            title="Branch Updates"
-                            description="When someone pushes to a branch you're collaborating on"
+                            title="Version Updates"
+                            description="When someone pushes to a version you're collaborating on"
                             defaultChecked={false}
                         />
                         <ToggleRow
