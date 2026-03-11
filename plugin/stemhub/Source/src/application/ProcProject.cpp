@@ -8,6 +8,76 @@
 
 using namespace stemhub::processorhelpers;
 
+namespace
+{
+juce::String extractVersionPrefixFromPathPart(const juce::String& value)
+{
+    const auto lastDash = value.lastIndexOfChar('-');
+    if (lastDash < 0 || lastDash + 8 >= value.length())
+        return {};
+
+    const auto candidate = value.substring(lastDash + 1, lastDash + 9);
+    for (int i = 0; i < candidate.length(); ++i)
+    {
+        const auto ch = candidate.toLowerCase()[i];
+        const bool isHexChar = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+        if (!isHexChar)
+            return {};
+    }
+    return candidate;
+}
+
+juce::String resolveOpenedVersionFromPath(const juce::File& projectFile,
+                                         const std::vector<VersionSummary>& versions,
+                                         const juce::String& requestedVersionId)
+{
+    const auto fileName = projectFile.getFileNameWithoutExtension();
+    const auto parentName = projectFile.getParentDirectory().getFileName();
+    const juce::String candidates[] = { fileName, parentName };
+
+    for (const auto& candidate : candidates)
+    {
+        const auto shortVersionId = extractVersionPrefixFromPathPart(candidate);
+        if (shortVersionId.isEmpty())
+            continue;
+
+        const auto it = std::find_if(versions.begin(), versions.end(),
+                                    [&shortVersionId](const VersionSummary& version)
+                                    {
+                                        if (version.id.length() < 8)
+                                            return false;
+                                        return version.id.substring(0, 8).compareIgnoreCase(shortVersionId) == 0;
+                                    });
+        if (it != versions.end())
+        {
+            juce::Logger::writeToLog("[Restore] Processor -> resolved version id from path segment="
+                                     + candidate
+                                     + ", prefix="
+                                     + shortVersionId
+                                     + ", full="
+                                     + it->id);
+            return it->id;
+        }
+        juce::Logger::writeToLog("[Restore] Processor -> no match for path segment="
+                                 + candidate
+                                 + ", prefix="
+                                 + shortVersionId);
+    }
+
+    if (requestedVersionId.isNotEmpty())
+    {
+        juce::Logger::writeToLog("[Restore] Processor -> using requested version id fallback="
+                                 + requestedVersionId);
+    }
+    else
+    {
+        juce::Logger::writeToLog("[Restore] Processor -> no requested version id available for fallback");
+    }
+
+    return requestedVersionId;
+}
+}
+
 void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobResult result)
 {
     if (hasError(result))
@@ -135,22 +205,37 @@ void StemhubAudioProcessor::applyRestoreVersionResult(RestoreVersionJobResult re
     {
         selectedProjectFile = result.restoredProjectFile;
         pendingProjectFile = selectedProjectFile;
-        selectedVersionId = result.restoredVersionId;
-        juce::Logger::writeToLog("[Restore] Processor -> applied selectedVersionId=" + selectedVersionId);
-        setWorkingCopyContext(selectedProjectFile, result.restoredVersionId);
-        versionControlService.setLastVersionId(result.restoredVersionId);
         const auto previousOpenedVersionId = currentOpenedVersionId;
-        setCurrentOpenedVersionId({});
+        const auto previousWorkingCopyFile = workingCopyProjectFile;
+        const auto previousWorkingCopyVersionId = workingCopyVersionId;
+        const auto previousWorkingCopyFileSize = workingCopyFileSize;
+        const auto previousWorkingCopyModTime = workingCopyFileModTime;
+        selectedVersionId = resolveOpenedVersionFromPath(result.restoredProjectFile, versionHistory, result.restoredVersionId);
+        setWorkingCopyContext(selectedProjectFile, selectedVersionId);
+        versionControlService.setLastVersionId(selectedVersionId);
+        setCurrentOpenedVersionId(selectedVersionId);
+        juce::Logger::writeToLog("[Restore] Processor -> resolved restoredVersionId="
+                                 + selectedVersionId
+                                 + " (requested="
+                                 + result.restoredVersionId
+                                 + ")");
+        juce::Logger::writeToLog("[Restore] Processor -> applied selectedVersionId=" + selectedVersionId);
         if (!stemhub::projectfiles::openInSystem(selectedProjectFile))
         {
             juce::Logger::writeToLog("[Restore] Processor -> openInSystem failed: " + selectedProjectFile.getFullPathName());
             setOperationState(OperationState::error);
             activeProjectStatusMessage = "Version restored, but failed to open project file: "
                 + selectedProjectFile.getFullPathName();
+            if (previousWorkingCopyVersionId.isNotEmpty() || previousWorkingCopyFile.existsAsFile())
+            {
+                workingCopyProjectFile = previousWorkingCopyFile;
+                workingCopyVersionId = previousWorkingCopyVersionId;
+                workingCopyFileSize = previousWorkingCopyFileSize;
+                workingCopyFileModTime = previousWorkingCopyModTime;
+            }
             setCurrentOpenedVersionId(previousOpenedVersionId);
             return;
         }
-        setCurrentOpenedVersionId(result.restoredVersionId);
         juce::Logger::writeToLog("[Restore] Processor -> openInSystem succeeded");
     }
     else
@@ -247,14 +332,13 @@ void StemhubAudioProcessor::setWorkingCopyContext(const juce::File& workingFile,
 void StemhubAudioProcessor::setCurrentOpenedVersionId(juce::String versionId)
 {
     const auto previousVersion = currentOpenedVersionId;
-    if (previousVersion == versionId)
-        return;
-
     currentOpenedVersionId = std::move(versionId);
     juce::Logger::writeToLog("[Restore] Processor -> setCurrentOpenedVersionId old="
                              + previousVersion
                              + " new="
-                             + currentOpenedVersionId);
+                             + currentOpenedVersionId
+                             + " changed="
+                             + (previousVersion == currentOpenedVersionId ? "false" : "true"));
 }
 
 void StemhubAudioProcessor::clearWorkingCopyContext()
