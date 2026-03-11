@@ -5,11 +5,11 @@ import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 
 const words: { text: string; accent?: boolean }[] = [
-  { text: "La" },
-  { text: "mémoire" },
-  { text: "de" },
-  { text: "votre" },
-  { text: "musique.", accent: true },
+  { text: "The" },
+  { text: "memory" },
+  { text: "of" },
+  { text: "your" },
+  { text: "music.", accent: true },
 ];
 
 export default function Hero() {
@@ -56,9 +56,9 @@ export default function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1, delay: 0.8, ease: [0.16, 1, 0.3, 1] }}
       >
-        Le versioning décentralisé pensé pour les producteurs.
+        Decentralized versioning designed for producers.
         <br className="hidden sm:block" />
-        Chaque session, chaque piste, chaque choix — préservé.
+        Every session, every track, every decision — preserved.
       </motion.p>
 
       {/* CTA Button */}
@@ -74,7 +74,7 @@ export default function Hero() {
           className="group relative flex items-center gap-3 overflow-hidden rounded-full bg-foreground px-8 py-4 text-sm font-light tracking-wide text-background transition-all duration-500 hover:bg-accent"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >
-          <span className="relative z-10">Commencer</span>
+          <span className="relative z-10">Get started</span>
           <motion.span
             className="relative z-10"
             animate={{ x: isHovered ? 4 : 0 }}
