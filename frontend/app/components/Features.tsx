@@ -22,37 +22,37 @@ interface Feature {
 const features: Feature[] = [
   {
     icon: GitBranch,
-    title: "Versions audio",
+    title: "Audio versions",
     description:
-      "Créez des versions alternatives de vos morceaux sans jamais toucher à l'original. Expérimentez librement, fusionnez le meilleur.",
+      "Create alternate takes of your tracks without ever touching the original. Experiment freely, merge the best.",
     size: "large",
   },
   {
     icon: History,
-    title: "Timeline complète",
+    title: "Full timeline",
     description:
-      "Naviguez dans l'historique de chaque piste. Restaurez n'importe quel état en un clic.",
+      "Navigate the history of every track. Restore any state in a single click.",
     size: "default",
   },
   {
     icon: Shield,
-    title: "Chiffrement E2E",
+    title: "End‑to‑end encryption",
     description:
-      "Vos stems ne quittent jamais votre contrôle. Chiffrement de bout en bout par défaut.",
+      "Your stems never leave your control. End‑to‑end encryption by default.",
     size: "default",
   },
   {
     icon: Layers,
-    title: "Diff par piste",
+    title: "Track‑by‑track diff",
     description:
-      "Comparez deux versions et voyez exactement ce qui a changé — piste par piste, effet par effet.",
+      "Compare two versions and see exactly what changed — track by track, effect by effect.",
     size: "default",
   },
   {
     icon: Users,
-    title: "Collaboration temps réel",
+    title: "Real‑time collaboration",
     description:
-      "Partagez une version avec votre équipe. Chacun travaille sur sa version, puis fusionnez le meilleur.",
+      "Share a version with your team. Everyone works on their take, then you merge the best.",
     size: "default",
   },
   {
@@ -149,15 +149,15 @@ export default function Features() {
             className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Fonctionnalités
+            Features
           </p>
           <h2
             className="mx-auto max-w-xl text-[clamp(2rem,5vw,4.5rem)] font-extralight leading-[1.1] tracking-tight"
             style={{ fontFamily: "var(--font-syne)" }}
           >
-            Tout ce qu&apos;il vous faut.
+            Everything you need.
             <br />
-            <span className="text-foreground/30">Rien de plus.</span>
+            <span className="text-foreground/30">Nothing more.</span>
           </h2>
         </motion.div>
 
