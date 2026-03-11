@@ -50,7 +50,7 @@ export function RepositoryBranchBar({
                     className="flex items-center gap-2 rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-background-tertiary"
                     aria-expanded={isOpen}
                     aria-haspopup="listbox"
-                    aria-label="Sélectionner la branche"
+                    aria-label="Sélectionner la version"
                 >
                     <GitBranch className="size-4 text-foreground/60" aria-hidden />
                     <span>{selectedBranchName}</span>
@@ -82,7 +82,7 @@ export function RepositoryBranchBar({
                                         type="button"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if (onDelete && window.confirm(`Are you sure you want to delete branch '${branch.name}'?`)) {
+                                            if (onDelete && window.confirm(`Are you sure you want to delete version '${branch.name}'?`)) {
                                                 onDelete(branch.id);
                                             }
                                         }}
@@ -116,10 +116,10 @@ export function RepositoryBranchBar({
                                         className="flex flex-col gap-2"
                                     >
                                         <input 
-                                            type="text" 
-                                            value={newBranchName} 
-                                            onChange={e => setNewBranchName(e.target.value)} 
-                                            placeholder="New branch name..."
+                                            type="text"
+                                            value={newBranchName}
+                                            onChange={e => setNewBranchName(e.target.value)}
+                                            placeholder="New version name..."
                                             className="w-full bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
                                             disabled={isSubmitting}
                                             autoFocus
@@ -152,7 +152,7 @@ export function RepositoryBranchBar({
                                         className="flex w-full items-center gap-2 px-2 py-2 text-left text-sm font-medium text-accent/90 transition-colors hover:text-accent hover:bg-accent/10 rounded"
                                     >
                                         <Plus className="size-4 shrink-0" />
-                                        Create new branch
+                                        Create new version
                                     </button>
                                 )}
                             </li>
@@ -162,7 +162,9 @@ export function RepositoryBranchBar({
             </div>
             <div className="flex items-center gap-2 text-sm text-foreground/70">
                 <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden />
-                <span>{branches.length} {branches.length === 1 ? "Branch" : "Branches"}</span>
+                <span>
+                    {branches.length} {branches.length === 1 ? "Version" : "Versions"}
+                </span>
             </div>
         </div>
     );

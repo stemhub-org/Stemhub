@@ -97,9 +97,9 @@ export function QuickExport({
             const a = document.createElement("a");
             a.href = url;
             const safeProject = sanitizeFilenamePart(projectName || "project");
-            const safeBranch = sanitizeFilenamePart(branchName || "main");
+            const safeVersion = sanitizeFilenamePart(branchName || "version");
             const versionShort = latestVersionId.substring(0, 8);
-            a.download = `${safeProject}-${safeBranch}-${versionShort}.zip`;
+            a.download = `${safeProject}-${safeVersion}-${versionShort}.zip`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
