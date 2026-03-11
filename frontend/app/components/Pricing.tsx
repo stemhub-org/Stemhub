@@ -8,51 +8,51 @@ const plans = [
   {
     name: "Solo",
     price: "0",
-    description: "Pour les producteurs indépendants qui débutent.",
+    description: "For independent producers getting started.",
     features: [
-      "3 projets",
-      "500 Mo de stockage",
-      "Historique 30 jours",
-      "Plugin FL Studio & Ableton",
+      "3 projects",
+      "500 MB storage",
+      "30‑day history",
+      "FL Studio & Ableton plugin",
     ],
-    cta: "Commencer gratuitement",
+    cta: "Start for free",
     highlighted: false,
   },
   {
     name: "Pro",
     price: "12",
-    description: "Pour les producteurs sérieux qui veulent tout garder.",
+    description: "For serious producers who want to keep everything.",
     features: [
-      "Projets illimités",
-      "50 Go de stockage",
-      "Historique illimité",
-      "Branches & merge",
-      "Collaboration (5 membres)",
-      "Support prioritaire",
+      "Unlimited projects",
+      "50 GB storage",
+      "Unlimited history",
+      "Versions & merges",
+      "Collaboration (up to 5 members)",
+      "Priority support",
     ],
-    cta: "Essai gratuit 14 jours",
+    cta: "14‑day free trial",
     highlighted: true,
   },
   {
     name: "Studio",
     price: "39",
-    description: "Pour les labels et les équipes de production.",
+    description: "For labels and production teams.",
     features: [
-      "Tout de Pro",
-      "Stockage illimité",
-      "Membres illimités",
+      "Everything in Pro",
+      "Unlimited storage",
+      "Unlimited members",
       "SSO & permissions",
       "API & webhooks",
-      "Account manager dédié",
+      "Dedicated account manager",
     ],
-    cta: "Contacter l'équipe",
+    cta: "Contact the team",
     highlighted: false,
   },
 ];
 
 export default function Pricing() {
   return (
-    <section id="tarifs" className="relative px-6 py-32 md:px-12">
+    <section id="pricing" className="relative px-6 py-32 md:px-12">
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <motion.div
@@ -66,13 +66,13 @@ export default function Pricing() {
             className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Tarifs
+            Pricing
           </p>
           <h2
             className="mx-auto max-w-xl text-[clamp(2rem,5vw,4.5rem)] font-extralight leading-[1.1] tracking-tight"
             style={{ fontFamily: "var(--font-syne)" }}
           >
-            Simple et transparent.
+            Simple and transparent.
           </h2>
         </motion.div>
 
@@ -136,7 +136,7 @@ export default function Pricing() {
                     className="text-sm font-light text-foreground/30"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
-                    /mois
+                    /month
                   </span>
                 </div>
 
