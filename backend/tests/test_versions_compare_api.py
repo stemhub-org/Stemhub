@@ -312,6 +312,34 @@ def test_compare_versions_returns_parser_errors_as_validation_failures(monkeypat
     assert response.json()["detail"] == "Snapshot archive does not contain an FL Studio project file."
 
 
+def test_compare_versions_returns_runtime_snapshot_errors_as_validation_failures(monkeypatch) -> None:
+    branch_id = uuid.uuid4()
+    current_user = _build_user()
+    base_version = _build_version(branch_id=branch_id)
+    target_version = _build_version(branch_id=branch_id)
+
+    def fake_load_snapshot(*, artifact_path, snapshot_manifest, storage):
+        del artifact_path, snapshot_manifest, storage
+        raise RuntimeError(
+            "PyFLP_enhanced is not installed. Run: `git submodule update --init --recursive && pip install -e backend/vendor/PyFLP_enhanced`."
+        )
+
+    client = _create_test_client(
+        monkeypatch=monkeypatch,
+        current_user=current_user,
+        versions={base_version.id: base_version, target_version.id: target_version},
+        load_snapshot_side_effect=fake_load_snapshot,
+    )
+
+    response = client.get(
+        f"/branches/{branch_id}/versions/compare",
+        params={"base_version_id": str(base_version.id), "target_version_id": str(target_version.id)},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"].startswith("PyFLP_enhanced is not installed.")
+
+
 def test_compare_versions_rejects_versions_outside_branch(monkeypatch) -> None:
     branch_id = uuid.uuid4()
     other_branch_id = uuid.uuid4()

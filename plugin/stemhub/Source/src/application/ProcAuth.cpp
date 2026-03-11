@@ -152,15 +152,25 @@ void StemhubAudioProcessor::requestRestoreCachedProjectContext()
     if (projectIt == projects.end())
         return;
 
+    const auto cachedProjectFilePath = stemhub::sessioncache::loadLastOpenedProjectFilePath().trim();
+    const auto cachedProjectFile = juce::File(cachedProjectFilePath);
+    const auto localProjectFile = cachedProjectFile.existsAsFile() ? cachedProjectFile : juce::File();
+    juce::Logger::writeToLog("[Restore] CachedProjectContext -> projectId="
+                             + cachedProjectId
+                             + ", cachedProjectFilePath="
+                             + cachedProjectFilePath
+                             + ", exists="
+                             + (cachedProjectFile.existsAsFile() ? "true" : "false"));
+
     setOperationState(OperationState::loadingProjects);
     projectSelectionStatusMessage = "Restoring last opened project...";
     sendChangeMessage();
 
     const auto projectsSnapshot = projects;
     const auto token = access_tkn;
-    enqueueBackgroundTask([this, cachedProjectId, projectsSnapshot, token]() -> BackgroundJobPayload
+    enqueueBackgroundTask([this, cachedProjectId, projectsSnapshot, token, localProjectFile]() -> BackgroundJobPayload
     {
-        auto result = performOpenProjectRequest(cachedProjectId, {}, projectsSnapshot, token);
+        auto result = performOpenProjectRequest(cachedProjectId, localProjectFile, projectsSnapshot, token, false);
         result.shouldAutoOpenLocalFile = false;
         return result;
     });

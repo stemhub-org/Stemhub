@@ -274,10 +274,21 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
         versionIds.push_back(version.id);
     }
 
+    const auto fileToDisplay = getEffectiveProjectFile();
+
     dashboardView.setProjectStatusMessage(getDashboardMessage(audioProcessor));
     dashboardView.setBranches(branchNames, branchIds, audioProcessor.getSelectedBranchId());
     dashboardView.setVersions(versionLabels, versionIds, audioProcessor.getSelectedVersionId());
-    dashboardView.setCurrentVersionId(audioProcessor.getCurrentOpenedVersionLabel());
+    const auto currentVersionLabel = audioProcessor.getCurrentOpenedVersionLabel();
+    const auto currentOpenedVersionId = audioProcessor.getCurrentOpenedVersionId();
+    dashboardView.setCurrentVersionId(currentVersionLabel);
+    dashboardView.setCurrentVersionFilePath(fileToDisplay.existsAsFile()
+                                               ? fileToDisplay.getFullPathName()
+                                               : "not available");
+    juce::Logger::writeToLog("[UI] Dashboard refresh -> currentVersionLabel=" + currentVersionLabel
+                             + ", currentOpenedVersionId=" + currentOpenedVersionId
+                             + ", selectedVersionId=" + audioProcessor.getSelectedVersionId()
+                             + ", openedFile=" + (fileToDisplay.existsAsFile() ? fileToDisplay.getFullPathName() : "not available"));
     dashboardView.setProjectNameMessage(audioProcessor.getSelectedProject()
         ? "Project: " + audioProcessor.getSelectedProject()->name
         : "Project: No project selected");
@@ -285,7 +296,6 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
         ? "Branch: " + audioProcessor.getSelectedBranchName()
         : "Branch: Not selected");
 
-    const auto fileToDisplay = getEffectiveProjectFile();
     dashboardView.setSelectedProjectFileMessage(fileToDisplay.existsAsFile()
         ? fileToDisplay.getFullPathName()
         : "No project file selected.");
@@ -415,15 +425,12 @@ void StemhubAudioProcessorEditor::handleSaveChangesClick()
 
 void StemhubAudioProcessorEditor::handleRestoreClick()
 {
-    const auto selectedVersionId = audioProcessor.getSelectedVersionId().isNotEmpty()
-        ? audioProcessor.getSelectedVersionId()
-        : dashboardView.getSelectedVersionId();
+    const auto selectedVersionId = dashboardView.getSelectedVersionId();
 
     juce::Logger::writeToLog("[Restore] UI -> request started. processorSelectedVersionId="
                              + audioProcessor.getSelectedVersionId()
                              + ", dropdownVersionId="
-                             + dashboardView.getSelectedVersionId()
-                             + ", resolvedVersionId=" + selectedVersionId);
+                             + selectedVersionId);
 
     if (selectedVersionId.isEmpty())
     {

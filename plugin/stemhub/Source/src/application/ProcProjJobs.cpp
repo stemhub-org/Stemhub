@@ -86,7 +86,8 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     const juce::String& projectId,
     const juce::File& localProjectFile,
     const std::vector<Project>& availableProjects,
-    const juce::String& accessToken) const
+    const juce::String& accessToken,
+    const bool preferRemoteLatest) const
 {
     ProjectActivationJobResult result;
     result.projectFile = localProjectFile;
@@ -134,10 +135,19 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     {
         result.versions = std::move(*versionsResult.value);
         sortVersionHistoryNewestFirst(result.versions);
-        result.selectedVersionId = chooseSelectedVersionId(result.versions, {});
+        const auto hintedVersionId = resolveVersionIdFromProjectPath(localProjectFile, result.versions);
+        result.selectedVersionId = chooseSelectedVersionId(result.versions, hintedVersionId);
+        juce::Logger::writeToLog("[Restore] OpenProject -> hintedVersionId="
+                                 + hintedVersionId
+                                 + ", selectedVersionId="
+                                 + result.selectedVersionId);
+        if (hintedVersionId.isNotEmpty())
+            result.workingVersionId = hintedVersionId;
 
-        const auto shouldAutoRestoreLatest = !localProjectFile.existsAsFile()
-            || stemhub::projectfiles::isManagedRestoreCacheFile(localProjectFile);
+        const auto hasExplicitLocalVersionHint = hasVersionHintInProjectPath(localProjectFile);
+        const auto shouldAutoRestoreLatest = preferRemoteLatest
+            || !localProjectFile.existsAsFile()
+            || !hasExplicitLocalVersionHint;
         if (shouldAutoRestoreLatest)
         {
             juce::File autoRestoredFile;
@@ -147,11 +157,12 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
                 selectedBranch.id,
                 versionControlService,
                 autoRestoredFile);
-            if (autoRestoredFile.existsAsFile())
-            {
-                result.projectFile = autoRestoredFile;
-                didAutoRestoreLatest = true;
-            }
+        if (autoRestoredFile.existsAsFile())
+        {
+            result.projectFile = autoRestoredFile;
+            didAutoRestoreLatest = true;
+            result.workingVersionId = result.selectedVersionId;
+        }
             else if (autoRestoreMessage.isNotEmpty())
             {
                 result.activeProjectStatusMessage = autoRestoreMessage;
@@ -290,12 +301,39 @@ StemhubAudioProcessor::BranchHistoryJobResult StemhubAudioProcessor::performFetc
 
     result.versions = std::move(*versionsResult.value);
     sortVersionHistoryNewestFirst(result.versions);
-    result.selectedVersionId = chooseSelectedVersionId(result.versions, preferredVersionId);
+    const auto effectiveProjectFile = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile, pendingProjectFile);
+    const auto hintedVersionId = resolveVersionIdFromProjectPath(effectiveProjectFile, result.versions);
+    result.selectedVersionId = chooseSelectedVersionId(result.versions, preferredVersionId.isNotEmpty()
+                                                                       ? preferredVersionId
+                                                                       : hintedVersionId);
+    if (hintedVersionId.isNotEmpty())
+        result.workingVersionId = hintedVersionId;
 
     const auto projectId = selectedProject ? selectedProject->id : juce::String();
-    const auto effectiveProjectFile = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile, pendingProjectFile);
-    const auto shouldAutoRestoreLatest = !effectiveProjectFile.existsAsFile()
-        || stemhub::projectfiles::isManagedRestoreCacheFile(effectiveProjectFile);
+    const auto isWorkingCopyClean = !effectiveProjectFile.existsAsFile()
+        ? true
+        : hasCleanWorkingCopy(effectiveProjectFile);
+    const auto hasExplicitVersionHint = hasVersionHintInProjectPath(effectiveProjectFile);
+    const auto hasPreferredVersion = preferredVersionId.isNotEmpty();
+    juce::Logger::writeToLog("[Restore] BranchHistory -> hintedVersionId="
+                             + hintedVersionId
+                             + ", selectedVersionId="
+                             + result.selectedVersionId
+                             + ", preferredVersionId="
+                             + preferredVersionId
+                             + ", workingVersionId="
+                             + result.workingVersionId);
+    const auto shouldAutoRestoreLatest = !hasExplicitVersionHint
+        && isWorkingCopyClean
+        && !hasPreferredVersion;
+    juce::Logger::writeToLog("[Restore] BranchHistory -> isWorkingCopyClean="
+                             + juce::String(isWorkingCopyClean ? "true" : "false")
+                             + ", hasExplicitVersionHint="
+                             + juce::String(hasExplicitVersionHint ? "true" : "false")
+                             + ", hasPreferredVersion="
+                             + juce::String(hasPreferredVersion ? "true" : "false")
+                             + ", shouldAutoRestoreLatest="
+                             + juce::String(shouldAutoRestoreLatest ? "true" : "false"));
     if (projectId.isNotEmpty() && shouldAutoRestoreLatest)
     {
         juce::File autoRestoredFile;
@@ -306,7 +344,10 @@ StemhubAudioProcessor::BranchHistoryJobResult StemhubAudioProcessor::performFetc
             versionControlService,
             autoRestoredFile);
         if (autoRestoredFile.existsAsFile())
+        {
             result.projectFile = autoRestoredFile;
+            result.workingVersionId = result.selectedVersionId;
+        }
         else if (autoRestoreMessage.isNotEmpty())
             result.activeProjectStatusMessage = autoRestoreMessage;
     }
@@ -314,6 +355,11 @@ StemhubAudioProcessor::BranchHistoryJobResult StemhubAudioProcessor::performFetc
     if (result.versions.empty())
     {
         result.activeProjectStatusMessage = "Loaded branch \"" + branchName + "\". No versions yet.";
+    }
+    else if (!isWorkingCopyClean && effectiveProjectFile.existsAsFile())
+    {
+        result.activeProjectStatusMessage = "Branch \"" + branchName + "\" has updates. Pull did not overwrite your local file. "
+            "Use Restore to checkout the latest snapshot.";
     }
     else if (result.projectFile.existsAsFile())
     {

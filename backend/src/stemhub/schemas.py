@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
@@ -190,6 +190,16 @@ class MixerDiffChange(BaseModel):
 class MixerDiffResponse(BaseModel):
     summary: MixerDiffSummary
     changes: list[MixerDiffChange]
+
+
+class VersionDiffHistoryEntry(BaseModel):
+    version: VersionWithAuthor
+    compared_to_version_id: UUID | None = None
+    status: Literal["initial", "compared", "unsupported"]
+    status_message: Optional[str] = None
+    summary: Optional[MixerDiffSummary] = None
+    changes: list[MixerDiffChange] = []
+
 
 class ProjectDetail(BaseModel):
     id: UUID

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <vector>
 
 #include "application/ProjectFileService.hpp"
 
@@ -21,6 +22,33 @@ juce::String sanitizePathSegment(const juce::String& value, const juce::String& 
         output = output.replace("--", "-");
     output = output.trimCharactersAtStart("-").trimCharactersAtEnd("-");
     return output.isNotEmpty() ? output : fallback;
+}
+
+std::vector<juce::File> collectFilesByExtension(const juce::File& rootDirectory, const juce::String& extension)
+{
+    std::vector<juce::File> matched;
+    if (!rootDirectory.isDirectory())
+        return matched;
+
+    juce::Array<juce::File> allFiles;
+    rootDirectory.findChildFiles(allFiles, juce::File::findFiles, true, "*");
+
+    const auto normalizedExtension = extension.toLowerCase();
+    for (const auto& file : allFiles)
+    {
+        auto fileExtension = file.getFileExtension().toLowerCase();
+        if (fileExtension.startsWith("."))
+            fileExtension = fileExtension.substring(1);
+        if (fileExtension == normalizedExtension)
+            matched.push_back(file);
+    }
+
+    std::sort(matched.begin(), matched.end(), [](const juce::File& lhs, const juce::File& rhs)
+    {
+        return lhs.getFullPathName().compareNatural(rhs.getFullPathName()) < 0;
+    });
+
+    return matched;
 }
 
 juce::File buildAutoRestoreCacheRoot(const juce::String& projectId, const juce::String& branchId)
@@ -49,6 +77,8 @@ juce::String resolveRestoreProjectName(const std::vector<VersionSummary>& versio
                                        const juce::String& versionId,
                                        const juce::String& fallbackName)
 {
+    juce::Logger::writeToLog("[Restore] ProjectFileService -> resolveRestoreProjectName versionId=" + versionId
+                             + ", fallback=" + fallbackName);
     const auto it = std::find_if(versions.begin(), versions.end(), [&versionId](const VersionSummary& version)
     {
         return version.id == versionId;
@@ -58,8 +88,15 @@ juce::String resolveRestoreProjectName(const std::vector<VersionSummary>& versio
     {
         const auto sourceProjectName = juce::File(it->sourceProjectFilename).getFileNameWithoutExtension();
         if (sourceProjectName.isNotEmpty())
+        {
+            juce::Logger::writeToLog("[Restore] ProjectFileService -> found sourceProjectFilename="
+                                     + it->sourceProjectFilename);
             return sourceProjectName;
+        }
     }
+
+    if (it == versions.end())
+        juce::Logger::writeToLog("[Restore] ProjectFileService -> version not found in provided history");
 
     return fallbackName.isNotEmpty() ? fallbackName : "restored-project";
 }
@@ -68,6 +105,10 @@ juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
                                   const juce::File& restoreDirectory,
                                   juce::File& restoredProjectFile)
 {
+    juce::Logger::writeToLog("[Restore] ProjectFileService -> resolveRestoreResult zip="
+                             + snapshotZipFile.getFullPathName()
+                             + ", restoreDir="
+                             + restoreDirectory.getFullPathName());
     if (!snapshotZipFile.existsAsFile())
         return juce::Result::fail("Downloaded snapshot file is missing.");
 
@@ -81,6 +122,7 @@ juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
     const auto uncompressResult = snapshotZip.uncompressTo(restoreDirectory);
     if (uncompressResult.failed())
         return uncompressResult;
+    juce::Logger::writeToLog("[Restore] ProjectFileService -> archive uncompressed");
 
     const auto manifestFile = restoreDirectory.getChildFile("manifest.json");
     if (manifestFile.existsAsFile())
@@ -92,29 +134,56 @@ juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
 
         const auto sourceProjectPath = manifestObject->getProperty("flp_relative_path").toString();
         const auto fallbackPath = manifestObject->getProperty("source_project_filename").toString();
-        restoredProjectFile = !sourceProjectPath.isEmpty()
-            ? restoreDirectory.getChildFile(sourceProjectPath)
-            : restoreDirectory.getChildFile(fallbackPath);
+        juce::String normalizedSourceProjectPath = sourceProjectPath.replaceCharacter('\\', '/').trim();
+        juce::String normalizedFallbackProjectPath = fallbackPath.replaceCharacter('\\', '/').trim();
+        if (normalizedSourceProjectPath.startsWith("/"))
+            normalizedSourceProjectPath = normalizedSourceProjectPath.substring(1);
+        if (normalizedSourceProjectPath.startsWith("./"))
+            normalizedSourceProjectPath = normalizedSourceProjectPath.substring(2);
+        if (normalizedFallbackProjectPath.startsWith("/"))
+            normalizedFallbackProjectPath = normalizedFallbackProjectPath.substring(1);
+        if (normalizedFallbackProjectPath.startsWith("./"))
+            normalizedFallbackProjectPath = normalizedFallbackProjectPath.substring(2);
+
+        restoredProjectFile = !normalizedSourceProjectPath.isEmpty()
+            ? restoreDirectory.getChildFile(normalizedSourceProjectPath)
+            : restoreDirectory.getChildFile(normalizedFallbackProjectPath);
+        juce::Logger::writeToLog("[Restore] ProjectFileService -> manifest sourceProjectPath="
+                                 + normalizedSourceProjectPath
+                                 + ", fallbackPath="
+                                 + normalizedFallbackProjectPath);
     }
 
     if (!restoredProjectFile.existsAsFile())
     {
-        juce::Array<juce::File> flpFiles;
-        restoreDirectory.findChildFiles(flpFiles, juce::File::findFiles, true, "*.flp");
-        if (!flpFiles.isEmpty())
-            restoredProjectFile = flpFiles[0];
+        const auto flpFiles = collectFilesByExtension(restoreDirectory, "flp");
+        if (!flpFiles.empty())
+        {
+            juce::Logger::writeToLog("[Restore] ProjectFileService -> fallback FLP file=" + flpFiles.front().getFileName());
+            restoredProjectFile = flpFiles.front();
+        }
     }
 
     if (!restoredProjectFile.existsAsFile())
     {
-        juce::Array<juce::File> alsFiles;
-        restoreDirectory.findChildFiles(alsFiles, juce::File::findFiles, true, "*.als");
-        if (!alsFiles.isEmpty())
-            restoredProjectFile = alsFiles[0];
+        const auto alsFiles = collectFilesByExtension(restoreDirectory, "als");
+        if (!alsFiles.empty())
+        {
+            juce::Logger::writeToLog("[Restore] ProjectFileService -> fallback ALS file=" + alsFiles.front().getFileName());
+            restoredProjectFile = alsFiles.front();
+        }
     }
 
     if (!restoredProjectFile.existsAsFile())
+    {
+        juce::Logger::writeToLog("[Restore] ProjectFileService -> no compatible project file found in restore directory");
         return juce::Result::fail("Restored snapshot did not produce a project file.");
+    }
+
+    juce::Logger::writeToLog("[Restore] ProjectFileService -> final restored file="
+                             + restoredProjectFile.getFullPathName()
+                             + ", size="
+                             + juce::String(restoredProjectFile.getSize()));
 
     return juce::Result::ok();
 }
@@ -129,17 +198,6 @@ juce::File resolveEffectiveProjectFile(const juce::File& selectedFile,
         return selectedFile;
 
     return {};
-}
-
-bool isManagedRestoreCacheFile(const juce::File& file)
-{
-    if (file == juce::File())
-        return false;
-
-    const auto cacheRoot = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                               .getChildFile("Stemhub")
-                               .getChildFile("restore-cache");
-    return file == cacheRoot || file.isAChildOf(cacheRoot);
 }
 
 bool openInSystem(const juce::File& file)

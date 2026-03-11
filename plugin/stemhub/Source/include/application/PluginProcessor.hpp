@@ -76,12 +76,9 @@ public:
     [[nodiscard]] const juce::File& getPendingProjectFile() const noexcept { return pendingProjectFile; }
     [[nodiscard]] const juce::File& getSelectedProjectFile() const noexcept { return selectedProjectFile; }
 
-    void setCurrentUser(std::optional<User> newUser) noexcept { currentUser = std::move(newUser); }
     void signIn(User newUser) noexcept;
     void signOut() noexcept;
-    
-    [[nodiscard]] juce::String getUsername() const noexcept { return currentUser ? currentUser->username : juce::String();}
-    
+
     void setAuthState(AuthState newAuthState) noexcept;
     void setUIState(UIState newUIState) noexcept;
     void setOperationState(OperationState newOperationState) noexcept;
@@ -109,7 +106,6 @@ private:
 
     struct AuthRequestResult
     {
-        uint64_t requestId {};
         std::optional<User> user;
         std::vector<Project> projects;
         juce::String token;
@@ -130,7 +126,6 @@ private:
         juce::String workingVersionId;
         juce::File projectFile;
         juce::String errorMessage;
-        juce::String projectSelectionStatusMessage;
         juce::String activeProjectStatusMessage;
         bool refreshProjects { false };
         bool shouldAutoOpenLocalFile { true };
@@ -199,6 +194,7 @@ private:
     void setWorkingCopyContext(const juce::File& workingFile, const juce::String& versionId);
     void clearWorkingCopyContext();
     [[nodiscard]] bool hasCleanWorkingCopy(const juce::File& workingFile) const;
+    [[nodiscard]] juce::String getCurrentOpenedVersionIdFromPath() const;
     void setCurrentOpenedVersionId(juce::String versionId);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)

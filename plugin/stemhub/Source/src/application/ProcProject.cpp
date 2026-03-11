@@ -10,59 +10,13 @@ using namespace stemhub::processorhelpers;
 
 namespace
 {
-juce::String extractVersionPrefixFromPathPart(const juce::String& value)
-{
-    const auto lastDash = value.lastIndexOfChar('-');
-    if (lastDash < 0 || lastDash + 8 >= value.length())
-        return {};
-
-    const auto candidate = value.substring(lastDash + 1, lastDash + 9);
-    for (int i = 0; i < candidate.length(); ++i)
-    {
-        const auto ch = candidate.toLowerCase()[i];
-        const bool isHexChar = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
-        if (!isHexChar)
-            return {};
-    }
-    return candidate;
-}
-
 juce::String resolveOpenedVersionFromPath(const juce::File& projectFile,
                                          const std::vector<VersionSummary>& versions,
                                          const juce::String& requestedVersionId)
 {
-    const auto fileName = projectFile.getFileNameWithoutExtension();
-    const auto parentName = projectFile.getParentDirectory().getFileName();
-    const juce::String candidates[] = { fileName, parentName };
-
-    for (const auto& candidate : candidates)
-    {
-        const auto shortVersionId = extractVersionPrefixFromPathPart(candidate);
-        if (shortVersionId.isEmpty())
-            continue;
-
-        const auto it = std::find_if(versions.begin(), versions.end(),
-                                    [&shortVersionId](const VersionSummary& version)
-                                    {
-                                        if (version.id.length() < 8)
-                                            return false;
-                                        return version.id.substring(0, 8).compareIgnoreCase(shortVersionId) == 0;
-                                    });
-        if (it != versions.end())
-        {
-            juce::Logger::writeToLog("[Restore] Processor -> resolved version id from path segment="
-                                     + candidate
-                                     + ", prefix="
-                                     + shortVersionId
-                                     + ", full="
-                                     + it->id);
-            return it->id;
-        }
-        juce::Logger::writeToLog("[Restore] Processor -> no match for path segment="
-                                 + candidate
-                                 + ", prefix="
-                                 + shortVersionId);
-    }
+    const auto resolvedVersionId = resolveVersionIdFromProjectPath(projectFile, versions);
+    if (resolvedVersionId.isNotEmpty())
+        return resolvedVersionId;
 
     if (requestedVersionId.isNotEmpty())
     {
@@ -117,6 +71,8 @@ void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobRes
     }
     if (selectedProjectFile.existsAsFile() && result.shouldAutoOpenLocalFile && result.workingVersionId.isNotEmpty())
         setCurrentOpenedVersionId(result.workingVersionId);
+    if (selectedProjectFile.existsAsFile() && !selectedProjectFile.isDirectory())
+        stemhub::sessioncache::saveLastOpenedProjectFilePath(selectedProjectFile.getFullPathName());
 
     setOperationState(OperationState::idle);
     activeProjectStatusMessage = std::move(result.activeProjectStatusMessage);
@@ -178,6 +134,8 @@ void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
         selectedVersionId = result.pushedVersionId;
         setWorkingCopyContext(selectedProjectFile, result.pushedVersionId);
         setCurrentOpenedVersionId(result.pushedVersionId);
+        if (selectedProjectFile.existsAsFile() && !selectedProjectFile.isDirectory())
+            stemhub::sessioncache::saveLastOpenedProjectFilePath(selectedProjectFile.getFullPathName());
     }
 
     setOperationState(OperationState::idle);
@@ -201,11 +159,11 @@ void StemhubAudioProcessor::applyRestoreVersionResult(RestoreVersionJobResult re
         return;
     }
 
-    if (result.restoredProjectFile.existsAsFile())
-    {
-        selectedProjectFile = result.restoredProjectFile;
-        pendingProjectFile = selectedProjectFile;
-        const auto previousOpenedVersionId = currentOpenedVersionId;
+        if (result.restoredProjectFile.existsAsFile())
+        {
+            selectedProjectFile = result.restoredProjectFile;
+            pendingProjectFile = selectedProjectFile;
+            const auto previousOpenedVersionId = currentOpenedVersionId;
         const auto previousWorkingCopyFile = workingCopyProjectFile;
         const auto previousWorkingCopyVersionId = workingCopyVersionId;
         const auto previousWorkingCopyFileSize = workingCopyFileSize;
@@ -236,8 +194,9 @@ void StemhubAudioProcessor::applyRestoreVersionResult(RestoreVersionJobResult re
             setCurrentOpenedVersionId(previousOpenedVersionId);
             return;
         }
-        juce::Logger::writeToLog("[Restore] Processor -> openInSystem succeeded");
-    }
+            juce::Logger::writeToLog("[Restore] Processor -> openInSystem succeeded");
+            stemhub::sessioncache::saveLastOpenedProjectFilePath(selectedProjectFile.getFullPathName());
+        }
     else
     {
         juce::Logger::writeToLog("[Restore] Processor -> no restoredProjectFile in result");
@@ -365,6 +324,16 @@ bool StemhubAudioProcessor::hasCleanWorkingCopy(const juce::File& workingFile) c
         && workingCopyFileModTime == workingFile.getLastModificationTime().toMilliseconds();
 }
 
+juce::String StemhubAudioProcessor::getCurrentOpenedVersionIdFromPath() const
+{
+    const auto fileToInspect = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile,
+                                                                              pendingProjectFile);
+    if (!fileToInspect.existsAsFile())
+        return {};
+
+    return resolveOpenedVersionFromPath(fileToInspect, versionHistory, {});
+}
+
 juce::String StemhubAudioProcessor::getCurrentOpenedVersionLabel() const
 {
     const auto fileToInspect = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile,
@@ -372,24 +341,40 @@ juce::String StemhubAudioProcessor::getCurrentOpenedVersionLabel() const
     if (!fileToInspect.existsAsFile())
         return "Current version: not available";
 
+    const auto resolvedVersionFromPath = getCurrentOpenedVersionIdFromPath();
+    const auto activeVersionId = resolvedVersionFromPath.isNotEmpty()
+        ? resolvedVersionFromPath
+        : currentOpenedVersionId;
+
+    if (activeVersionId.isEmpty())
+    {
+        if (workingCopyProjectFile != fileToInspect || workingCopyVersionId.isEmpty())
+            return "Current version: unknown";
+
+        if (hasCleanWorkingCopy(fileToInspect))
+            return "Current version: " + workingCopyVersionId;
+
+        return "Current version: " + workingCopyVersionId + " (modified locally)";
+    }
+
     if (currentOpenedVersionId.isNotEmpty() && currentOpenedVersionId == workingCopyVersionId
         && workingCopyProjectFile == fileToInspect)
     {
         if (hasCleanWorkingCopy(fileToInspect))
-            return "Current version: " + currentOpenedVersionId;
+            return "Current version: " + activeVersionId;
 
-        return "Current version: " + currentOpenedVersionId + " (modified locally)";
+        return "Current version: " + activeVersionId + " (modified locally)";
     }
 
-    if (currentOpenedVersionId.isNotEmpty())
+    if (activeVersionId.isNotEmpty())
     {
-        if (workingCopyProjectFile != fileToInspect || workingCopyVersionId != currentOpenedVersionId)
-            return "Current version: " + currentOpenedVersionId + " (working copy out of sync)";
+        if (workingCopyProjectFile != fileToInspect || workingCopyVersionId != activeVersionId)
+            return "Current version: " + activeVersionId + " (working copy out of sync)";
 
         if (hasCleanWorkingCopy(fileToInspect))
-            return "Current version: " + currentOpenedVersionId;
+            return "Current version: " + activeVersionId;
 
-        return "Current version: " + currentOpenedVersionId + " (modified locally)";
+        return "Current version: " + activeVersionId + " (modified locally)";
     }
 
     if (workingCopyProjectFile != fileToInspect)
@@ -495,11 +480,7 @@ void StemhubAudioProcessor::requestRefreshVersionHistory()
 
     const auto token = access_tkn;
     const auto branchId = selectedBranchId;
-    const auto effectiveProjectFile = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile, pendingProjectFile);
-    const auto isWorkingCopyClean = !effectiveProjectFile.existsAsFile()
-        ? true
-        : hasCleanWorkingCopy(effectiveProjectFile);
-    const auto preferredVersionId = isWorkingCopyClean ? juce::String() : selectedVersionId;
+    const auto preferredVersionId = selectedVersionId;
     enqueueBackgroundTask([this,
                            branchId,
                            branchName,

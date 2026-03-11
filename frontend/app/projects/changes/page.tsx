@@ -7,9 +7,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
 import { RepositoryHeader } from "../components/RepositoryHeader";
-import { ArrowLeft, Loader2, GitCompareArrows, Info } from "lucide-react";
+import { ArrowLeft, Loader2, Info } from "lucide-react";
 import { authFetch } from "@/lib/api";
-import type { ProjectSummaryResponse, VersionWithAuthor } from "@/types/project";
+import type { ProjectSummaryResponse, VersionDiffHistoryEntry } from "@/types/project";
 import { RepositoryBranchBar } from "../components/RepositoryBranchBar";
 
 function formatTimeAgo(dateString: string): string {
@@ -30,11 +30,14 @@ function getInitials(username: string): string {
     return username.slice(0, 2).toUpperCase();
 }
 
-function buildVersionLabel(version: VersionWithAuthor): string {
-    const message = version.commit_message || "No message";
-    const timestamp = formatTimeAgo(version.created_at);
-    const filename = version.source_project_filename ? ` • ${version.source_project_filename}` : "";
-    return `${message} • ${timestamp}${filename}`;
+function formatSummaryLine(entry: VersionDiffHistoryEntry): string {
+    if (!entry.summary) return "";
+    const parts = [
+        `${entry.summary.total_changes} change${entry.summary.total_changes === 1 ? "" : "s"}`,
+        `${entry.summary.inserts_changed} insert${entry.summary.inserts_changed === 1 ? "" : "s"}`,
+        `${entry.summary.slots_changed} slot${entry.summary.slots_changed === 1 ? "" : "s"}`,
+    ];
+    return parts.join(" • ");
 }
 
 const cardBase =
@@ -52,12 +55,10 @@ function ProjectChangesContent() {
     const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
     const [summary, setSummary] = useState<ProjectSummaryResponse | null>(null);
+    const [historyEntries, setHistoryEntries] = useState<VersionDiffHistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedBranchId, setSelectedBranchId] = useState(branchIdFromQuery);
-    const [baseVersionId, setBaseVersionId] = useState("");
-    const [targetVersionId, setTargetVersionId] = useState("");
-    const [compareLaunchMessage, setCompareLaunchMessage] = useState<string | null>(null);
 
     useEffect(() => {
         setSelectedBranchId(branchIdFromQuery);
@@ -76,21 +77,40 @@ function ProjectChangesContent() {
             setLoading(true);
             setError(null);
             try {
-                const summaryPath = selectedBranchId
-                    ? `/projects/${projectId}/summary?branch_id=${selectedBranchId}`
-                    : `/projects/${projectId}/summary`;
-                const data = await authFetch<ProjectSummaryResponse>(summaryPath);
+                if (!selectedBranchId) {
+                    const data = await authFetch<ProjectSummaryResponse>(`/projects/${projectId}/summary`);
+
+                    if (cancelled) return;
+
+                    if (data.branches.length > 0) {
+                        const fallbackBranchId = data.branches[0].id;
+                        setSelectedBranchId(fallbackBranchId);
+                        router.replace(`/projects/changes?id=${projectId}&branch_id=${fallbackBranchId}`);
+                        return;
+                    }
+
+                    setSummary(data);
+                    setHistoryEntries([]);
+                    return;
+                }
+
+                const [summaryData, historyData] = await Promise.all([
+                    authFetch<ProjectSummaryResponse>(`/projects/${projectId}/summary?branch_id=${selectedBranchId}`),
+                    authFetch<VersionDiffHistoryEntry[]>(`/branches/${selectedBranchId}/versions/diff-history`),
+                ]);
 
                 if (cancelled) return;
 
-                if (!selectedBranchId && data.branches.length > 0) {
-                    const fallbackBranchId = data.branches[0].id;
+                const branchExists = summaryData.branches.some((branch) => branch.id === selectedBranchId);
+                if (!branchExists && summaryData.branches.length > 0) {
+                    const fallbackBranchId = summaryData.branches[0].id;
                     setSelectedBranchId(fallbackBranchId);
                     router.replace(`/projects/changes?id=${projectId}&branch_id=${fallbackBranchId}`);
                     return;
                 }
 
-                setSummary(data);
+                setHistoryEntries(historyData);
+                setSummary(summaryData);
             } catch (err) {
                 if (cancelled) return;
                 setError(err instanceof Error ? err.message : "Failed to load changes");
@@ -106,38 +126,9 @@ function ProjectChangesContent() {
         };
     }, [projectId, router, selectedBranchId]);
 
-    const versions = summary?.recent_versions || [];
     const branches = summary?.branches || [];
-    const comparableVersions = versions.filter(
-        (version) => version.has_artifact && version.source_daw === "FL Studio"
-    );
-
-    useEffect(() => {
-        setCompareLaunchMessage(null);
-        if (comparableVersions.length === 0) {
-            setBaseVersionId("");
-            setTargetVersionId("");
-            return;
-        }
-
-        const versionIds = new Set(comparableVersions.map((version) => version.id));
-        const nextBaseId = versionIds.has(baseVersionId) ? baseVersionId : comparableVersions[0].id;
-        let nextTargetId = versionIds.has(targetVersionId) ? targetVersionId : "";
-
-        if (!nextTargetId || nextTargetId === nextBaseId) {
-            nextTargetId = comparableVersions.find((version) => version.id !== nextBaseId)?.id || "";
-        }
-
-        if (nextBaseId !== baseVersionId) {
-            setBaseVersionId(nextBaseId);
-        }
-        if (nextTargetId !== targetVersionId) {
-            setTargetVersionId(nextTargetId);
-        }
-    }, [baseVersionId, comparableVersions, targetVersionId]);
 
     const handleBranchChange = (branchId: string) => {
-        setCompareLaunchMessage(null);
         setSelectedBranchId(branchId);
         if (projectId) {
             router.replace(`/projects/changes?id=${projectId}&branch_id=${branchId}`);
@@ -185,7 +176,7 @@ function ProjectChangesContent() {
                                     Changes
                                 </h1>
                                 <p className="text-sm text-foreground/60">
-                                    Select a branch and two FL Studio versions to prepare a mixer diff.
+                                    Each version is automatically compared against its previous version on the active branch.
                                 </p>
                             </div>
                             <div className="inline-flex items-center gap-2 rounded-xl border border-accent/20 bg-accent/10 px-3 py-2 text-xs font-medium text-accent">
@@ -202,85 +193,30 @@ function ProjectChangesContent() {
                     </div>
 
                     <div className="mb-6 rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-5">
-                        {comparableVersions.length < 2 ? (
+                        {historyEntries.length === 0 ? (
                             <div className="space-y-2">
-                                <h2 className="text-sm font-medium text-foreground">Compare setup</h2>
+                                <h2 className="text-sm font-medium text-foreground">Branch diff timeline</h2>
                                 <p className="text-sm text-foreground/60">
-                                    This branch needs at least two FL Studio versions with artifacts before compare can be launched.
+                                    This branch does not have any version history yet.
                                 </p>
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
-                                    <label className="flex flex-col gap-2 text-sm">
-                                        <span className="font-medium text-foreground">Base version</span>
-                                        <select
-                                            value={baseVersionId}
-                                            onChange={(event) => {
-                                                setBaseVersionId(event.target.value);
-                                                setCompareLaunchMessage(null);
-                                            }}
-                                            className="rounded-xl border border-border-subtle bg-background-secondary dark:bg-background-tertiary px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-accent"
-                                        >
-                                            {comparableVersions.map((version) => (
-                                                <option key={version.id} value={version.id}>
-                                                    {buildVersionLabel(version)}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-
-                                    <label className="flex flex-col gap-2 text-sm">
-                                        <span className="font-medium text-foreground">Target version</span>
-                                        <select
-                                            value={targetVersionId}
-                                            onChange={(event) => {
-                                                setTargetVersionId(event.target.value);
-                                                setCompareLaunchMessage(null);
-                                            }}
-                                            className="rounded-xl border border-border-subtle bg-background-secondary dark:bg-background-tertiary px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-accent"
-                                        >
-                                            {comparableVersions.map((version) => (
-                                                <option
-                                                    key={version.id}
-                                                    value={version.id}
-                                                    disabled={version.id === baseVersionId}
-                                                >
-                                                    {buildVersionLabel(version)}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setCompareLaunchMessage(
-                                                "Compare request is configured. Result fetching and rendering lands in the next iteration."
-                                            );
-                                        }}
-                                        disabled={!baseVersionId || !targetVersionId || baseVersionId === targetVersionId}
-                                        className="inline-flex h-[50px] items-center justify-center gap-2 rounded-xl bg-accent px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        <GitCompareArrows className="size-4" aria-hidden />
-                                        Compare versions
-                                    </button>
-                                </div>
-
-                                {compareLaunchMessage && (
-                                    <p className="text-sm text-foreground/60">{compareLaunchMessage}</p>
-                                )}
+                                <p className="text-sm text-foreground/60">
+                                    The latest versions are shown first. Each card summarizes mixer changes against the previous branch version.
+                                </p>
                             </div>
                         )}
                     </div>
 
-                    {versions.length === 0 ? (
+                    {historyEntries.length === 0 ? (
                         <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-6 text-center">
                             <p className="text-sm text-foreground/50">No changes yet</p>
                         </div>
                     ) : (
                         <ul className="flex flex-col gap-3" role="list">
-                            {versions.map((version) => {
+                            {historyEntries.map((entry) => {
+                                const version = entry.version;
                                 const authorName = version.author?.username || "Unknown";
                                 const initials = version.author
                                     ? getInitials(version.author.username)
@@ -320,6 +256,50 @@ function ProjectChangesContent() {
                                                             {version.source_project_filename ? ` • ${version.source_project_filename}` : ""}
                                                         </p>
                                                     )}
+
+                                                    <div className="mt-3 rounded-xl border border-foreground/[0.08] bg-background/40 p-3">
+                                                        {entry.status === "initial" && (
+                                                            <p className="text-sm text-foreground/65">
+                                                                {entry.status_message || "Initial snapshot on this branch."}
+                                                            </p>
+                                                        )}
+
+                                                        {entry.status === "unsupported" && (
+                                                            <p className="text-sm text-foreground/65">
+                                                                {entry.status_message || "Automatic mixer diff unavailable for this version."}
+                                                            </p>
+                                                        )}
+
+                                                        {entry.status === "compared" && entry.summary && (
+                                                            <div className="space-y-3">
+                                                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                                                    <span className="rounded-md border border-accent/30 bg-accent/15 px-2.5 py-1 font-medium text-accent">
+                                                                        {formatSummaryLine(entry)}
+                                                                    </span>
+                                                                    <span className="text-foreground/50">
+                                                                        Compared to previous branch version
+                                                                    </span>
+                                                                </div>
+
+                                                                {entry.summary.total_changes === 0 ? (
+                                                                    <p className="text-sm text-foreground/65">
+                                                                        No mixer changes detected.
+                                                                    </p>
+                                                                ) : (
+                                                                    <ul className="space-y-2">
+                                                                        {entry.changes.map((change, index) => (
+                                                                            <li
+                                                                                key={`${version.id}-${change.type}-${change.slot_index ?? "insert"}-${index}`}
+                                                                                className="text-sm text-foreground/72"
+                                                                            >
+                                                                                {change.message}
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

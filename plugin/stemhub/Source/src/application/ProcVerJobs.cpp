@@ -81,7 +81,8 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     ProjectVersionContext context;
     context.projectId = project->id;
     context.branchId = branchId;
-    context.lastVersionId = versionControlService.getLastVersionId();
+    context.lastVersionId = workingCopyVersionId.isNotEmpty() ? workingCopyVersionId
+                                                             : versionControlService.getLastVersionId();
     versionControlService.setCurrentProjectContext(context);
 
     PushVersionRequest request;
@@ -141,16 +142,22 @@ StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRes
     const juce::String& versionId,
     const juce::File& destinationFile) const
 {
+    juce::Logger::writeToLog("[Restore] Job -> start versionId=" + versionId
+                             + ", destinationFile=" + destinationFile.getFullPathName());
+
     RestoreVersionJobResult result;
+    result.restoredVersionId = versionId;
 
     if (versionId.isEmpty())
     {
+        juce::Logger::writeToLog("[Restore] Job -> reject: empty versionId");
         result.errorMessage = "Select a version before restoring.";
         return result;
     }
 
     if (destinationFile.isDirectory())
     {
+        juce::Logger::writeToLog("[Restore] Job -> reject: destination is directory");
         result.errorMessage = "Select a valid destination file for restore.";
         return result;
     }
@@ -161,9 +168,13 @@ StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRes
         versionControlService.getAccessToken());
     if (restoreResult.failed())
     {
+        juce::Logger::writeToLog("[Restore] Job -> download failed: " + restoreResult.getErrorMessage());
         result.errorMessage = restoreResult.getErrorMessage();
         return result;
     }
+    juce::Logger::writeToLog("[Restore] Job -> download ok, file exists="
+                             + juce::String(destinationFile.existsAsFile() ? "true" : "false"));
+    juce::Logger::writeToLog("[Restore] Job -> destination size=" + juce::String(destinationFile.getSize()));
 
     const auto restoreDirectory = destinationFile.getParentDirectory().getChildFile(
         destinationFile.getFileNameWithoutExtension());
@@ -171,6 +182,7 @@ StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRes
     {
         if (!restoreDirectory.deleteRecursively())
         {
+            juce::Logger::writeToLog("[Restore] Job -> failed to clear restore directory " + restoreDirectory.getFullPathName());
             result.errorMessage = "Failed to clear previous restore folder at " + restoreDirectory.getFullPathName();
             return result;
         }
@@ -180,9 +192,12 @@ StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRes
     const auto extractResult = stemhub::projectfiles::resolveRestoreResult(destinationFile, restoreDirectory, restoredProjectFile);
     if (extractResult.failed())
     {
+        juce::Logger::writeToLog("[Restore] Job -> extraction failed: " + extractResult.getErrorMessage());
         result.errorMessage = extractResult.getErrorMessage();
         return result;
     }
+    juce::Logger::writeToLog("[Restore] Job -> restored project path=" + restoredProjectFile.getFullPathName()
+                             + ", exists=" + juce::String(restoredProjectFile.existsAsFile() ? "true" : "false"));
 
     result.restoredProjectFile = std::move(restoredProjectFile);
     result.activeProjectStatusMessage = "Version restored successfully: " + result.restoredProjectFile.getFileName();

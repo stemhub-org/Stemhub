@@ -26,6 +26,32 @@ export interface VersionWithAuthor {
     source_project_filename: string | null;
 }
 
+export interface MixerDiffSummary {
+    total_changes: number;
+    inserts_changed: number;
+    slots_changed: number;
+    parameter_changes: number;
+}
+
+export interface MixerDiffChange {
+    type: string;
+    insert_iid: number;
+    insert_name: string | null;
+    slot_index: number | null;
+    before: unknown;
+    after: unknown;
+    message: string;
+}
+
+export interface VersionDiffHistoryEntry {
+    version: VersionWithAuthor;
+    compared_to_version_id: string | null;
+    status: "initial" | "compared" | "unsupported";
+    status_message: string | null;
+    summary: MixerDiffSummary | null;
+    changes: MixerDiffChange[];
+}
+
 // ── Track ──
 export interface Track {
     id: string;
