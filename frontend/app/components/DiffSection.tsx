@@ -11,15 +11,15 @@ import { GitBranch, GitCommit, GitMerge } from "lucide-react";
 
 const terminalLines = [
   { prefix: "$", text: "stemhub status", color: "text-foreground/80" },
-  { prefix: ">", text: 'Piste "Kick" modifiée...', color: "text-accent" },
-  { prefix: ">", text: '"Synth Lead" ajouté en V2', color: "text-accent" },
-  { prefix: ">", text: "Mix Bus compressé — gain +2dB", color: "text-foreground/50" },
-  { prefix: "$", text: "stemhub commit -m 'Session nocturne'", color: "text-foreground/80" },
-  { prefix: ">", text: "Commit #a7f3d2 enregistré.", color: "text-green-500" },
+  { prefix: ">", text: 'Track "Kick" updated…', color: "text-accent" },
+  { prefix: ">", text: '"Synth Lead" added in V2', color: "text-accent" },
+  { prefix: ">", text: "Mix bus compressed — gain +2dB", color: "text-foreground/50" },
+  { prefix: "$", text: "stemhub commit -m 'Late-night session'", color: "text-foreground/80" },
+  { prefix: ">", text: "Commit #a7f3d2 saved.", color: "text-green-500" },
   { prefix: "$", text: "stemhub diff v1..v2", color: "text-foreground/80" },
-  { prefix: "+", text: "Synth Lead — 808 pattern alterné", color: "text-green-500" },
-  { prefix: "-", text: "Hi-hat roll supprimé", color: "text-red-400" },
-  { prefix: ">", text: "3 fichiers modifiés, 1 ajouté", color: "text-foreground/50" },
+  { prefix: "+", text: "Synth Lead — 808 pattern changed", color: "text-green-500" },
+  { prefix: "-", text: "Hi-hat roll removed", color: "text-red-400" },
+  { prefix: ">", text: "3 files changed, 1 added", color: "text-foreground/50" },
 ];
 
 function useMotionValueState(value: MotionValue<number>): number {
@@ -105,7 +105,7 @@ export default function DiffSection() {
   return (
     <section
       ref={sectionRef}
-      id="produit"
+      id="product"
       className="relative min-h-[120vh] overflow-hidden px-6 py-32 md:px-12"
     >
       <div className="mx-auto max-w-7xl">
@@ -121,13 +121,13 @@ export default function DiffSection() {
             className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Le Diff
+            The Diff
           </p>
           <h2
             className="max-w-2xl text-[clamp(2rem,5vw,4.5rem)] font-extralight leading-[1.1] tracking-tight"
             style={{ fontFamily: "var(--font-syne)" }}
           >
-            Chaque changement,
+            Every change,
             <br />
             <span className="gradient-text">capturé.</span>
           </h2>
@@ -169,10 +169,10 @@ export default function DiffSection() {
             >
               <GitBranch size={20} strokeWidth={1.5} className="mb-3 text-accent" />
               <p className="text-sm font-light text-foreground/60" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Branches illimitées
+                Unlimited versions
               </p>
               <p className="mt-1 text-xs text-foreground/30" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Explorez sans risque
+                Explore without risk
               </p>
             </motion.div>
 
@@ -182,10 +182,10 @@ export default function DiffSection() {
             >
               <GitCommit size={20} strokeWidth={1.5} className="mb-3 text-accent" />
               <p className="text-sm font-light text-foreground/60" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Commits granulaires
+                Granular commits
               </p>
               <p className="mt-1 text-xs text-foreground/30" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Piste par piste
+                Track by track
               </p>
             </motion.div>
 
@@ -195,10 +195,10 @@ export default function DiffSection() {
             >
               <GitMerge size={20} strokeWidth={1.5} className="mb-3 text-accent" />
               <p className="text-sm font-light text-foreground/60" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Merge intelligent
+                Smart merges
               </p>
               <p className="mt-1 text-xs text-foreground/30" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Fusionnez vos sessions
+                Merge your sessions
               </p>
             </motion.div>
           </div>
