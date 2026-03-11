@@ -22,8 +22,100 @@ export default function ExplorePage() {
 
 
                 <div className="w-full flex flex-col xl:flex-row justify-between gap-8">
-                    {/* Left Spacer to perfectly center the activity feed */}
-                    <div className="hidden xl:block xl:w-80 shrink-0"></div>
+                    {/* Left Sidebar */}
+                    <div className="hidden xl:block xl:w-80 shrink-0 space-y-8">
+                        {/* Trending Producers */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <TrendingUp size={18} className="text-accent" />
+                                <h3 className="font-semibold text-foreground">Trending Producers</h3>
+                            </div>
+                            <div className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-2 space-y-1">
+                                {[
+                                    { name: 'Madeon', followers: '12.4k', color: 'from-pink-500 to-rose-400', initial: 'MD', rise: '+234' },
+                                    { name: 'REZZ', followers: '8.2k', color: 'from-purple-500 to-indigo-500', initial: 'RZ', rise: '+189' },
+                                    { name: 'Illenium', followers: '15.8k', color: 'from-cyan-500 to-blue-500', initial: 'IL', rise: '+156' },
+                                    { name: 'Zedd', followers: '22.1k', color: 'from-amber-400 to-orange-500', initial: 'ZD', rise: '+142' }
+                                ].map((producer, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg hover:bg-background transition-colors cursor-pointer group">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs font-bold text-foreground-muted w-3">{idx + 1}</span>
+                                            <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${producer.color} flex items-center justify-center text-white text-xs font-bold shadow-sm group-hover:scale-110 transition-transform`}>
+                                                {producer.initial}
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors">{producer.name}</div>
+                                                <div className="text-[10px] text-foreground-muted">{producer.followers} followers</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-xs font-medium text-emerald-500">{producer.rise}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Hot This Week */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <Star size={18} className="text-accent" />
+                                <h3 className="font-semibold text-foreground">Hot This Week</h3>
+                            </div>
+                            <div className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-2 space-y-1">
+                                {[
+                                    { name: 'Hyperpop-Starter-Kit', genre: 'Hyperpop', stars: '2.4k', color: 'bg-pink-500' },
+                                    { name: 'Lofi-Beats-Collection', genre: 'Lo-Fi', stars: '1.8k', color: 'bg-indigo-400' },
+                                    { name: 'Techno-Grooves', genre: 'Techno', stars: '1.2k', color: 'bg-teal-500' }
+                                ].map((project, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg hover:bg-background transition-colors cursor-pointer group">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${project.color}`} />
+                                            <div>
+                                                <div className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors truncate max-w-[140px]">{project.name}</div>
+                                                <div className="text-[10px] text-foreground-muted">{project.genre}</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1 text-xs text-foreground-muted">
+                                            <Star size={10} className="text-yellow-500" /> {project.stars}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Platform Updates */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <Zap size={18} className="text-accent" />
+                                <h3 className="font-semibold text-foreground">Platform Updates</h3>
+                            </div>
+                            <div className="space-y-3">
+                                {[
+                                    { version: 'v2.4.0', time: '2 days ago', title: 'Real-time Collaboration', desc: 'Work on projects simultaneously with your team', icon: Users },
+                                    { version: 'v2.3.5', time: '1 week ago', title: 'Advanced Waveform Analysis', desc: 'New spectral view and frequency isolation tools', icon: Activity },
+                                    { version: 'v2.3.0', time: '2 weeks ago', title: 'Stem Export Presets', desc: 'Save custom export configurations for faster workflow', icon: Box }
+                                ].map((update, idx) => {
+                                    const Icon = update.icon;
+                                    return (
+                                        <div key={idx} className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-4 hover:border-accent/30 transition-colors group cursor-pointer">
+                                            <div className="flex items-start gap-3">
+                                                <div className="h-8 w-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center shrink-0 group-hover:bg-accent/20 transition-colors">
+                                                    <Icon size={14} className="text-accent" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-foreground/5 text-foreground-muted border border-border-subtle">{update.version}</span>
+                                                        <span className="text-[10px] text-foreground-muted/70">{update.time}</span>
+                                                    </div>
+                                                    <h4 className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors mb-1.5">{update.title}</h4>
+                                                    <p className="text-xs text-foreground-muted leading-relaxed">{update.desc}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Activity Feed Container */}
                     <div className="flex-1 flex justify-center">
@@ -212,102 +304,99 @@ export default function ExplorePage() {
                             </div>
                         </motion.div>
                         </div>
-                    </div>
-
-                    {/* Right Sidebar */}
-                    <div className="w-full xl:w-80 shrink-0 space-y-8">
-                        {/* Trending Producers */}
+                    </div>                    {/* Right Sidebar */}
+                    <div className="hidden xl:block w-full xl:w-80 shrink-0 space-y-8">
+                        {/* Suggested Collaborators */}
                         <div>
                             <div className="flex items-center gap-2 mb-4">
-                                <TrendingUp size={18} className="text-accent" />
-                                <h3 className="font-semibold text-foreground">Trending Producers</h3>
-                            </div>
-                            <div className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-2 space-y-1">
-                                {[
-                                    { name: 'Madeon', followers: '12.4k', color: 'from-pink-500 to-rose-400', initial: 'MD', rise: '+234' },
-                                    { name: 'REZZ', followers: '8.2k', color: 'from-purple-500 to-indigo-500', initial: 'RZ', rise: '+189' },
-                                    { name: 'Illenium', followers: '15.8k', color: 'from-cyan-500 to-blue-500', initial: 'IL', rise: '+156' },
-                                    { name: 'Zedd', followers: '22.1k', color: 'from-amber-400 to-orange-500', initial: 'ZD', rise: '+142' }
-                                ].map((producer, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg hover:bg-background transition-colors cursor-pointer group">
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-xs font-bold text-foreground-muted w-3">{idx + 1}</span>
-                                            <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${producer.color} flex items-center justify-center text-white text-xs font-bold shadow-sm group-hover:scale-110 transition-transform`}>
-                                                {producer.initial}
-                                            </div>
-                                            <div>
-                                                <div className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors">{producer.name}</div>
-                                                <div className="text-[10px] text-foreground-muted">{producer.followers} followers</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-xs font-medium text-emerald-500">{producer.rise}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Hot This Week */}
-                        <div>
-                            <div className="flex items-center gap-2 mb-4">
-                                <Star size={18} className="text-accent" />
-                                <h3 className="font-semibold text-foreground">Hot This Week</h3>
-                            </div>
-                            <div className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-2 space-y-1">
-                                {[
-                                    { name: 'Hyperpop-Starter-Kit', genre: 'Hyperpop', stars: '2.4k', color: 'bg-pink-500' },
-                                    { name: 'Lofi-Beats-Collection', genre: 'Lo-Fi', stars: '1.8k', color: 'bg-indigo-400' },
-                                    { name: 'Techno-Grooves', genre: 'Techno', stars: '1.2k', color: 'bg-teal-500' }
-                                ].map((project, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg hover:bg-background transition-colors cursor-pointer group">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-1.5 h-1.5 rounded-full ${project.color}`} />
-                                            <div>
-                                                <div className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors truncate max-w-[140px]">{project.name}</div>
-                                                <div className="text-[10px] text-foreground-muted">{project.genre}</div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1 text-xs text-foreground-muted">
-                                            <Star size={10} className="text-yellow-500" /> {project.stars}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Platform Updates */}
-                        <div>
-                            <div className="flex items-center gap-2 mb-4">
-                                <Zap size={18} className="text-accent" />
-                                <h3 className="font-semibold text-foreground">Platform Updates</h3>
+                                <Users size={18} className="text-accent" />
+                                <h3 className="font-semibold text-foreground">Suggested Collaborators</h3>
                             </div>
                             <div className="space-y-3">
                                 {[
-                                    { version: 'v2.4.0', time: '2 days ago', title: 'Real-time Collaboration', desc: 'Work on projects simultaneously with your team', icon: Users },
-                                    { version: 'v2.3.5', time: '1 week ago', title: 'Advanced Waveform Analysis', desc: 'New spectral view and frequency isolation tools', icon: Activity },
-                                    { version: 'v2.3.0', time: '2 weeks ago', title: 'Stem Export Presets', desc: 'Save custom export configurations for faster workflow', icon: Box }
-                                ].map((update, idx) => {
-                                    const Icon = update.icon;
-                                    return (
-                                        <div key={idx} className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-4 hover:border-accent/30 transition-colors group cursor-pointer">
-                                            <div className="flex items-start gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center shrink-0 group-hover:bg-accent/20 transition-colors">
-                                                    <Icon size={14} className="text-accent" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-foreground/5 text-foreground-muted border border-border-subtle">{update.version}</span>
-                                                        <span className="text-[10px] text-foreground-muted/70">{update.time}</span>
-                                                    </div>
-                                                    <h4 className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors mb-1.5">{update.title}</h4>
-                                                    <p className="text-xs text-foreground-muted leading-relaxed">{update.desc}</p>
+                                    { name: 'ODESZA', genres: ['Electronic', 'Indie'], mutual: 12, initials: 'OD', color: 'bg-pink-500' },
+                                    { name: 'San Holo', genres: ['Future Bass'], mutual: 8, initials: 'SH', color: 'bg-cyan-500' },
+                                    { name: 'Kasbo', genres: ['Melodic', 'Chill'], mutual: 15, initials: 'KB', color: 'bg-purple-500' }
+                                ].map((collab, idx) => (
+                                    <div key={idx} className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-4 hover:border-accent/30 transition-colors">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className={`h-10 w-10 rounded-full ${collab.color} flex items-center justify-center text-white text-xs font-bold shadow-md`}>
+                                                {collab.initials}
+                                            </div>
+                                            <div>
+                                                <h4 className="text-sm font-semibold text-foreground">{collab.name}</h4>
+                                                <div className="flex gap-1 mt-1 flex-wrap">
+                                                    {collab.genres.map(g => (
+                                                        <span key={g} className="px-1.5 py-0.5 rounded bg-foreground/5 text-foreground-muted border border-border-subtle text-[10px]">{g}</span>
+                                                    ))}
                                                 </div>
                                             </div>
                                         </div>
-                                    );
-                                })}
+                                        <p className="text-xs text-foreground-muted mb-3">{collab.mutual} mutual connections</p>
+                                        <button className="w-full py-2 rounded-lg bg-accent/10 border border-accent/20 text-accent font-medium text-xs hover:bg-accent hover:text-white transition-all">
+                                            Connect
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
+                        {/* Active Challenges */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <TrendingUp size={18} className="text-accent" />
+                                <h3 className="font-semibold text-foreground">Active Challenges</h3>
+                            </div>
+                            <div className="space-y-3">
+                                {[
+                                    { title: '7-Day Beat Challenge', desc: 'Create a full beat in under 3 hours', level: 'Intermediate', joined: '2,847', daysLeft: 3, prize: 'Prize: $500' },
+                                    { title: 'Vocal Chop Remix', desc: 'Remix using only vocal samples', level: 'Advanced', joined: '1,523', daysLeft: 6, prize: 'Prize: Featured' }
+                                ].map((challenge, idx) => (
+                                    <div key={idx} className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-4 hover:border-accent/30 transition-colors">
+                                        <h4 className="text-sm font-semibold text-foreground mb-1">{challenge.title}</h4>
+                                        <p className="text-xs text-foreground-muted mb-3">{challenge.desc}</p>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <span className="px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 text-[10px] font-medium">{challenge.level}</span>
+                                            <span className="text-[10px] text-foreground-muted">• {challenge.joined} joined</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs mb-3 border-t border-border-subtle pt-3 mt-1">
+                                            <span className="text-foreground-muted flex items-center gap-1"><Clock size={12} /> Ends in {challenge.daysLeft} days</span>
+                                            <span className="font-semibold text-accent">{challenge.prize}</span>
+                                        </div>
+                                        <button className="w-full py-2 rounded-lg bg-accent text-white font-medium text-xs hover:bg-accent/90 transition-all shadow-[0_0_10px_rgba(156,87,223,0.3)]">
+                                            Join Challenge
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Upcoming Events */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <Clock size={18} className="text-accent" />
+                                <h3 className="font-semibold text-foreground">Upcoming Events</h3>
+                            </div>
+                            <div className="space-y-3">
+                                {[
+                                    { title: 'Ableton Live Masterclass', type: 'Workshop', host: 'Madeon', date: 'Mar 14, 2026 • 7:00 PM PST', attending: '342' },
+                                    { title: 'Mixing & Mastering Q&A', type: 'Live Stream', host: 'deadmau5', date: 'Mar 16, 2026 • 3:00 PM PST', attending: '1,247' }
+                                ].map((event, idx) => (
+                                    <div key={idx} className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-4 hover:border-accent/30 transition-colors">
+                                        <span className="inline-block px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 text-[10px] font-medium mb-2">{event.type}</span>
+                                        <h4 className="text-sm font-semibold text-foreground mb-1">{event.title}</h4>
+                                        <p className="text-xs text-foreground-muted mb-3">Hosted by {event.host}</p>
+                                        <div className="space-y-1.5 mb-4">
+                                            <p className="text-xs text-foreground-muted flex items-center gap-1.5"><Clock size={10} /> {event.date}</p>
+                                            <p className="text-xs text-foreground-muted flex items-center gap-1.5"><Users size={10} /> {event.attending} attending</p>
+                                        </div>
+                                        <button className="w-full py-2 rounded-lg bg-transparent border border-border-subtle text-foreground font-medium text-xs hover:border-accent hover:text-accent transition-all">
+                                            Register
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
