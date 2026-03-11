@@ -23,6 +23,7 @@ class User(Base):
     genres: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # ── Relationships ──
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="owner")
