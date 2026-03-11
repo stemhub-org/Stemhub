@@ -30,17 +30,17 @@ export default function Footer() {
         >
           <div>
             <h3
-              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground/30"
+              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
-              Produit
+              Product
             </h3>
             <ul className="space-y-3">
-              {["Fonctionnalités", "Tarifs", "Changelog", "Roadmap"].map((item) => (
+              {["Features", "Pricing", "Changelog", "Roadmap"].map((item) => (
                 <li key={item}>
                   <a
                     href="#"
-                    className="text-sm font-light text-foreground/50 transition-colors duration-300 hover:text-foreground"
+                    className="text-sm font-light text-foreground transition-colors duration-300 hover:opacity-80"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     {item}
@@ -52,17 +52,17 @@ export default function Footer() {
 
           <div>
             <h3
-              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground/30"
+              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
-              Ressources
+              Resources
             </h3>
             <ul className="space-y-3">
-              {["Documentation", "API", "Guides", "Communauté"].map((item) => (
+              {["Documentation", "API", "Guides", "Community"].map((item) => (
                 <li key={item}>
                   <a
                     href="#"
-                    className="text-sm font-light text-foreground/50 transition-colors duration-300 hover:text-foreground"
+                    className="text-sm font-light text-foreground transition-colors duration-300 hover:opacity-80"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     {item}
@@ -74,17 +74,17 @@ export default function Footer() {
 
           <div>
             <h3
-              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground/30"
+              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
-              Entreprise
+              Company
             </h3>
             <ul className="space-y-3">
-              {["À propos", "Blog", "Carrières", "Contact"].map((item) => (
+              {["About", "Blog", "Careers", "Contact"].map((item) => (
                 <li key={item}>
                   <a
                     href="#"
-                    className="text-sm font-light text-foreground/50 transition-colors duration-300 hover:text-foreground"
+                    className="text-sm font-light text-foreground transition-colors duration-300 hover:opacity-80"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     {item}
@@ -96,22 +96,22 @@ export default function Footer() {
         </motion.div>
 
         {/* Divider */}
-        <div className="h-[1px] w-full bg-foreground/[0.06]" />
+        <div className="h-[1px] w-full bg-accent/20" />
 
         {/* Bottom bar */}
         <div className="flex items-center justify-between py-8">
           <p
-            className="text-xs font-light text-foreground/30"
+            className="text-xs font-light text-foreground"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            &copy; 2025 StemHub. Tous droits réservés.
+            &copy; 2025 StemHub. All rights reserved.
           </p>
           <div className="flex gap-6">
-            {["Confidentialité", "CGU"].map((item) => (
+            {["Privacy", "Terms"].map((item) => (
               <a
                 key={item}
                 href="#"
-                className="text-xs font-light text-foreground/30 transition-colors duration-300 hover:text-foreground/60"
+                className="text-xs font-light text-foreground transition-colors duration-300 hover:opacity-80"
                 style={{ fontFamily: "var(--font-jakarta)" }}
               >
                 {item}

@@ -2,18 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Menu } from "lucide-react";
+import { Menu, Sun } from "lucide-react";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 
 const navLinks = [
-  { label: "Produit", href: "#produit" },
-  { label: "Fonctionnalités", href: "#features" },
-  { label: "Tarifs", href: "#tarifs" },
+  { label: "Product", href: "#product" },
+  { label: "Features", href: "#features" },
+  { label: "Pricing", href: "#pricing" },
 ];
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -30,7 +33,7 @@ export default function Navbar() {
       transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
       className={`fixed top-0 left-0 z-50 w-full transition-all duration-500 ${
         scrolled
-          ? "border-b border-foreground/[0.04] bg-background/70 backdrop-blur-xl"
+          ? "border-b border-accent/10 bg-background/80 backdrop-blur-xl dark:bg-background/90"
           : "bg-transparent"
       }`}
     >
@@ -44,7 +47,7 @@ export default function Navbar() {
             <a
               key={link.label}
               href={link.href}
-              className="text-sm font-light tracking-wide text-foreground/60 transition-colors duration-300 hover:text-foreground"
+              className="text-sm font-light tracking-wide text-foreground transition-colors duration-300 hover:opacity-80"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
               {link.label}
@@ -55,18 +58,27 @@ export default function Navbar() {
         <div className="hidden items-center gap-4 md:flex">
           <Link
             href="/login"
-            className="text-sm font-light tracking-wide text-foreground/60 transition-colors duration-300 hover:text-foreground"
+            className="text-sm font-light tracking-wide text-foreground transition-colors duration-300 hover:opacity-80"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Connexion
+            Log in
           </Link>
           <Link
             href="/register"
-            className="rounded-full border border-foreground/10 px-6 py-2.5 text-sm font-light tracking-wide transition-all duration-300 hover:border-accent hover:text-accent"
+            className="rounded-full border border-foreground/20 px-6 py-2.5 text-sm font-light tracking-wide text-foreground transition-all duration-300 hover:bg-foreground/5 hover:border-foreground/30"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Commencer
+            Get started
           </Link>
+          <button
+            type="button"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            className="p-2 rounded-full hover:bg-foreground/5 text-foreground transition-colors"
+            aria-label="Toggle theme"
+            title={isDark ? "Light mode" : "Dark mode"}
+          >
+            <Sun size={18} />
+          </button>
         </div>
 
         <button
@@ -82,13 +94,13 @@ export default function Navbar() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="border-b border-foreground/5 bg-background/90 px-6 pb-6 backdrop-blur-xl md:hidden"
+          className="border-b border-accent/10 bg-background/90 dark:bg-background/95 px-6 pb-6 backdrop-blur-xl md:hidden"
         >
           {navLinks.map((link) => (
             <a
               key={link.label}
               href={link.href}
-              className="block py-3 text-sm font-light text-foreground/60"
+              className="block py-3 text-sm font-light text-foreground"
               onClick={() => setMobileOpen(false)}
             >
               {link.label}
@@ -97,18 +109,26 @@ export default function Navbar() {
           <div className="mt-3 flex flex-col gap-3">
             <Link
               href="/login"
-              className="text-sm font-light text-foreground/60"
+              className="text-sm font-light text-foreground"
               onClick={() => setMobileOpen(false)}
             >
-              Connexion
+              Log in
             </Link>
             <Link
               href="/register"
-              className="inline-block rounded-full border border-foreground/10 px-6 py-2.5 text-center text-sm font-light"
+              className="inline-block rounded-full border border-foreground/20 text-foreground px-6 py-2.5 text-center text-sm font-light"
               onClick={() => setMobileOpen(false)}
             >
-              Commencer
+              Get started
             </Link>
+            <button
+              type="button"
+              onClick={() => { setTheme(isDark ? "light" : "dark"); setMobileOpen(false); }}
+              className="flex items-center gap-2 text-sm font-light text-foreground"
+              aria-label="Toggle theme"
+            >
+              <Sun size={18} /> {isDark ? "Light mode" : "Dark mode"}
+            </button>
           </div>
         </motion.div>
       )}
