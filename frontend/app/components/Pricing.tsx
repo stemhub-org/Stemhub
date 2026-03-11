@@ -83,8 +83,8 @@ export default function Pricing() {
               key={plan.name}
               className={`relative overflow-hidden rounded-2xl border p-8 transition-all duration-500 ${
                 plan.highlighted
-                  ? "border-accent/20 bg-background-secondary/80 dark:bg-background-tertiary/80"
-                  : "border-foreground/[0.06] bg-background-secondary/40 dark:bg-background-tertiary/40"
+                  ? "border-accent/40 bg-accent/20 dark:bg-background-tertiary/80"
+                  : "border-accent/20 bg-accent/10 dark:bg-background-tertiary/40"
               }`}
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -103,7 +103,7 @@ export default function Pricing() {
                 {/* Plan badge */}
                 {plan.highlighted && (
                   <span
-                    className="mb-6 inline-block rounded-full bg-accent/10 px-3 py-1 text-xs font-light text-accent"
+                    className="mb-6 inline-block rounded-full bg-foreground/10 px-3 py-1 text-xs font-light text-foreground"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     Populaire
@@ -118,7 +118,7 @@ export default function Pricing() {
                 </h3>
 
                 <p
-                  className="mb-6 text-sm font-light text-foreground/40"
+                  className="mb-6 text-sm font-light text-foreground"
                   style={{ fontFamily: "var(--font-jakarta)" }}
                 >
                   {plan.description}
@@ -133,7 +133,7 @@ export default function Pricing() {
                     {plan.price}€
                   </span>
                   <span
-                    className="text-sm font-light text-foreground/30"
+                    className="text-sm font-light text-foreground"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     /month
@@ -145,13 +145,13 @@ export default function Pricing() {
                   {plan.features.map((feature) => (
                     <li
                       key={feature}
-                      className="flex items-center gap-3 text-sm font-light text-foreground/60"
+                      className="flex items-center gap-3 text-sm font-light text-foreground"
                       style={{ fontFamily: "var(--font-jakarta)" }}
                     >
                       <Check
                         size={14}
                         strokeWidth={1.5}
-                        className={plan.highlighted ? "text-accent" : "text-foreground/25"}
+                        className={plan.highlighted ? "text-accent" : "text-foreground"}
                       />
                       {feature}
                     </li>
@@ -164,7 +164,7 @@ export default function Pricing() {
                   className={`block w-full rounded-xl py-3.5 text-center text-sm font-light tracking-wide transition-all duration-300 ${
                     plan.highlighted
                       ? "bg-foreground text-background hover:bg-accent"
-                      : "border border-foreground/[0.08] text-foreground/60 hover:border-accent/30 hover:text-accent"
+                      : "border border-foreground/20 text-foreground hover:bg-foreground/5 hover:border-foreground/30"
                   }`}
                   style={{ fontFamily: "var(--font-jakarta)" }}
                 >
