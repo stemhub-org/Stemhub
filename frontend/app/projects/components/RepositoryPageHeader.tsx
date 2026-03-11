@@ -35,7 +35,7 @@ export function RepositoryPageHeader({
                         <ol className="flex flex-wrap items-center gap-1">
                             <li>
                                 <Link
-                                    href="/dashboard"
+                                    href="/dashboard/projects"
                                     className="transition-colors hover:text-foreground"
                                 >
                                     {ownerUsername}
