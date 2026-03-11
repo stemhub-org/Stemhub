@@ -27,9 +27,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="StemHub API", lifespan=lifespan)
 
+# CORS should support both local host aliases commonly used during development.
+frontend_origins: list[str] = []
+for origin in (
+    os.getenv("FRONTEND_URL", "http://localhost:3000"),
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+):
+    if origin and origin not in frontend_origins:
+        frontend_origins.append(origin)
+
+extra_frontend_origins = os.getenv("FRONTEND_URLS", "")
+if extra_frontend_origins:
+    for origin in extra_frontend_origins.split(","):
+        origin = origin.strip()
+        if origin and origin not in frontend_origins:
+            frontend_origins.append(origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],
+    allow_origins=frontend_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
@@ -166,6 +166,40 @@ class VersionWithAuthor(BaseModel):
     branch_name: str
     author: Optional[OwnerSummary] = None
     has_artifact: bool = False
+    source_daw: Optional[str] = None
+    source_project_filename: Optional[str] = None
+
+
+class MixerDiffSummary(BaseModel):
+    total_changes: int
+    inserts_changed: int
+    slots_changed: int
+    parameter_changes: int
+
+
+class MixerDiffChange(BaseModel):
+    type: str
+    insert_iid: int
+    insert_name: Optional[str] = None
+    slot_index: Optional[int] = None
+    before: Any = None
+    after: Any = None
+    message: str
+
+
+class MixerDiffResponse(BaseModel):
+    summary: MixerDiffSummary
+    changes: list[MixerDiffChange]
+
+
+class VersionDiffHistoryEntry(BaseModel):
+    version: VersionWithAuthor
+    compared_to_version_id: UUID | None = None
+    status: Literal["initial", "compared", "unsupported"]
+    status_message: Optional[str] = None
+    summary: Optional[MixerDiffSummary] = None
+    changes: list[MixerDiffChange] = []
+
 
 class ProjectDetail(BaseModel):
     id: UUID

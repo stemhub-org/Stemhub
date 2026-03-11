@@ -182,6 +182,8 @@ async def get_project(
                     branch_name=v.branch.name if v.branch else "unknown",
                     author=author_summary,
                     has_artifact=v.artifact_path is not None,
+                    source_daw=v.source_daw,
+                    source_project_filename=v.source_project_filename,
                 )
             )
 

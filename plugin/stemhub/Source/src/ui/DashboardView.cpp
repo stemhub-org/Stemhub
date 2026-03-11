@@ -439,6 +439,18 @@ DashboardView::DashboardView()
         invokeIfBound(onVersionSelectionChange);
     };
 
+    addAndMakeVisible(currentVersionLabel);
+    currentVersionLabel.setText("Current version: not set", juce::dontSendNotification);
+    currentVersionLabel.setJustificationType(juce::Justification::centredLeft);
+    currentVersionLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.8f));
+    currentVersionLabel.setFont(juce::FontOptions(12.5f, juce::Font::plain));
+
+    addAndMakeVisible(currentVersionFileLabel);
+    currentVersionFileLabel.setText("Opened file: not set", juce::dontSendNotification);
+    currentVersionFileLabel.setJustificationType(juce::Justification::centredLeft);
+    currentVersionFileLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.6f));
+    currentVersionFileLabel.setFont(juce::FontOptions(10.5f, juce::Font::plain));
+
     addAndMakeVisible(backToProjectsButton);
     styleCompactTopButton(backToProjectsButton);
     backToProjectsButton.onClick = [this]
@@ -605,6 +617,14 @@ void DashboardView::resized()
 
     auto versionRow = leftColumn.removeFromTop(controlHeight);
     versionComboBox.setBounds(controlX, versionRow.getY(), controlWidth, versionRow.getHeight());
+
+    leftColumn.removeFromTop(6);
+    auto currentVersionIdRow = leftColumn.removeFromTop(18);
+    currentVersionLabel.setBounds(controlX, currentVersionIdRow.getY(), controlWidth, currentVersionIdRow.getHeight());
+
+    leftColumn.removeFromTop(4);
+    auto currentVersionFileRow = leftColumn.removeFromTop(30);
+    currentVersionFileLabel.setBounds(controlX, currentVersionFileRow.getY(), controlWidth, currentVersionFileRow.getHeight());
 
     leftColumn.removeFromTop(6);
     auto commitMessageLabelRow = leftColumn.removeFromTop(18);

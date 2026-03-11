@@ -11,8 +11,11 @@ COPY pyproject.toml ./
 COPY src/ ./src/
 COPY alembic.ini ./
 COPY alembic/ ./alembic/
+COPY vendor/PyFLP_enhanced/ ./vendor/PyFLP_enhanced/
 
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -e . \
+    && export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYFLP=0.0.0 \
+    && pip install --no-cache-dir --no-build-isolation ./vendor/PyFLP_enhanced
 
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
