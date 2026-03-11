@@ -22,7 +22,7 @@ interface Feature {
 const features: Feature[] = [
   {
     icon: GitBranch,
-    title: "Branches audio",
+    title: "Versions audio",
     description:
       "Créez des versions alternatives de vos morceaux sans jamais toucher à l'original. Expérimentez librement, fusionnez le meilleur.",
     size: "large",
@@ -52,7 +52,7 @@ const features: Feature[] = [
     icon: Users,
     title: "Collaboration temps réel",
     description:
-      "Partagez une branche avec votre équipe. Chacun travaille sur sa version, puis fusionnez le meilleur.",
+      "Partagez une version avec votre équipe. Chacun travaille sur sa version, puis fusionnez le meilleur.",
     size: "default",
   },
   {
