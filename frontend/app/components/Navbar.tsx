@@ -6,9 +6,9 @@ import { Menu } from "lucide-react";
 import Link from "next/link";
 
 const navLinks = [
-  { label: "Produit", href: "#produit" },
-  { label: "Fonctionnalités", href: "#features" },
-  { label: "Tarifs", href: "#tarifs" },
+  { label: "Product", href: "#product" },
+  { label: "Features", href: "#features" },
+  { label: "Pricing", href: "#pricing" },
 ];
 
 export default function Navbar() {
@@ -58,14 +58,14 @@ export default function Navbar() {
             className="text-sm font-light tracking-wide text-foreground/60 transition-colors duration-300 hover:text-foreground"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Connexion
+            Log in
           </Link>
           <Link
             href="/register"
             className="rounded-full border border-foreground/10 px-6 py-2.5 text-sm font-light tracking-wide transition-all duration-300 hover:border-accent hover:text-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Commencer
+            Get started
           </Link>
         </div>
 
@@ -100,14 +100,14 @@ export default function Navbar() {
               className="text-sm font-light text-foreground/60"
               onClick={() => setMobileOpen(false)}
             >
-              Connexion
+              Log in
             </Link>
             <Link
               href="/register"
               className="inline-block rounded-full border border-foreground/10 px-6 py-2.5 text-center text-sm font-light"
               onClick={() => setMobileOpen(false)}
             >
-              Commencer
+              Get started
             </Link>
           </div>
         </motion.div>
