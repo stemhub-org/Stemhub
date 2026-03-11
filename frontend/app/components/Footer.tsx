@@ -30,7 +30,7 @@ export default function Footer() {
         >
           <div>
             <h3
-              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground/30"
+              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
               Product
@@ -40,7 +40,7 @@ export default function Footer() {
                 <li key={item}>
                   <a
                     href="#"
-                    className="text-sm font-light text-foreground/50 transition-colors duration-300 hover:text-foreground"
+                    className="text-sm font-light text-foreground transition-colors duration-300 hover:opacity-80"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     {item}
@@ -52,7 +52,7 @@ export default function Footer() {
 
           <div>
             <h3
-              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground/30"
+              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
               Resources
@@ -62,7 +62,7 @@ export default function Footer() {
                 <li key={item}>
                   <a
                     href="#"
-                    className="text-sm font-light text-foreground/50 transition-colors duration-300 hover:text-foreground"
+                    className="text-sm font-light text-foreground transition-colors duration-300 hover:opacity-80"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     {item}
@@ -74,7 +74,7 @@ export default function Footer() {
 
           <div>
             <h3
-              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground/30"
+              className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-foreground"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
               Company
@@ -84,7 +84,7 @@ export default function Footer() {
                 <li key={item}>
                   <a
                     href="#"
-                    className="text-sm font-light text-foreground/50 transition-colors duration-300 hover:text-foreground"
+                    className="text-sm font-light text-foreground transition-colors duration-300 hover:opacity-80"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     {item}
@@ -96,12 +96,12 @@ export default function Footer() {
         </motion.div>
 
         {/* Divider */}
-        <div className="h-[1px] w-full bg-foreground/[0.06]" />
+        <div className="h-[1px] w-full bg-accent/20" />
 
         {/* Bottom bar */}
         <div className="flex items-center justify-between py-8">
           <p
-            className="text-xs font-light text-foreground/30"
+            className="text-xs font-light text-foreground"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
             &copy; 2025 StemHub. All rights reserved.
@@ -111,7 +111,7 @@ export default function Footer() {
               <a
                 key={item}
                 href="#"
-                className="text-xs font-light text-foreground/30 transition-colors duration-300 hover:text-foreground/60"
+                className="text-xs font-light text-foreground transition-colors duration-300 hover:opacity-80"
                 style={{ fontFamily: "var(--font-jakarta)" }}
               >
                 {item}
