@@ -152,9 +152,10 @@ def test_load_fl_studio_mixer_snapshot_extracts_manifest_flp_and_cleans_remote_t
     tmp_path,
     monkeypatch,
 ) -> None:
+    flp_bytes = b"fake flp bytes"
     snapshot_zip = tmp_path / "artifact.zip"
     with zipfile.ZipFile(snapshot_zip, "w") as archive:
-        archive.writestr("Projects/demo/project.flp", b"fake flp bytes")
+        archive.writestr("Projects/demo/project.flp", flp_bytes)
 
     parsed_paths: list[Path] = []
 
@@ -172,18 +173,19 @@ def test_load_fl_studio_mixer_snapshot_extracts_manifest_flp_and_cleans_remote_t
         storage=storage,
     )
 
-    assert snapshot == MixerProjectSnapshot(
-        inserts=(
-            MixerInsertSnapshot(
-                iid=0,
-                name="Master",
-                enabled=None,
-                volume=None,
-                pan=None,
-                slots=(),
-            ),
-        )
+    assert snapshot.inserts == (
+        MixerInsertSnapshot(
+            iid=0,
+            name="Master",
+            enabled=None,
+            volume=None,
+            pan=None,
+            slots=(),
+        ),
     )
+    assert snapshot.flp_size_bytes == len(flp_bytes)
+    assert snapshot.flp_sha256 is not None
+    assert snapshot.mixer_supported is True
     assert len(parsed_paths) == 1
     assert parsed_paths[0].name == "project.flp"
     assert not parsed_paths[0].exists()
@@ -191,10 +193,11 @@ def test_load_fl_studio_mixer_snapshot_extracts_manifest_flp_and_cleans_remote_t
 
 
 def test_load_fl_studio_mixer_snapshot_falls_back_to_first_flp_entry(tmp_path, monkeypatch) -> None:
+    flp_bytes = b"fake flp bytes"
     snapshot_zip = tmp_path / "artifact.zip"
     with zipfile.ZipFile(snapshot_zip, "w") as archive:
         archive.writestr("manifest.json", "{}")
-        archive.writestr("nested/beat.flp", b"fake flp bytes")
+        archive.writestr("nested/beat.flp", flp_bytes)
 
     def fake_parse(path: Path):
         assert Path(path).name == "beat.flp"
@@ -210,7 +213,10 @@ def test_load_fl_studio_mixer_snapshot_falls_back_to_first_flp_entry(tmp_path, m
         storage=storage,
     )
 
-    assert snapshot == MixerProjectSnapshot(inserts=())
+    assert snapshot.inserts == ()
+    assert snapshot.flp_size_bytes == len(flp_bytes)
+    assert snapshot.flp_sha256 is not None
+    assert snapshot.mixer_supported is False
     assert snapshot_zip.exists()
 
 
@@ -235,3 +241,31 @@ def test_load_fl_studio_mixer_snapshot_errors_when_snapshot_has_no_flp(tmp_path,
         assert str(exc) == "Snapshot archive does not contain an FL Studio project file."
     else:
         raise AssertionError("Expected MixerSnapshotError when snapshot zip does not contain a .flp file")
+
+
+def test_load_fl_studio_mixer_snapshot_falls_back_to_binary_snapshot_on_parser_failure(tmp_path, monkeypatch) -> None:
+    flp_bytes = b"fake flp bytes"
+    snapshot_zip = tmp_path / "artifact.zip"
+    with zipfile.ZipFile(snapshot_zip, "w") as archive:
+        archive.writestr("nested/demo.flp", flp_bytes)
+
+    def fake_parse(path: Path):
+        del path
+        raise RuntimeError("low-level parser crash")
+
+    monkeypatch.setattr("stemhub.flp_mixer_snapshot.ensure_pyflp_available", lambda: None)
+    monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=fake_parse))
+
+    storage = FakeStorage(snapshot_zip)
+
+    snapshot = load_fl_studio_mixer_snapshot(
+        artifact_path="projects/demo/artifact.zip",
+        snapshot_manifest={"flp_relative_path": "nested/demo.flp"},
+        storage=storage,
+    )
+
+    assert snapshot.inserts == ()
+    assert snapshot.flp_size_bytes == len(flp_bytes)
+    assert snapshot.flp_sha256 is not None
+    assert snapshot.mixer_supported is False
+    assert snapshot.parse_error == "low-level parser crash"

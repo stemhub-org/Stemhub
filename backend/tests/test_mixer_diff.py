@@ -92,3 +92,28 @@ def test_diff_mixer_project_snapshots_reports_expected_change_types() -> None:
     assert diff_result.summary.inserts_changed == 3
     assert diff_result.summary.slots_changed == 2
     assert diff_result.summary.parameter_changes == 5
+
+
+def test_diff_mixer_project_snapshots_falls_back_to_binary_change_when_mixer_unsupported() -> None:
+    base_snapshot = MixerProjectSnapshot(
+        inserts=(),
+        flp_sha256="old-hash",
+        flp_size_bytes=100,
+        mixer_supported=False,
+    )
+    target_snapshot = MixerProjectSnapshot(
+        inserts=(),
+        flp_sha256="new-hash",
+        flp_size_bytes=120,
+        mixer_supported=False,
+    )
+
+    diff_result = diff_mixer_project_snapshots(base_snapshot, target_snapshot)
+
+    assert diff_result.summary.total_changes == 1
+    assert diff_result.summary.inserts_changed == 0
+    assert diff_result.summary.slots_changed == 0
+    assert diff_result.summary.parameter_changes == 0
+    assert len(diff_result.changes) == 1
+    assert diff_result.changes[0].type == "project_binary_changed"
+    assert diff_result.changes[0].insert_iid == -1

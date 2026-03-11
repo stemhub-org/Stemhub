@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import tempfile
 import zipfile
@@ -39,6 +40,10 @@ class MixerInsertSnapshot:
 @dataclass(frozen=True)
 class MixerProjectSnapshot:
     inserts: tuple[MixerInsertSnapshot, ...]
+    flp_sha256: str | None = None
+    flp_size_bytes: int | None = None
+    mixer_supported: bool = True
+    parse_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,9 +91,23 @@ def load_fl_studio_mixer_snapshot(
                 snapshot_manifest=snapshot_manifest,
                 extract_root=Path(extract_root),
             )
-            project = pyflp.parse(flp_path)
+            flp_bytes = flp_path.read_bytes()
+            try:
+                project = pyflp.parse(flp_path)
+            except Exception as exc:  # pragma: no cover - parser internals vary by FLP shape
+                return MixerProjectSnapshot(
+                    inserts=(),
+                    flp_sha256=hashlib.sha256(flp_bytes).hexdigest(),
+                    flp_size_bytes=len(flp_bytes),
+                    mixer_supported=False,
+                    parse_error=str(exc),
+                )
 
-    return build_mixer_snapshot(project)
+    return build_mixer_snapshot(
+        project,
+        flp_sha256=hashlib.sha256(flp_bytes).hexdigest(),
+        flp_size_bytes=len(flp_bytes),
+    )
 
 
 def extract_flp_from_snapshot(
@@ -128,7 +147,12 @@ def extract_flp_from_snapshot(
     return extracted_path
 
 
-def build_mixer_snapshot(project: Any) -> MixerProjectSnapshot:
+def build_mixer_snapshot(
+    project: Any,
+    *,
+    flp_sha256: str | None = None,
+    flp_size_bytes: int | None = None,
+) -> MixerProjectSnapshot:
     inserts: list[MixerInsertSnapshot] = []
 
     for insert in getattr(project, "mixer", []):
@@ -149,7 +173,12 @@ def build_mixer_snapshot(project: Any) -> MixerProjectSnapshot:
         )
 
     inserts.sort(key=lambda item: item.iid)
-    return MixerProjectSnapshot(inserts=tuple(inserts))
+    return MixerProjectSnapshot(
+        inserts=tuple(inserts),
+        flp_sha256=flp_sha256,
+        flp_size_bytes=flp_size_bytes,
+        mixer_supported=len(inserts) > 0,
+    )
 
 
 def diff_mixer_project_snapshots(
@@ -283,6 +312,41 @@ def diff_mixer_project_snapshots(
         slots_changed=len(slot_changes),
         parameter_changes=sum(1 for change in changes if change.type in parameter_change_types),
     )
+
+    if (
+        summary.total_changes == 0
+        and (not base_snapshot.mixer_supported or not target_snapshot.mixer_supported)
+        and base_snapshot.flp_sha256 is not None
+        and target_snapshot.flp_sha256 is not None
+        and base_snapshot.flp_sha256 != target_snapshot.flp_sha256
+    ):
+        changes.append(
+            MixerDiffChange(
+                type="project_binary_changed",
+                insert_iid=-1,
+                insert_name=None,
+                slot_index=None,
+                before={
+                    "flp_sha256": base_snapshot.flp_sha256,
+                    "flp_size_bytes": base_snapshot.flp_size_bytes,
+                },
+                after={
+                    "flp_sha256": target_snapshot.flp_sha256,
+                    "flp_size_bytes": target_snapshot.flp_size_bytes,
+                },
+                message=(
+                    "FL Studio project binary changed, but mixer semantic extraction is unavailable "
+                    "for this snapshot format."
+                ),
+            )
+        )
+        summary = MixerDiffSummary(
+            total_changes=1,
+            inserts_changed=0,
+            slots_changed=0,
+            parameter_changes=0,
+        )
+
     return MixerDiffResult(summary=summary, changes=tuple(changes))
 
 
