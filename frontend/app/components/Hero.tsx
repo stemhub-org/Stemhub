@@ -4,12 +4,14 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 
-const words: { text: string; accent?: boolean }[] = [
-  { text: "The" },
-  { text: "memory" },
-  { text: "of" },
+const line1: { text: string; accent?: boolean }[] = [
+  { text: "Never " },
+  { text: "lose " },
   { text: "your" },
-  { text: "music.", accent: true },
+];
+const line2: { text: string; accent?: boolean }[] = [
+  { text: "productions ", accent: true },
+  { text: "again" },
 ];
 
 export default function Hero() {
@@ -26,12 +28,12 @@ export default function Hero() {
       </div>
 
       {/* Staggered H1 */}
-      <h1 className="relative z-10 text-center">
-        <span className="flex flex-wrap items-center justify-center gap-x-[0.3em]">
-          {words.map((word, i) => (
+      <h1 className="relative z-10 flex flex-col items-center justify-center text-center">
+        <span className="flex flex-wrap items-center justify-center gap-x-[0.75em]">
+          {line1.map((word, i) => (
             <span key={i} className="overflow-hidden inline-block py-1">
               <motion.span
-                className={`inline-block text-[clamp(2.8rem,8vw,8rem)] font-extralight leading-[1.05] tracking-normal ${word.accent ? "text-accent" : ""}`}
+                className="inline-block text-[clamp(2.8rem,8vw,8rem)] font-extralight leading-[1.05] tracking-normal"
                 style={{ fontFamily: "var(--font-syne)" }}
                 initial={{ y: "110%" }}
                 animate={{ y: "0%" }}
@@ -46,11 +48,30 @@ export default function Hero() {
             </span>
           ))}
         </span>
+        <span className="flex flex-wrap items-center justify-center gap-x-[0.75em]">
+          {line2.map((word, i) => (
+            <span key={i} className="overflow-hidden inline-block py-1">
+              <motion.span
+                className={`inline-block text-[clamp(2.8rem,8vw,8rem)] font-extralight leading-[1.05] tracking-normal ${word.accent ? "text-accent" : ""}`}
+                style={{ fontFamily: "var(--font-syne)" }}
+                initial={{ y: "110%" }}
+                animate={{ y: "0%" }}
+                transition={{
+                  duration: 1,
+                  delay: 0.15 + (line1.length + i) * 0.08,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
+              >
+                {word.text}
+              </motion.span>
+            </span>
+          ))}
+        </span>
       </h1>
 
       {/* Subtitle */}
       <motion.p
-        className="relative z-10 mt-8 max-w-lg text-center text-base font-light leading-relaxed text-foreground/50 md:text-lg"
+        className="relative z-10 mt-8 max-w-lg text-center text-base font-light leading-relaxed text-foreground md:text-lg"
         style={{ fontFamily: "var(--font-jakarta)" }}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
