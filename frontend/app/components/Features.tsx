@@ -88,7 +88,7 @@ function FeatureCard({
   return (
     <motion.div
       ref={cardRef}
-      className={`group relative overflow-hidden rounded-2xl border border-foreground/[0.06] bg-background-secondary/50 dark:bg-background-tertiary/50 transition-all duration-500 hover:scale-[1.02] hover:border-accent/20 ${
+      className={`group relative overflow-hidden rounded-2xl border border-accent/20 bg-accent/10 dark:bg-background-tertiary/50 transition-all duration-500 hover:scale-[1.02] hover:border-accent/40 ${
         isLarge ? "col-span-1 md:col-span-2 p-10" : "col-span-1 p-8"
       }`}
       onMouseMove={handleMouseMove}
@@ -123,7 +123,7 @@ function FeatureCard({
         </h3>
 
         <p
-          className="text-[0.85rem] font-light leading-[1.7] text-foreground/45"
+          className="text-[0.85rem] font-light leading-[1.7] text-foreground"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >
           {feature.description}
@@ -157,7 +157,7 @@ export default function Features() {
           >
             Everything you need.
             <br />
-            <span className="text-foreground/30">Nothing more.</span>
+            <span className="text-foreground">Nothing more.</span>
           </h2>
         </motion.div>
 
