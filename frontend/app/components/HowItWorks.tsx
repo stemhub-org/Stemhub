@@ -7,30 +7,30 @@ const steps = [
   {
     number: "01",
     icon: Download,
-    title: "Installez le plugin",
+    title: "Install the plugin",
     description:
-      "Ajoutez StemHub à FL Studio ou Ableton en un clic. Aucune configuration nécessaire.",
+      "Add StemHub to FL Studio or Ableton in one click. No setup required.",
   },
   {
     number: "02",
     icon: GitCommit,
-    title: "Commitez vos sessions",
+    title: "Commit your sessions",
     description:
-      "Chaque modification est capturée automatiquement. Nommez vos versions, annotez vos choix.",
+      "Every change is captured automatically. Name your versions, annotate your choices.",
   },
   {
     number: "03",
     icon: GitBranch,
-    title: "Créez des branches",
+    title: "Create versions",
     description:
-      "Testez un nouveau mix sans toucher à l'original. Comparez, revenez en arrière, fusionnez.",
+      "Try new mixes without touching the original. Compare, roll back, and merge.",
   },
   {
     number: "04",
     icon: Share2,
-    title: "Collaborez",
+    title: "Collaborate",
     description:
-      "Partagez une branche avec votre équipe ou vos clients. Chacun travaille sur sa version.",
+      "Share a version with your team or clients. Everyone works on their own take.",
   },
 ];
 
@@ -50,22 +50,22 @@ export default function HowItWorks() {
             className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Comment ça marche
+            How it works
           </p>
           <h2
             className="mx-auto max-w-xl text-[clamp(2rem,5vw,4.5rem)] font-extralight leading-[1.1] tracking-tight"
             style={{ fontFamily: "var(--font-syne)" }}
           >
-            Quatre étapes.
+            Four steps.
             <br />
-            <span className="text-foreground/30">Zéro friction.</span>
+            <span className="text-foreground">Zero friction.</span>
           </h2>
         </motion.div>
 
         {/* Steps */}
         <div className="relative grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           {/* Connecting line (desktop) */}
-          <div className="pointer-events-none absolute top-16 right-0 left-0 hidden h-[1px] bg-gradient-to-r from-transparent via-foreground/[0.08] to-transparent lg:block" />
+          <div className="pointer-events-none absolute top-16 right-0 left-0 hidden h-[1px] bg-gradient-to-r from-transparent via-accent/30 to-transparent lg:block" />
 
           {steps.map((step, i) => {
             const Icon = step.icon;
@@ -83,14 +83,14 @@ export default function HowItWorks() {
                 }}
               >
                 {/* Step number + icon */}
-                <div className="relative mb-8 flex h-16 w-16 items-center justify-center rounded-2xl border border-foreground/[0.06] bg-background-secondary/50 dark:bg-background-tertiary/50 transition-all duration-500 group-hover:border-accent/20 group-hover:bg-accent/5">
+                <div className="relative mb-8 flex h-16 w-16 items-center justify-center rounded-2xl border border-accent/25 bg-accent/10 dark:bg-background-tertiary/50 transition-all duration-500 group-hover:border-accent/40 group-hover:bg-accent/20">
                   <Icon
                     size={22}
                     strokeWidth={1.5}
-                    className="text-foreground/40 transition-colors duration-500 group-hover:text-accent"
+                    className="text-accent/80 transition-colors duration-500 group-hover:text-accent"
                   />
                   <span
-                    className="absolute -top-2.5 -right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-background text-[10px] font-light text-foreground/30 ring-1 ring-foreground/[0.06]"
+                    className="absolute -top-2.5 -right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-background text-[10px] font-light text-accent/80 ring-1 ring-accent/20"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     {step.number}
@@ -105,7 +105,7 @@ export default function HowItWorks() {
                   {step.title}
                 </h3>
                 <p
-                  className="text-sm font-light leading-relaxed text-foreground/45"
+                  className="text-sm font-light leading-relaxed text-foreground"
                   style={{ fontFamily: "var(--font-jakarta)" }}
                 >
                   {step.description}

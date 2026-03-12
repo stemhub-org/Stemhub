@@ -121,16 +121,7 @@ async def callback_google(request: Request, code: str, state: str | None = None,
             await db.refresh(user)
 
         jwt_token = create_access_token(data={"sub": user.email})
-        response = RedirectResponse(url=f"{FRONTEND_URL}/auth/callback")
-        response.set_cookie(
-            key="access_token",
-            value=jwt_token,
-            httponly=True,
-            max_age=3600,
-            secure=ENVIRONMENT != "local",
-            samesite="lax",
-        )
-        return response
+        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
 
 @router.post("/register", response_model=UserResponse)
 async def register(user: UserCreate, response: RedirectResponse, db: AsyncSession = Depends(get_db)):

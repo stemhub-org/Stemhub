@@ -21,7 +21,7 @@ export default function RegisterPage() {
     setError("");
 
     if (password !== confirmPassword) {
-      setError("Les mots de passe ne correspondent pas");
+      setError("Passwords do not match");
       return;
     }
 
@@ -36,12 +36,12 @@ export default function RegisterPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.detail || "Erreur lors de la création du compte");
+        throw new Error(data.detail || "Error while creating your account");
       }
 
       router.push("/login");
     } catch (err: any) {
-      setError(err.message || "Une erreur est survenue");
+      setError(err.message || "An unexpected error occurred");
     }
   };
 
@@ -77,13 +77,13 @@ export default function RegisterPage() {
             className="mb-3 text-3xl font-extralight tracking-tight"
             style={{ fontFamily: "var(--font-syne)" }}
           >
-            Créer un compte
+            Create an account
           </h1>
           <p
             className="text-sm font-light text-foreground/50"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Commencez à versionner vos projets musicaux.
+            Start versioning your music projects.
           </p>
         </div>
 
@@ -117,7 +117,7 @@ export default function RegisterPage() {
               fill="#EA4335"
             />
           </svg>
-          Inscription avec Google
+          Sign up with Google
         </button>
 
         <div className="my-8 flex items-center gap-4">
@@ -126,7 +126,7 @@ export default function RegisterPage() {
             className="text-xs font-light text-foreground/30"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            ou
+            or
           </span>
           <div className="h-[1px] flex-1 bg-foreground/[0.06]" />
         </div>
@@ -142,7 +142,7 @@ export default function RegisterPage() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Nom d'utilisateur"
+              placeholder="Username"
               className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3.5 pr-4 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
               style={{ fontFamily: "var(--font-jakarta)" }}
             />
@@ -174,7 +174,7 @@ export default function RegisterPage() {
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mot de passe"
+              placeholder="Password"
               className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3.5 pr-11 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
               style={{ fontFamily: "var(--font-jakarta)" }}
             />
@@ -201,7 +201,7 @@ export default function RegisterPage() {
               type={showPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirmer le mot de passe"
+              placeholder="Confirm password"
               className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3.5 pr-4 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
               style={{ fontFamily: "var(--font-jakarta)" }}
             />
@@ -212,7 +212,7 @@ export default function RegisterPage() {
             className="w-full rounded-xl bg-foreground py-3.5 text-sm font-light tracking-wide text-background transition-all duration-300 hover:bg-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Créer mon compte
+            Create my account
           </button>
         </form>
 
@@ -220,13 +220,13 @@ export default function RegisterPage() {
           className="mt-6 text-center text-xs font-light leading-relaxed text-foreground/30"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >
-          En créant un compte, vous acceptez nos{" "}
+          By creating an account, you agree to our{" "}
           <a href="#" className="text-foreground/50 hover:text-accent transition-colors duration-300">
-            CGU
+            Terms of Service
           </a>{" "}
-          et notre{" "}
+          and{" "}
           <a href="#" className="text-foreground/50 hover:text-accent transition-colors duration-300">
-            Politique de confidentialité
+            Privacy Policy
           </a>
           .
         </p>
@@ -235,12 +235,12 @@ export default function RegisterPage() {
           className="mt-6 text-center text-sm font-light text-foreground/40"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >
-          Déjà un compte ?{" "}
+          Already have an account?{" "}
           <Link
             href="/login"
             className="text-foreground/70 transition-colors duration-300 hover:text-accent"
           >
-            Se connecter
+            Log in
           </Link>
         </p>
       </motion.div>

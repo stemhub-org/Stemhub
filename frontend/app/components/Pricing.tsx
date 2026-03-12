@@ -8,51 +8,51 @@ const plans = [
   {
     name: "Solo",
     price: "0",
-    description: "Pour les producteurs indépendants qui débutent.",
+    description: "For independent producers getting started.",
     features: [
-      "3 projets",
-      "500 Mo de stockage",
-      "Historique 30 jours",
-      "Plugin FL Studio & Ableton",
+      "3 projects",
+      "500 MB storage",
+      "30‑day history",
+      "FL Studio & Ableton plugin",
     ],
-    cta: "Commencer gratuitement",
+    cta: "Start for free",
     highlighted: false,
   },
   {
     name: "Pro",
     price: "12",
-    description: "Pour les producteurs sérieux qui veulent tout garder.",
+    description: "For serious producers who want to keep everything.",
     features: [
-      "Projets illimités",
-      "50 Go de stockage",
-      "Historique illimité",
-      "Branches & merge",
-      "Collaboration (5 membres)",
-      "Support prioritaire",
+      "Unlimited projects",
+      "50 GB storage",
+      "Unlimited history",
+      "Versions & merges",
+      "Collaboration (up to 5 members)",
+      "Priority support",
     ],
-    cta: "Essai gratuit 14 jours",
+    cta: "14‑day free trial",
     highlighted: true,
   },
   {
     name: "Studio",
     price: "39",
-    description: "Pour les labels et les équipes de production.",
+    description: "For labels and production teams.",
     features: [
-      "Tout de Pro",
-      "Stockage illimité",
-      "Membres illimités",
+      "Everything in Pro",
+      "Unlimited storage",
+      "Unlimited members",
       "SSO & permissions",
       "API & webhooks",
-      "Account manager dédié",
+      "Dedicated account manager",
     ],
-    cta: "Contacter l'équipe",
+    cta: "Contact the team",
     highlighted: false,
   },
 ];
 
 export default function Pricing() {
   return (
-    <section id="tarifs" className="relative px-6 py-32 md:px-12">
+    <section id="pricing" className="relative px-6 py-32 md:px-12">
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <motion.div
@@ -66,13 +66,13 @@ export default function Pricing() {
             className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Tarifs
+            Pricing
           </p>
           <h2
             className="mx-auto max-w-xl text-[clamp(2rem,5vw,4.5rem)] font-extralight leading-[1.1] tracking-tight"
             style={{ fontFamily: "var(--font-syne)" }}
           >
-            Simple et transparent.
+            Simple and transparent.
           </h2>
         </motion.div>
 
@@ -83,8 +83,8 @@ export default function Pricing() {
               key={plan.name}
               className={`relative overflow-hidden rounded-2xl border p-8 transition-all duration-500 ${
                 plan.highlighted
-                  ? "border-accent/20 bg-background-secondary/80 dark:bg-background-tertiary/80"
-                  : "border-foreground/[0.06] bg-background-secondary/40 dark:bg-background-tertiary/40"
+                  ? "border-accent/40 bg-accent/20 dark:bg-background-tertiary/80"
+                  : "border-accent/20 bg-accent/10 dark:bg-background-tertiary/40"
               }`}
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -103,7 +103,7 @@ export default function Pricing() {
                 {/* Plan badge */}
                 {plan.highlighted && (
                   <span
-                    className="mb-6 inline-block rounded-full bg-accent/10 px-3 py-1 text-xs font-light text-accent"
+                    className="mb-6 inline-block rounded-full bg-foreground/10 px-3 py-1 text-xs font-light text-foreground"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
                     Populaire
@@ -118,7 +118,7 @@ export default function Pricing() {
                 </h3>
 
                 <p
-                  className="mb-6 text-sm font-light text-foreground/40"
+                  className="mb-6 text-sm font-light text-foreground"
                   style={{ fontFamily: "var(--font-jakarta)" }}
                 >
                   {plan.description}
@@ -133,10 +133,10 @@ export default function Pricing() {
                     {plan.price}€
                   </span>
                   <span
-                    className="text-sm font-light text-foreground/30"
+                    className="text-sm font-light text-foreground"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
-                    /mois
+                    /month
                   </span>
                 </div>
 
@@ -145,13 +145,13 @@ export default function Pricing() {
                   {plan.features.map((feature) => (
                     <li
                       key={feature}
-                      className="flex items-center gap-3 text-sm font-light text-foreground/60"
+                      className="flex items-center gap-3 text-sm font-light text-foreground"
                       style={{ fontFamily: "var(--font-jakarta)" }}
                     >
                       <Check
                         size={14}
                         strokeWidth={1.5}
-                        className={plan.highlighted ? "text-accent" : "text-foreground/25"}
+                        className={plan.highlighted ? "text-accent" : "text-foreground"}
                       />
                       {feature}
                     </li>
@@ -164,7 +164,7 @@ export default function Pricing() {
                   className={`block w-full rounded-xl py-3.5 text-center text-sm font-light tracking-wide transition-all duration-300 ${
                     plan.highlighted
                       ? "bg-foreground text-background hover:bg-accent"
-                      : "border border-foreground/[0.08] text-foreground/60 hover:border-accent/30 hover:text-accent"
+                      : "border border-foreground/20 text-foreground hover:bg-foreground/5 hover:border-foreground/30"
                   }`}
                   style={{ fontFamily: "var(--font-jakarta)" }}
                 >

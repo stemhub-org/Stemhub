@@ -48,7 +48,7 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
             });
 
             if (typeof window !== "undefined") {
-                localStorage.removeItem("token");
+                localStorage.removeItem("access_token");
             }
         } finally {
             router.push("/login");
