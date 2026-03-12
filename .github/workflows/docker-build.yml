@@ -42,9 +42,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e backend/vendor/PyFLP_enhanced
           pip install -e "backend[dev]"
+          pip install pytest-cov
 
-      - name: Run backend tests
-        run: pytest backend/tests
+      - name: Run backend tests with coverage
+        run: |
+          pytest backend/tests \
+            --cov=backend/src/stemhub \
+            --cov-report=term-missing \
+            --cov-report=xml:backend/coverage.xml \
+            --cov-report=html:backend/htmlcov
+
+      - name: Upload backend coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report
+          path: |
+            backend/coverage.xml
+            backend/htmlcov/
+          if-no-files-found: warn
 
   frontend-lint:
     name: frontend-lint
