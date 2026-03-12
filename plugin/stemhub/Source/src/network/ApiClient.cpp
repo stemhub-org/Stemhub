@@ -196,6 +196,10 @@ juce::Result ApiClient::downloadFile(const juce::String& path,
                                      const juce::File& destinationFile,
                                      const juce::String& bearerToken) const
 {
+    juce::Logger::writeToLog("[Restore] ApiClient -> downloadFile path=" + path
+                             + ", destination=" + destinationFile.getFullPathName()
+                             + ", baseUrl=" + baseUrl);
+
     auto url = juce::URL(baseUrl + path);
 
     juce::StringPairArray responseHeaders;
@@ -210,25 +214,44 @@ juce::Result ApiClient::downloadFile(const juce::String& path,
 
     auto stream = url.createInputStream(options);
     if (stream == nullptr)
+    {
+        juce::Logger::writeToLog("[Restore] ApiClient -> connect failed, statusCode=" + juce::String(statusCode));
         return juce::Result::fail("Failed to connect to backend.");
+    }
 
     if (statusCode < 200 || statusCode >= 300)
     {
         const auto responseText = stream->readEntireStreamAsString();
         const auto parsedJson = juce::JSON::parse(responseText);
+        juce::Logger::writeToLog("[Restore] ApiClient -> download error status="
+                                 + juce::String(statusCode)
+                                 + ", body="
+                                 + extractErrorMessage(parsedJson, responseText, "File download failed."));
         return juce::Result::fail(extractErrorMessage(parsedJson, responseText, "File download failed."));
     }
+    juce::Logger::writeToLog("[Restore] ApiClient -> HTTP status=" + juce::String(statusCode));
 
     destinationFile.getParentDirectory().createDirectory();
 
     juce::FileOutputStream output(destinationFile);
     if (!output.openedOk())
+    {
+        juce::Logger::writeToLog("[Restore] ApiClient -> cannot open destination file");
         return juce::Result::fail("Failed to open destination file for writing.");
+    }
 
-    if (output.writeFromInputStream(*stream, -1) < 0)
+    const auto bytes = output.writeFromInputStream(*stream, -1);
+    if (bytes < 0)
+    {
+        juce::Logger::writeToLog("[Restore] ApiClient -> write failed");
         return juce::Result::fail("Failed to write downloaded snapshot to disk.");
+    }
+
+    juce::Logger::writeToLog("[Restore] ApiClient -> wrote bytes=" + juce::String(bytes)
+                             + ", destinationSize=" + juce::String(destinationFile.getSize()));
 
     output.flush();
+    juce::Logger::writeToLog("[Restore] ApiClient -> download complete");
     return juce::Result::ok();
 }
 

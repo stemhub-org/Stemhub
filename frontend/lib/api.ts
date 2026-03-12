@@ -6,11 +6,13 @@ export const API_URL =
  * Throws on non-ok responses with the API error detail.
  */
 export async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     const res = await fetch(`${API_URL}${path}`, {
         ...init,
         credentials: "include",
         headers: {
             "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...init?.headers,
         },
     });

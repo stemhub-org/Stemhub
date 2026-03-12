@@ -414,12 +414,12 @@ DashboardView::DashboardView()
     branchNameLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
 
     addAndMakeVisible(branchLabel);
-    branchLabel.setText("Branch", juce::dontSendNotification);
+    branchLabel.setText("Workspace", juce::dontSendNotification);
     branchLabel.setJustificationType(juce::Justification::centredLeft);
     branchLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
     addAndMakeVisible(branchComboBox);
-    branchComboBox.setTextWhenNothingSelected("No branch available");
+    branchComboBox.setTextWhenNothingSelected("No workspace available");
     styleComboBox(branchComboBox);
     branchComboBox.onChange = [this]
     {
@@ -427,7 +427,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(versionLabel);
-    versionLabel.setText("Version history", juce::dontSendNotification);
+    versionLabel.setText("Saved versions", juce::dontSendNotification);
     versionLabel.setJustificationType(juce::Justification::centredLeft);
     versionLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
@@ -439,6 +439,18 @@ DashboardView::DashboardView()
         invokeIfBound(onVersionSelectionChange);
     };
 
+    addAndMakeVisible(currentVersionLabel);
+    currentVersionLabel.setText("Current version: not set", juce::dontSendNotification);
+    currentVersionLabel.setJustificationType(juce::Justification::centredLeft);
+    currentVersionLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.8f));
+    currentVersionLabel.setFont(juce::FontOptions(12.5f, juce::Font::plain));
+
+    addAndMakeVisible(currentVersionFileLabel);
+    currentVersionFileLabel.setText("Opened file: not set", juce::dontSendNotification);
+    currentVersionFileLabel.setJustificationType(juce::Justification::centredLeft);
+    currentVersionFileLabel.setColour(juce::Label::textColourId, kStemhubLight.withAlpha(0.6f));
+    currentVersionFileLabel.setFont(juce::FontOptions(10.5f, juce::Font::plain));
+
     addAndMakeVisible(backToProjectsButton);
     styleCompactTopButton(backToProjectsButton);
     backToProjectsButton.onClick = [this]
@@ -447,7 +459,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(commitMessageLabel);
-    commitMessageLabel.setText("Commit message", juce::dontSendNotification);
+    commitMessageLabel.setText("Save note", juce::dontSendNotification);
     commitMessageLabel.setJustificationType(juce::Justification::centredLeft);
     commitMessageLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
@@ -605,6 +617,14 @@ void DashboardView::resized()
 
     auto versionRow = leftColumn.removeFromTop(controlHeight);
     versionComboBox.setBounds(controlX, versionRow.getY(), controlWidth, versionRow.getHeight());
+
+    leftColumn.removeFromTop(6);
+    auto currentVersionIdRow = leftColumn.removeFromTop(18);
+    currentVersionLabel.setBounds(controlX, currentVersionIdRow.getY(), controlWidth, currentVersionIdRow.getHeight());
+
+    leftColumn.removeFromTop(4);
+    auto currentVersionFileRow = leftColumn.removeFromTop(30);
+    currentVersionFileLabel.setBounds(controlX, currentVersionFileRow.getY(), controlWidth, currentVersionFileRow.getHeight());
 
     leftColumn.removeFromTop(6);
     auto commitMessageLabelRow = leftColumn.removeFromTop(18);

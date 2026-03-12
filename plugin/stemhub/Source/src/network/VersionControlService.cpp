@@ -164,6 +164,8 @@ juce::Result VersionControlService::downloadVersion(
     const juce::File& destinationFile,
     const juce::String& bearerToken) const
 {
+    juce::Logger::writeToLog("[Restore] VersionControlService -> downloadVersion versionId=" + versionId
+                             + ", destination=" + destinationFile.getFullPathName());
     if (versionId.isEmpty())
         return juce::Result::fail("A version ID is required to download a snapshot.");
 
@@ -185,7 +187,14 @@ juce::Result VersionControlService::restoreVersion(
     const juce::File& destinationFile,
     const juce::String& bearerToken) const
 {
-    return downloadVersion(versionId, destinationFile, bearerToken);
+    juce::Logger::writeToLog("[Restore] VersionControlService -> restoreVersion delegates to downloadVersion for "
+                             + versionId);
+    const auto result = downloadVersion(versionId, destinationFile, bearerToken);
+    if (result.failed())
+        juce::Logger::writeToLog("[Restore] VersionControlService -> restoreVersion failed: " + result.getErrorMessage());
+    else
+        juce::Logger::writeToLog("[Restore] VersionControlService -> restoreVersion ok");
+    return result;
 }
 
 juce::String VersionControlService::resolveParentVersionId(const PushVersionRequest& request) const

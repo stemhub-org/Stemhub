@@ -36,6 +36,7 @@ export default function ProfilePage() {
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
     const [user, setUser] = useState<any>(null);
+    const [projects, setProjects] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editForm, setEditForm] = useState<{
@@ -74,18 +75,20 @@ export default function ProfilePage() {
     };
 
     useEffect(() => {
-        const fetchUser = async () => {
+        const fetchUserAndProjects = async () => {
             try {
                 const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-                const response = await fetch(`${apiUrl}/auth/me`, {
+
+                // Fetch User
+                const userResponse = await fetch(`${apiUrl}/auth/me`, {
                     credentials: "include"
                 });
 
-                if (!response.ok) {
+                if (!userResponse.ok) {
                     throw new Error("Session expirée");
                 }
 
-                const data = await response.json();
+                const data = await userResponse.json();
                 setUser(data);
                 setEditForm({
                     username: data.username || "",
@@ -95,6 +98,16 @@ export default function ProfilePage() {
                     bio: data.bio || "",
                     genres: data.genres || []
                 });
+
+                // Fetch Projects
+                const projectsResponse = await fetch(`${apiUrl}/projects/`, {
+                    credentials: "include"
+                });
+
+                if (projectsResponse.ok) {
+                    const projectsData = await projectsResponse.json();
+                    setProjects(projectsData);
+                }
             } catch (err) {
                 router.push("/login");
             } finally {
@@ -102,7 +115,7 @@ export default function ProfilePage() {
             }
         };
 
-        fetchUser();
+        fetchUserAndProjects();
     }, [router]);
 
     if (loading) {
@@ -167,6 +180,7 @@ export default function ProfilePage() {
 
             const updatedUser = await response.json();
             setUser(updatedUser);
+            window.dispatchEvent(new Event("user-updated"));
             setIsEditModalOpen(false);
         } catch (err: any) {
             alert(err.message);
@@ -213,7 +227,7 @@ export default function ProfilePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
-                className="flex flex-col md:flex-row gap-8 items-start relative rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-8 backdrop-blur-xl"
+                className="flex flex-col md:flex-row gap-8 items-start relative rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-8 backdrop-blur-xl"
             >
                 <div className="absolute right-8 top-8 z-10">
                     {!isEditModalOpen ? (
@@ -265,9 +279,8 @@ export default function ProfilePage() {
                             <img
                                 src={isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url}
                                 alt={username}
-                                className={`h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 shadow-xl transition-all ${
-                                    isDark ? "border-accent" : "border-white"
-                                } ${isEditModalOpen ? "cursor-pointer hover:brightness-75" : ""}`}
+                                className={`h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 shadow-xl transition-all ${isDark ? "border-accent" : "border-white"
+                                    } ${isEditModalOpen ? "cursor-pointer hover:brightness-75" : ""}`}
                                 onClick={() => isEditModalOpen && fileInputRef.current?.click()}
                             />
                             {isEditModalOpen && (
@@ -282,9 +295,8 @@ export default function ProfilePage() {
                         </div>
                     ) : (
                         <div
-                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl relative border-4 ${
-                                isDark ? "border-accent" : "border-white"
-                            } ${isEditModalOpen ? "cursor-pointer hover:brightness-90" : ""}`}
+                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl relative border-4 ${isDark ? "border-accent" : "border-white"
+                                } ${isEditModalOpen ? "cursor-pointer hover:brightness-90" : ""}`}
                             onClick={() => isEditModalOpen && fileInputRef.current?.click()}
                         >
                             {initials}
@@ -397,10 +409,6 @@ export default function ProfilePage() {
                         )}
                     </div>
 
-                    <div className="flex items-center gap-6 text-sm pt-2">
-                        <div><span className="font-medium text-foreground text-base">0</span> <span className="text-foreground/60 font-light">followers</span></div>
-                        <div><span className="font-medium text-foreground text-base">0</span> <span className="text-foreground/60 font-light">following</span></div>
-                    </div>
                 </div>
             </motion.div>
 
@@ -409,7 +417,7 @@ export default function ProfilePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
-                className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 backdrop-blur-xl"
+                className="rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-6 backdrop-blur-xl"
             >
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
@@ -449,7 +457,7 @@ export default function ProfilePage() {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className="relative w-full max-w-4xl max-h-[80vh] bg-background-secondary border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                        className="relative w-full max-w-4xl max-h-[80vh] bg-background-secondary dark:bg-background-tertiary border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                     >
                         <div className="p-6 border-b border-white/10 flex items-center justify-between">
                             <div>
@@ -561,141 +569,45 @@ export default function ProfilePage() {
                 >
                     <div className="flex items-center gap-2 mb-2">
                         <Heart size={18} className="text-accent" />
-                        <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Featured Projects <span className="text-foreground/40 font-light text-sm tracking-normal">• Pinned</span></h2>
+                        <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Recent Projects</h2>
                     </div>
 
                     <div className="space-y-4">
-                        {/* Project Card 1 */}
-                        <div
-                            className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 hover:opacity-95 dark:hover:bg-background-secondary/60 transition-all cursor-pointer backdrop-blur-xl group"
-                            onClick={() => router.push("/projects")}
-                        >
-                            <div className="flex items-start justify-between mb-4">
-                                <div>
-                                    <h3 className="text-lg font-medium flex items-center gap-2 group-hover:text-accent transition-colors">
-                                        <div className="w-2 h-2 rounded-full bg-accent"></div>
-                                        <span>Dubstep-Track</span>
-                                    </h3>
-                                    <p className="text-sm text-foreground/60 mt-1 font-light">Experimental dubstep track</p>
+                        {projects.slice(0, 3).map((project) => (
+                            <div
+                                key={project.id}
+                                className="rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-6 hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-all cursor-pointer backdrop-blur-xl group"
+                                onClick={() => router.push(`/projects?id=${project.id}`)}
+                            >
+                                <div className="flex items-start justify-between mb-4">
+                                    <div>
+                                        <h3 className="text-lg font-medium flex items-center gap-2 group-hover:text-accent transition-colors">
+                                            <div className="w-2 h-2 rounded-full bg-accent"></div>
+                                            <span>{project.name}</span>
+                                        </h3>
+                                        {project.description && (
+                                            <p className="text-sm text-foreground/60 mt-1 font-light">{project.description}</p>
+                                        )}
+                                    </div>
+                                    <span className="text-xs text-foreground/40 font-light">
+                                        {new Date(project.created_at).toLocaleDateString()}
+                                    </span>
                                 </div>
-                                <span className="text-xs text-foreground/40 font-light">2h ago</span>
-                            </div>
 
-                            <div className="flex items-center gap-3 mb-5">
-                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">140 BPM</span>
-                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">C minor</span>
-                                <span className="flex items-center gap-1.5 text-xs text-foreground/60 ml-2 font-light"><Users size={14} /> 3 contributors</span>
-                            </div>
-
-                            <div className="flex items-center gap-5 text-sm text-foreground/50 font-light">
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFeaturedFavorites((prev) => ({
-                                            ...prev,
-                                            dubstep: !prev.dubstep
-                                        }));
-                                    }}
-                                    className="flex items-center gap-1.5 hover:text-accent transition-colors"
-                                >
-                                    <Heart
-                                        size={16}
-                                        className={featuredFavorites.dubstep ? "text-red-500 fill-red-500" : "text-foreground/70"}
-                                    />
-                                    <span>12</span>
-                                </button>
-                                <span className="flex items-center gap-1.5 hover:text-blue-400 transition-colors">
-                                    <GitBranch size={16} /> 4 versions
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Project Card 2 */}
-                        <div className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 hover:opacity-95 dark:hover:bg-background-secondary/60 transition-all cursor-pointer backdrop-blur-xl group">
-                            <div className="flex items-start justify-between mb-4">
-                                <div>
-                                    <h3 className="text-lg font-medium flex items-center gap-2 group-hover:text-accent transition-colors">
-                                        <div className="w-2 h-2 rounded-full bg-accent"></div>
-                                        <span>Melodic-House-EP</span>
-                                    </h3>
-                                    <p className="text-sm text-foreground/60 mt-1 font-light">Deep melodic house collection</p>
+                                <div className="flex items-center gap-3 mb-5">
+                                    <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">{project.category}</span>
+                                    {project.is_public && (
+                                        <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">Public</span>
+                                    )}
                                 </div>
-                                <span className="text-xs text-foreground/40 font-light">1d ago</span>
                             </div>
+                        ))}
 
-                            <div className="flex items-center gap-3 mb-5">
-                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">124 BPM</span>
-                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">A minor</span>
-                                <span className="flex items-center gap-1.5 text-xs text-foreground/60 ml-2 font-light"><Users size={14} /> 2 contributors</span>
+                        {projects.length === 0 && (
+                            <div className="text-sm text-foreground/50 italic p-6 text-center border border-foreground/10 rounded-2xl bg-background-secondary dark:bg-background-tertiary">
+                                No projects created yet.
                             </div>
-
-                            <div className="flex items-center gap-5 text-sm text-foreground/50 font-light">
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFeaturedFavorites((prev) => ({
-                                            ...prev,
-                                            melodic: !prev.melodic
-                                        }));
-                                    }}
-                                    className="flex items-center gap-1.5 hover:text-accent transition-colors"
-                                >
-                                    <Heart
-                                        size={16}
-                                        className={featuredFavorites.melodic ? "text-red-500 fill-red-500" : "text-foreground/70"}
-                                    />
-                                    <span>9</span>
-                                </button>
-                                <span className="flex items-center gap-1.5 hover:text-blue-400 transition-colors">
-                                    <GitBranch size={16} /> 5 versions
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Project Card 3 */}
-                        <div className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 hover:opacity-95 dark:hover:bg-background-secondary/60 transition-all cursor-pointer backdrop-blur-xl group">
-                            <div className="flex items-start justify-between mb-4">
-                                <div>
-                                    <h3 className="text-lg font-medium flex items-center gap-2 group-hover:text-accent transition-colors">
-                                        <div className="w-2 h-2 rounded-full bg-accent"></div>
-                                        <span>Bass-Experiments</span>
-                                    </h3>
-                                    <p className="text-sm text-foreground/60 mt-1 font-light">Sub bass design toolkit</p>
-                                </div>
-                                <span className="text-xs text-foreground/40 font-light">3d ago</span>
-                            </div>
-
-                            <div className="flex items-center gap-3 mb-5">
-                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">140 BPM</span>
-                                <span className="px-2.5 py-1 rounded-md bg-foreground/5 border border-foreground/10 text-xs font-medium">E minor</span>
-                                <span className="flex items-center gap-1.5 text-xs text-foreground/60 ml-2 font-light"><Users size={14} /> 1 contributor</span>
-                            </div>
-
-                            <div className="flex items-center gap-5 text-sm text-foreground/50 font-light">
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFeaturedFavorites((prev) => ({
-                                            ...prev,
-                                            bass: !prev.bass
-                                        }));
-                                    }}
-                                    className="flex items-center gap-1.5 hover:text-accent transition-colors"
-                                >
-                                    <Heart
-                                        size={16}
-                                        className={featuredFavorites.bass ? "text-red-500 fill-red-500" : "text-foreground/70"}
-                                    />
-                                    <span>6</span>
-                                </button>
-                                <span className="flex items-center gap-1.5 hover:text-blue-400 transition-colors">
-                                    <GitBranch size={16} /> 3 versions
-                                </span>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </motion.div>
 
@@ -708,50 +620,17 @@ export default function ProfilePage() {
                 >
                     <div className="flex items-center gap-2 mb-2">
                         <Headphones size={18} className="text-foreground/80" />
-                        <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Activity</h2>
-                    </div>
-
-                    <div className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 backdrop-blur-xl">
-                        <div className="flex flex-col gap-1 mb-6">
-                            <span className="text-xs text-foreground/50 font-light">Last year</span>
-                            <span className="text-3xl font-medium tracking-tight">696 <span className="text-sm font-light text-foreground/50 tracking-normal">contributions</span></span>
-                        </div>
-
-                        {/* Contribution Graph Mock */}
-                        <div className="mt-2">
-                            <div className="grid grid-cols-[repeat(26,minmax(0,1fr))] gap-1 opacity-80">
-                                {[...Array(26 * 7)].map((_, i) => (
-                                    <div
-                                        key={i}
-                                        className={`w-full aspect-square rounded-[2px] ${Math.random() > 0.7
-                                            ? Math.random() > 0.5 ? 'bg-accent' : 'bg-accent/60'
-                                            : Math.random() > 0.8 ? 'bg-accent/40' : 'bg-foreground/5'
-                                            }`}
-                                    />
-                                ))}
-                            </div>
-                            <div className="flex items-center justify-between text-[10px] text-foreground/40 mt-4 pt-3 border-t border-foreground/5">
-                                <span>Less</span>
-                                <div className="flex gap-1.5">
-                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-foreground/5"></div>
-                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-accent/40"></div>
-                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-accent/60"></div>
-                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-accent"></div>
-                                    <div className="w-2.5 h-2.5 rounded-[2px] bg-[#fff] border border-accent/20"></div>
-                                </div>
-                                <span>More</span>
-                            </div>
-                        </div>
+                        <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Stats</h2>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-secondary/60 transition-colors cursor-pointer">
+                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
                             <span className="text-xs text-foreground/50 font-light">Projects</span>
-                            <p className="text-2xl font-medium mt-1 tracking-tight">24</p>
+                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p: any) => p.owner_id === user?.id).length}</p>
                         </div>
-                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-secondary/60 transition-colors cursor-pointer">
+                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
                             <span className="text-xs text-foreground/50 font-light">Collaborations</span>
-                            <p className="text-2xl font-medium mt-1 tracking-tight">18</p>
+                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p: any) => p.owner_id !== user?.id).length}</p>
                         </div>
                     </div>
                 </motion.div>
