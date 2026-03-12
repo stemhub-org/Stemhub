@@ -258,6 +258,16 @@ class ExploreFeedResponse(BaseModel):
     producer: OwnerSummary
     created_at: datetime
     
+class PlatformUpdateResponse(BaseModel):
+    id: UUID
+    version_string: str
+    title: str
+    description: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+    
 class ProducerResponse(BaseModel):
     id: UUID
     username: str
