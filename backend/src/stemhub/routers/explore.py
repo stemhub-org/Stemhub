@@ -9,8 +9,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Project, User, UserFollow
-from ..schemas import ExploreProjectResponse, ExploreFeedResponse, ProducerResponse
+from ..models import Project, User, UserFollow, PlatformUpdate
+from ..schemas import ExploreProjectResponse, ExploreFeedResponse, ProducerResponse, PlatformUpdateResponse
 from ..auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -129,3 +129,14 @@ async def get_explore_producers(
             genres=user.genres
         ))
     return producers
+
+@router.get("/changelog", response_model=list[PlatformUpdateResponse])
+async def get_explore_changelog(
+    limit: int = Query(10, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get recent platform updates/changelog."""
+    stmt = select(PlatformUpdate).order_by(desc(PlatformUpdate.created_at)).limit(limit).offset(offset)
+    result = await db.execute(stmt)
+    return result.scalars().all()
