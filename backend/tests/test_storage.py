@@ -92,10 +92,20 @@ def test_gcs_storage_service_roundtrip(monkeypatch) -> None:
     class FakeBlob:
         def __init__(self, path: str) -> None:
             self.path = path
+            self.size: int | None = None
+            self.md5_hash: str | None = None
 
         def upload_from_filename(self, source_path: str) -> None:
             with open(source_path, "rb") as file:
                 uploaded_blobs[self.path] = file.read()
+
+        def upload_from_file(self, source_file) -> None:
+            uploaded_blobs[self.path] = source_file.read()
+
+        def reload(self) -> None:
+            payload = uploaded_blobs[self.path]
+            self.size = len(payload)
+            self.md5_hash = hashlib.md5(payload).hexdigest()
 
         def exists(self) -> bool:
             return self.path in uploaded_blobs
