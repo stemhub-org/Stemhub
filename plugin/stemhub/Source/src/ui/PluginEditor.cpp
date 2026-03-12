@@ -40,10 +40,10 @@ juce::String getProjectSelectionMessage(const StemhubAudioProcessor& processor)
 juce::String getDashboardMessage(const StemhubAudioProcessor& processor)
 {
     if (processor.getOperationState() == OperationState::committing)
-        return "Committing...";
+        return "Saving version...";
 
     if (processor.getOperationState() == OperationState::pulling)
-        return "Refreshing version history...";
+        return "Syncing version history...";
 
     if (processor.getActiveProjectStatusMessage().isNotEmpty())
         return processor.getActiveProjectStatusMessage();
@@ -54,7 +54,7 @@ juce::String getDashboardMessage(const StemhubAudioProcessor& processor)
 juce::String formatVersionLabel(const VersionSummary& version)
 {
     const auto shortId = version.id.substring(0, 8);
-    const auto message = version.commitMessage.isNotEmpty() ? version.commitMessage : "No commit message";
+    const auto message = version.commitMessage.isNotEmpty() ? version.commitMessage : "No save note";
 
     juce::String timestamp = "Unknown time";
     if (version.createdAt.isNotEmpty())
@@ -293,8 +293,8 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
         ? "Project: " + audioProcessor.getSelectedProject()->name
         : "Project: No project selected");
     dashboardView.setBranchNameMessage(audioProcessor.getSelectedBranchName().isNotEmpty()
-        ? "Branch: " + audioProcessor.getSelectedBranchName()
-        : "Branch: Not selected");
+        ? "Workspace: " + audioProcessor.getSelectedBranchName()
+        : "Workspace: Not selected");
 
     dashboardView.setSelectedProjectFileMessage(fileToDisplay.existsAsFile()
         ? fileToDisplay.getFullPathName()
@@ -515,7 +515,7 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
     {
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::WarningIcon,
-            "Push failed",
+            "Save failed",
             "Choose or create a project before saving.");
         refreshSessionUi();
         return;
@@ -585,10 +585,10 @@ void StemhubAudioProcessorEditor::handleVersionSelectionChanged()
 void StemhubAudioProcessorEditor::showCommitMessagePopupForSave()
 {
     auto* commitPopup = new juce::AlertWindow("Save version",
-                                              "Enter a commit message before saving.",
+                                              "Enter a save note before saving.",
                                               juce::AlertWindow::NoIcon);
 
-    commitPopup->addTextEditor("commit_message", dashboardView.getCommitMessage(), "Commit message");
+    commitPopup->addTextEditor("commit_message", dashboardView.getCommitMessage(), "Save note");
     commitPopup->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
     commitPopup->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
 

@@ -40,6 +40,14 @@ function formatSummaryLine(entry: VersionDiffHistoryEntry): string {
     return parts.join(" • ");
 }
 
+function producerFriendlyCopy(text: string): string {
+    return text
+        .replace(/\bBranches\b/g, "Workspaces")
+        .replace(/\bbranches\b/g, "workspaces")
+        .replace(/\bBranch\b/g, "Workspace")
+        .replace(/\bbranch\b/g, "workspace");
+}
+
 const cardBase =
     "rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle p-6 transition-all duration-300";
 const cardHoverDark =
@@ -176,7 +184,7 @@ function ProjectChangesContent() {
                                     Changes
                                 </h1>
                                 <p className="text-sm text-foreground/60">
-                                    Each version is automatically compared against its previous version on the active branch.
+                                    Each version is automatically compared against its previous version in the active workspace.
                                 </p>
                             </div>
                             <div className="inline-flex items-center gap-2 rounded-xl border border-accent/20 bg-accent/10 px-3 py-2 text-xs font-medium text-accent">
@@ -195,15 +203,15 @@ function ProjectChangesContent() {
                     <div className="mb-6 rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-5">
                         {historyEntries.length === 0 ? (
                             <div className="space-y-2">
-                                <h2 className="text-sm font-medium text-foreground">Branch diff timeline</h2>
+                                <h2 className="text-sm font-medium text-foreground">Workspace timeline</h2>
                                 <p className="text-sm text-foreground/60">
-                                    This branch does not have any version history yet.
+                                    This workspace does not have any version history yet.
                                 </p>
                             </div>
                         ) : (
                             <div className="space-y-4">
                                 <p className="text-sm text-foreground/60">
-                                    The latest versions are shown first. Each card summarizes mixer changes against the previous branch version.
+                                    The latest versions are shown first. Each card summarizes mixer changes against the previous version in this lane.
                                 </p>
                             </div>
                         )}
@@ -241,7 +249,7 @@ function ProjectChangesContent() {
                                                             {formatTimeAgo(version.created_at)}
                                                         </span>
                                                         <span className="rounded-md border bg-accent/15 text-accent border-accent/30 px-2.5 py-0.5 text-[10px] font-medium">
-                                                            Commit
+                                                            Saved
                                                         </span>
                                                     </div>
                                                     <p className="mt-1 text-sm text-foreground/80">
@@ -260,7 +268,9 @@ function ProjectChangesContent() {
                                                     <div className="mt-3 rounded-xl border border-foreground/[0.08] bg-background/40 p-3">
                                                         {entry.status === "initial" && (
                                                             <p className="text-sm text-foreground/65">
-                                                                {entry.status_message || "Initial snapshot on this branch."}
+                                                                {entry.status_message
+                                                                    ? producerFriendlyCopy(entry.status_message)
+                                                                    : "First snapshot in this workspace."}
                                                             </p>
                                                         )}
 
@@ -277,7 +287,7 @@ function ProjectChangesContent() {
                                                                         {formatSummaryLine(entry)}
                                                                     </span>
                                                                     <span className="text-foreground/50">
-                                                                        Compared to previous branch version
+                                                                        Compared to the previous version in this lane
                                                                     </span>
                                                                 </div>
 

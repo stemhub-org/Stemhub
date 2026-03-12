@@ -114,7 +114,7 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     if (!branchesResult.ok() || !branchesResult.value.has_value() || branchesResult.value->empty())
     {
         result.errorMessage = branchesResult.error ? branchesResult.error->message
-                                                   : "No branches found for this project.";
+                                                   : "No workspaces found for this project.";
         return result;
     }
 
@@ -276,7 +276,7 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     if (!branchesResult.ok() || !branchesResult.value.has_value() || branchesResult.value->empty())
     {
         result.errorMessage = branchesResult.error ? branchesResult.error->message
-                                                   : "Project created but no branch was returned.";
+                                                   : "Project created but no workspace was returned.";
         return result;
     }
 
@@ -307,11 +307,11 @@ StemhubAudioProcessor::ProjectActivationJobResult StemhubAudioProcessor::perform
     }
     else if (result.versions.empty())
     {
-        result.activeProjectStatusMessage = "Project created and main branch selected. No versions yet.";
+        result.activeProjectStatusMessage = "Project created and main workspace selected. No versions yet.";
     }
     else
     {
-        result.activeProjectStatusMessage = "Project created and main branch selected.";
+        result.activeProjectStatusMessage = "Project created and main workspace selected.";
     }
 
     return result;
@@ -399,22 +399,22 @@ StemhubAudioProcessor::BranchHistoryJobResult StemhubAudioProcessor::performFetc
 
     if (result.versions.empty())
     {
-        result.activeProjectStatusMessage = "Loaded branch \"" + branchName + "\". No versions yet.";
+        result.activeProjectStatusMessage = "Loaded workspace \"" + branchName + "\". No versions yet.";
     }
     else if (!isWorkingCopyClean && effectiveProjectFile.existsAsFile())
     {
-        result.activeProjectStatusMessage = "Branch \"" + branchName + "\" has updates. Pull did not overwrite your local file. "
-            "Use Restore to checkout the latest snapshot.";
+        result.activeProjectStatusMessage = "Workspace \"" + branchName + "\" has updates. Sync did not overwrite your local file. "
+            "Use Restore to load the latest snapshot.";
     }
     else if (result.projectFile.existsAsFile())
     {
-        result.activeProjectStatusMessage = "Loaded latest version for branch \"" + branchName + "\".";
+        result.activeProjectStatusMessage = "Loaded latest version for workspace \"" + branchName + "\".";
     }
     else if (result.activeProjectStatusMessage.isEmpty())
     {
         result.activeProjectStatusMessage = "Loaded "
             + juce::String(static_cast<int>(result.versions.size()))
-            + " version(s) for branch \"" + branchName + "\".";
+            + " version(s) for workspace \"" + branchName + "\".";
     }
 
     return result;

@@ -107,7 +107,7 @@ void StemhubAudioProcessor::applyBranchHistoryResult(BranchHistoryJobResult resu
         if (!stemhub::projectfiles::openInSystem(selectedProjectFile))
         {
             setOperationState(OperationState::error);
-            activeProjectStatusMessage = "Branch loaded, but failed to open local project file: "
+            activeProjectStatusMessage = "Workspace loaded, but failed to open local project file: "
                 + selectedProjectFile.getFullPathName();
             return;
         }
@@ -141,7 +141,7 @@ void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
     setOperationState(OperationState::idle);
     activeProjectStatusMessage = result.activeProjectStatusMessage.isNotEmpty()
         ? result.activeProjectStatusMessage
-        : "Version pushed successfully.";
+        : "Version saved successfully.";
 }
 
 void StemhubAudioProcessor::applyRestoreVersionResult(RestoreVersionJobResult result)
@@ -430,7 +430,7 @@ void StemhubAudioProcessor::requestSelectBranch(juce::String branchId)
     if (!selectedProject.has_value())
     {
         setOperationState(OperationState::error);
-        setActiveProjectStatusMessage("Choose a project before selecting a branch.");
+        setActiveProjectStatusMessage("Choose a project before selecting a workspace.");
         return;
     }
 
@@ -442,12 +442,12 @@ void StemhubAudioProcessor::requestSelectBranch(juce::String branchId)
     if (branchIt == branches.end())
     {
         setOperationState(OperationState::error);
-        setActiveProjectStatusMessage("Selected branch is no longer available.");
+        setActiveProjectStatusMessage("Selected workspace is no longer available.");
         return;
     }
 
     setOperationState(OperationState::pulling);
-    setActiveProjectStatusMessage("Loading branch history...");
+    setActiveProjectStatusMessage("Loading workspace history...");
 
     const auto token = access_tkn;
     const auto branchName = branchIt->name;
@@ -465,7 +465,7 @@ void StemhubAudioProcessor::requestRefreshVersionHistory()
     if (!hasProjectAndBranchSelected(selectedProject, selectedBranchId))
     {
         setOperationState(OperationState::error);
-        setActiveProjectStatusMessage("Choose a project and branch before refreshing history.");
+        setActiveProjectStatusMessage("Choose a project and workspace before refreshing history.");
         return;
     }
 

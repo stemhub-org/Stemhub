@@ -87,7 +87,7 @@ export function RepositoryBranchBar({
                                             }
                                         }}
                                         className="px-3 py-2 text-foreground/40 hover:text-red-500 transition-colors"
-                                        title="Delete Branch"
+                                        title="Delete Workspace"
                                     >
                                         <Trash2 className="size-4" />
                                     </button>

@@ -414,12 +414,12 @@ DashboardView::DashboardView()
     branchNameLabel.setFont(juce::FontOptions(14.0f, juce::Font::plain));
 
     addAndMakeVisible(branchLabel);
-    branchLabel.setText("Branch", juce::dontSendNotification);
+    branchLabel.setText("Workspace", juce::dontSendNotification);
     branchLabel.setJustificationType(juce::Justification::centredLeft);
     branchLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
     addAndMakeVisible(branchComboBox);
-    branchComboBox.setTextWhenNothingSelected("No branch available");
+    branchComboBox.setTextWhenNothingSelected("No workspace available");
     styleComboBox(branchComboBox);
     branchComboBox.onChange = [this]
     {
@@ -427,7 +427,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(versionLabel);
-    versionLabel.setText("Version history", juce::dontSendNotification);
+    versionLabel.setText("Saved versions", juce::dontSendNotification);
     versionLabel.setJustificationType(juce::Justification::centredLeft);
     versionLabel.setColour(juce::Label::textColourId, kStemhubLight);
 
@@ -459,7 +459,7 @@ DashboardView::DashboardView()
     };
 
     addAndMakeVisible(commitMessageLabel);
-    commitMessageLabel.setText("Commit message", juce::dontSendNotification);
+    commitMessageLabel.setText("Save note", juce::dontSendNotification);
     commitMessageLabel.setJustificationType(juce::Justification::centredLeft);
     commitMessageLabel.setColour(juce::Label::textColourId, kStemhubLight);
 

@@ -89,7 +89,7 @@ export function RecentChanges({ versions, projectId, branchId }: RecentChangesPr
                                                     {formatTimeAgo(version.created_at)}
                                                 </span>
                                                 <span className="rounded-md border bg-accent/15 text-accent border-accent/30 px-2.5 py-0.5 text-[10px] font-medium">
-                                                    Commit
+                                                    Saved
                                                 </span>
                                             </div>
                                             <p className="mt-1 text-sm text-foreground/80">

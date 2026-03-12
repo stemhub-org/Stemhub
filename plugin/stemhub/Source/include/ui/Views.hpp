@@ -126,7 +126,7 @@ private:
     juce::TextButton backToProjectsButton { "< Projects" };
     juce::TextEditor commitMessageInput;
     juce::TextButton saveChanges { "Save" };
-    juce::TextButton syncButton { "Pull" };
+    juce::TextButton syncButton { "Sync latest" };
     juce::TextButton changeBranch { "Load" };
     juce::TextButton signOutButton { "Sign Out" };
     juce::TextButton restoreButton { "Restore" };
