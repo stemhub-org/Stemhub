@@ -81,7 +81,12 @@ async def register_event(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-        
+
+    # Prevent registration for events that have already occurred
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if event.event_date < now:
+        raise HTTPException(status_code=400, detail="Cannot register for past event")
     attendee = EventAttendee(user_id=current_user.id, event_id=event_id)
     db.add(attendee)
     try:
