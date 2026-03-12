@@ -9,6 +9,8 @@ from .routers.branches import router as branches_router
 from .routers.versions import router as versions_router
 from .routers.collaborators import router as collaborators_router
 from .routers.stats import router as stats_router
+from .routers.explore import router as explore_router
+from .routers.community import router as community_router
 from .database import engine
 from .migrations import check_migrations_async
 
@@ -59,6 +61,8 @@ app.include_router(versions_router)
 app.include_router(files_router)
 app.include_router(collaborators_router)
 app.include_router(stats_router)
+app.include_router(explore_router)
+app.include_router(community_router)
 
 @app.get("/")
 async def root():

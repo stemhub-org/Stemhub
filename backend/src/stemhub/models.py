@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, Integer
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,6 +37,8 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[str] = mapped_column(String(100), default="General")
+    tags: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    like_count: Mapped[int] = mapped_column(Integer, default=0)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
@@ -108,8 +110,72 @@ class Track(Base):
     version_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)  # e.g. Kick, Lead Synth
     file_type: Mapped[str] = mapped_column(String(50), default=".json")
+    bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    key: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    duration: Mapped[int | None] = mapped_column(Integer, nullable=True)  # in seconds
     storage_path: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=True)
 
     # ── Relationships ──
     version: Mapped["Version"] = relationship("Version", back_populates="tracks")
+
+
+# ── Social & Feed Models ──
+
+class UserFollow(Base):
+    __tablename__ = "user_follow"
+
+    follower_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    followed_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class PlatformUpdate(Base):
+    __tablename__ = "platform_update"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    version_string: Mapped[str] = mapped_column(String(50), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+# ── Community Tab Models ──
+
+class Challenge(Base):
+    __tablename__ = "challenge"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    level: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., Beginner, Intermediate, Advanced
+    prize: Mapped[str] = mapped_column(String(255), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class ChallengeParticipant(Base):
+    __tablename__ = "challenge_participant"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    challenge_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("challenge.id", ondelete="CASCADE"), primary_key=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class Event(Base):
+    __tablename__ = "event"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    type: Mapped[str] = mapped_column(String(50), nullable=False)  # Workshop, Stream
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    host_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class EventAttendee(Base):
+    __tablename__ = "event_attendee"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("event.id", ondelete="CASCADE"), primary_key=True)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
