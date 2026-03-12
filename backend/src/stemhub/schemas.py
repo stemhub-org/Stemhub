@@ -22,6 +22,7 @@ class UserResponse(BaseModel):
     genres: Optional[list[str]] = None
     created_at: datetime
     is_active: bool
+    is_admin: bool
 
     class Config:
         from_attributes = True
