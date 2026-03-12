@@ -181,9 +181,7 @@ export default function DashboardProjectsPage() {
                             <Link
                                 href="/dashboard/profile"
                                 className={`mt-2 inline-block w-full rounded-lg border border-border-subtle px-4 py-2 text-center text-sm font-medium transition-colors ${
-                                    isDark
-                                        ? "bg-background-tertiary text-foreground hover:bg-background-tertiary/80 hover:border-accent/40"
-                                        : "bg-background-secondary text-foreground hover:bg-background-tertiary hover:border-accent/40"
+                                    "bg-background-secondary dark:bg-background-tertiary text-foreground hover:bg-background-tertiary dark:hover:bg-background-tertiary/80 hover:border-accent/40"
                                 }`}
                             >
                                 View profile
@@ -203,7 +201,7 @@ export default function DashboardProjectsPage() {
                                 placeholder="Find a project..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full rounded-md border border-border-subtle bg-background-secondary/80 py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-foreground-muted focus:outline-none focus:border-border-hover"
+                                className="w-full rounded-md border border-border-subtle bg-background-secondary/80 dark:bg-background-tertiary/80 py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-foreground-muted focus:outline-none focus:border-border-hover"
                             />
                         </div>
                         <button
@@ -217,7 +215,7 @@ export default function DashboardProjectsPage() {
                     </div>
 
                     <ul
-                        className="divide-y divide-border-subtle border border-border-subtle rounded-md bg-background-secondary/60"
+                        className="divide-y divide-border-subtle border border-border-subtle rounded-md bg-background-secondary/60 dark:bg-background-tertiary/60"
                         role="list"
                     >
                         {filteredProjects.length === 0 ? (
@@ -313,7 +311,7 @@ export default function DashboardProjectsPage() {
                             className="fixed inset-0 z-50 flex items-center justify-center p-4"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="w-full max-w-md rounded-xl bg-background-secondary border border-border-subtle p-6 shadow-2xl">
+                            <div className="w-full max-w-md rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle p-6 shadow-2xl">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-lg font-medium text-foreground">New Project</h2>
                                     <button

@@ -1,19 +1,23 @@
 import type { Metadata } from "next";
-import { Syne, Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
-const syne = Syne({
-  subsets: ["latin"],
+const syne = localFont({
+  src: [
+    { path: "../public/fonts/syne-latin.woff2", weight: "400 800", style: "normal" },
+    { path: "../public/fonts/syne-latin-ext.woff2", weight: "400 800", style: "normal" },
+  ],
   variable: "--font-syne",
-  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
+const jakarta = localFont({
+  src: [
+    { path: "../public/fonts/jakarta-latin.woff2", weight: "200 600", style: "normal" },
+    { path: "../public/fonts/jakarta-latin-ext.woff2", weight: "200 600", style: "normal" },
+  ],
   variable: "--font-jakarta",
-  weight: ["200", "300", "400", "500", "600"],
   display: "swap",
 });
 

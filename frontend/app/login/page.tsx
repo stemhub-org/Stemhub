@@ -29,19 +29,23 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Identifiants incorrects");
+        throw new Error("Invalid credentials");
       }
 
+      const data = await response.json();
+      if (data.access_token) {
+        localStorage.setItem("access_token", data.access_token);
+      }
       router.push("/dashboard");
     } catch (err: unknown) {
       const isNetworkError =
         err instanceof TypeError ||
         (err instanceof Error && (err.message === "Failed to fetch" || err.message.includes("fetch")));
       const message = isNetworkError
-        ? "Impossible de contacter le serveur. Vérifiez que le backend est démarré et que NEXT_PUBLIC_API_URL est correct."
+        ? "Unable to reach the server. Make sure the backend is running and NEXT_PUBLIC_API_URL is correct."
         : err instanceof Error
           ? err.message
-          : "Une erreur est survenue";
+          : "An unexpected error occurred";
       setError(message);
     }
   };
@@ -78,13 +82,13 @@ export default function LoginPage() {
             className="mb-3 text-3xl font-extralight tracking-tight"
             style={{ fontFamily: "var(--font-syne)" }}
           >
-            Bon retour
+            Welcome back
           </h1>
           <p
             className="text-sm font-light text-foreground/50"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Connectez-vous pour retrouver vos projets.
+            Log in to pick up where you left off.
           </p>
         </div>
 
@@ -97,7 +101,7 @@ export default function LoginPage() {
         <button
           type="button"
           onClick={() => { window.location.href = `${apiUrl}/auth/login/google`; }}
-          className="flex w-full items-center justify-center gap-3 rounded-xl border border-foreground/[0.08] bg-background-secondary/50 px-6 py-3.5 text-sm font-light transition-all duration-300 hover:border-foreground/20 hover:bg-background-secondary"
+          className="flex w-full items-center justify-center gap-3 rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 px-6 py-3.5 text-sm font-light transition-all duration-300 hover:border-foreground/20 hover:bg-background-secondary dark:hover:bg-background-tertiary"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24">
@@ -118,7 +122,7 @@ export default function LoginPage() {
               fill="#EA4335"
             />
           </svg>
-          Connexion avec Google
+          Continue with Google
         </button>
 
         <div className="my-8 flex items-center gap-4">
@@ -127,7 +131,7 @@ export default function LoginPage() {
             className="text-xs font-light text-foreground/30"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            ou
+            or
           </span>
           <div className="h-[1px] flex-1 bg-foreground/[0.06]" />
         </div>
@@ -144,7 +148,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
-              className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3.5 pr-4 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
+              className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3.5 pr-4 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
               style={{ fontFamily: "var(--font-jakarta)" }}
             />
           </div>
@@ -159,8 +163,8 @@ export default function LoginPage() {
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mot de passe"
-              className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3.5 pr-11 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
+              placeholder="Password"
+              className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3.5 pr-11 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
               style={{ fontFamily: "var(--font-jakarta)" }}
             />
             <button
@@ -182,7 +186,7 @@ export default function LoginPage() {
               className="text-xs font-light text-foreground/40 transition-colors duration-300 hover:text-accent"
               style={{ fontFamily: "var(--font-jakarta)" }}
             >
-              Mot de passe oublié ?
+              Forgot your password?
             </a>
           </div>
 
@@ -191,7 +195,7 @@ export default function LoginPage() {
             className="w-full rounded-xl bg-foreground py-3.5 text-sm font-light tracking-wide text-background transition-all duration-300 hover:bg-accent"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            Se connecter
+            Log in
           </button>
         </form>
 
@@ -199,12 +203,12 @@ export default function LoginPage() {
           className="mt-8 text-center text-sm font-light text-foreground/40"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >
-          Pas encore de compte ?{" "}
+          Don&apos;t have an account yet?{" "}
           <Link
             href="/register"
             className="text-foreground/70 transition-colors duration-300 hover:text-accent"
           >
-            Créer un compte
+            Create an account
           </Link>
         </p>
       </motion.div>

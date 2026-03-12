@@ -33,7 +33,7 @@ export function RepositoryHeader({
     };
 
     return (
-        <header className="h-20 border-b border-border-subtle bg-background-secondary/30 backdrop-blur-xl flex items-center justify-between px-6 lg:px-8 z-10 sticky top-0">
+        <header className="h-20 border-b border-border-subtle bg-background-secondary/30 dark:bg-background-tertiary/30 backdrop-blur-xl flex items-center justify-between px-6 lg:px-8 z-10 sticky top-0">
             <div className="flex items-center gap-3">
                 {onToggleSidebar && (
                     <button
@@ -44,12 +44,12 @@ export function RepositoryHeader({
                     >
                         <span className="flex flex-col justify-center gap-1 items-center">
                             <span
-                                className={`block h-[2px] min-h-[2px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
+                                className={`block h-[1.5px] min-h-[1.5px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
                                     sidebarOpen ? "translate-y-[2px] rotate-45" : ""
                                 }`}
                             />
                             <span
-                                className={`block h-[2px] min-h-[2px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
+                                className={`block h-[1.5px] min-h-[1.5px] w-4 shrink-0 rounded-full bg-foreground transition-transform duration-200 ease-out ${
                                     sidebarOpen ? "-translate-y-[2px] -rotate-45" : ""
                                 }`}
                             />

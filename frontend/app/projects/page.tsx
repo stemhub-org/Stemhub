@@ -23,8 +23,14 @@ import type {
 } from "@/types/project";
 import { ProjectSettings } from "./components/ProjectSettings";
 
+type CurrentUserSummary = {
+    id: string;
+    avatar_url: string | null;
+    username: string | null;
+};
+
 const cardHoverDark =
-    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
+    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
 
 function RepositoryPageContent() {
     const { resolvedTheme } = useTheme();
@@ -32,9 +38,8 @@ function RepositoryPageContent() {
     const projectId = searchParams.get("id");
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const isDark = resolvedTheme === "dark";
-    const cardBase = isDark
-        ? "rounded-xl bg-background-tertiary border border-border-subtle transition-all duration-300"
-        : "rounded-xl bg-[#FAFAFA] border border-border-subtle transition-all duration-300";
+    const cardBase =
+        "rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle transition-all duration-300";
     const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
     // ── Data state ──
@@ -60,7 +65,7 @@ function RepositoryPageContent() {
                 authFetch<ProjectSummaryResponse>(summaryPath),
                 authFetch<ActivityStatsResponse>(`/projects/${projectId}/stats/activity`),
                 authFetch<TopContributorsResponse>(`/projects/${projectId}/stats/top-contributors`),
-                authFetch<any>(`/auth/me`),
+                authFetch<CurrentUserSummary>(`/auth/me`),
             ]);
             setSummary(summaryData);
             setActivity(activityData);
@@ -86,7 +91,7 @@ function RepositoryPageContent() {
             await authFetch(`/branches/${branchId}`, { method: "DELETE" });
             if (projectId) fetchData(projectId);
         } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to delete branch");
+            alert(err instanceof Error ? err.message : "Failed to delete workspace");
         }
     };
 
@@ -100,7 +105,7 @@ function RepositoryPageContent() {
             setSelectedBranchId(createdBranch.id);
             fetchData(projectId, createdBranch.id);
         } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to create branch");
+            alert(err instanceof Error ? err.message : "Failed to create workspace");
             throw err;
         }
     };
@@ -178,7 +183,7 @@ function RepositoryPageContent() {
                 )}
             </AnimatePresence>
 
-            <div className="relative z-10 p-6 space-y-6">
+            <div className="relative z-0 p-6 space-y-6">
                 <div className={`${cardClass} overflow-hidden`}>
                     <RepositoryPageHeader
                         ownerUsername={summary.project.owner.username}
@@ -261,7 +266,11 @@ function RepositoryPageContent() {
                                     />
                                 </div>
                                 <div className={`${cardClass} p-6`}>
-                                    <RecentChanges versions={summary.recent_versions} projectId={projectId} />
+                                    <RecentChanges
+                                        versions={summary.recent_versions}
+                                        projectId={projectId}
+                                        branchId={selectedBranchId || undefined}
+                                    />
                                 </div>
                             </section>
 

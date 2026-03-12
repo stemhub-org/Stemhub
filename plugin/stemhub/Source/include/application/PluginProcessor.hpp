@@ -67,6 +67,8 @@ public:
     [[nodiscard]] const juce::String& getSelectedBranchId() const noexcept { return selectedBranchId; }
     [[nodiscard]] const juce::String& getSelectedBranchName() const noexcept { return selectedBranchName; }
     [[nodiscard]] const juce::String& getSelectedVersionId() const noexcept { return selectedVersionId; }
+    [[nodiscard]] const juce::String& getCurrentOpenedVersionId() const noexcept { return currentOpenedVersionId; }
+    [[nodiscard]] juce::String getCurrentOpenedVersionLabel() const;
     [[nodiscard]] const juce::String& getAccessToken() const noexcept { return access_tkn; }
     [[nodiscard]] const juce::String& getAuthErrorMessage() const noexcept { return authErrorMessage; }
     [[nodiscard]] const juce::String& getProjectSelectionStatusMessage() const noexcept { return projectSelectionStatusMessage; }
@@ -74,12 +76,9 @@ public:
     [[nodiscard]] const juce::File& getPendingProjectFile() const noexcept { return pendingProjectFile; }
     [[nodiscard]] const juce::File& getSelectedProjectFile() const noexcept { return selectedProjectFile; }
 
-    void setCurrentUser(std::optional<User> newUser) noexcept { currentUser = std::move(newUser); }
     void signIn(User newUser) noexcept;
     void signOut() noexcept;
-    
-    [[nodiscard]] juce::String getUsername() const noexcept { return currentUser ? currentUser->username : juce::String();}
-    
+
     void setAuthState(AuthState newAuthState) noexcept;
     void setUIState(UIState newUIState) noexcept;
     void setOperationState(OperationState newOperationState) noexcept;
@@ -91,7 +90,7 @@ public:
     
     void requestSignIn(const juce::String& email, const juce::String& password);
     void requestRestoreCachedSession();
-    void requestOpenProject(juce::String projectId, juce::File localProjectFile);
+    void requestOpenProject(juce::String projectId, juce::File localProjectFile, bool preferRemoteLatest = false);
     void requestCreateProject(juce::File localProjectFile);
     void requestSelectBranch(juce::String branchId);
     void requestRefreshVersionHistory();
@@ -107,7 +106,6 @@ private:
 
     struct AuthRequestResult
     {
-        uint64_t requestId {};
         std::optional<User> user;
         std::vector<Project> projects;
         juce::String token;
@@ -125,9 +123,9 @@ private:
         juce::String branchId;
         juce::String branchName;
         juce::String selectedVersionId;
+        juce::String workingVersionId;
         juce::File projectFile;
         juce::String errorMessage;
-        juce::String projectSelectionStatusMessage;
         juce::String activeProjectStatusMessage;
         bool refreshProjects { false };
         bool shouldAutoOpenLocalFile { true };
@@ -139,6 +137,7 @@ private:
         juce::String branchId;
         juce::String branchName;
         juce::String selectedVersionId;
+        juce::String workingVersionId;
         juce::File projectFile;
         juce::String errorMessage;
         juce::String activeProjectStatusMessage;
@@ -154,6 +153,7 @@ private:
     struct RestoreVersionJobResult
     {
         juce::File restoredProjectFile;
+        juce::String restoredVersionId;
         juce::String errorMessage;
         juce::String activeProjectStatusMessage;
     };
@@ -170,7 +170,8 @@ private:
     ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,
                                                          const juce::File& localProjectFile,
                                                          const std::vector<Project>& availableProjects,
-                                                         const juce::String& accessToken) const;
+                                                         const juce::String& accessToken,
+                                                         bool preferRemoteLatest) const;
     ProjectActivationJobResult performCreateProjectRequest(const juce::File& localProjectFile,
                                                            const juce::String& accessToken) const;
     BranchHistoryJobResult performFetchBranchHistoryRequest(const juce::String& branchId,
@@ -190,6 +191,11 @@ private:
     void applyPushVersionResult(PushVersionJobResult result);
     void applyRestoreVersionResult(RestoreVersionJobResult result);
     void requestRestoreCachedProjectContext();
+    void setWorkingCopyContext(const juce::File& workingFile, const juce::String& versionId);
+    void clearWorkingCopyContext();
+    [[nodiscard]] bool hasCleanWorkingCopy(const juce::File& workingFile) const;
+    [[nodiscard]] juce::String getCurrentOpenedVersionIdFromPath() const;
+    void setCurrentOpenedVersionId(juce::String versionId);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
@@ -211,5 +217,10 @@ private:
     VersionControlService versionControlService;
     juce::File pendingProjectFile;
     juce::File selectedProjectFile;
+    juce::String currentOpenedVersionId;
+    juce::File workingCopyProjectFile;
+    juce::String workingCopyVersionId;
+    int64 workingCopyFileSize { 0 };
+    int64 workingCopyFileModTime { 0 };
     bool didAttemptCachedSessionRestore { false };
 };

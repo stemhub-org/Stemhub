@@ -15,27 +15,44 @@ juce::var loadCachedSessionJson()
     if (!sessionFile.existsAsFile())
         return {};
 
-    return juce::JSON::parse(sessionFile.loadFileAsString());
+    const auto parsed = juce::JSON::parse(sessionFile.loadFileAsString());
+    return parsed;
 }
 
-void saveCachedSession(const juce::String& token, const juce::String& projectId)
+void updateCachedSession(const std::function<void(juce::DynamicObject&)>& updater)
 {
     const auto sessionFile = resolveSessionCacheFile();
     const auto sessionDirectory = sessionFile.getParentDirectory();
     if ((!sessionDirectory.exists() && !sessionDirectory.createDirectory()) || !sessionDirectory.isDirectory())
         return;
 
-    juce::DynamicObject::Ptr sessionObject = new juce::DynamicObject();
-    sessionObject->setProperty("access_token", token);
-    sessionObject->setProperty("last_project_id", projectId);
+    const auto existing = loadCachedSessionJson();
+    juce::DynamicObject::Ptr sessionObject;
+    if (auto* object = existing.getDynamicObject(); object != nullptr)
+        sessionObject = object;
+    else
+        sessionObject = new juce::DynamicObject();
+
+    updater(*sessionObject);
 
     const auto sessionJson = juce::JSON::toString(juce::var(sessionObject.get()), true);
     sessionFile.replaceWithText(sessionJson);
 }
+
 }
 
 namespace stemhub::sessioncache
 {
+juce::String loadLastOpenedProjectFilePath()
+{
+    const auto jsonValue = loadCachedSessionJson();
+    const auto* sessionObject = jsonValue.getDynamicObject();
+    if (sessionObject == nullptr)
+        return {};
+
+    return sessionObject->getProperty("last_opened_project_file").toString();
+}
+
 juce::String loadAccessToken()
 {
     const auto jsonValue = loadCachedSessionJson();
@@ -58,12 +75,26 @@ juce::String loadProjectId()
 
 void saveAccessToken(const juce::String& token)
 {
-    saveCachedSession(token, loadProjectId());
+    updateCachedSession([&token](juce::DynamicObject& sessionObject)
+    {
+        sessionObject.setProperty("access_token", token);
+    });
 }
 
 void saveProjectId(const juce::String& projectId)
 {
-    saveCachedSession(loadAccessToken(), projectId);
+    updateCachedSession([&projectId](juce::DynamicObject& sessionObject)
+    {
+        sessionObject.setProperty("last_project_id", projectId);
+    });
+}
+
+void saveLastOpenedProjectFilePath(const juce::String& projectFilePath)
+{
+    updateCachedSession([&projectFilePath](juce::DynamicObject& sessionObject)
+    {
+        sessionObject.setProperty("last_opened_project_file", projectFilePath);
+    });
 }
 
 void clear()
@@ -73,4 +104,3 @@ void clear()
         sessionFile.deleteFile();
 }
 }
-

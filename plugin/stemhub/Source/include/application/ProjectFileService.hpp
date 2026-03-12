@@ -16,8 +16,15 @@ juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
                                   const juce::File& restoreDirectory,
                                   juce::File& restoredProjectFile);
 
+juce::Result materializeRestoredSnapshotAsWorkingCopy(const juce::File& restoredProjectFile,
+                                                      const juce::String& projectId,
+                                                      const juce::String& branchId,
+                                                      juce::File& workingProjectFile);
+
 juce::File resolveEffectiveProjectFile(const juce::File& selectedFile,
                                        const juce::File& pendingFile);
+
+bool isManagedRestoreCacheFile(const juce::File& file);
 
 bool openInSystem(const juce::File& file);
 
@@ -27,4 +34,3 @@ juce::String tryRestoreLatestVersionToCache(const std::vector<VersionSummary>& v
                                             const VersionControlService& versionControlService,
                                             juce::File& restoredProjectFile);
 }
-

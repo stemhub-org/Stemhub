@@ -227,7 +227,7 @@ export default function ProfilePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
-                className="flex flex-col md:flex-row gap-8 items-start relative rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-8 backdrop-blur-xl"
+                className="flex flex-col md:flex-row gap-8 items-start relative rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-8 backdrop-blur-xl"
             >
                 <div className="absolute right-8 top-8 z-10">
                     {!isEditModalOpen ? (
@@ -417,7 +417,7 @@ export default function ProfilePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
-                className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 backdrop-blur-xl"
+                className="rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-6 backdrop-blur-xl"
             >
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
@@ -457,7 +457,7 @@ export default function ProfilePage() {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className="relative w-full max-w-4xl max-h-[80vh] bg-background-secondary border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                        className="relative w-full max-w-4xl max-h-[80vh] bg-background-secondary dark:bg-background-tertiary border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                     >
                         <div className="p-6 border-b border-white/10 flex items-center justify-between">
                             <div>
@@ -576,7 +576,7 @@ export default function ProfilePage() {
                         {projects.slice(0, 3).map((project) => (
                             <div
                                 key={project.id}
-                                className="rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-6 hover:opacity-95 dark:hover:bg-background-secondary/60 transition-all cursor-pointer backdrop-blur-xl group"
+                                className="rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-6 hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-all cursor-pointer backdrop-blur-xl group"
                                 onClick={() => router.push(`/projects?id=${project.id}`)}
                             >
                                 <div className="flex items-start justify-between mb-4">
@@ -604,7 +604,7 @@ export default function ProfilePage() {
                         ))}
 
                         {projects.length === 0 && (
-                            <div className="text-sm text-foreground/50 italic p-6 text-center border border-foreground/10 rounded-2xl bg-[#FAFAFA] dark:bg-background-tertiary">
+                            <div className="text-sm text-foreground/50 italic p-6 text-center border border-foreground/10 rounded-2xl bg-background-secondary dark:bg-background-tertiary">
                                 No projects created yet.
                             </div>
                         )}
@@ -624,11 +624,11 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-secondary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
+                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
                             <span className="text-xs text-foreground/50 font-light">Projects</span>
                             <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p: any) => p.owner_id === user?.id).length}</p>
                         </div>
-                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-[#FAFAFA] dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-secondary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
+                        <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
                             <span className="text-xs text-foreground/50 font-light">Collaborations</span>
                             <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p: any) => p.owner_id !== user?.id).length}</p>
                         </div>

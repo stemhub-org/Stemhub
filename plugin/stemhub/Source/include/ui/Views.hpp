@@ -72,6 +72,20 @@ public:
     void setSelectedProjectFileMessage(const juce::String& message) { projectFileLabel.setText(message, juce::dontSendNotification); }
     void setProjectNameMessage(const juce::String& message) { projectNameLabel.setText(message, juce::dontSendNotification); }
     void setBranchNameMessage(const juce::String& message) { branchNameLabel.setText(message, juce::dontSendNotification); }
+    void setCurrentVersionId(const juce::String& label)
+    {
+        const auto displayVersion = label.isNotEmpty()
+            ? label
+            : "Current version: not available";
+        currentVersionLabel.setText(displayVersion, juce::dontSendNotification);
+    }
+    void setCurrentVersionFilePath(const juce::String& path)
+    {
+        const auto displayPath = path.isNotEmpty()
+            ? path
+            : "Opened file: not available";
+        currentVersionFileLabel.setText("Opened file: " + displayPath, juce::dontSendNotification);
+    }
     void setBranches(const std::vector<juce::String>& branchNames,
                      const std::vector<juce::String>& branchIds,
                      const juce::String& selectedBranchId);
@@ -104,13 +118,15 @@ private:
     juce::Label branchNameLabel;
     juce::Label branchLabel;
     juce::Label versionLabel;
+    juce::Label currentVersionLabel;
+    juce::Label currentVersionFileLabel;
     juce::Label commitMessageLabel;
     juce::ComboBox branchComboBox;
     juce::ComboBox versionComboBox;
     juce::TextButton backToProjectsButton { "< Projects" };
     juce::TextEditor commitMessageInput;
     juce::TextButton saveChanges { "Save" };
-    juce::TextButton syncButton { "Pull" };
+    juce::TextButton syncButton { "Sync latest" };
     juce::TextButton changeBranch { "Load" };
     juce::TextButton signOutButton { "Sign Out" };
     juce::TextButton restoreButton { "Restore" };

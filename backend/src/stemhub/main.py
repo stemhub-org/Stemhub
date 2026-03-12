@@ -9,6 +9,8 @@ from .routers.branches import router as branches_router
 from .routers.versions import router as versions_router
 from .routers.collaborators import router as collaborators_router
 from .routers.stats import router as stats_router
+from .routers.explore import router as explore_router
+from .routers.community import router as community_router
 from .database import engine
 from .migrations import check_migrations_async
 
@@ -27,9 +29,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="StemHub API", lifespan=lifespan)
 
+# CORS should support both local host aliases commonly used during development.
+frontend_origins: list[str] = []
+for origin in (
+    os.getenv("FRONTEND_URL", "http://localhost:3000"),
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+):
+    if origin and origin not in frontend_origins:
+        frontend_origins.append(origin)
+
+extra_frontend_origins = os.getenv("FRONTEND_URLS", "")
+if extra_frontend_origins:
+    for origin in extra_frontend_origins.split(","):
+        origin = origin.strip()
+        if origin and origin not in frontend_origins:
+            frontend_origins.append(origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],
+    allow_origins=frontend_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,6 +61,8 @@ app.include_router(versions_router)
 app.include_router(files_router)
 app.include_router(collaborators_router)
 app.include_router(stats_router)
+app.include_router(explore_router)
+app.include_router(community_router)
 
 @app.get("/")
 async def root():

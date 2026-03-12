@@ -108,11 +108,11 @@ export default function SettingsPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4, delay: 0.2 }}
-                    className="flex-1 rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 backdrop-blur-xl p-8 min-h-[500px]"
+                    className="flex-1 rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 backdrop-blur-xl p-8 min-h-[500px]"
                 >
                     <AnimatePresence mode="wait">
                         {activeTab === "profile" && <ProfileSettings key="profile" user={user} onUpdate={fetchUser} />}
-                        {activeTab === "account" && <AccountSettings key="account" user={user} />}
+                        {activeTab === "account" && <AccountSettings key="account" user={user} onUpdate={fetchUser} />}
                         {activeTab === "integrations" && <IntegrationSettings key="integrations" user={user} />}
                         {activeTab === "storage" && <StorageSettings key="storage" user={user} />}
                         {activeTab === "notifications" && <NotificationSettings key="notifications" user={user} />}
@@ -216,7 +216,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                         type="text"
                         value={form.username}
                         onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="space-y-2">
@@ -226,7 +226,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                         value={form.location}
                         onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
                         placeholder="e.g. Paris, France"
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="space-y-2">
@@ -236,7 +236,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                         value={form.website}
                         onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
                         placeholder="https://yourwebsite.com"
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="space-y-2">
@@ -246,7 +246,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                         value={form.bio}
                         onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
                         placeholder="Electronic music producer..."
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all resize-none"
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all resize-none"
                     />
                 </div>
             </div>
@@ -261,7 +261,82 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
     );
 }
 
-function AccountSettings({ user }: { user: any }) {
+function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }) {
+    const [emailForm, setEmailForm] = useState(user?.email || "");
+    const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+    
+    const [passwordForm, setPasswordForm] = useState({
+        current_password: "",
+        new_password: "",
+        confirm_password: ""
+    });
+    const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+    const [passwordError, setPasswordError] = useState("");
+    const [passwordSuccess, setPasswordSuccess] = useState("");
+
+    const handleUpdateEmail = async () => {
+        if (!emailForm || emailForm === user?.email) return;
+        setIsUpdatingEmail(true);
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const res = await fetch(`${apiUrl}/auth/me/email`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ new_email: emailForm }),
+                credentials: "include"
+            });
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.detail || "Erreur lors de la mise à jour de l'email");
+            }
+            onUpdate();
+            alert("Email mis à jour !");
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsUpdatingEmail(false);
+        }
+    };
+
+    const handleUpdatePassword = async () => {
+        setPasswordError("");
+        setPasswordSuccess("");
+        
+        if (!passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password) {
+            setPasswordError("Veuillez remplir tous les champs.");
+            return;
+        }
+        
+        if (passwordForm.new_password !== passwordForm.confirm_password) {
+            setPasswordError("Les nouveaux mots de passe ne correspondent pas.");
+            return;
+        }
+
+        setIsUpdatingPassword(true);
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const res = await fetch(`${apiUrl}/auth/me/password`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    current_password: passwordForm.current_password,
+                    new_password: passwordForm.new_password
+                }),
+                credentials: "include"
+            });
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.detail || "Erreur lors de la mise à jour du mot de passe");
+            }
+            setPasswordSuccess("Mot de passe mis à jour avec succès !");
+            setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+        } catch (err: any) {
+            setPasswordError(err.message);
+        } finally {
+            setIsUpdatingPassword(false);
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -281,12 +356,16 @@ function AccountSettings({ user }: { user: any }) {
                     <div className="flex gap-4">
                         <input
                             type="email"
-                            defaultValue={user?.email || ""}
-                            disabled
-                            className="w-full rounded-xl border border-foreground/[0.08] bg-background/50 py-3 px-4 text-sm font-light text-foreground/60 cursor-not-allowed"
+                            value={emailForm}
+                            onChange={(e) => setEmailForm(e.target.value)}
+                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                         />
-                        <button className="shrink-0 px-4 py-3 rounded-xl bg-foreground/5 hover:bg-foreground/10 text-sm font-medium transition-colors border border-foreground/10">
-                            Change
+                        <button 
+                            onClick={handleUpdateEmail}
+                            disabled={isUpdatingEmail || emailForm === user?.email}
+                            className="shrink-0 px-4 py-3 rounded-xl bg-foreground/5 hover:bg-foreground/10 text-sm font-medium transition-colors border border-foreground/10 disabled:opacity-50"
+                        >
+                            {isUpdatingEmail ? <Loader2 size={16} className="animate-spin" /> : "Change"}
                         </button>
                     </div>
                 </div>
@@ -296,7 +375,9 @@ function AccountSettings({ user }: { user: any }) {
                     <input
                         type="password"
                         placeholder="••••••••"
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        value={passwordForm.current_password}
+                        onChange={(e) => setPasswordForm(f => ({ ...f, current_password: e.target.value }))}
+                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -304,21 +385,38 @@ function AccountSettings({ user }: { user: any }) {
                         <label className="text-sm font-medium text-foreground/80">New Password</label>
                         <input
                             type="password"
-                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                            placeholder="••••••••"
+                            value={passwordForm.new_password}
+                            onChange={(e) => setPasswordForm(f => ({ ...f, new_password: e.target.value }))}
+                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                         />
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-foreground/80">Confirm New Password</label>
                         <input
                             type="password"
-                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                            placeholder="••••••••"
+                            value={passwordForm.confirm_password}
+                            onChange={(e) => setPasswordForm(f => ({ ...f, confirm_password: e.target.value }))}
+                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                         />
                     </div>
                 </div>
+                
+                {passwordError && (
+                    <p className="text-sm text-red-500 font-medium">{passwordError}</p>
+                )}
+                {passwordSuccess && (
+                    <p className="text-sm text-green-500 font-medium">{passwordSuccess}</p>
+                )}
 
                 <div className="pt-2">
-                    <button className="px-6 py-2.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 text-sm font-medium transition-colors border border-foreground/10 text-foreground">
-                        Update Password
+                    <button 
+                        onClick={handleUpdatePassword}
+                        disabled={isUpdatingPassword}
+                        className="px-6 py-2.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 text-sm font-medium transition-colors border border-foreground/10 text-foreground flex items-center gap-2 disabled:opacity-50"
+                    >
+                        {isUpdatingPassword ? <Loader2 size={16} className="animate-spin" /> : "Update Password"}
                     </button>
                 </div>
             </div>
@@ -410,7 +508,7 @@ function IntegrationSettings({ user }: { user: any }) {
                     </div>
 
                     {/* FL Studio */}
-                    <div className="p-5 rounded-xl border border-foreground/[0.08] bg-background-secondary/20 flex flex-col justify-between h-32">
+                    <div className="p-5 rounded-xl border border-foreground/[0.08] bg-background-secondary/20 dark:bg-background-tertiary/20 flex flex-col justify-between h-32">
                         <div className="flex justify-between items-start">
                             <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 bg-[#FF6A00] rounded-md flex items-center justify-center text-white p-1">
@@ -532,8 +630,8 @@ function NotificationSettings({ user }: { user: any }) {
                             defaultChecked={true}
                         />
                         <ToggleRow
-                            title="Branch Updates"
-                            description="When someone pushes to a branch you're collaborating on"
+                            title="Version Updates"
+                            description="When someone pushes to a version you're collaborating on"
                             defaultChecked={false}
                         />
                         <ToggleRow
@@ -580,7 +678,7 @@ function ToggleRow({ title, description, defaultChecked }: { title: string, desc
     const [checked, setChecked] = useState(defaultChecked);
 
     return (
-        <div className="flex items-center justify-between p-4 rounded-xl border border-foreground/[0.04] bg-background-secondary/10 hover:bg-background-secondary/30 transition-colors cursor-pointer" onClick={() => setChecked(!checked)}>
+        <div className="flex items-center justify-between p-4 rounded-xl border border-foreground/[0.04] bg-background-secondary/10 dark:bg-background-tertiary/10 hover:bg-background-secondary/30 dark:hover:bg-background-tertiary/30 transition-colors cursor-pointer" onClick={() => setChecked(!checked)}>
             <div>
                 <h4 className="text-sm font-medium text-foreground/90">{title}</h4>
                 <p className="text-xs text-foreground/50 font-light mt-0.5">{description}</p>

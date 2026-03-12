@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
@@ -166,6 +166,40 @@ class VersionWithAuthor(BaseModel):
     branch_name: str
     author: Optional[OwnerSummary] = None
     has_artifact: bool = False
+    source_daw: Optional[str] = None
+    source_project_filename: Optional[str] = None
+
+
+class MixerDiffSummary(BaseModel):
+    total_changes: int
+    inserts_changed: int
+    slots_changed: int
+    parameter_changes: int
+
+
+class MixerDiffChange(BaseModel):
+    type: str
+    insert_iid: int
+    insert_name: Optional[str] = None
+    slot_index: Optional[int] = None
+    before: Any = None
+    after: Any = None
+    message: str
+
+
+class MixerDiffResponse(BaseModel):
+    summary: MixerDiffSummary
+    changes: list[MixerDiffChange]
+
+
+class VersionDiffHistoryEntry(BaseModel):
+    version: VersionWithAuthor
+    compared_to_version_id: UUID | None = None
+    status: Literal["initial", "compared", "unsupported"]
+    status_message: Optional[str] = None
+    summary: Optional[MixerDiffSummary] = None
+    changes: list[MixerDiffChange] = []
+
 
 class ProjectDetail(BaseModel):
     id: UUID
@@ -191,3 +225,69 @@ class ProjectSummaryResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class EmailChangeRequest(BaseModel):
+    new_email: EmailStr
+
+# ── Explore & Community Schemas ──
+
+class ExploreProjectResponse(BaseModel):
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    category: str
+    tags: Optional[list[str]] = None
+    like_count: int = 0
+    bpm: Optional[int] = None
+    key: Optional[str] = None
+    created_at: datetime
+    owner: OwnerSummary
+
+    class Config:
+        from_attributes = True
+
+class ExploreFeedResponse(BaseModel):
+    id: UUID
+    action_type: str
+    project_id: UUID
+    project_name: str
+    producer: OwnerSummary
+    created_at: datetime
+    
+class ProducerResponse(BaseModel):
+    id: UUID
+    username: str
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    follower_count: int = 0
+    genres: Optional[list[str]] = None
+
+    class Config:
+        from_attributes = True
+
+class ChallengeResponse(BaseModel):
+    id: UUID
+    title: str
+    description: str
+    level: str
+    prize: str
+    ends_at: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class EventResponse(BaseModel):
+    id: UUID
+    type: str
+    title: str
+    host_name: str
+    event_date: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
