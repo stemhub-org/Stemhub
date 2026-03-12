@@ -1,4 +1,4 @@
 [submodule "backend/vendor/PyFLP_v2"]
 	path = backend/vendor/PyFLP_v2
 	url = https://github.com/stemhub-org/PyFLP_v2.git
-	branch = master
+	branch = main

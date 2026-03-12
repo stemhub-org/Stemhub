@@ -15,7 +15,7 @@ COPY alembic/ ./alembic/
 
 RUN pip install --no-cache-dir -e . \
     && export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYFLP=0.0.0 \
-    && pip install --no-cache-dir --no-build-isolation "git+https://github.com/stemhub-org/PyFLP_v2.git@master"
+    && pip install --no-cache-dir --no-build-isolation "git+https://github.com/stemhub-org/PyFLP_v2.git@main"
 
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
