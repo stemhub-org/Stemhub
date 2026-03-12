@@ -7,7 +7,7 @@ def ensure_pyflp_available() -> None:
         import pyflp  # type: ignore[reportMissingImports]  # noqa: F401
     except ModuleNotFoundError as exc:
         raise RuntimeError(
-            "PyFLP_enhanced is not installed. Run: "
+            "PyFLP_v2 is not installed. Run: "
             "`git submodule update --init --recursive && "
-            "pip install -e backend/vendor/PyFLP_enhanced`."
+            "pip install -e backend/vendor/PyFLP_v2`."
         ) from exc

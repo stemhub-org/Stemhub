@@ -50,7 +50,7 @@ Server-side processing of audio visuals is CPU-heavy.
   We use React and Wavesurfer.js to render waveforms directly on the user's device, relieving our servers of graphical processing.
 
 - **Backend:**  
-  We use FastAPI with optimized libraries (`struct`, `PyFLP_enhanced`) and **Alembic** managed migrations to ensure efficient execution and minimal database overhead.
+  We use FastAPI with optimized libraries (`struct`, `PyFLP_v2`) and **Alembic** managed migrations to ensure efficient execution and minimal database overhead.
 
 ---
 
@@ -73,5 +73,5 @@ To validate our strategy, we utilize the following tools:
 | Hosting | GCP `europe-west9` (Paris) | 100% carbon-neutral energy (matched) |
 | Network | Streaming Uploads | Zero intermediate disk I/O, optimized energy per GB |
 | Compute | Client-Side Rendering | Offloads energy cost to client devices; reduces server heat/AC needs |
-| Parsing | Binary Structs (PyFLP_enhanced) | Minimizes CPU cycles/electricity required for file analysis |
+| Parsing | Binary Structs (PyFLP_v2) | Minimizes CPU cycles/electricity required for file analysis |
 | Storage | GCS Lifecycle Policies | Automated cleanup of temporary files to reduce storage waste |

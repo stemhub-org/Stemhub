@@ -269,7 +269,7 @@ def test_list_version_diff_history_returns_runtime_snapshot_errors_as_unsupporte
     def fake_load_snapshot(*, artifact_path, snapshot_manifest, storage):
         del artifact_path, snapshot_manifest, storage
         raise RuntimeError(
-            "PyFLP_enhanced is not installed. Run: `git submodule update --init --recursive && pip install -e backend/vendor/PyFLP_enhanced`."
+            "PyFLP_v2 is not installed. Run: `git submodule update --init --recursive && pip install -e backend/vendor/PyFLP_v2`."
         )
 
     client = _create_test_client(
@@ -284,4 +284,4 @@ def test_list_version_diff_history_returns_runtime_snapshot_errors_as_unsupporte
     assert response.status_code == 200
     payload = response.json()
     assert payload[0]["status"] == "unsupported"
-    assert payload[0]["status_message"].startswith("PyFLP_enhanced is not installed.")
+    assert payload[0]["status_message"].startswith("PyFLP_v2 is not installed.")

@@ -321,7 +321,7 @@ def test_compare_versions_returns_runtime_snapshot_errors_as_validation_failures
     def fake_load_snapshot(*, artifact_path, snapshot_manifest, storage):
         del artifact_path, snapshot_manifest, storage
         raise RuntimeError(
-            "PyFLP_enhanced is not installed. Run: `git submodule update --init --recursive && pip install -e backend/vendor/PyFLP_enhanced`."
+            "PyFLP_v2 is not installed. Run: `git submodule update --init --recursive && pip install -e backend/vendor/PyFLP_v2`."
         )
 
     client = _create_test_client(
@@ -337,7 +337,7 @@ def test_compare_versions_returns_runtime_snapshot_errors_as_validation_failures
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"].startswith("PyFLP_enhanced is not installed.")
+    assert response.json()["detail"].startswith("PyFLP_v2 is not installed.")
 
 
 def test_compare_versions_rejects_versions_outside_branch(monkeypatch) -> None:
