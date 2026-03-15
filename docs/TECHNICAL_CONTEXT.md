@@ -106,7 +106,7 @@ For a detailed visual representation and API contract, see the [Data & API Model
 
 ## 3. Infrastructure & Storage (Cloud)
 - **Database**: PostgreSQL (Relational) to store links between Artists, Projects, and Versions.
-- **Heavy File Storage**: AWS S3 / Google Cloud Storage.
+- **Heavy File Storage**: Google Cloud Storage.
 - **Upload Architecture**: Direct upload to FastAPI which proxies/streams the snapshot artifact to Cloud Storage.
 
 ## 4. Security & DevOps
