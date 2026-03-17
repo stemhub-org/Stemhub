@@ -1,0 +1,129 @@
+name: "Technical Debt"
+description: Track code quality, refactoring, or maintenance work
+title: "[TECH DEBT] "
+labels: ["tech-debt"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for refactoring, code quality improvements, or technical maintenance work.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Technical Problem
+      description: What is the current state that needs improvement?
+      placeholder: |
+        The `PluginProcessor.cpp` file has grown to 2000+ lines and violates single responsibility principle.
+        Multiple concerns (audio, auth, project management) are mixed together.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Why does this matter? What problems does it cause?
+      placeholder: |
+        **Current problems:**
+        - Hard to navigate and understand
+        - Increases merge conflicts
+        - Makes testing difficult
+        - Slows down new feature development
+
+        **Risk if not addressed:**
+        - Code becomes unmaintainable
+        - New contributors struggle to contribute
+        - Bug rate increases
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution
+      description: How should this be refactored or improved?
+      placeholder: |
+        Split `PluginProcessor.cpp` into focused implementation files:
+        - `ProcAudio.cpp` - Audio processing
+        - `ProcAuth.cpp` - Authentication flows
+        - `ProcProject.cpp` - Project management
+        - `ProcVersion.cpp` - Version control operations
+
+        Keep `PluginProcessor.cpp` as the main orchestrator with forwarding methods.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know this is complete?
+      placeholder: |
+        - [ ] Code is refactored according to proposed solution
+        - [ ] All existing tests still pass
+        - [ ] No behavior changes (pure refactoring)
+        - [ ] Code coverage maintained or improved
+        - [ ] Documentation updated if needed
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      description: Which part of the codebase?
+      options:
+        - Backend (FastAPI/Python)
+        - Frontend (Next.js/React)
+        - Plugin (JUCE/C++)
+        - Parser (PyFLP)
+        - Storage
+        - Infrastructure
+        - Multiple Components
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this technical debt?
+      options:
+        - "High (Blocking new features or causing frequent bugs)"
+        - "Medium (Slowing development but not blocking)"
+        - "Low (Nice to have, can defer)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: effort
+    attributes:
+      label: Effort Estimate
+      description: Rough estimate of time required
+      placeholder: "2-3 days of focused refactoring work"
+    validations:
+      required: false
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks
+      description: What could go wrong during refactoring?
+      placeholder: |
+        - May introduce regressions if not tested thoroughly
+        - May conflict with in-flight feature branches
+        - May require significant testing effort
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Links to code, related PRs, references
+      placeholder: "Link to specific files, methods, or related refactoring work."
+    validations:
+      required: false

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discord Community
+    url: https://discord.gg/stemhub
+    about: Ask questions and discuss StemHub with the community
+  - name: 📚 Documentation
+    url: https://docs.stemhub.io
+    about: Read the documentation and user guides
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/stemhub-org/Stemhub/security/advisories/new
+    about: Report a security vulnerability (private disclosure)
