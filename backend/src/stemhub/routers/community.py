@@ -1,12 +1,15 @@
 from typing import Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from ..database import get_db
-from ..models import Challenge, Event
+from ..models import Challenge, Event, ChallengeParticipant, EventAttendee, User
 from ..schemas import ChallengeResponse, EventResponse
+from ..auth import get_current_user
 
 router = APIRouter(prefix="/community", tags=["community"])
 
@@ -46,3 +49,50 @@ async def get_community_events(
     
     result = await db.execute(stmt)
     return result.scalars().all()
+
+@router.post("/challenges/{challenge_id}/join")
+async def join_challenge(
+    challenge_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Join an active challenge."""
+    challenge = await db.get(Challenge, challenge_id)
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+        
+    participant = ChallengeParticipant(user_id=current_user.id, challenge_id=challenge_id)
+    db.add(participant)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Already joined this challenge")
+        
+    return {"message": "Successfully joined challenge"}
+
+@router.post("/events/{event_id}/register")
+async def register_event(
+    event_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Register for an event."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Prevent registration for events that have already occurred
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if event.event_date < now:
+        raise HTTPException(status_code=400, detail="Cannot register for past event")
+    attendee = EventAttendee(user_id=current_user.id, event_id=event_id)
+    db.add(attendee)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Already registered for this event")
+        
+    return {"message": "Successfully registered for event"}

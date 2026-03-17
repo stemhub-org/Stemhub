@@ -1,0 +1,135 @@
+name: "Bug Report"
+description: Report a defect or incorrect behavior in StemHub
+title: "[BUG] "
+labels: ["bug"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Clear reproduction steps help us fix issues faster.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: What went wrong?
+      placeholder: "Describe the incorrect behavior clearly and concisely."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Provide detailed step-by-step instructions
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen?
+      placeholder: "Describe the correct behavior."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happens?
+      placeholder: "Describe what's happening instead."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      description: Where does this bug occur?
+      options:
+        - Backend (API/Server)
+        - Frontend (Web UI)
+        - Plugin (DAW)
+        - Parser (FL Studio files)
+        - Storage (File operations)
+        - Infrastructure (Docker/CI)
+        - Multiple Components
+        - Unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this bug?
+      options:
+        - "Critical (Data loss, security issue, complete blocker)"
+        - "High (Major feature broken, no workaround)"
+        - "Medium (Feature broken, workaround exists)"
+        - "Low (Cosmetic, minor issue, edge case)"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: StemHub Version
+      description: Which version of StemHub? (check plugin/frontend footer or git commit)
+      placeholder: "v0.3.2 or git commit hash"
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Please provide system information
+      placeholder: |
+        - OS: [macOS 13.4 / Windows 11 / Ubuntu 22.04]
+        - DAW (if plugin bug): [FL Studio 21.2 / Ableton Live 11.3]
+        - Browser (if frontend bug): [Chrome 120 / Firefox 121]
+        - Plugin format (if applicable): [VST3 / AU]
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Screenshots / Error Messages
+      description: Attach logs, screenshots, stack traces, console output
+      placeholder: |
+        ```
+        [Paste logs or error messages here]
+        ```
+
+        Or drag and drop screenshots/videos.
+    validations:
+      required: false
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: Is there a temporary workaround? (helps other users)
+      placeholder: "Describe any temporary solution you've found."
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Any other relevant information
+      placeholder: "Network conditions, specific project settings, etc."
+    validations:
+      required: false
