@@ -79,12 +79,12 @@ public:
             : "Current version: not available";
         currentVersionLabel.setText(displayVersion, juce::dontSendNotification);
     }
-    void setCurrentVersionFilePath(const juce::String& path)
+    void setCurrentVersionFilePath(const juce::String& fileName)
     {
-        const auto displayPath = path.isNotEmpty()
-            ? path
-            : "Opened file: not available";
-        currentVersionFileLabel.setText("Opened file: " + displayPath, juce::dontSendNotification);
+        const auto displayName = fileName.isNotEmpty()
+            ? fileName
+            : "not available";
+        currentVersionFileLabel.setText("Opened file: " + displayName, juce::dontSendNotification);
     }
     void setBranches(const std::vector<juce::String>& branchNames,
                      const std::vector<juce::String>& branchIds,

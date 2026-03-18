@@ -540,6 +540,8 @@ void DashboardView::setVersions(const std::vector<juce::String>& versionLabels,
 void DashboardView::setPackagedFiles(const juce::String& rootLabel,
                                      const std::vector<juce::String>& relativeFilePaths)
 {
+    juce::ignoreUnused(rootLabel);
+
     auto labelText = juce::String("Packaged files");
     if (!relativeFilePaths.empty())
         labelText += " (" + juce::String(static_cast<int>(relativeFilePaths.size())) + ")";
@@ -549,9 +551,9 @@ void DashboardView::setPackagedFiles(const juce::String& rootLabel,
     if (auto* rootItem = packagedFilesTree.getRootItem())
         rootItem->setOpen(true);
 
-    packagedFilesTree.setTooltip(rootLabel.isNotEmpty()
-        ? "Bundle root: " + rootLabel
-        : "No project root selected.");
+    packagedFilesTree.setTooltip(relativeFilePaths.empty()
+        ? "No packaged files detected."
+        : "Files included in the project snapshot.");
 }
 
 juce::String DashboardView::getSelectedBranchId() const
