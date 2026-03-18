@@ -20,6 +20,7 @@ if(JUCE_DIR STREQUAL "")
 endif()
 
 add_subdirectory(${JUCE_DIR} JUCE)
+find_package(CURL REQUIRED)
 
 juce_add_plugin(stemhub
     COMPANY_NAME "Stemhub"
@@ -70,6 +71,52 @@ target_compile_definitions(stemhub
 
 target_link_libraries(stemhub
     PRIVATE
+        juce::juce_audio_utils
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags)
+
+juce_add_console_app(stemhub_plugin_tests
+    PRODUCT_NAME "stemhub-plugin-tests")
+
+juce_generate_juce_header(stemhub_plugin_tests)
+
+target_sources(stemhub_plugin_tests
+    PRIVATE
+        Source/src/application/ProcAudio.cpp
+        Source/src/application/ProcAuth.cpp
+        Source/src/application/ProcProject.cpp
+        Source/src/application/ProcProjJobs.cpp
+        Source/src/application/ProcVerJobs.cpp
+        Source/src/application/PluginProcessor.cpp
+        Source/src/application/ProjectFileService.cpp
+        Source/src/application/SessionCache.cpp
+        Source/src/application/SnapshotBundler.cpp
+        Source/src/network/ApiClient.cpp
+        Source/src/network/VersionControlService.cpp
+        tests/ProcessorStabilityTests.cpp)
+
+target_include_directories(stemhub_plugin_tests
+    PRIVATE
+        Source/include)
+
+target_compile_definitions(stemhub_plugin_tests
+    PRIVATE
+        STEMHUB_PLUGIN_HEADLESS_TESTS=1
+        JUCE_USE_CURL=1
+        JUCE_WEB_BROWSER=0
+        JUCE_MODAL_LOOPS_PERMITTED=1
+        JUCE_STRICT_REFCOUNTEDPOINTER=1
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        JucePlugin_Name="Stemhub Session"
+        JucePlugin_WantsMidiInput=0
+        JucePlugin_ProducesMidiOutput=0
+        JucePlugin_IsMidiEffect=0
+        JucePlugin_IsSynth=0)
+
+target_link_libraries(stemhub_plugin_tests
+    PRIVATE
+        CURL::libcurl
         juce::juce_audio_utils
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
