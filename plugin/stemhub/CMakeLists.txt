@@ -20,6 +20,7 @@ if(JUCE_DIR STREQUAL "")
 endif()
 
 add_subdirectory(${JUCE_DIR} JUCE)
+find_package(CURL REQUIRED)
 
 juce_add_plugin(stemhub
     COMPANY_NAME "Stemhub"
@@ -115,6 +116,7 @@ target_compile_definitions(stemhub_plugin_tests
 
 target_link_libraries(stemhub_plugin_tests
     PRIVATE
+        CURL::libcurl
         juce::juce_audio_utils
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
