@@ -44,6 +44,7 @@ juce_generate_juce_header(stemhub)
 target_sources(stemhub
     PRIVATE
         Source/src/ui/PluginEditor.cpp
+        Source/src/ui/PluginTheme.cpp
         Source/src/ui/DashboardView.cpp
         Source/src/ui/LoginView.cpp
         Source/src/application/ProcAudio.cpp
