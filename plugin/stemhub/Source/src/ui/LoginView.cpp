@@ -15,11 +15,11 @@ juce::Rectangle<int> computeCardBounds(const int containerWidth, const int conta
 LoginView::LoginView()
 {
     addAndMakeVisible(authStateLabel);
-    authStateLabel.setText("Sign in to continue", juce::dontSendNotification);
     stemhub::plugin::theme::styleStatusLabel(
         authStateLabel,
-        "Sign in to continue",
+        {},
         stemhub::plugin::theme::MessageStatus::neutral);
+    authStateLabel.setVisible(false);
 
     addAndMakeVisible(emailInput);
     stemhub::plugin::theme::styleTextInput(emailInput, "Email");
@@ -44,6 +44,7 @@ void LoginView::setMessage(const juce::String& message,
 {
     stemhub::plugin::theme::styleStatusLabel(authStateLabel, message, status);
     authStateLabel.setTooltip(message);
+    authStateLabel.setVisible(message.isNotEmpty());
 }
 
 void LoginView::paint(juce::Graphics& g)
@@ -52,12 +53,19 @@ void LoginView::paint(juce::Graphics& g)
     g.fillAll(stemhub::plugin::theme::PluginTheme::kBackground);
     stemhub::plugin::theme::paintSurface(g, cardBounds);
 
-    const auto logoArea = cardBounds.withY(cardBounds.getY() + 16.0f)
-        .withHeight(44.0f)
-        .withTrimmedBottom(12.0f);
-    g.setColour(stemhub::plugin::theme::PluginTheme::kForeground);
-    g.setFont(stemhub::plugin::theme::headingFont(34.0f));
-    g.drawText("Stemhub", logoArea, juce::Justification::centred, false);
+    const auto logoArea = cardBounds.withY(cardBounds.getY() + 18.0f)
+        .withHeight(48.0f);
+    const auto stemhubFont = stemhub::plugin::theme::headingFont(34.0f);
+    const auto sessionFont = stemhub::plugin::theme::bodyFont(30.0f, juce::Font::bold);
+    juce::AttributedString title;
+    title.setJustification(juce::Justification::centred);
+    title.append("Stemhub", stemhubFont, stemhub::plugin::theme::PluginTheme::kForeground);
+    title.append(" ", stemhubFont, stemhub::plugin::theme::PluginTheme::kForeground);
+    title.append("Session", sessionFont, stemhub::plugin::theme::PluginTheme::kAccent);
+
+    juce::TextLayout layout;
+    layout.createLayout(title, logoArea.getWidth());
+    layout.draw(g, logoArea);
 }
 
 void LoginView::resized()
@@ -69,9 +77,17 @@ void LoginView::resized()
     const int fieldWidth = juce::jmin(260, content.getWidth());
     const int centerX = juce::jmax(0, content.getX() + (content.getWidth() - fieldWidth) / 2);
 
-    auto statusRow = content.removeFromTop(42);
-    authStateLabel.setBounds(statusRow);
-    content.removeFromTop(18);
+    if (authStateLabel.isVisible())
+    {
+        auto statusRow = content.removeFromTop(42);
+        authStateLabel.setBounds(statusRow);
+        content.removeFromTop(18);
+    }
+    else
+    {
+        authStateLabel.setBounds(0, 0, 0, 0);
+        content.removeFromTop(8);
+    }
 
     auto emailRow = content.removeFromTop(30);
     emailInput.setBounds(centerX, emailRow.getY(), fieldWidth, emailRow.getHeight());

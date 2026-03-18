@@ -7,13 +7,42 @@ StemhubPluginLookAndFeel::StemhubPluginLookAndFeel()
     setDefaultSansSerifTypefaceName("Syne");
 }
 
+void StemhubPluginLookAndFeel::drawButtonBackground(juce::Graphics& g,
+                                                    juce::Button& button,
+                                                    const juce::Colour& backgroundColour,
+                                                    bool shouldDrawButtonAsHighlighted,
+                                                    bool shouldDrawButtonAsDown)
+{
+    auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
+    auto fill = backgroundColour;
+
+    if (!button.isEnabled())
+        fill = fill.darker(0.2f).withMultipliedAlpha(0.45f);
+    else if (shouldDrawButtonAsDown)
+        fill = fill.brighter(0.08f);
+    else if (shouldDrawButtonAsHighlighted)
+        fill = fill.brighter(0.04f);
+
+    const auto cornerSize = juce::jmin(PluginTheme::buttonRadius,
+                                       bounds.getHeight() * 0.48f,
+                                       bounds.getWidth() * 0.48f);
+    const auto outline = button.hasKeyboardFocus(true)
+        ? PluginTheme::kAccent
+        : fill.contrasting(0.18f).withAlpha(button.isEnabled() ? 0.7f : 0.25f);
+
+    g.setColour(fill);
+    g.fillRoundedRectangle(bounds, cornerSize);
+
+    g.setColour(outline);
+    g.drawRoundedRectangle(bounds, cornerSize, button.hasKeyboardFocus(true) ? 1.6f : 1.0f);
+}
+
 void stylePrimaryButton(juce::TextButton& button)
 {
     button.setColour(juce::TextButton::buttonColourId, PluginTheme::kAccent);
     button.setColour(juce::TextButton::buttonOnColourId, PluginTheme::kAccentHover);
     button.setColour(juce::TextButton::textColourOffId, PluginTheme::kForeground);
     button.setColour(juce::TextButton::textColourOnId, PluginTheme::kForeground);
-    button.setConnectedEdges(juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);
     button.setSize(0, static_cast<int>(PluginTheme::controlHeight));
     button.setMouseCursor(juce::MouseCursor::PointingHandCursor);
 }
@@ -24,7 +53,6 @@ void styleSecondaryButton(juce::TextButton& button)
     button.setColour(juce::TextButton::buttonOnColourId, PluginTheme::kSurfaceSoft.brighter(0.1f));
     button.setColour(juce::TextButton::textColourOffId, PluginTheme::kForeground);
     button.setColour(juce::TextButton::textColourOnId, PluginTheme::kForeground);
-    button.setConnectedEdges(juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);
     button.setSize(0, static_cast<int>(PluginTheme::controlHeight));
     button.setMouseCursor(juce::MouseCursor::PointingHandCursor);
 }

@@ -17,6 +17,7 @@ enum class MessageStatus
 struct PluginTheme
 {
     static constexpr float panelRadius = 12.0f;
+    static constexpr float buttonRadius = 12.0f;
     static constexpr int labelHeight = 24;
     static constexpr float contentPadding = 14.0f;
     static constexpr float controlHeight = 30.0f;
@@ -91,6 +92,12 @@ class StemhubPluginLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
     StemhubPluginLookAndFeel();
+
+    void drawButtonBackground(juce::Graphics&,
+                              juce::Button&,
+                              const juce::Colour& backgroundColour,
+                              bool shouldDrawButtonAsHighlighted,
+                              bool shouldDrawButtonAsDown) override;
 };
 
 void stylePrimaryButton(juce::TextButton& button);

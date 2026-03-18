@@ -14,16 +14,13 @@ constexpr std::array<const char*, 9> kBundledAssetExtensions = {
 
 juce::String getLoginMessage(const StemhubAudioProcessor& processor)
 {
-    if (processor.getAuthState() == AuthState::signedOut)
-        return "Sign in to continue.";
-
     if (processor.getAuthState() == AuthState::signingIn)
         return "Signing in to your StemHub account...";
 
     if (processor.getAuthState() == AuthState::authError && processor.getAuthErrorMessage().isNotEmpty())
         return processor.getAuthErrorMessage();
 
-    return "Sign in to continue.";
+    return {};
 }
 
 stemhub::plugin::theme::MessageStatus getLoginStatus(const StemhubAudioProcessor& processor)
