@@ -302,3 +302,20 @@ class EventResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# ── Admin Schemas ──
+
+class AdminStatsResponse(BaseModel):
+    total_users: int
+    total_projects: int
+
+class AdminUserResponse(BaseModel):
+    id: UUID
+    email: EmailStr
+    username: str
+    is_active: bool
+    is_admin: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
