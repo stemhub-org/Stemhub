@@ -4,6 +4,7 @@
 #include <memory>
 #include <JuceHeader.h>
 #include <optional>
+#include <atomic>
 #include <vector>
 #include <variant>
 #include "application/BackgroundJobCoordinator.hpp"
@@ -100,6 +101,7 @@ public:
     void setSelectedVersionId(juce::String versionId);
     VersionControlService& getVersionControlService() noexcept { return versionControlService; }
     IProjectApi& getApiClient() noexcept { return *apiClient; }
+    void flushPendingBackgroundResultsForTesting();
 
 private:
     void handleAsyncUpdate() override;
@@ -116,6 +118,7 @@ private:
 
     struct ProjectActivationJobResult
     {
+        uint64_t selectionRequestId {};
         std::optional<Project> selectedProject;
         std::vector<Project> projects;
         std::vector<Branch> branches;
@@ -129,10 +132,12 @@ private:
         juce::String activeProjectStatusMessage;
         bool refreshProjects { false };
         bool shouldAutoOpenLocalFile { true };
+        bool fromCachedProjectRestore { false };
     };
 
     struct BranchHistoryJobResult
     {
+        uint64_t selectionRequestId {};
         std::vector<VersionSummary> versions;
         juce::String branchId;
         juce::String branchName;
@@ -193,6 +198,8 @@ private:
     void requestRestoreCachedProjectContext();
     void setWorkingCopyContext(const juce::File& workingFile, const juce::String& versionId);
     void clearWorkingCopyContext();
+    uint64_t beginSelectionRequest() noexcept;
+    [[nodiscard]] bool isCurrentSelectionRequest(uint64_t requestId) const noexcept;
     [[nodiscard]] bool hasCleanWorkingCopy(const juce::File& workingFile) const;
     [[nodiscard]] juce::String getCurrentOpenedVersionIdFromPath() const;
     void setCurrentOpenedVersionId(juce::String versionId);
@@ -223,4 +230,5 @@ private:
     int64 workingCopyFileSize { 0 };
     int64 workingCopyFileModTime { 0 };
     bool didAttemptCachedSessionRestore { false };
+    std::atomic<uint64_t> activeSelectionRequestId { 0 };
 };
