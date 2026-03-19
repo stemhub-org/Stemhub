@@ -51,8 +51,12 @@ class RecentUser(BaseModel):
 async def list_users(
     _: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
+    limit: int = 20,
+    offset: int = 0,
 ) -> list[UserWithProjects]:
-    result = await db.execute(select(User).order_by(User.created_at.desc()))
+    result = await db.execute(
+        select(User).order_by(User.created_at.desc()).limit(limit).offset(offset)
+    )
     users = result.scalars().all()
 
     # Count projects per user
