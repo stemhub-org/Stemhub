@@ -51,6 +51,18 @@ pip install -e backend
 python -c "import pyflp; print(pyflp.__version__)"
 ```
 
+## Parser fixture corpus
+
+StemHub keeps a parser validation corpus in `backend/tests/fixtures/parser_corpus/manifest.json`.
+
+Run the dedicated harness with:
+
+```bash
+.venv/bin/pytest backend/tests/test_parser_fixture_corpus.py
+```
+
+When adding new roadmap parser work, prefer extending the manifest and its stable expectations instead of relying on ad hoc local project exports. See `backend/tests/fixtures/parser_corpus/README.md` for the fixture format and extension rules.
+
 ## Contributing to `PyFLP_v2`
 
 1. Work inside `backend/vendor/PyFLP_v2` on a branch.
