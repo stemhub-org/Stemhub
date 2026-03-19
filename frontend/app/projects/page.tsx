@@ -91,7 +91,7 @@ function RepositoryPageContent() {
             await authFetch(`/branches/${branchId}`, { method: "DELETE" });
             if (projectId) fetchData(projectId);
         } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to delete branch");
+            alert(err instanceof Error ? err.message : "Failed to delete workspace");
         }
     };
 
@@ -105,7 +105,7 @@ function RepositoryPageContent() {
             setSelectedBranchId(createdBranch.id);
             fetchData(projectId, createdBranch.id);
         } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to create branch");
+            alert(err instanceof Error ? err.message : "Failed to create workspace");
             throw err;
         }
     };

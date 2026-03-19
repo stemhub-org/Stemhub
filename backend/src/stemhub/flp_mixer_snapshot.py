@@ -156,7 +156,7 @@ def build_mixer_snapshot(
     inserts: list[MixerInsertSnapshot] = []
 
     for insert in getattr(project, "mixer", []):
-        iid = getattr(insert, "iid", None)
+        iid = _safe_model_attr(insert, "iid")
         if iid is None or iid == -1:
             continue
 
@@ -164,10 +164,10 @@ def build_mixer_snapshot(
         inserts.append(
             MixerInsertSnapshot(
                 iid=int(iid),
-                name=_normalize_optional_text(getattr(insert, "name", None)),
-                enabled=_coerce_optional_bool(getattr(insert, "enabled", None)),
-                volume=_coerce_optional_int(getattr(insert, "volume", None)),
-                pan=_coerce_optional_int(getattr(insert, "pan", None)),
+                name=_normalize_optional_text(_safe_model_attr(insert, "name")),
+                enabled=_coerce_optional_bool(_safe_model_attr(insert, "enabled")),
+                volume=_coerce_optional_int(_safe_model_attr(insert, "volume")),
+                pan=_coerce_optional_int(_safe_model_attr(insert, "pan")),
                 slots=slots,
             )
         )
@@ -353,27 +353,30 @@ def diff_mixer_project_snapshots(
 def _build_slot_snapshots(insert: Any) -> tuple[MixerSlotSnapshot, ...]:
     slots: list[MixerSlotSnapshot] = []
 
-    for slot in insert:
-        name = _normalize_optional_text(getattr(slot, "name", None))
-        internal_name = _normalize_optional_text(getattr(slot, "internal_name", None))
-        plugin_key = _resolve_slot_plugin_key(slot, name=name, internal_name=internal_name)
-        if not any((name, internal_name, plugin_key)):
-            continue
+    try:
+        for slot in insert:
+            name = _normalize_optional_text(_safe_model_attr(slot, "name"))
+            internal_name = _normalize_optional_text(_safe_model_attr(slot, "internal_name"))
+            plugin_key = _resolve_slot_plugin_key(slot, name=name, internal_name=internal_name)
+            if not any((name, internal_name, plugin_key)):
+                continue
 
-        slot_index = getattr(slot, "index", None)
-        if slot_index is None:
-            continue
+            slot_index = _safe_model_attr(slot, "index")
+            if slot_index is None:
+                continue
 
-        slots.append(
-            MixerSlotSnapshot(
-                index=int(slot_index),
-                name=name,
-                internal_name=internal_name,
-                enabled=_coerce_optional_bool(getattr(slot, "enabled", None)),
-                mix=_coerce_optional_int(getattr(slot, "mix", None)),
-                plugin_key=plugin_key,
+            slots.append(
+                MixerSlotSnapshot(
+                    index=int(slot_index),
+                    name=name,
+                    internal_name=internal_name,
+                    enabled=_coerce_optional_bool(_safe_model_attr(slot, "enabled")),
+                    mix=_coerce_optional_int(_safe_model_attr(slot, "mix")),
+                    plugin_key=plugin_key,
+                )
             )
-        )
+    except Exception:
+        return tuple(slots)
 
     slots.sort(key=lambda item: item.index)
     return tuple(slots)
@@ -486,7 +489,7 @@ def _resolve_slot_plugin_key(
     name: str | None,
     internal_name: str | None,
 ) -> str | None:
-    plugin = getattr(slot, "plugin", None)
+    plugin = _safe_model_attr(slot, "plugin")
     plugin_type = type(plugin).__name__ if plugin is not None else None
     plugin_type = _normalize_optional_text(plugin_type)
 
@@ -543,6 +546,13 @@ def _normalize_optional_text(value: Any) -> str | None:
 
     text = str(value).strip()
     return text or None
+
+
+def _safe_model_attr(obj: Any, name: str) -> Any:
+    try:
+        return getattr(obj, name, None)
+    except Exception:
+        return None
 
 
 def _coerce_optional_int(value: Any) -> int | None:

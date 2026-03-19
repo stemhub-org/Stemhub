@@ -269,3 +269,30 @@ def test_load_fl_studio_mixer_snapshot_falls_back_to_binary_snapshot_on_parser_f
     assert snapshot.flp_sha256 is not None
     assert snapshot.mixer_supported is False
     assert snapshot.parse_error == "low-level parser crash"
+
+
+def test_load_fl_studio_mixer_snapshot_tolerates_inserts_with_missing_params() -> None:
+    snapshot_zip = Path(__file__).resolve().parent / "fixtures" / "parser_corpus" / "assets" / "stemhub_snapshots" / "SuperBeat.zip"
+    storage = FakeStorage(snapshot_zip)
+
+    snapshot = load_fl_studio_mixer_snapshot(
+        artifact_path="projects/demo/branches/main/versions/superbeat/snapshot/SuperBeat.zip",
+        snapshot_manifest={"source_project_filename": "SuperBeat.flp"},
+        storage=storage,
+    )
+
+    assert snapshot.mixer_supported is True
+    assert len(snapshot.inserts) == 126
+    assert snapshot.flp_size_bytes == 600354
+    assert snapshot.flp_sha256 == "a6f2b29210f0aa0e3dbd5d920fc4e4b60a1effc19c1770a23ca5af3333da5bac"
+    assert [insert.name for insert in snapshot.inserts if insert.name][:9] == [
+        "Kick",
+        "Hat",
+        "clap (anything)",
+        "perc (haha)",
+        "snare (close)_2",
+        "hat (be nice 2 me)",
+        "kick (rack dry)",
+        "808",
+        "open hat (special place)",
+    ]

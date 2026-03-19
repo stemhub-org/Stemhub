@@ -146,7 +146,7 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
         previewTrackFile.deleteFile();
 
     result.pushedVersionId = pushedVersionId;
-    result.activeProjectStatusMessage = "Version pushed successfully.";
+    result.activeProjectStatusMessage = "Version saved successfully.";
     return result;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Sun, User as UserIcon } from "lucide-react";
+import { Bell, Sun, User as UserIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
@@ -69,6 +69,19 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                         StemHub<span className="text-accent">.</span>
                     </Link>
                 )}
+            </div>
+
+            <div className="flex-1 flex justify-center max-w-xl mx-auto hidden md:flex px-4">
+                <div className="relative w-full group">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search size={16} className="text-foreground-muted group-focus-within:text-accent transition-colors" />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search users, projects, genres..."
+                        className="w-full h-10 pl-10 pr-4 rounded-xl border border-border-subtle bg-background-secondary dark:bg-background-tertiary text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all outline-none shadow-sm group-focus-within:shadow-[0_0_15px_rgba(156,87,223,0.1)]"
+                    />
+                </div>
             </div>
 
             <div className="flex items-center gap-4">

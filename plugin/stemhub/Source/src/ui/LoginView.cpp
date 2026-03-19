@@ -2,48 +2,36 @@
 
 namespace
 {
-const auto kStemhubPurple = juce::Colour::fromRGB(0x9C, 0x57, 0xDF);
-const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
-const auto kStemhubLight = juce::Colour::fromRGB(0xF1, 0xF1, 0xF1);
-const auto kStemhubSurface = juce::Colour::fromRGB(0x26, 0x26, 0x2A);
-
-juce::Font makeSyneFont(float size, int styleFlags)
+juce::Rectangle<int> computeCardBounds(const int containerWidth, const int containerHeight)
 {
-    return juce::Font(juce::FontOptions("Syne", size, styleFlags));
+    const auto width = juce::jmin(420, juce::jmax(280, containerWidth - 40));
+    const auto height = juce::jmin(340, juce::jmax(280, containerHeight - 30));
+    const auto x = (containerWidth - width) / 2;
+    const auto y = (containerHeight - height) / 2;
+    return { x, y, width, height };
 }
 }
 
 LoginView::LoginView()
 {
     addAndMakeVisible(authStateLabel);
-    authStateLabel.setJustificationType(juce::Justification::centred);
-    authStateLabel.setColour(juce::Label::textColourId, kStemhubLight);
-    authStateLabel.setFont(makeSyneFont(18.0f, juce::Font::bold));
+    stemhub::plugin::theme::styleStatusLabel(
+        authStateLabel,
+        {},
+        stemhub::plugin::theme::MessageStatus::neutral);
+    authStateLabel.setVisible(false);
 
     addAndMakeVisible(emailInput);
-    emailInput.setMultiLine(false);
-    emailInput.setTextToShowWhenEmpty("Email", kStemhubLight.withAlpha(0.45f));
-    emailInput.setColour(juce::TextEditor::textColourId, kStemhubLight);
-    emailInput.setColour(juce::TextEditor::backgroundColourId, kStemhubSurface);
-    emailInput.setColour(juce::TextEditor::outlineColourId, kStemhubLight.withAlpha(0.45f));
-    emailInput.setColour(juce::TextEditor::focusedOutlineColourId, kStemhubPurple);
-    emailInput.setColour(juce::CaretComponent::caretColourId, kStemhubPurple);
+    stemhub::plugin::theme::styleTextInput(emailInput, "Email");
 
     addAndMakeVisible(passwordInput);
-    passwordInput.setMultiLine(false);
-    passwordInput.setTextToShowWhenEmpty("Password", kStemhubLight.withAlpha(0.45f));
-    passwordInput.setColour(juce::TextEditor::textColourId, kStemhubLight);
-    passwordInput.setColour(juce::TextEditor::backgroundColourId, kStemhubSurface);
-    passwordInput.setColour(juce::TextEditor::outlineColourId, kStemhubLight.withAlpha(0.45f));
-    passwordInput.setColour(juce::TextEditor::focusedOutlineColourId, kStemhubPurple);
-    passwordInput.setColour(juce::CaretComponent::caretColourId, kStemhubPurple);
+    stemhub::plugin::theme::styleTextInput(passwordInput, "Password");
     passwordInput.setPasswordCharacter('*');
 
     addAndMakeVisible(signInButton);
-    signInButton.setColour(juce::TextButton::buttonColourId, kStemhubPurple);
-    signInButton.setColour(juce::TextButton::buttonOnColourId, kStemhubPurple.brighter(0.15f));
-    signInButton.setColour(juce::TextButton::textColourOffId, kStemhubLight);
-    signInButton.setColour(juce::TextButton::textColourOnId, kStemhubLight);
+    signInButton.setButtonText("Sign in");
+    stemhub::plugin::theme::stylePrimaryButton(signInButton);
+    signInButton.setTooltip("Sign in to access StemHub projects.");
     signInButton.onClick = [this]
     {
         if (onSignIn != nullptr)
@@ -51,48 +39,66 @@ LoginView::LoginView()
     };
 }
 
+void LoginView::setMessage(const juce::String& message,
+                          stemhub::plugin::theme::MessageStatus status)
+{
+    stemhub::plugin::theme::styleStatusLabel(authStateLabel, message, status);
+    authStateLabel.setTooltip(message);
+    authStateLabel.setVisible(message.isNotEmpty());
+}
+
 void LoginView::paint(juce::Graphics& g)
 {
-    const auto area = getLocalBounds().reduced(20);
-    const int logoWidth = 240;
-    const int logoHeight = 40;
-    auto logoArea = juce::Rectangle<int>((getWidth() - logoWidth) / 2, area.getY() + 8, logoWidth, logoHeight);
+    const auto cardBounds = computeCardBounds(getWidth(), getHeight()).toFloat();
+    g.fillAll(stemhub::plugin::theme::PluginTheme::kBackground);
+    stemhub::plugin::theme::paintSurface(g, cardBounds);
 
-    g.setColour(kStemhubLight);
-    g.setFont(makeSyneFont(30.0f, juce::Font::bold));
-    g.drawText("Stemhub.", logoArea, juce::Justification::centred, false);
+    const auto logoArea = cardBounds.withY(cardBounds.getY() + 18.0f)
+        .withHeight(48.0f);
+    const auto stemhubFont = stemhub::plugin::theme::headingFont(34.0f);
+    const auto sessionFont = stemhub::plugin::theme::bodyFont(30.0f, juce::Font::bold);
+    juce::AttributedString title;
+    title.setJustification(juce::Justification::centred);
+    title.append("Stemhub", stemhubFont, stemhub::plugin::theme::PluginTheme::kForeground);
+    title.append(" ", stemhubFont, stemhub::plugin::theme::PluginTheme::kForeground);
+    title.append("Session", sessionFont, stemhub::plugin::theme::PluginTheme::kAccent);
 
-    g.setColour(kStemhubPurple.withAlpha(0.9f));
-    g.drawLine(static_cast<float>(logoArea.getX() + 46),
-               static_cast<float>(logoArea.getBottom() + 2),
-               static_cast<float>(logoArea.getRight() - 46),
-               static_cast<float>(logoArea.getBottom() + 2),
-               1.2f);
+    juce::TextLayout layout;
+    layout.createLayout(title, logoArea.getWidth());
+    layout.draw(g, logoArea);
 }
 
 void LoginView::resized()
 {
-    auto area = getLocalBounds().reduced(20);
-    const int fieldWidth = 220;
-    const int x = (getWidth() - fieldWidth) / 2;
+    auto area = computeCardBounds(getWidth(), getHeight());
+    auto content = area.reduced(20);
+    content.removeFromTop(66);
 
-    area.removeFromTop(86);
+    const int fieldWidth = juce::jmin(260, content.getWidth());
+    const int centerX = juce::jmax(0, content.getX() + (content.getWidth() - fieldWidth) / 2);
 
-    auto emailRow = area.removeFromTop(32);
-    emailInput.setBounds(x, emailRow.getY(), fieldWidth, emailRow.getHeight());
+    if (authStateLabel.isVisible())
+    {
+        auto statusRow = content.removeFromTop(42);
+        authStateLabel.setBounds(statusRow);
+        content.removeFromTop(18);
+    }
+    else
+    {
+        authStateLabel.setBounds(0, 0, 0, 0);
+        content.removeFromTop(8);
+    }
 
-    area.removeFromTop(8);
+    auto emailRow = content.removeFromTop(30);
+    emailInput.setBounds(centerX, emailRow.getY(), fieldWidth, emailRow.getHeight());
 
-    auto passwordRow = area.removeFromTop(32);
-    passwordInput.setBounds(x, passwordRow.getY(), fieldWidth, passwordRow.getHeight());
+    content.removeFromTop(10);
 
-    area.removeFromTop(12);
+    auto passwordRow = content.removeFromTop(30);
+    passwordInput.setBounds(centerX, passwordRow.getY(), fieldWidth, passwordRow.getHeight());
 
-    auto buttonRow = area.removeFromTop(32);
-    signInButton.setBounds(x, buttonRow.getY(), fieldWidth, buttonRow.getHeight());
+    content.removeFromTop(10);
 
-    area.removeFromTop(24);
-
-    auto labelRow = area.removeFromTop(56);
-    authStateLabel.setBounds(labelRow);
+    auto signInRow = content.removeFromTop(34);
+    signInButton.setBounds(centerX, signInRow.getY(), fieldWidth, signInRow.getHeight());
 }

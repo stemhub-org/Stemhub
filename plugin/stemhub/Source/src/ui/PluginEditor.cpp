@@ -15,12 +15,26 @@ constexpr std::array<const char*, 9> kBundledAssetExtensions = {
 juce::String getLoginMessage(const StemhubAudioProcessor& processor)
 {
     if (processor.getAuthState() == AuthState::signingIn)
-        return "Signing in...";
+        return "Signing in to your StemHub account...";
 
     if (processor.getAuthState() == AuthState::authError && processor.getAuthErrorMessage().isNotEmpty())
         return processor.getAuthErrorMessage();
 
-    return "Please sign in to your Stemhub account to access your projects.";
+    return {};
+}
+
+stemhub::plugin::theme::MessageStatus getLoginStatus(const StemhubAudioProcessor& processor)
+{
+    if (processor.getAuthState() == AuthState::signingIn)
+        return stemhub::plugin::theme::MessageStatus::loading;
+
+    if (processor.getAuthState() == AuthState::authError)
+        return stemhub::plugin::theme::MessageStatus::error;
+
+    if (processor.getAuthErrorMessage().isNotEmpty())
+        return stemhub::plugin::theme::MessageStatus::warning;
+
+    return stemhub::plugin::theme::MessageStatus::neutral;
 }
 
 juce::String getProjectSelectionMessage(const StemhubAudioProcessor& processor)
@@ -32,18 +46,37 @@ juce::String getProjectSelectionMessage(const StemhubAudioProcessor& processor)
         return processor.getProjectSelectionStatusMessage();
 
     if (processor.getProjects().empty())
-        return "Choose a DAW project file to create your first project.";
+        return "No StemHub projects available for this account.";
 
-    return "Choose an existing project or create a new one.";
+    return "Open an existing project, or choose a local file to create one.";
+}
+
+stemhub::plugin::theme::MessageStatus getProjectSelectionStatus(const StemhubAudioProcessor& processor)
+{
+    if (processor.getOperationState() == OperationState::loadingProjects)
+        return stemhub::plugin::theme::MessageStatus::loading;
+
+    if (processor.getOperationState() == OperationState::error)
+        return stemhub::plugin::theme::MessageStatus::error;
+
+    if (processor.getProjectSelectionStatusMessage().isNotEmpty())
+        return processor.getProjectSelectionStatusMessage().contains("No projects found")
+            ? stemhub::plugin::theme::MessageStatus::warning
+            : stemhub::plugin::theme::MessageStatus::neutral;
+
+    if (processor.getProjects().empty())
+        return stemhub::plugin::theme::MessageStatus::warning;
+
+    return stemhub::plugin::theme::MessageStatus::success;
 }
 
 juce::String getDashboardMessage(const StemhubAudioProcessor& processor)
 {
     if (processor.getOperationState() == OperationState::committing)
-        return "Committing...";
+        return "Saving version...";
 
     if (processor.getOperationState() == OperationState::pulling)
-        return "Refreshing version history...";
+        return "Syncing version history...";
 
     if (processor.getActiveProjectStatusMessage().isNotEmpty())
         return processor.getActiveProjectStatusMessage();
@@ -51,10 +84,29 @@ juce::String getDashboardMessage(const StemhubAudioProcessor& processor)
     return "Project ready.";
 }
 
+stemhub::plugin::theme::MessageStatus getDashboardStatus(const StemhubAudioProcessor& processor)
+{
+    if (processor.getOperationState() == OperationState::committing
+        || processor.getOperationState() == OperationState::pulling)
+        return stemhub::plugin::theme::MessageStatus::loading;
+
+    if (processor.getOperationState() == OperationState::error)
+        return stemhub::plugin::theme::MessageStatus::error;
+
+    if (processor.getActiveProjectStatusMessage().contains("failed")
+        || processor.getActiveProjectStatusMessage().contains("could not"))
+        return stemhub::plugin::theme::MessageStatus::error;
+
+    if (processor.getActiveProjectStatusMessage().isNotEmpty())
+        return stemhub::plugin::theme::MessageStatus::success;
+
+    return stemhub::plugin::theme::MessageStatus::neutral;
+}
+
 juce::String formatVersionLabel(const VersionSummary& version)
 {
     const auto shortId = version.id.substring(0, 8);
-    const auto message = version.commitMessage.isNotEmpty() ? version.commitMessage : "No commit message";
+    const auto message = version.commitMessage.isNotEmpty() ? version.commitMessage : "No save note";
 
     juce::String timestamp = "Unknown time";
     if (version.createdAt.isNotEmpty())
@@ -68,9 +120,6 @@ juce::String formatVersionLabel(const VersionSummary& version)
 
     return shortId + " - " + message + " (" + timestamp + ")";
 }
-
-const auto kStemhubDark = juce::Colour::fromRGB(0x1E, 0x1E, 0x1E);
-const auto kStemhubPurple = juce::Colour::fromRGB(0x9C, 0x57, 0xDF);
 
 bool isBackupPath(const juce::File& candidateFile, const juce::File& rootFolder)
 {
@@ -141,16 +190,26 @@ std::vector<juce::String> collectPackagedRelativeFilePaths(const juce::File& bun
     });
     return relativePaths;
 }
+
+juce::String formatProjectFileStatus(const juce::File& file)
+{
+    if (!file.existsAsFile())
+        return "No project file selected.";
+
+    return "DAW file selected: " + file.getFileName();
+}
 }
 
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
     : AudioProcessorEditor(&processorToEdit), audioProcessor(processorToEdit)
 {
-    juce::LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypefaceName("Syne");
+    previousLookAndFeel = &juce::LookAndFeel::getDefaultLookAndFeel();
+    juce::LookAndFeel::setDefaultLookAndFeel(&pluginLookAndFeel);
+    setSize(780, 430);
     setWantsKeyboardFocus(true);
+    setOpaque(true);
     addKeyListener(this);
 
-    setSize(780, 430);
     audioProcessor.addChangeListener(this);
 
     addAndMakeVisible(loginView);
@@ -178,6 +237,7 @@ StemhubAudioProcessorEditor::~StemhubAudioProcessorEditor()
 {
     removeKeyListener(this);
     audioProcessor.removeChangeListener(this);
+    juce::LookAndFeel::setDefaultLookAndFeel(previousLookAndFeel);
 }
 
 void StemhubAudioProcessorEditor::changeListenerCallback(juce::ChangeBroadcaster* source)
@@ -215,7 +275,7 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
     else if (showDashboard)
         refreshDashboardUi();
     else
-        loginView.setMessage(getLoginMessage(audioProcessor));
+        loginView.setMessage(getLoginMessage(audioProcessor), getLoginStatus(audioProcessor));
 
     resized();
     repaint();
@@ -239,10 +299,13 @@ void StemhubAudioProcessorEditor::refreshProjectSelectionUi()
     const auto hasSelectedProjectFile = effectiveProjectFile.existsAsFile();
     projectSelectionView.setHasExistingProjects(!projects.empty());
     projectSelectionView.setCanCreateProject(hasSelectedProjectFile);
-    projectSelectionView.setMessage(getProjectSelectionMessage(audioProcessor));
-    projectSelectionView.setSelectedProjectFileMessage(hasSelectedProjectFile
-        ? effectiveProjectFile.getFullPathName()
-        : "No project file selected.");
+    projectSelectionView.setMessage(getProjectSelectionMessage(audioProcessor),
+                                   getProjectSelectionStatus(audioProcessor));
+    projectSelectionView.setProjectFileSelectionState(hasSelectedProjectFile,
+                                                      hasSelectedProjectFile
+                                                          ? effectiveProjectFile.getFullPathName()
+                                                          : juce::String());
+    projectSelectionView.setSelectedProjectFileMessage(formatProjectFileStatus(effectiveProjectFile));
     projectSelectionView.setProjects(projectNames,
                                      projectIds,
                                      audioProcessor.getSelectedProject() ? audioProcessor.getSelectedProject()->id : juce::String());
@@ -276,32 +339,25 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
 
     const auto fileToDisplay = getEffectiveProjectFile();
 
-    dashboardView.setProjectStatusMessage(getDashboardMessage(audioProcessor));
+    dashboardView.setProjectStatusMessage(getDashboardMessage(audioProcessor), getDashboardStatus(audioProcessor));
     dashboardView.setBranches(branchNames, branchIds, audioProcessor.getSelectedBranchId());
     dashboardView.setVersions(versionLabels, versionIds, audioProcessor.getSelectedVersionId());
-    const auto currentVersionLabel = audioProcessor.getCurrentOpenedVersionLabel();
-    const auto currentOpenedVersionId = audioProcessor.getCurrentOpenedVersionId();
-    dashboardView.setCurrentVersionId(currentVersionLabel);
-    dashboardView.setCurrentVersionFilePath(fileToDisplay.existsAsFile()
-                                               ? fileToDisplay.getFullPathName()
-                                               : "not available");
-    juce::Logger::writeToLog("[UI] Dashboard refresh -> currentVersionLabel=" + currentVersionLabel
-                             + ", currentOpenedVersionId=" + currentOpenedVersionId
-                             + ", selectedVersionId=" + audioProcessor.getSelectedVersionId()
+    juce::Logger::writeToLog("[UI] Dashboard refresh -> selectedVersionId=" + audioProcessor.getSelectedVersionId()
                              + ", openedFile=" + (fileToDisplay.existsAsFile() ? fileToDisplay.getFullPathName() : "not available"));
     dashboardView.setProjectNameMessage(audioProcessor.getSelectedProject()
         ? "Project: " + audioProcessor.getSelectedProject()->name
         : "Project: No project selected");
     dashboardView.setBranchNameMessage(audioProcessor.getSelectedBranchName().isNotEmpty()
-        ? "Branch: " + audioProcessor.getSelectedBranchName()
-        : "Branch: Not selected");
+        ? "Workspace: " + audioProcessor.getSelectedBranchName()
+        : "Workspace: Not selected");
+    dashboardView.setSelectedProjectFilePath(fileToDisplay.existsAsFile()
+                                                ? fileToDisplay.getFullPathName()
+                                                : juce::String());
 
-    dashboardView.setSelectedProjectFileMessage(fileToDisplay.existsAsFile()
-        ? fileToDisplay.getFullPathName()
-        : "No project file selected.");
+    dashboardView.setSelectedProjectFileMessage(formatProjectFileStatus(fileToDisplay));
 
     const auto bundleRootDirectory = resolveBundleRootDirectory(fileToDisplay);
-    dashboardView.setPackagedFiles(bundleRootDirectory.getFullPathName(),
+    dashboardView.setPackagedFiles({},
                                    collectPackagedRelativeFilePaths(bundleRootDirectory, fileToDisplay));
 }
 
@@ -404,7 +460,7 @@ void StemhubAudioProcessorEditor::handleSignInClick()
 
     if (email.isEmpty() || password.isEmpty())
     {
-        loginView.setMessage("Please enter both email and password.");
+        loginView.setMessage("Please enter both email and password.", stemhub::plugin::theme::MessageStatus::warning);
         return;
     }
     audioProcessor.requestSignIn(email, password);
@@ -515,7 +571,7 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
     {
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::WarningIcon,
-            "Push failed",
+            "Save failed",
             "Choose or create a project before saving.");
         refreshSessionUi();
         return;
@@ -585,10 +641,10 @@ void StemhubAudioProcessorEditor::handleVersionSelectionChanged()
 void StemhubAudioProcessorEditor::showCommitMessagePopupForSave()
 {
     auto* commitPopup = new juce::AlertWindow("Save version",
-                                              "Enter a commit message before saving.",
+                                              "Enter a save note before saving.",
                                               juce::AlertWindow::NoIcon);
 
-    commitPopup->addTextEditor("commit_message", dashboardView.getCommitMessage(), "Commit message");
+    commitPopup->addTextEditor("commit_message", dashboardView.getCommitMessage(), "Save note");
     commitPopup->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
     commitPopup->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
 
@@ -614,15 +670,16 @@ void StemhubAudioProcessorEditor::handleBackToProjectsClick()
 
 void StemhubAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(kStemhubDark);
+    g.fillAll(stemhub::plugin::theme::PluginTheme::kBackground);
 
-    juce::ColourGradient topGlow(kStemhubPurple.withAlpha(0.22f),
+    juce::ColourGradient topGlow(stemhub::plugin::theme::PluginTheme::kAccent.withAlpha(0.22f),
                                  static_cast<float>(getWidth()) * 0.52f,
                                  static_cast<float>(getHeight()) * 0.08f,
-                                 kStemhubDark,
+                                 stemhub::plugin::theme::PluginTheme::kBackground,
                                  static_cast<float>(getWidth()) * 0.5f,
                                  static_cast<float>(getHeight()) * 0.7f,
                                  true);
+
     g.setGradientFill(topGlow);
     g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(6.0f), 10.0f);
 }
