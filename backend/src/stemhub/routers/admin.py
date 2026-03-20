@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, cast, Date
@@ -10,39 +9,9 @@ from sqlalchemy import func, cast, Date
 from ..auth import get_current_admin_user
 from ..database import get_db
 from ..models import Project, User
-from ..schemas import UserResponse
+from ..schemas import UserResponse, DailySignup, AdminStats, UserWithProjects, RecentUser
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
-
-
-# ── Schemas ──────────────────────────────────────────────────────────────────
-
-class DailySignup(BaseModel):
-    date: str
-    count: int
-
-class AdminStats(BaseModel):
-    total_users: int
-    total_projects: int
-    active_users: int
-    admin_users: int
-    public_projects: int
-    private_projects: int
-    signups_last_30_days: list[DailySignup]
-
-class UserWithProjects(UserResponse):
-    project_count: int
-
-class RecentUser(BaseModel):
-    id: UUID
-    username: str
-    email: str
-    avatar_url: str | None
-    created_at: datetime
-    is_admin: bool
-
-    class Config:
-        from_attributes = True
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -51,8 +20,8 @@ class RecentUser(BaseModel):
 async def list_users(
     _: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> list[UserWithProjects]:
     result = await db.execute(
         select(User).order_by(User.created_at.desc()).limit(limit).offset(offset)

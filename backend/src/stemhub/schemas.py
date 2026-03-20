@@ -302,3 +302,32 @@ class EventResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# ── Admin Schemas ──
+
+class DailySignup(BaseModel):
+    date: str
+    count: int
+
+class AdminStats(BaseModel):
+    total_users: int
+    total_projects: int
+    active_users: int
+    admin_users: int
+    public_projects: int
+    private_projects: int
+    signups_last_30_days: list[DailySignup]
+
+class UserWithProjects(UserResponse):
+    project_count: int
+
+class RecentUser(BaseModel):
+    id: UUID
+    username: str
+    email: EmailStr
+    avatar_url: Optional[str] = None
+    created_at: datetime
+    is_admin: bool
+
+    class Config:
+        from_attributes = True
