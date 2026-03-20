@@ -59,9 +59,14 @@ class DummyAsyncSession:
         def scalars(self):
             return DummyAsyncSession._ScalarsProxy(self._value if isinstance(self._value, list) else [self._value])
 
+        def all(self):
+            return self._value if isinstance(self._value, list) else [self._value]
+
     async def execute(self, stmt):
         stmt_str = str(stmt)
-        if "count" in stmt_str.lower() and "users" in stmt_str.lower():
+        if "group_by" in stmt_str.lower():
+            return self._Result([])
+        if "count" in stmt_str.lower() and "user" in stmt_str.lower():
             return self._ScalarResult(self._user_count)
         if "count" in stmt_str.lower() and "project" in stmt_str.lower():
             return self._ScalarResult(self._project_count)
