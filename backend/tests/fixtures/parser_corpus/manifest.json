@@ -1,0 +1,207 @@
+{
+  "fixtures": [
+    {
+      "id": "pyflp_reference_project",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/FL 20.8.4.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "success",
+        "project": {
+          "title": "PyFLP Test FLP",
+          "channel_count": 19,
+          "tempo": 69.42,
+          "version": "20.8.4.2576"
+        },
+        "mixer_snapshot": {
+          "mixer_supported": true,
+          "insert_count": 126,
+          "named_inserts_prefix": [
+            "Audio track",
+            "Instrument track",
+            "Colored",
+            "Zero Volume"
+          ]
+        }
+      }
+    },
+    {
+      "id": "pyflp_multi_channel_pattern_project",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/patterns/multi-channel.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "success",
+        "project": {
+          "title": "",
+          "channel_count": 2,
+          "tempo": 140.0,
+          "version": "20.8.4.2576"
+        },
+        "mixer_snapshot": {
+          "mixer_supported": true,
+          "insert_count": 126,
+          "named_inserts_prefix": []
+        }
+      }
+    },
+    {
+      "id": "corrupted_invalid_data_magic",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/corrupted/invalid-data-magic.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "error",
+        "error": {
+          "type": "HeaderCorrupted",
+          "message_contains": "expected 'FLdt'"
+        }
+      }
+    },
+    {
+      "id": "corrupted_invalid_event_size",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/corrupted/invalid-event-size.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "error",
+        "error": {
+          "type": "HeaderCorrupted",
+          "message_contains": "Data chunk size corrupted"
+        }
+      }
+    },
+    {
+      "id": "corrupted_invalid_format",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/corrupted/invalid-format.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "error",
+        "error": {
+          "type": "HeaderCorrupted",
+          "message_contains": "Unsupported project file format"
+        }
+      }
+    },
+    {
+      "id": "corrupted_invalid_header_magic",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/corrupted/invalid-header-magic.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "error",
+        "error": {
+          "type": "HeaderCorrupted",
+          "message_contains": "expected 'FLhd'"
+        }
+      }
+    },
+    {
+      "id": "corrupted_invalid_header_size",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/corrupted/invalid-header-size.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "error",
+        "error": {
+          "type": "HeaderCorrupted",
+          "message_contains": "expected 6"
+        }
+      }
+    },
+    {
+      "id": "corrupted_invalid_ppq",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/corrupted/invalid-ppq.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "error",
+        "error": {
+          "type": "HeaderCorrupted",
+          "message_contains": "Invalid PPQ"
+        }
+      }
+    },
+    {
+      "id": "stemhub_snapshot_manifest_path_reference_project",
+      "path": "backend/tests/fixtures/parser_corpus/assets/stemhub_snapshots/roadmap-reference-snapshot.zip",
+      "artifact_path": "projects/demo/branches/main/versions/reference/snapshot/roadmap-reference-snapshot.zip",
+      "kind": "stemhub_snapshot_archive",
+      "snapshot_manifest": {
+        "flp_relative_path": "Projects/demo/reference.flp"
+      },
+      "expectations": {
+        "parse": "success",
+        "mixer_snapshot": {
+          "mixer_supported": true,
+          "insert_count": 126,
+          "flp_size_bytes": 190128,
+          "flp_sha256": "60822a9e2fde1397f4287caa56444618d339c0812a40ca86ce090cd1617f51de",
+          "named_inserts_prefix": [
+            "Audio track",
+            "Instrument track",
+            "Colored",
+            "Zero Volume"
+          ]
+        }
+      }
+    },
+    {
+      "id": "stemhub_snapshot_source_filename_multi_channel",
+      "path": "backend/tests/fixtures/parser_corpus/assets/stemhub_snapshots/roadmap-source-filename-snapshot.zip",
+      "artifact_path": "projects/demo/branches/feature/versions/multi-channel/snapshot/roadmap-source-filename-snapshot.zip",
+      "kind": "stemhub_snapshot_archive",
+      "snapshot_manifest": {
+        "source_project_filename": "roadmap-multi-channel.flp"
+      },
+      "expectations": {
+        "parse": "success",
+        "mixer_snapshot": {
+          "mixer_supported": true,
+          "insert_count": 126,
+          "flp_size_bytes": 115522,
+          "flp_sha256": "9fe81fbefb0dfcafdf7bbe86f71850ebcff29c933efa3d74df256c6be2c8a30c",
+          "named_inserts_prefix": []
+        }
+      }
+    },
+    {
+      "id": "stemhub_snapshot_missing_flp_error",
+      "path": "backend/tests/fixtures/parser_corpus/assets/stemhub_snapshots/roadmap-missing-flp-snapshot.zip",
+      "artifact_path": "projects/demo/branches/main/versions/missing/snapshot/roadmap-missing-flp-snapshot.zip",
+      "kind": "stemhub_snapshot_archive",
+      "snapshot_manifest": {
+        "flp_relative_path": "missing/project.flp"
+      },
+      "expectations": {
+        "parse": "error",
+        "error": {
+          "type": "MixerSnapshotError",
+          "message_contains": "Snapshot archive does not contain an FL Studio project file."
+        }
+      }
+    },
+    {
+      "id": "stemhub_snapshot_superbeat_user_fixture",
+      "path": "backend/tests/fixtures/parser_corpus/assets/stemhub_snapshots/SuperBeat.zip",
+      "artifact_path": "projects/demo/branches/main/versions/superbeat/snapshot/SuperBeat.zip",
+      "kind": "stemhub_snapshot_archive",
+      "snapshot_manifest": {
+        "source_project_filename": "SuperBeat.flp"
+      },
+      "expectations": {
+        "parse": "success",
+        "mixer_snapshot": {
+          "mixer_supported": true,
+          "insert_count": 126,
+          "flp_size_bytes": 600354,
+          "flp_sha256": "a6f2b29210f0aa0e3dbd5d920fc4e4b60a1effc19c1770a23ca5af3333da5bac",
+          "named_inserts_prefix": [
+            "Kick",
+            "Hat",
+            "clap (anything)",
+            "perc (haha)",
+            "snare (close)_2",
+            "hat (be nice 2 me)",
+            "kick (rack dry)",
+            "808",
+            "open hat (special place)"
+          ]
+        }
+      }
+    }
+  ]
+}
