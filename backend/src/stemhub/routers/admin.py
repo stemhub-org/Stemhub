@@ -34,7 +34,7 @@ async def list_users(
         .where(Project.is_deleted == False)
         .group_by(Project.owner_id)
     )
-    counts = {row.owner_id: row.cnt for row in project_counts_result}
+    counts = {row.owner_id: row.cnt for row in project_counts_result.all()}
 
     return [
         UserWithProjects(**UserResponse.model_validate(u).model_dump(), project_count=counts.get(u.id, 0))
@@ -47,11 +47,11 @@ async def get_stats(
     _: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminStats:
-    total_users = (await db.execute(select(func.count()).select_from(User))).scalar_one()
-    active_users = (await db.execute(select(func.count()).select_from(User).where(User.is_active == True))).scalar_one()
-    admin_users = (await db.execute(select(func.count()).select_from(User).where(User.is_admin == True))).scalar_one()
-    total_projects = (await db.execute(select(func.count()).select_from(Project).where(Project.is_deleted == False))).scalar_one()
-    public_projects = (await db.execute(select(func.count()).select_from(Project).where(Project.is_deleted == False, Project.is_public == True))).scalar_one()
+    total_users = (await db.execute(select(func.count()).select_from(User))).scalar() or 0
+    active_users = (await db.execute(select(func.count()).select_from(User).where(User.is_active == True))).scalar() or 0
+    admin_users = (await db.execute(select(func.count()).select_from(User).where(User.is_admin == True))).scalar() or 0
+    total_projects = (await db.execute(select(func.count()).select_from(Project).where(Project.is_deleted == False))).scalar() or 0
+    public_projects = (await db.execute(select(func.count()).select_from(Project).where(Project.is_deleted == False, Project.is_public == True))).scalar() or 0
     private_projects = total_projects - public_projects
 
     # Signups per day over last 30 days
@@ -65,7 +65,7 @@ async def get_stats(
         .group_by("day")
         .order_by("day")
     )
-    signup_map = {str(row.day): row.cnt for row in rows}
+    signup_map = {str(row.day): row.cnt for row in rows.all()}
 
     # Fill all 30 days (including zeros)
     signups_last_30_days = []
