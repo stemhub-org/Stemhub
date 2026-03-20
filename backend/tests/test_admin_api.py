@@ -63,12 +63,12 @@ class DummyAsyncSession:
             return self._value if isinstance(self._value, list) else [self._value]
 
     async def execute(self, stmt):
-        stmt_str = str(stmt)
-        if "group_by" in stmt_str.lower():
+        stmt_str = str(stmt).lower()
+        if "group by" in stmt_str:
             return self._Result([])
-        if "count" in stmt_str.lower() and "user" in stmt_str.lower():
+        if "count" in stmt_str and "user" in stmt_str:
             return self._ScalarResult(self._user_count)
-        if "count" in stmt_str.lower() and "project" in stmt_str.lower():
+        if "count" in stmt_str and "project" in stmt_str:
             return self._ScalarResult(self._project_count)
         # list query – return users
         return self._Result(self._users)
