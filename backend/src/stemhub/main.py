@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 import os
+import logging
 from contextlib import asynccontextmanager
 from .auth import router as auth_router
 from .routers.files import router as files_router
@@ -12,9 +14,14 @@ from .routers.stats import router as stats_router
 from .routers.admin import router as admin_router
 from .routers.explore import router as explore_router
 from .routers.community import router as community_router
-from .routers.admin import router as admin_router
+from .routers.blobs import router as blobs_router
 from .database import engine
 from .migrations import check_migrations_async
+from .logging_config import RequestIdMiddleware, configure_logging
+
+configure_logging()
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,10 +30,9 @@ async def lifespan(app: FastAPI):
     try:
         await check_migrations_async()
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Startup failed due to pending migrations: {e}")
+        logger.error(f"Startup failed due to pending migrations: {e}")
         raise RuntimeError("Pending migrations found. Please run 'alembic upgrade head' before starting the application.") from e
-        
+
     yield
 
 app = FastAPI(title="StemHub API", lifespan=lifespan)
@@ -55,6 +61,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestIdMiddleware)
 
 app.include_router(auth_router)
 app.include_router(projects_router)
@@ -66,8 +73,26 @@ app.include_router(stats_router)
 app.include_router(admin_router)
 app.include_router(explore_router)
 app.include_router(community_router)
-app.include_router(admin_router)
+app.include_router(blobs_router)
+
 
 @app.get("/")
 async def root():
     return {"message": "Welcome to the StemHub API"}
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return {"status": "ready"}
+    except Exception as exc:
+        logger.warning("readiness check failed: %s", exc)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=503, content={"status": "not_ready", "detail": str(exc)})
