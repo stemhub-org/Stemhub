@@ -98,12 +98,27 @@ class Version(Base):
     source_daw: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_project_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     snapshot_manifest: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    manifest_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    manifest_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # ── Relationships ──
     branch: Mapped["Branch"] = relationship("Branch", back_populates="versions")
     author: Mapped["User | None"] = relationship("User", foreign_keys=[created_by])
     parent: Mapped["Version | None"] = relationship("Version", remote_side="Version.id", backref="children")
     tracks: Mapped[list["Track"]] = relationship("Track", back_populates="version")
+
+
+class Blob(Base):
+    """Content-addressed blob. Project-scoped for privacy — see docs/content-addressed-storage.md."""
+    __tablename__ = "blob"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("project.id", ondelete="CASCADE"), primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    mime_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    storage_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    ref_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class Track(Base):
