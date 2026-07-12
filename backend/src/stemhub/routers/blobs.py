@@ -5,7 +5,7 @@ See docs/content-addressed-storage.md for the design rationale.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -147,6 +147,12 @@ async def download_blob(
     blob = result.scalar_one_or_none()
     if blob is None:
         raise HTTPException(status_code=404, detail="Blob not found")
+
+    # Backends that support presigned URLs (e.g. GCS) return one and we
+    # redirect the client to it — bytes never flow through the API server.
+    presigned = storage.get_blob_download_url(blob.storage_uri)
+    if presigned is not None:
+        return RedirectResponse(url=presigned, status_code=307)
 
     try:
         path = storage.resolve_blob_path(blob.storage_uri)

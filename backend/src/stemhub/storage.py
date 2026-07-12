@@ -148,6 +148,15 @@ class StorageService(ABC):
     def delete_blob(self, storage_uri: str) -> bool:
         raise NotImplementedError
 
+    def get_blob_download_url(self, storage_uri: str, *, ttl_seconds: int = 900) -> str | None:
+        """Return a URL the client can download the blob from directly.
+
+        Only meaningful for storage backends that support presigned URLs
+        (e.g. GCS). Local FS returns None; the caller should fall back to
+        streaming via FileResponse.
+        """
+        return None
+
 
 class GCSStorageService(StorageService):
     _GCS_SCHEME = "gcs://"
@@ -324,6 +333,16 @@ class GCSStorageService(StorageService):
             return False
         gcs_blob.delete()
         return True
+
+    def get_blob_download_url(self, storage_uri: str, *, ttl_seconds: int = 900) -> str | None:
+        from datetime import timedelta
+        blob_path = self._to_blob_path(storage_uri)
+        gcs_blob = self._bucket.blob(blob_path)
+        return gcs_blob.generate_signed_url(
+            expiration=timedelta(seconds=ttl_seconds),
+            method="GET",
+            version="v4",
+        )
 
     def _build_artifact_path(self, project_id: UUID, branch_id: UUID, version_id: UUID, filename: str) -> str:
         return (

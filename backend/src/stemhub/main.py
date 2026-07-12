@@ -92,7 +92,9 @@ async def ready():
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return {"status": "ready"}
-    except Exception as exc:
-        logger.warning("readiness check failed: %s", exc)
+    except Exception:
+        # Log the real exception server-side; don't leak it to callers,
+        # since it can contain DB connection strings or internal hostnames.
+        logger.exception("readiness check failed")
         from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=503, content={"status": "not_ready", "detail": str(exc)})
+        return JSONResponse(status_code=503, content={"status": "not_ready", "detail": "database unavailable"})
