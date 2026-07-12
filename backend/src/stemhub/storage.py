@@ -300,9 +300,11 @@ class GCSStorageService(StorageService):
         try:
             blob_path = self._build_blob_path(project_id, checksum_sha256)
             gcs_blob = self._bucket.blob(blob_path)
-            if not gcs_blob.exists():
-                with tmp_path.open("rb") as upload_source:
-                    gcs_blob.upload_from_file(upload_source, size=size_bytes)
+            # No pre-check via exists(): the DB-level idempotency check in the
+            # blobs router already gates duplicate uploads. Overwriting with
+            # identical bytes is safe (content-addressed by SHA-256).
+            with tmp_path.open("rb") as upload_source:
+                gcs_blob.upload_from_file(upload_source, size=size_bytes)
         finally:
             tmp_path.unlink(missing_ok=True)
 

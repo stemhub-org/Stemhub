@@ -48,9 +48,20 @@ def configure_logging() -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
+_REQUEST_ID_ALLOWED = set("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_")
+_REQUEST_ID_MAX_LEN = 64
+
+
+def _sanitize_request_id(raw: str | None) -> str:
+    if not raw:
+        return uuid.uuid4().hex
+    cleaned = "".join(c for c in raw if c in _REQUEST_ID_ALLOWED)[:_REQUEST_ID_MAX_LEN]
+    return cleaned or uuid.uuid4().hex
+
+
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        rid = request.headers.get("x-request-id") or uuid.uuid4().hex
+        rid = _sanitize_request_id(request.headers.get("x-request-id"))
         token = _request_id.set(rid)
         started = time.perf_counter()
         response: Response | None = None

@@ -97,7 +97,17 @@ class Version(Base):
     artifact_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)  # SHA-256 for integrity verification
     source_daw: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_project_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # ── Version payload ──
+    # snapshot_manifest is the legacy field: it stores the DAW mixer state that
+    # was extracted from the (whole) artifact bundle uploaded via the old flow.
+    # It will keep being written by the legacy POST /versions endpoint until
+    # the plugin migrates to the manifest-based flow.
     snapshot_manifest: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # manifest_json is the content-addressed manifest (see
+    # docs/content-addressed-storage.md). Populated only by the new
+    # manifest-based version-create endpoint. When set, artifact_path /
+    # artifact_size_bytes / artifact_checksum are unused. manifest_version
+    # is the schema version of this JSON blob so future readers can migrate.
     manifest_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     manifest_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 

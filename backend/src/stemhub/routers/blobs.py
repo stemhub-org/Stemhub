@@ -4,22 +4,31 @@ See docs/content-addressed-storage.md for the design rationale.
 """
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
-from stemhub.models import Blob, Collaborator, Project, User
+from stemhub.models import Blob, User
 from stemhub.storage import StorageNotFoundError, StorageService, get_storage_service
+
+from ._project_access import (
+    get_project_with_read_access,
+    get_project_with_write_access,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/blobs", tags=["blobs"])
 
+# Cap on how many sha256s a client can query per check-missing request.
+# Prevents an unbounded IN (...) query from a single request.
+CHECK_MISSING_MAX_ITEMS = 1000
+
 
 class CheckMissingRequest(BaseModel):
-    sha256s: list[str]
+    sha256s: list[str] = Field(default_factory=list, max_length=CHECK_MISSING_MAX_ITEMS)
 
 
 class CheckMissingResponse(BaseModel):
@@ -30,61 +39,6 @@ class BlobResponse(BaseModel):
     sha256: str
     size_bytes: int
     mime_type: str | None = None
-
-
-async def _get_project_with_write_access(
-    *, project_id: UUID, current_user: User, db: AsyncSession
-) -> Project:
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.is_deleted == False,
-        )
-    )
-    project = result.scalar_one_or_none()
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    if project.owner_id == current_user.id:
-        return project
-
-    collab = await db.execute(
-        select(Collaborator).where(
-            Collaborator.project_id == project.id,
-            Collaborator.user_id == current_user.id,
-            Collaborator.role.in_(["Admin", "Editor"]),
-        )
-    )
-    if collab.scalars().first() is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
-
-
-async def _get_project_with_read_access(
-    *, project_id: UUID, current_user: User, db: AsyncSession
-) -> Project:
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.is_deleted == False,
-        )
-    )
-    project = result.scalar_one_or_none()
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    if project.is_public or project.owner_id == current_user.id:
-        return project
-
-    collab = await db.execute(
-        select(Collaborator).where(
-            Collaborator.project_id == project.id,
-            Collaborator.user_id == current_user.id,
-        )
-    )
-    if collab.scalars().first() is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
 
 
 def _validate_sha256(candidate: str) -> str:
@@ -101,7 +55,7 @@ async def check_missing(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CheckMissingResponse:
-    await _get_project_with_write_access(
+    await get_project_with_write_access(
         project_id=project_id, current_user=current_user, db=db
     )
     requested = [_validate_sha256(s) for s in payload.sha256s]
@@ -128,7 +82,7 @@ async def upload_blob(
     storage: StorageService = Depends(get_storage_service),
 ) -> BlobResponse:
     expected_sha = _validate_sha256(sha256)
-    await _get_project_with_write_access(
+    await get_project_with_write_access(
         project_id=project_id, current_user=current_user, db=db
     )
 
@@ -143,9 +97,13 @@ async def upload_blob(
             mime_type=existing_blob.mime_type,
         )
 
+    # Write bytes to storage first, then the DB row. If the process dies between
+    # the two steps, the storage object is orphaned (no DB row references it).
+    # This is acceptable: the GC sweep for blobs with ref_count == 0 (see
+    # docs/content-addressed-storage.md) will reclaim it after the grace window.
+    # The reverse order (DB first) would produce 404s on download and is worse.
     stored = storage.store_blob(project_id=project_id, source=file.file)
     if stored.checksum_sha256 != expected_sha:
-        # Integrity mismatch: client claimed X, bytes hashed to Y.
         storage.delete_blob(stored.path)
         raise HTTPException(
             status_code=400,
@@ -179,7 +137,7 @@ async def download_blob(
     storage: StorageService = Depends(get_storage_service),
 ):
     expected_sha = _validate_sha256(sha256)
-    await _get_project_with_read_access(
+    await get_project_with_read_access(
         project_id=project_id, current_user=current_user, db=db
     )
 
