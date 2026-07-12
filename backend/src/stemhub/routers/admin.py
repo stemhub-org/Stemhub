@@ -7,9 +7,11 @@ from sqlalchemy.future import select
 from sqlalchemy import func, cast, Date
 
 from ..auth import get_current_admin_user
+from ..blob_gc import sweep_orphan_blobs
 from ..database import get_db
 from ..models import Project, User
 from ..schemas import UserResponse, DailySignup, AdminStats, UserWithProjects, RecentUser
+from ..storage import StorageService, get_storage_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -129,3 +131,32 @@ async def toggle_active(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.post("/blobs/gc")
+async def run_blob_gc(
+    _: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
+    grace_hours: int = Query(24, ge=0, le=720),
+    batch_size: int = Query(500, ge=1, le=5000),
+):
+    """Run one pass of the content-addressed blob GC sweep.
+
+    Deletes blobs where ref_count == 0 and older than the grace window.
+    See docs/content-addressed-storage.md. Intended to be invoked by an
+    external scheduler; also usable ad-hoc from an admin session.
+    """
+    result = await sweep_orphan_blobs(
+        db=db,
+        storage=storage,
+        grace_hours=grace_hours,
+        batch_size=batch_size,
+    )
+    return {
+        "scanned": result.scanned,
+        "deleted": result.deleted,
+        "failed": result.failed,
+        "grace_hours": grace_hours,
+        "batch_size": batch_size,
+    }
