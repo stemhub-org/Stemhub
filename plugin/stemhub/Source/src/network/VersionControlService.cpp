@@ -272,3 +272,97 @@ juce::String VersionControlService::resolveParentVersionId(const PushVersionRequ
 
     return context.lastVersionId;
 }
+
+namespace
+{
+juce::String sha256HexOfLocalFile(const juce::File& file)
+{
+    juce::FileInputStream stream(file);
+    if (!stream.openedOk())
+        return {};
+    return juce::SHA256(stream).toHexString();
+}
+}
+
+juce::Result VersionControlService::restoreVersionFromManifest(const juce::String& projectId,
+                                                                 const juce::String& versionId,
+                                                                 const juce::File& restoreDirectory,
+                                                                 juce::File& outProjectFile)
+{
+    outProjectFile = juce::File();
+
+    if (accessToken.isEmpty())
+        return juce::Result::fail("No access token is configured for version control.");
+    if (versionId.isEmpty())
+        return juce::Result::fail("A version ID is required to restore a snapshot.");
+    if (projectId.isEmpty())
+        return juce::Result::fail("A project ID is required to restore a snapshot.");
+
+    const auto* api = getApiClient();
+    if (api == nullptr)
+        return juce::Result::fail("VersionControlService API client is not configured.");
+
+    // Fetch the version detail — we want manifest_json (added to
+    // VersionResponse in the CAS integration PR).
+    const auto detailResult = api->requestJson("/versions/" + versionId, "GET", {}, accessToken);
+    if (!detailResult.ok())
+        return juce::Result::fail(buildApiErrorMessage(detailResult.error, "Failed to fetch version detail."));
+
+    auto* detailObj = detailResult.value->getDynamicObject();
+    if (detailObj == nullptr)
+        return juce::Result::fail("Version detail is not a JSON object.");
+
+    const auto manifestJson = detailObj->getProperty("manifest_json");
+    if (manifestJson.isVoid() || !manifestJson.isObject())
+        return juce::Result::fail("Version has no content-addressed manifest.");
+
+    ParsedManifest parsed;
+    const auto parseStatus = SnapshotBundler::parseContentAddressedManifest(manifestJson, parsed);
+    if (parseStatus.failed())
+        return parseStatus;
+
+    if (!restoreDirectory.exists() && !restoreDirectory.createDirectory())
+        return juce::Result::fail("Failed to create restore directory: " + restoreDirectory.getFullPathName());
+    if (!restoreDirectory.isDirectory())
+        return juce::Result::fail("Restore path is not a directory: " + restoreDirectory.getFullPathName());
+
+    std::vector<juce::File> writtenFiles;
+    writtenFiles.reserve(parsed.entries.size());
+
+    for (const auto& entry : parsed.entries)
+    {
+        auto dest = restoreDirectory.getChildFile(entry.filename);
+        if (dest.existsAsFile())
+            dest.deleteFile();
+
+        const auto downloadStatus = api->downloadBlob(projectId, entry.sha256, dest, accessToken);
+        if (downloadStatus.failed())
+        {
+            for (auto& f : writtenFiles) f.deleteFile();
+            return juce::Result::fail("Failed to download blob " + entry.filename
+                                       + " (" + entry.sha256.substring(0, 12) + "..): "
+                                       + downloadStatus.getErrorMessage());
+        }
+
+        const auto localSha = sha256HexOfLocalFile(dest);
+        if (localSha != entry.sha256)
+        {
+            for (auto& f : writtenFiles) f.deleteFile();
+            dest.deleteFile();
+            return juce::Result::fail("SHA-256 mismatch for " + entry.filename
+                                       + ": expected " + entry.sha256.substring(0, 12)
+                                       + ", got " + localSha.substring(0, 12));
+        }
+
+        writtenFiles.push_back(dest);
+        if (entry.isProjectFile)
+            outProjectFile = dest;
+    }
+
+    if (!outProjectFile.existsAsFile())
+        return juce::Result::fail("Manifest did not include a project file entry.");
+
+    context.projectId = projectId;
+    context.lastVersionId = versionId;
+    return juce::Result::ok();
+}

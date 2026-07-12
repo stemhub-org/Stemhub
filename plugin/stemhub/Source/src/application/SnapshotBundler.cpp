@@ -274,3 +274,56 @@ juce::Result SnapshotBundler::buildContentAddressedManifest(const SnapshotBundle
 
     return juce::Result::ok();
 }
+
+namespace
+{
+    bool readBlobRef(const juce::var& value, ParsedManifestEntry& outEntry)
+    {
+        auto* obj = value.getDynamicObject();
+        if (obj == nullptr)
+            return false;
+
+        outEntry.sha256 = obj->getProperty("sha256").toString().toLowerCase();
+        outEntry.filename = obj->getProperty("filename").toString();
+        outEntry.sizeBytes = static_cast<juce::int64>(obj->getProperty("size_bytes"));
+        return outEntry.sha256.length() == 64 && outEntry.filename.isNotEmpty();
+    }
+}
+
+juce::Result SnapshotBundler::parseContentAddressedManifest(const juce::var& manifestJson,
+                                                              ParsedManifest& outResult)
+{
+    outResult = {};
+
+    auto* root = manifestJson.getDynamicObject();
+    if (root == nullptr)
+        return juce::Result::fail("Manifest is not a JSON object.");
+
+    const auto version = static_cast<int>(root->getProperty("manifest_version"));
+    if (version != 1)
+        return juce::Result::fail("Unsupported manifest_version: " + juce::String(version));
+
+    outResult.manifestVersion = version;
+    outResult.sourceDaw = root->getProperty("source_daw").toString();
+    outResult.sourceProjectFilename = root->getProperty("source_project_filename").toString();
+
+    ParsedManifestEntry projectEntry;
+    if (!readBlobRef(root->getProperty("project_file"), projectEntry))
+        return juce::Result::fail("Manifest project_file is missing or malformed.");
+    projectEntry.isProjectFile = true;
+    outResult.entries.push_back(std::move(projectEntry));
+
+    const auto tracksVar = root->getProperty("tracks");
+    if (tracksVar.isArray())
+    {
+        for (const auto& trackVar : *tracksVar.getArray())
+        {
+            ParsedManifestEntry entry;
+            if (!readBlobRef(trackVar, entry))
+                return juce::Result::fail("Manifest track entry is malformed.");
+            outResult.entries.push_back(std::move(entry));
+        }
+    }
+
+    return juce::Result::ok();
+}
