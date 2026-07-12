@@ -449,3 +449,15 @@ ApiResult<juce::var> ApiClient::createVersionFromManifest(const juce::String& br
         return { {}, jsonResult.error };
     return { *jsonResult.value, {} };
 }
+
+juce::Result ApiClient::downloadBlob(const juce::String& projectId,
+                                       const juce::String& sha256,
+                                       const juce::File& destinationFile,
+                                       const juce::String& accessToken) const
+{
+    // Reuse the existing downloadFile plumbing. Backend may 307-redirect to
+    // a presigned URL (GCS); juce::URL's input stream follows redirects.
+    return downloadFile("/projects/" + projectId + "/blobs/" + sha256,
+                        destinationFile,
+                        accessToken);
+}

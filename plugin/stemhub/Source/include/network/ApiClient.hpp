@@ -45,6 +45,13 @@ public:
     virtual ApiResult<juce::var> createVersionFromManifest(const juce::String& branchId,
                                                             const juce::var& payload,
                                                             const juce::String& accessToken) const = 0;
+    // Download a single blob to a local file. Backend may 307-redirect to a
+    // presigned URL (GCS) — juce::URL's input stream follows redirects by
+    // default so the implementation is a normal GET.
+    virtual juce::Result downloadBlob(const juce::String& projectId,
+                                       const juce::String& sha256,
+                                       const juce::File& destinationFile,
+                                       const juce::String& accessToken) const = 0;
 };
 
 class ApiClient final : public IProjectApi
@@ -80,6 +87,10 @@ public:
     ApiResult<juce::var> createVersionFromManifest(const juce::String& branchId,
                                                     const juce::var& payload,
                                                     const juce::String& accessToken) const override;
+    juce::Result downloadBlob(const juce::String& projectId,
+                               const juce::String& sha256,
+                               const juce::File& destinationFile,
+                               const juce::String& accessToken) const override;
 
 private:
     juce::String baseUrl;
