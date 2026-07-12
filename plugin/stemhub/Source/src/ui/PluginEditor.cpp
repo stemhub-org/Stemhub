@@ -600,7 +600,11 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
 
 void StemhubAudioProcessorEditor::triggerPushVersion(const juce::String& commitMessage)
 {
-    audioProcessor.requestPushVersion(commitMessage, kDawName);
+    // Content-addressed push: uploads only novel blobs (SHA-256 dedup within
+    // the project). See docs/content-addressed-storage.md. The legacy
+    // whole-bundle path remains available via
+    // audioProcessor.requestPushVersion() if a rollback is needed.
+    audioProcessor.requestPushVersionContentAddressed(commitMessage, kDawName);
     refreshSessionUi();
 }
 
