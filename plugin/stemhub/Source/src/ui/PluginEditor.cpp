@@ -196,7 +196,7 @@ juce::String formatProjectFileStatus(const juce::File& file)
     if (!file.existsAsFile())
         return "No project file selected.";
 
-    return "DAW file selected: " + file.getFileName();
+    return file.getFileName();
 }
 }
 
@@ -205,7 +205,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& 
 {
     previousLookAndFeel = &juce::LookAndFeel::getDefaultLookAndFeel();
     juce::LookAndFeel::setDefaultLookAndFeel(&pluginLookAndFeel);
-    setSize(780, 430);
+    setSize(720, 560);
     setWantsKeyboardFocus(true);
     setOpaque(true);
     addKeyListener(this);
@@ -345,11 +345,11 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
     juce::Logger::writeToLog("[UI] Dashboard refresh -> selectedVersionId=" + audioProcessor.getSelectedVersionId()
                              + ", openedFile=" + (fileToDisplay.existsAsFile() ? fileToDisplay.getFullPathName() : "not available"));
     dashboardView.setProjectNameMessage(audioProcessor.getSelectedProject()
-        ? "Project: " + audioProcessor.getSelectedProject()->name
-        : "Project: No project selected");
+        ? audioProcessor.getSelectedProject()->name
+        : "No project selected");
     dashboardView.setBranchNameMessage(audioProcessor.getSelectedBranchName().isNotEmpty()
-        ? "Workspace: " + audioProcessor.getSelectedBranchName()
-        : "Workspace: Not selected");
+        ? audioProcessor.getSelectedBranchName()
+        : "Workspace not selected");
     dashboardView.setSelectedProjectFilePath(fileToDisplay.existsAsFile()
                                                 ? fileToDisplay.getFullPathName()
                                                 : juce::String());
@@ -671,17 +671,8 @@ void StemhubAudioProcessorEditor::handleBackToProjectsClick()
 void StemhubAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(stemhub::plugin::theme::PluginTheme::kBackground);
-
-    juce::ColourGradient topGlow(stemhub::plugin::theme::PluginTheme::kAccent.withAlpha(0.22f),
-                                 static_cast<float>(getWidth()) * 0.52f,
-                                 static_cast<float>(getHeight()) * 0.08f,
-                                 stemhub::plugin::theme::PluginTheme::kBackground,
-                                 static_cast<float>(getWidth()) * 0.5f,
-                                 static_cast<float>(getHeight()) * 0.7f,
-                                 true);
-
-    g.setGradientFill(topGlow);
-    g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(6.0f), 10.0f);
+    g.setColour(stemhub::plugin::theme::PluginTheme::kAccentGlow);
+    g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(10.0f), 12.0f);
 }
 
 void StemhubAudioProcessorEditor::resized()
