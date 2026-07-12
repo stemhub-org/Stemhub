@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 # ── User Schemas ──
 
@@ -98,6 +98,8 @@ class VersionBase(BaseModel):
     source_daw: Optional[str] = None
     source_project_filename: Optional[str] = None
     snapshot_manifest: Optional[dict[str, Any]] = None
+    manifest_json: Optional[dict[str, Any]] = None
+    manifest_version: Optional[int] = None
 
 class VersionCreate(VersionBase):
     pass
@@ -113,6 +115,49 @@ class VersionResponse(VersionBase):
 
     class Config:
         from_attributes = True
+
+
+# ── Content-Addressed Manifest (v1) ──
+#
+# See docs/content-addressed-storage.md. Every blob reference is a hex
+# SHA-256 that must already exist in the project's blob table (uploaded
+# via PUT /projects/{pid}/blobs/{sha256}) before a version can reference it.
+
+_SHA256_HEX_RE = "^[0-9a-f]{64}$"
+
+
+class ManifestBlobRef(BaseModel):
+    sha256: str = Field(pattern=_SHA256_HEX_RE)
+    size_bytes: int = Field(ge=0)
+    filename: str = Field(min_length=1, max_length=255)
+
+
+class ManifestTrack(ManifestBlobRef):
+    name: str = Field(min_length=1, max_length=255)
+    bpm: Optional[int] = Field(default=None, ge=1, le=1000)
+    key: Optional[str] = Field(default=None, max_length=10)
+    duration_seconds: Optional[int] = Field(default=None, ge=0)
+
+
+class VersionManifestV1(BaseModel):
+    manifest_version: Literal[1] = 1
+    source_daw: Optional[str] = Field(default=None, max_length=50)
+    source_project_filename: Optional[str] = Field(default=None, max_length=255)
+    project_file: ManifestBlobRef
+    tracks: list[ManifestTrack] = Field(default_factory=list, max_length=500)
+    mixer_state: Optional[dict[str, Any]] = None
+
+    def all_blob_shas(self) -> set[str]:
+        shas = {self.project_file.sha256}
+        shas.update(t.sha256 for t in self.tracks)
+        return shas
+
+
+class VersionFromManifestCreate(BaseModel):
+    commit_message: Optional[str] = Field(default=None, max_length=500)
+    parent_version_id: Optional[UUID] = None
+    manifest: VersionManifestV1
+
 
 # ── Collaborator Schemas ──
 
