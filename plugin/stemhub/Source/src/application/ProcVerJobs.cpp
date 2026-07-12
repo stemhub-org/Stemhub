@@ -221,6 +221,52 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     return result;
 }
 
+StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRestoreVersionContentAddressedRequest(
+    const juce::String& versionId, const juce::File& destinationFolder)
+{
+    RestoreVersionJobResult result;
+    result.restoredVersionId = versionId;
+
+    if (versionId.isEmpty())
+    {
+        result.errorMessage = "Select a version before restoring.";
+        return result;
+    }
+    if (destinationFolder.exists() && !destinationFolder.isDirectory())
+    {
+        result.errorMessage = "Restore destination is not a directory: " + destinationFolder.getFullPathName();
+        return result;
+    }
+    if (!selectedProject)
+    {
+        result.errorMessage = "Choose a project before restoring.";
+        return result;
+    }
+
+    // Clear any previous restore contents at that path so download starts fresh.
+    if (destinationFolder.exists())
+    {
+        if (!destinationFolder.deleteRecursively())
+        {
+            result.errorMessage = "Failed to clear previous restore folder at " + destinationFolder.getFullPathName();
+            return result;
+        }
+    }
+
+    juce::File restoredProjectFile;
+    const auto status = versionControlService.restoreVersionFromManifest(
+        selectedProject->id, versionId, destinationFolder, restoredProjectFile);
+    if (status.failed())
+    {
+        result.errorMessage = status.getErrorMessage();
+        return result;
+    }
+
+    result.restoredProjectFile = restoredProjectFile;
+    result.activeProjectStatusMessage = "Version restored successfully: " + restoredProjectFile.getFileName();
+    return result;
+}
+
 StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRestoreVersionRequest(
     const juce::String& versionId,
     const juce::File& destinationFile) const

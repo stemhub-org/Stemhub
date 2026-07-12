@@ -219,6 +219,15 @@ public:
         return makeApiError("createVersionFromManifest not implemented in tests");
     }
 
+    juce::Result downloadBlob(const juce::String& projectId,
+                               const juce::String& sha256,
+                               const juce::File& destinationFile,
+                               const juce::String& accessToken) const override
+    {
+        juce::ignoreUnused(projectId, sha256, destinationFile, accessToken);
+        return juce::Result::fail("downloadBlob not implemented in tests");
+    }
+
     bool cachedSessionIsValid { true };
     std::vector<Project> projects;
     std::map<juce::String, std::vector<Branch>> projectBranches;

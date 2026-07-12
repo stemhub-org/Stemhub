@@ -100,6 +100,10 @@ public:
     // whole-project bundle. See docs/content-addressed-storage.md.
     void requestPushVersionContentAddressed(juce::String commitMessage, juce::String dawName);
     void requestRestoreVersion(const juce::String& versionId, const juce::File& destinationFolder);
+    // Content-addressed restore: fetches the version's manifest and downloads
+    // only the referenced blobs into destinationFolder, verifying SHA-256.
+    // See docs/content-addressed-storage.md.
+    void requestRestoreVersionContentAddressed(const juce::String& versionId, const juce::File& destinationFolder);
 
     void setSelectedVersionId(juce::String versionId);
     VersionControlService& getVersionControlService() noexcept { return versionControlService; }
@@ -173,6 +177,7 @@ private:
     void enqueueBackgroundTask(std::function<BackgroundJobPayload()> job);
 
     RestoreVersionJobResult performRestoreVersionRequest(const juce::String& versionId, const juce::File& destinationFile) const;
+    RestoreVersionJobResult performRestoreVersionContentAddressedRequest(const juce::String& versionId, const juce::File& destinationFolder);
     AuthRequestResult performSignInRequest(const juce::String& email, const juce::String& password) const;
     AuthRequestResult performRestoreCachedSessionRequest(const juce::String& token) const;
     ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,

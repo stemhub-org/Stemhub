@@ -626,6 +626,48 @@ void StemhubAudioProcessor::requestRestoreVersion(const juce::String& versionId,
     });
 }
 
+void StemhubAudioProcessor::requestRestoreVersionContentAddressed(const juce::String& versionId, const juce::File& projectFolder)
+{
+    if (!hasProjectAndBranchSelected(selectedProject, selectedBranchId))
+    {
+        setOperationState(OperationState::error);
+        setActiveProjectStatusMessage("Choose a project before restoring.");
+        return;
+    }
+    if (!projectFolder.isDirectory())
+    {
+        setOperationState(OperationState::error);
+        setActiveProjectStatusMessage("Choose a valid restore destination folder.");
+        return;
+    }
+    if (versionId.isEmpty())
+    {
+        setOperationState(OperationState::error);
+        setActiveProjectStatusMessage("Select a version before restoring.");
+        return;
+    }
+
+    const auto projectName = selectedProject ? selectedProject->name : juce::String();
+    const auto restoredProjectBase = stemhub::projectfiles::resolveRestoreProjectName(versionHistory, versionId, projectName);
+    // Materialize the blobs into a per-version subdirectory to avoid clobbering
+    // adjacent restores. Matches the shape of the legacy restore path.
+    const auto restoreDir = projectFolder.getChildFile(
+        restoredProjectBase + "-" + versionId.substring(0, juce::jmin(8, versionId.length())));
+
+    setOperationState(OperationState::pulling);
+    setActiveProjectStatusMessage("Restoring selected version...");
+    sendChangeMessage();
+
+    const auto requestedVersionId = versionId;
+    const auto requestedRestoreDir = restoreDir;
+    enqueueBackgroundTask([this,
+                           requestedVersionId,
+                           requestedRestoreDir]() mutable -> BackgroundJobPayload
+    {
+        return performRestoreVersionContentAddressedRequest(requestedVersionId, requestedRestoreDir);
+    });
+}
+
 void StemhubAudioProcessor::setSelectedVersionId(juce::String versionId)
 {
     selectedVersionId = std::move(versionId);

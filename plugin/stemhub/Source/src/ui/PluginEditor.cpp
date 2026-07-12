@@ -538,7 +538,10 @@ void StemhubAudioProcessorEditor::handleRestoreClick()
                 juce::Logger::writeToLog("[Restore] UI -> requesting restore from confirmation callback: "
                                          + folder.getFullPathName() + ", version="
                                          + versionToRestore);
-                mutableEditor->audioProcessor.requestRestoreVersion(versionToRestore, folder);
+                // Content-addressed restore: pulls only referenced blobs (verified by SHA-256).
+                // See docs/content-addressed-storage.md. The legacy zip-download path remains
+                // available via audioProcessor.requestRestoreVersion() if a rollback is needed.
+                mutableEditor->audioProcessor.requestRestoreVersionContentAddressed(versionToRestore, folder);
                 mutableEditor->refreshSessionUi();
             }));
     };

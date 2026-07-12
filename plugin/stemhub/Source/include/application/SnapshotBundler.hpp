@@ -31,6 +31,24 @@ struct ContentAddressedManifest
     std::vector<ContentAddressedFileEntry> entries;
 };
 
+// Parsed entry from a v1 manifest — describes ONE blob the client needs to
+// materialize during pull, plus where to put it.
+struct ParsedManifestEntry
+{
+    juce::String sha256;
+    juce::int64 sizeBytes { 0 };
+    juce::String filename;    // basename; used relative to the restore directory
+    bool isProjectFile { false };
+};
+
+struct ParsedManifest
+{
+    int manifestVersion { 0 };
+    juce::String sourceDaw;
+    juce::String sourceProjectFilename;
+    std::vector<ParsedManifestEntry> entries;   // project file first if present
+};
+
 class SnapshotBundler
 {
     public:
@@ -43,4 +61,10 @@ class SnapshotBundler
         // Does NOT write a zip.
         [[nodiscard]] juce::Result buildContentAddressedManifest(const SnapshotBundleRequest& request,
                                                                     ContentAddressedManifest& outResult) const;
+
+        // Parse a v1 manifest_json blob (as returned by GET /versions/{vid})
+        // into a flat list of entries the caller can iterate to download blobs.
+        // Only accepts manifest_version == 1.
+        [[nodiscard]] static juce::Result parseContentAddressedManifest(const juce::var& manifestJson,
+                                                                         ParsedManifest& outResult);
 };
