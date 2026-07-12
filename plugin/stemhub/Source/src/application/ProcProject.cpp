@@ -552,6 +552,32 @@ void StemhubAudioProcessor::requestPushVersion(juce::String commitMessage, juce:
     });
 }
 
+void StemhubAudioProcessor::requestPushVersionContentAddressed(juce::String commitMessage, juce::String dawName)
+{
+    setOperationState(OperationState::committing);
+    sendChangeMessage();
+
+    const auto projectFile = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile, pendingProjectFile);
+    const auto projectRootDirectory = projectFile.existsAsFile() ? projectFile.getParentDirectory() : juce::File();
+    const auto project = selectedProject;
+    const auto branchId = selectedBranchId;
+    enqueueBackgroundTask([this,
+                           selectedFile = std::move(projectFile),
+                           selectedProjectRoot = std::move(projectRootDirectory),
+                           project,
+                           selectedBranch = std::move(branchId),
+                           requestedCommitMessage = std::move(commitMessage),
+                           requestedDawName = std::move(dawName)]() mutable -> BackgroundJobPayload
+    {
+        return performPushVersionContentAddressedRequest(selectedFile,
+                                                          selectedProjectRoot,
+                                                          project,
+                                                          selectedBranch,
+                                                          requestedCommitMessage,
+                                                          requestedDawName);
+    });
+}
+
 void StemhubAudioProcessor::requestRestoreVersion(const juce::String& versionId, const juce::File& projectFolder)
 {
     juce::Logger::writeToLog("[Restore] Processor -> requestRestoreVersion called. versionId=" + versionId

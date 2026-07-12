@@ -150,6 +150,77 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     return result;
 }
 
+StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVersionContentAddressedRequest(
+    const juce::File& projectFile,
+    const juce::File& projectRootDirectory,
+    const std::optional<Project>& project,
+    const juce::String& branchId,
+    const juce::String& commitMessage,
+    const juce::String& dawName)
+{
+    PushVersionJobResult result;
+
+    if (!hasProjectAndBranchSelected(project, branchId))
+    {
+        result.errorMessage = "Choose or create a project before saving.";
+        return result;
+    }
+    if (!projectFile.existsAsFile())
+    {
+        result.errorMessage = "Choose a project file before saving.";
+        return result;
+    }
+    if (!projectRootDirectory.isDirectory())
+    {
+        result.errorMessage = "Choose a valid project file before saving.";
+        return result;
+    }
+    if (hasCleanWorkingCopy(projectFile))
+    {
+        result.errorMessage = "No local project file changes detected on disk. Save the project in FL Studio first, then click Save again.";
+        return result;
+    }
+
+    ProjectVersionContext context;
+    context.projectId = project->id;
+    context.branchId = branchId;
+    context.lastVersionId = workingCopyVersionId.isNotEmpty() ? workingCopyVersionId
+                                                             : versionControlService.getLastVersionId();
+    versionControlService.setCurrentProjectContext(context);
+
+    SnapshotBundleRequest bundleRequest;
+    bundleRequest.sourceProjectFile = projectFile;
+    bundleRequest.sourceDaw = dawName;
+    bundleRequest.projectRootDirectory = projectRootDirectory;
+
+    SnapshotBundler bundler;
+    ContentAddressedManifest manifest;
+    const auto manifestStatus = bundler.buildContentAddressedManifest(bundleRequest, manifest);
+    if (manifestStatus.failed())
+    {
+        result.errorMessage = manifestStatus.getErrorMessage();
+        return result;
+    }
+
+    PushVersionCasRequest casRequest;
+    casRequest.projectId = project->id;
+    casRequest.branchId = branchId;
+    casRequest.commitMessage = commitMessage;
+    casRequest.parentVersionId = context.lastVersionId;
+    casRequest.manifest = std::move(manifest);
+
+    const auto pushStatus = versionControlService.pushVersionContentAddressed(casRequest);
+    if (pushStatus.failed())
+    {
+        result.errorMessage = pushStatus.getErrorMessage();
+        return result;
+    }
+
+    result.pushedVersionId = versionControlService.getLastVersionId();
+    result.activeProjectStatusMessage = "Version saved successfully.";
+    return result;
+}
+
 StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRestoreVersionRequest(
     const juce::String& versionId,
     const juce::File& destinationFile) const

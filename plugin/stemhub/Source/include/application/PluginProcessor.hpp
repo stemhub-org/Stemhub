@@ -96,6 +96,9 @@ public:
     void requestSelectBranch(juce::String branchId);
     void requestRefreshVersionHistory();
     void requestPushVersion(juce::String commitMessage, juce::String dawName);
+    // Content-addressed variant: uploads only novel blobs instead of the full
+    // whole-project bundle. See docs/content-addressed-storage.md.
+    void requestPushVersionContentAddressed(juce::String commitMessage, juce::String dawName);
     void requestRestoreVersion(const juce::String& versionId, const juce::File& destinationFolder);
 
     void setSelectedVersionId(juce::String versionId);
@@ -189,6 +192,12 @@ private:
                                                    const juce::String& branchId,
                                                    const juce::String& commitMessage,
                                                    const juce::String& dawName);
+    PushVersionJobResult performPushVersionContentAddressedRequest(const juce::File& projectFile,
+                                                                    const juce::File& projectRootDirectory,
+                                                                    const std::optional<Project>& project,
+                                                                    const juce::String& branchId,
+                                                                    const juce::String& commitMessage,
+                                                                    const juce::String& dawName);
     void applyBackgroundResult(BackgroundJobResult result);
     void applyAuthRequestResult(AuthRequestResult result);
     void applyProjectActivationResult(ProjectActivationJobResult result);

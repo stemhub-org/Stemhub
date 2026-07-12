@@ -2,7 +2,17 @@
 
 #include <JuceHeader.h>
 #include "network/ApiClient.hpp"
+#include "application/SnapshotBundler.hpp"
 #include "application/VersionControlUtils.hpp"
+
+struct PushVersionCasRequest
+{
+    juce::String projectId;
+    juce::String branchId;
+    juce::String commitMessage;
+    juce::String parentVersionId;
+    ContentAddressedManifest manifest;
+};
 
 class VersionControlService
 {
@@ -17,6 +27,11 @@ class VersionControlService
         }
     
         juce::Result pushVersion(const PushVersionRequest& request);
+
+        // Content-addressed push: hash → check-missing → upload novel blobs →
+        // create version from manifest. See docs/content-addressed-storage.md.
+        // Only re-uploads blobs the server doesn't already have.
+        juce::Result pushVersionContentAddressed(const PushVersionCasRequest& request);
     
         ApiResult<std::vector<VersionSummary>> fetchVersionHistory(
             const juce::String& branchId,

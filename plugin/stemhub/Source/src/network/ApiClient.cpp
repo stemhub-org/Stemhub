@@ -368,3 +368,84 @@ ApiResult<std::vector<Branch>> ApiClient::fetchBranches(const juce::String& proj
 
     return { branches, {} };
 }
+
+ApiResult<std::vector<juce::String>> ApiClient::checkMissingBlobs(const juce::String& projectId,
+                                                                   const std::vector<juce::String>& sha256s,
+                                                                   const juce::String& accessToken) const
+{
+    auto* obj = new juce::DynamicObject();
+    juce::Array<juce::var> arr;
+    arr.ensureStorageAllocated(static_cast<int>(sha256s.size()));
+    for (const auto& sha : sha256s)
+        arr.add(sha);
+    obj->setProperty("sha256s", arr);
+    const auto body = juce::JSON::toString(juce::var(obj));
+
+    const auto path = "/projects/" + projectId + "/blobs/check-missing";
+    const auto jsonResult = requestJson(path, "POST", body, accessToken);
+    if (!jsonResult.ok())
+        return { {}, jsonResult.error };
+
+    const auto missingVar = jsonResult.value->getProperty("missing", juce::var());
+    if (!missingVar.isArray())
+        return { {}, ApiError { 200, "check-missing response has no 'missing' array." } };
+
+    std::vector<juce::String> missing;
+    const auto* missingArray = missingVar.getArray();
+    missing.reserve(static_cast<size_t>(missingArray->size()));
+    for (const auto& item : *missingArray)
+        missing.push_back(item.toString());
+
+    return { missing, {} };
+}
+
+ApiResult<juce::var> ApiClient::uploadBlob(const juce::String& projectId,
+                                            const juce::String& sha256,
+                                            const juce::File& file,
+                                            const juce::String& accessToken) const
+{
+    if (!file.existsAsFile())
+        return { {}, ApiError { 0, "Blob source file does not exist." } };
+
+    // Backend expects multipart/form-data with a "file" field, PUT method.
+    // Matches routers/blobs.py::upload_blob signature.
+    const auto path = "/projects/" + projectId + "/blobs/" + sha256;
+    auto url = juce::URL(baseUrl + path).withFileToUpload("file", file, "application/octet-stream");
+
+    juce::StringPairArray responseHeaders;
+    int statusCode = 0;
+
+    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
+        .withHttpRequestCmd("PUT")
+        .withExtraHeaders("Accept: application/json\r\nAuthorization: Bearer " + accessToken + "\r\n")
+        .withResponseHeaders(&responseHeaders)
+        .withStatusCode(&statusCode)
+        .withConnectionTimeoutMs(120000);
+
+    auto stream = url.createInputStream(options);
+    if (stream == nullptr)
+        return { {}, ApiError { statusCode, "Failed to connect to backend for blob upload." } };
+
+    const auto responseText = stream->readEntireStreamAsString();
+    const auto parsedJson = juce::JSON::parse(responseText);
+
+    if (statusCode < 200 || statusCode >= 300)
+        return { {}, ApiError { statusCode, extractErrorMessage(parsedJson, responseText, "Blob upload failed.") } };
+
+    if (parsedJson.isVoid())
+        return { {}, ApiError { statusCode, "Backend returned invalid JSON." } };
+
+    return { parsedJson, {} };
+}
+
+ApiResult<juce::var> ApiClient::createVersionFromManifest(const juce::String& branchId,
+                                                           const juce::var& payload,
+                                                           const juce::String& accessToken) const
+{
+    const auto body = juce::JSON::toString(payload);
+    const auto path = "/branches/" + branchId + "/versions/from-manifest";
+    const auto jsonResult = requestJson(path, "POST", body, accessToken);
+    if (!jsonResult.ok())
+        return { {}, jsonResult.error };
+    return { *jsonResult.value, {} };
+}

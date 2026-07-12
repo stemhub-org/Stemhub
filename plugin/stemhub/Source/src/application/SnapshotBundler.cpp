@@ -5,6 +5,17 @@
 
 namespace
 {
+    juce::String sha256HexOfFile(const juce::File& file)
+    {
+        juce::FileInputStream stream(file);
+        if (!stream.openedOk())
+            return {};
+        return juce::SHA256(stream).toHexString();
+    }
+}
+
+namespace
+{
     constexpr std::array<const char*, 9> kBundledAssetExtensions = {
         "wav", "mp3", "flac", "ogg", "aiff", "aif", "m4a", "mid", "midi"
     };
@@ -167,5 +178,99 @@ juce::Result SnapshotBundler::bundleProject(const SnapshotBundleRequest& request
 
     outResult.bundleFile = bundleFile;
     outResult.manifest = manifest;
+    return juce::Result::ok();
+}
+
+juce::Result SnapshotBundler::buildContentAddressedManifest(const SnapshotBundleRequest& request,
+                                                              ContentAddressedManifest& outResult) const
+{
+    outResult = {};
+
+    if (!request.sourceProjectFile.existsAsFile())
+        return juce::Result::fail("Source project file does not exist.");
+
+    if (!request.projectRootDirectory.isDirectory())
+        return juce::Result::fail("Project root directory does not exist.");
+
+    if (!isSourceFileWithinRoot(request.sourceProjectFile, request.projectRootDirectory))
+        return juce::Result::fail("Project file must be inside the selected project root directory.");
+
+    juce::Array<juce::File> discoveredFiles;
+    request.projectRootDirectory.findChildFiles(discoveredFiles, juce::File::findFiles, true);
+
+    if (discoveredFiles.isEmpty())
+        return juce::Result::fail("Project root directory does not contain files to bundle.");
+
+    std::sort(discoveredFiles.begin(), discoveredFiles.end(), [](const juce::File& lhs, const juce::File& rhs)
+    {
+        return lhs.getFullPathName() < rhs.getFullPathName();
+    });
+
+    std::vector<ContentAddressedFileEntry> entries;
+    entries.reserve(static_cast<size_t>(discoveredFiles.size()));
+    ContentAddressedFileEntry projectEntry;
+    bool haveProjectEntry = false;
+
+    for (const auto& file : discoveredFiles)
+    {
+        if (!shouldIncludeInSnapshot(file, request.projectRootDirectory, request.sourceProjectFile))
+            continue;
+
+        const auto sha = sha256HexOfFile(file);
+        if (sha.isEmpty())
+            return juce::Result::fail("Failed to hash file: " + file.getFullPathName());
+
+        ContentAddressedFileEntry entry;
+        entry.file = file;
+        entry.sha256 = sha;
+        entry.sizeBytes = file.getSize();
+        entry.filename = file.getFileName();
+        entry.isProjectFile = (file == request.sourceProjectFile);
+
+        if (entry.isProjectFile)
+        {
+            projectEntry = entry;
+            haveProjectEntry = true;
+        }
+        else
+        {
+            entries.push_back(entry);
+        }
+    }
+
+    if (!haveProjectEntry)
+        return juce::Result::fail("Project file was not included in the discovered set.");
+
+    juce::DynamicObject::Ptr projectFileObj = new juce::DynamicObject();
+    projectFileObj->setProperty("sha256", projectEntry.sha256);
+    projectFileObj->setProperty("size_bytes", projectEntry.sizeBytes);
+    projectFileObj->setProperty("filename", projectEntry.filename);
+
+    juce::Array<juce::var> tracks;
+    tracks.ensureStorageAllocated(static_cast<int>(entries.size()));
+    for (const auto& e : entries)
+    {
+        juce::DynamicObject::Ptr t = new juce::DynamicObject();
+        t->setProperty("sha256", e.sha256);
+        t->setProperty("size_bytes", e.sizeBytes);
+        t->setProperty("filename", e.filename);
+        t->setProperty("name", e.file.getFileNameWithoutExtension());
+        tracks.add(juce::var(t.get()));
+    }
+
+    juce::DynamicObject::Ptr manifest = new juce::DynamicObject();
+    manifest->setProperty("manifest_version", 1);
+    manifest->setProperty("source_daw", request.sourceDaw);
+    manifest->setProperty("source_project_filename", projectEntry.filename);
+    manifest->setProperty("project_file", juce::var(projectFileObj.get()));
+    manifest->setProperty("tracks", juce::var(tracks));
+
+    outResult.manifestJson = juce::var(manifest.get());
+    // Combine project + tracks so callers can iterate every blob to upload.
+    outResult.entries.reserve(entries.size() + 1);
+    outResult.entries.push_back(projectEntry);
+    for (auto& e : entries)
+        outResult.entries.push_back(std::move(e));
+
     return juce::Result::ok();
 }

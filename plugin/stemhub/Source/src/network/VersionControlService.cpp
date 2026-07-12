@@ -1,3 +1,5 @@
+#include <set>
+
 #include "application/VersionControlService.hpp"
 
 namespace
@@ -98,6 +100,72 @@ juce::Result VersionControlService::pushVersion(const PushVersionRequest& reques
 
     context.branchId = uploadedVersion.value->branchId;
     context.lastVersionId = uploadedVersion.value->id;
+    return juce::Result::ok();
+}
+
+juce::Result VersionControlService::pushVersionContentAddressed(const PushVersionCasRequest& request)
+{
+    if (accessToken.isEmpty())
+        return juce::Result::fail("No access token is configured for version control.");
+
+    const auto* api = getApiClient();
+    if (api == nullptr)
+        return juce::Result::fail("VersionControlService API client is not configured.");
+
+    const auto projectId = request.projectId.isNotEmpty() ? request.projectId : context.projectId;
+    const auto branchId  = request.branchId.isNotEmpty()  ? request.branchId  : context.branchId;
+    if (projectId.isEmpty())
+        return juce::Result::fail("A project ID is required to push a version.");
+    if (branchId.isEmpty())
+        return juce::Result::fail("A branch ID is required to push a version.");
+    if (request.manifest.entries.empty())
+        return juce::Result::fail("Manifest has no files to upload.");
+
+    // Ask the server which blobs it already has.
+    std::vector<juce::String> allShas;
+    allShas.reserve(request.manifest.entries.size());
+    for (const auto& e : request.manifest.entries)
+        allShas.push_back(e.sha256);
+
+    const auto missingResult = api->checkMissingBlobs(projectId, allShas, accessToken);
+    if (!missingResult.ok())
+        return juce::Result::fail(buildApiErrorMessage(missingResult.error, "Failed to check missing blobs."));
+
+    // Upload only the blobs the server doesn't have.
+    std::set<juce::String> missingSet(missingResult.value->begin(), missingResult.value->end());
+    for (const auto& e : request.manifest.entries)
+    {
+        if (missingSet.find(e.sha256) == missingSet.end())
+            continue;
+
+        const auto up = api->uploadBlob(projectId, e.sha256, e.file, accessToken);
+        if (!up.ok())
+            return juce::Result::fail(buildApiErrorMessage(up.error,
+                "Failed to upload blob " + e.filename + " (" + e.sha256.substring(0, 12) + "…)."));
+    }
+
+    // Create the version referencing the manifest.
+    juce::DynamicObject::Ptr payload = new juce::DynamicObject();
+    if (request.commitMessage.isNotEmpty())
+        payload->setProperty("commit_message", request.commitMessage);
+    const auto parentId = request.parentVersionId.isNotEmpty()
+        ? request.parentVersionId
+        : context.lastVersionId;
+    if (parentId.isNotEmpty())
+        payload->setProperty("parent_version_id", parentId);
+    payload->setProperty("manifest", request.manifest.manifestJson);
+
+    const auto createResult = api->createVersionFromManifest(branchId, juce::var(payload.get()), accessToken);
+    if (!createResult.ok())
+        return juce::Result::fail(buildApiErrorMessage(createResult.error, "Failed to create version from manifest."));
+
+    const auto createdVersion = parseVersionSummary(*createResult.value);
+    if (!createdVersion.ok())
+        return juce::Result::fail(buildApiErrorMessage(createdVersion.error, "Failed to parse created version."));
+
+    context.projectId = projectId;
+    context.branchId = createdVersion.value->branchId;
+    context.lastVersionId = createdVersion.value->id;
     return juce::Result::ok();
 }
 
