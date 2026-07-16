@@ -119,7 +119,7 @@ jobs:
       POSTGRES_PASSWORD: ci
       POSTGRES_DB: ci
       DATABASE_URL: postgresql://ci:ci@db:5432/ci
-      SECRET_KEY: ci
+      SECRET_KEY: ci-fixture-secret-key-not-for-any-real-deployment-0123456789
       GOOGLE_CLIENT_ID: ci
       GOOGLE_CLIENT_SECRET: ci
       STEMHUB_STORAGE_PROVIDER: local

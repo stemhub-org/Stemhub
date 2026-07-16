@@ -59,6 +59,24 @@ def _write_stream_and_hash(source: BinaryIO, destination: Path) -> tuple[int, st
     return size_bytes, checksum.hexdigest()
 
 
+def _hash_stream_to_tempfile(source: BinaryIO) -> tuple[Path, int, str]:
+    checksum = hashlib.sha256()
+    size_bytes = 0
+
+    fd, temp_path = tempfile.mkstemp(prefix="stemhub-upload-")
+    tmp = Path(temp_path)
+    with os.fdopen(fd, "wb") as output:
+        while True:
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
+            checksum.update(chunk)
+            size_bytes += len(chunk)
+            output.write(chunk)
+
+    return tmp, size_bytes, checksum.hexdigest()
+
+
 def _delete_files_in_directory(directory: Path) -> bool:
     if not directory.is_dir():
         return False
@@ -110,6 +128,35 @@ class StorageService(ABC):
     def delete_project_preview(self, project_id: UUID) -> bool:
         raise NotImplementedError
 
+    # ── Content-addressed blob operations ──
+
+    @abstractmethod
+    def store_blob(
+        self,
+        *,
+        project_id: UUID,
+        source: BinaryIO,
+    ) -> StoredArtifact:
+        """Store a blob and return its SHA-256, size, and storage_uri (StoredArtifact.path)."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def resolve_blob_path(self, storage_uri: str) -> Path:
+        raise NotImplementedError
+
+    @abstractmethod
+    def delete_blob(self, storage_uri: str) -> bool:
+        raise NotImplementedError
+
+    def get_blob_download_url(self, storage_uri: str, *, ttl_seconds: int = 900) -> str | None:
+        """Return a URL the client can download the blob from directly.
+
+        Only meaningful for storage backends that support presigned URLs
+        (e.g. GCS). Local FS returns None; the caller should fall back to
+        streaming via FileResponse.
+        """
+        return None
+
 
 class GCSStorageService(StorageService):
     _GCS_SCHEME = "gcs://"
@@ -156,20 +203,18 @@ class GCSStorageService(StorageService):
         artifact_path = self._build_artifact_path(project_id, branch_id, version_id, safe_filename)
 
         _rewind_if_possible(source)
-
-        blob = self._bucket.blob(artifact_path)
-        
-        # Stream the file-like object directly to Google Cloud Storage
-        # This completely avoids writing the file to the local disk.
-        blob.upload_from_file(source)
-        
-        # Reload to get the size and hash computed by GCS
-        blob.reload()
+        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
+        try:
+            blob = self._bucket.blob(artifact_path)
+            with tmp_path.open("rb") as upload_source:
+                blob.upload_from_file(upload_source, size=size_bytes)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
         return StoredArtifact(
             path=self._to_reference_path(artifact_path),
-            size_bytes=blob.size,
-            checksum_sha256=blob.md5_hash, # We use GCS's native md5_hash instead of calculating SHA256 manually
+            size_bytes=size_bytes,
+            checksum_sha256=checksum_sha256,
         )
 
     def resolve_artifact_path(self, artifact_path: str) -> Path:
@@ -206,15 +251,18 @@ class GCSStorageService(StorageService):
             old_blob.delete()
 
         _rewind_if_possible(source)
-
-        blob = self._bucket.blob(artifact_path)
-        blob.upload_from_file(source)
-        blob.reload()
+        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
+        try:
+            blob = self._bucket.blob(artifact_path)
+            with tmp_path.open("rb") as upload_source:
+                blob.upload_from_file(upload_source, size=size_bytes)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
         return StoredArtifact(
             path=self._to_reference_path(artifact_path),
-            size_bytes=blob.size,
-            checksum_sha256=blob.md5_hash,
+            size_bytes=size_bytes,
+            checksum_sha256=checksum_sha256,
         )
 
     def has_project_preview(self, project_id: UUID) -> bool:
@@ -250,10 +298,60 @@ class GCSStorageService(StorageService):
             deleted = True
         return deleted
 
+    def store_blob(
+        self,
+        *,
+        project_id: UUID,
+        source: BinaryIO,
+    ) -> StoredArtifact:
+        _rewind_if_possible(source)
+        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
+        try:
+            blob_path = self._build_blob_path(project_id, checksum_sha256)
+            gcs_blob = self._bucket.blob(blob_path)
+            # No pre-check via exists(): the DB-level idempotency check in the
+            # blobs router already gates duplicate uploads. Overwriting with
+            # identical bytes is safe (content-addressed by SHA-256).
+            with tmp_path.open("rb") as upload_source:
+                gcs_blob.upload_from_file(upload_source, size=size_bytes)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        return StoredArtifact(
+            path=self._to_reference_path(blob_path),
+            size_bytes=size_bytes,
+            checksum_sha256=checksum_sha256,
+        )
+
+    def resolve_blob_path(self, storage_uri: str) -> Path:
+        return self.resolve_artifact_path(storage_uri)
+
+    def delete_blob(self, storage_uri: str) -> bool:
+        blob_path = self._to_blob_path(storage_uri)
+        gcs_blob = self._bucket.blob(blob_path)
+        if not gcs_blob.exists():
+            return False
+        gcs_blob.delete()
+        return True
+
+    def get_blob_download_url(self, storage_uri: str, *, ttl_seconds: int = 900) -> str | None:
+        from datetime import timedelta
+        blob_path = self._to_blob_path(storage_uri)
+        gcs_blob = self._bucket.blob(blob_path)
+        return gcs_blob.generate_signed_url(
+            expiration=timedelta(seconds=ttl_seconds),
+            method="GET",
+            version="v4",
+        )
+
     def _build_artifact_path(self, project_id: UUID, branch_id: UUID, version_id: UUID, filename: str) -> str:
         return (
             f"projects/{project_id}/branches/{branch_id}/versions/{version_id}/snapshot/{filename}"
         )
+
+    def _build_blob_path(self, project_id: UUID, sha256: str) -> str:
+        # Fan out by first 2 hex chars to keep any single "directory" small.
+        return f"projects/{project_id}/blobs/{sha256[:2]}/{sha256}"
 
     def _build_project_preview_prefix(self, project_id: UUID) -> str:
         return f"projects/{project_id}/preview"
@@ -365,6 +463,49 @@ class LocalFilesystemStorageService(StorageService):
             pass
 
         return deleted
+
+    def store_blob(
+        self,
+        *,
+        project_id: UUID,
+        source: BinaryIO,
+    ) -> StoredArtifact:
+        _rewind_if_possible(source)
+        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
+        try:
+            relative_path = self._blob_relative_path(project_id, checksum_sha256)
+            destination = self.root / relative_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if not destination.exists():
+                tmp_path.rename(destination)
+            else:
+                tmp_path.unlink(missing_ok=True)
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+        return StoredArtifact(
+            path=relative_path.as_posix(),
+            size_bytes=size_bytes,
+            checksum_sha256=checksum_sha256,
+        )
+
+    def resolve_blob_path(self, storage_uri: str) -> Path:
+        return self.resolve_artifact_path(storage_uri)
+
+    def delete_blob(self, storage_uri: str) -> bool:
+        candidate = (self.root / storage_uri).resolve()
+        try:
+            candidate.relative_to(self.root)
+        except ValueError:
+            return False
+        if not candidate.is_file():
+            return False
+        candidate.unlink()
+        return True
+
+    def _blob_relative_path(self, project_id: UUID, sha256: str) -> Path:
+        return Path("projects") / str(project_id) / "blobs" / sha256[:2] / sha256
 
 
 def _default_artifact_root() -> Path:
