@@ -73,6 +73,7 @@ target_compile_definitions(stemhub
 target_link_libraries(stemhub
     PRIVATE
         juce::juce_audio_utils
+        juce::juce_cryptography
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
@@ -119,6 +120,7 @@ target_link_libraries(stemhub_plugin_tests
     PRIVATE
         CURL::libcurl
         juce::juce_audio_utils
+        juce::juce_cryptography
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)

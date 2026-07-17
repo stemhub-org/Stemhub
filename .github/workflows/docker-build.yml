@@ -119,8 +119,6 @@ jobs:
       POSTGRES_PASSWORD: ci
       POSTGRES_DB: ci
       DATABASE_URL: postgresql://ci:ci@db:5432/ci
-      # Long-enough placeholder to satisfy the SECRET_KEY startup guard
-      # (min 32 chars, rejects known-default strings). CI-only value.
       SECRET_KEY: ci-fixture-secret-key-not-for-any-real-deployment-0123456789
       GOOGLE_CLIENT_ID: ci
       GOOGLE_CLIENT_SECRET: ci
