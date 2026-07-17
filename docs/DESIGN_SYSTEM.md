@@ -80,6 +80,37 @@ The musical equivalent of a GitHub Pull Request. Collaborators can leave timesta
 
 ---
 
+## Plugin Design System (JUCE VST3 & Standalone UI)
+
+The DAW plugin (`plugin/stemhub/`) implements a developer-oriented dark design system detailed in [`plugin/stemhub/UIUX_rework.md`](../plugin/stemhub/UIUX_rework.md):
+
+### Typography & Hierarchy
+- **Inter**: Primary UI typeface used for headings, labels, buttons, and navigation.
+- **JetBrains Mono**: Technical typeface used for commit SHAs, file paths, SHA-256 hashes, metrics, and timestamps.
+
+### Plugin Color & Surface Palette
+| Token | Hex / Value | Usage |
+|---|---|---|
+| **App Background** | `#121214` | Deepest surface for the plugin editor window |
+| **Card Surface** | `#1A1A1E` | Primary container surface for cards and panels |
+| **Elevated Surface** | `#26262B` | Hover states, modals, and active inputs |
+| **Cyan Accent** | `#00E5FF` | Primary actions, focus rings, and active selection state |
+| **Status Green** | `#00E676` | Synced project indicator |
+| **Status Yellow** | `#FFEA00` | Uncommitted local changes |
+| **Status Red** | `#FF1744` | Offline mode, network disconnect, or errors |
+
+### Core Plugin Views
+1. **LoginView (`LoginView.cpp`)**
+   - Branded header with StemHub logo and subtitle.
+   - Clean labeled input fields with focus indicators.
+   - Quick-access "Forgot password" and explicit "Work Offline" mode buttons.
+2. **DashboardView (`DashboardView.cpp`)**
+   - Searchable and filterable card grid replacing traditional list views.
+   - Three tab filters: **All**, **Local** (cached on disk), and **Cloud** (available to pull).
+   - Dedicated empty states guiding new users to create or open a project.
+
+---
+
 ## Technical Implementation: SSR Hydration Resilience
 
 Since StemHub uses Next.js, we enforce a **strict client-side mounting pattern** for components that depend on dynamic browser data (like theme, local storage, or audio contexts).

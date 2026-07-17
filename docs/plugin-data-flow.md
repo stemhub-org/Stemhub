@@ -15,10 +15,13 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 - `ApiClient` / `IProjectApi` (`plugin/stemhub/Source/src/network/ApiClient.cpp`)
   - Raw HTTP transport + JSON parsing.
   - Auth, user, projects, branches, file upload/download.
+  - Content-Addressed Storage endpoints (`checkMissingBlobs`, `uploadBlob`, `downloadBlob`, `createVersionFromManifest`).
 - `VersionControlService` (`plugin/stemhub/Source/src/network/VersionControlService.cpp`)
   - Version-domain operations: create version, upload artifact, fetch history, restore/download.
+  - Content-Addressed Storage push (`pushVersionContentAddressed`) and restore (`restoreVersionFromManifest`).
 - `SnapshotBundler` (`plugin/stemhub/Source/src/application/SnapshotBundler.cpp`)
   - Builds local snapshot artifact + manifest before push.
+  - Builds (`buildContentAddressedManifest`) and parses (`parseContentAddressedManifest`) SHA-256 asset manifests.
 
 ## 2) Data Objects Moving Through The Flow
 
@@ -113,7 +116,9 @@ sequenceDiagram
   - `GET /branches/{branchId}/versions/`
 - Output: same dashboard activation state as open flow.
 
-## 7) Push Version Flow
+## 7) Push Version Flow (Content-Addressed & Legacy)
+
+The plugin supports two push strategies: **Content-Addressed Storage (CAS) Push** (primary, routed via `DashboardView.onSave`) and **Legacy Whole-Bundle Push** (backward compatible).
 
 ### Preconditions enforced by processor
 
@@ -121,18 +126,27 @@ sequenceDiagram
 - Selected branch exists.
 - Effective project file exists on disk.
 
-### Data path
+### Content-Addressed Push Path (`requestPushVersionContentAddressed`)
+
+1. UI triggers save action.
+2. Processor calls `SnapshotBundler::buildContentAddressedManifest(...)`, hashing every project file (SHA-256) and returning a manifest plus a flat list of blob entries.
+3. Processor calls `VersionControlService::pushVersionContentAddressed(...)`.
+4. Service calls backend:
+   - `POST /projects/{projectId}/blobs/check-missing` (asks server which SHA-256 blobs are missing).
+   - `PUT /projects/{projectId}/blobs/{sha256}` (uploads only missing blobs).
+   - `POST /branches/{branchId}/versions/from-manifest` (creates version record with verified manifest).
+5. On success, sets last version id and automatically refreshes history.
+
+### Legacy Whole-Bundle Push Path (`requestPushVersion`)
 
 1. UI triggers `requestPushVersion(commitMessage, dawName)`.
-2. Processor builds `PushVersionRequest` and snapshot bundle:
-   - `SnapshotBundler::bundleProject(...)` produces zip + manifest.
+2. Processor builds `PushVersionRequest` and snapshot bundle (`SnapshotBundler::bundleProject(...)`).
 3. Processor calls `VersionControlService::pushVersion(...)`.
-4. Service calls backend:
+4. Service uploads whole zip archive:
    - `POST /branches/{branchId}/versions/` (metadata)
    - `POST /versions/{versionId}/artifact` (binary upload)
-5. On success, processor sets last version id and auto-calls `requestRefreshVersionHistory()`.
 
-### Sequence
+### Sequence (Content-Addressed Push)
 
 ```mermaid
 sequenceDiagram
@@ -144,30 +158,38 @@ sequenceDiagram
     participant A as ApiClient
 
     U->>E: Save action
-    E->>P: requestPushVersion
-    P->>P: Validate selection and set committing state
-    P->>S: Build snapshot bundle from project file
-    S-->>P: Return zip bundle and manifest
-    P->>V: Push version request
-    V->>A: Create version metadata POST branch versions
-    V->>A: Upload artifact POST version artifact
+    E->>P: requestPushVersionContentAddressed
+    P->>S: buildContentAddressedManifest (SHA-256 files)
+    S-->>P: Return manifest and blob entries
+    P->>V: pushVersionContentAddressed
+    V->>A: Check missing blobs POST check-missing
+    A-->>V: Return list of missing SHA-256s
+    loop For each missing blob
+        V->>A: Upload blob PUT /projects/{pid}/blobs/{sha256}
+    end
+    V->>A: Create version POST from-manifest
     V-->>P: Return success and new version id
     P->>P: Apply push result and trigger history refresh
 ```
 
-## 8) Pull / Refresh Version History Flow
+## 8) Pull / Refresh & Content-Addressed Restore Flow
 
-This is triggered by:
+History refresh is triggered by dashboard refresh, branch selection change, or automatic follow-up after push.
 
-- user presses refresh in dashboard,
-- user selects another branch,
-- successful push (automatic follow-up refresh).
-
-### API call
+### Refresh API call
 
 - `GET /branches/{branchId}/versions/`
 
-### Sequence
+### Content-Addressed Restore / Pull (`requestRestoreVersionContentAddressed`)
+
+Symmetric to CAS push, when restoring a project version:
+1. Processor calls `VersionControlService::restoreVersionFromManifest(...)`.
+2. Service fetches version details including `manifest_json` (`GET /versions/{versionId}`).
+3. `SnapshotBundler::parseContentAddressedManifest(...)` extracts required blob entries `(sha256, filename, size, isProjectFile)`.
+4. Service downloads missing blobs into the local project directory (`GET /projects/{projectId}/blobs/{sha256}`), following presigned URL redirects and verifying SHA-256 checksums per file.
+5. Returns the restored DAW project file path for immediate loading.
+
+### Sequence (History Refresh)
 
 ```mermaid
 sequenceDiagram

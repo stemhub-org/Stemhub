@@ -109,3 +109,28 @@ feature/fix branch → (Pull Request + Review) → dev → main
 4. **External API Failures (DAW Format Parsing):**
    - Fallback to basic file handling without DAW-specific features
    - User notified: "Advanced features temporarily unavailable"
+
+---
+
+## Application Observability, Security Hardening & CAS Resilience
+
+### 1. Health & Readiness Probes
+The backend exposes explicit probes for Kubernetes/container orchestration lifecycle management:
+- **Liveness Probe (`GET /health`)**: Lightweight check verifying the API process loop is responsive.
+- **Readiness Probe (`GET /ready`)**: Verifies active database connection pool availability and storage engine readiness before routing user traffic.
+
+### 2. Distributed Tracing & Request Observability
+- **`X-Request-ID` Tracing Middleware**: Every HTTP request is assigned a unique UUID `X-Request-ID` header (or propagates incoming trace IDs).
+- **Structured JSON Logging**: Standard library logging is structured for easy aggregation across backend services and background workers.
+
+### 3. Startup Security & Configuration Guards
+- **`SECRET_KEY` Startup Validation Guard**: The application rejects default development keys or insecure short secrets in production environments during startup initialization.
+- **JWT Lifecycle Hardening**: Access token expiration is strictly limited to 24 hours (`ACCESS_TOKEN_EXPIRE_MINUTES = 1440`).
+
+### 4. Storage Deduplication & Garbage Collection
+- **Content-Addressed Storage (CAS)**: Files are stored once by SHA-256 hash (`Blob(project_id, sha256)`), preventing duplicate uploads across branches and versions.
+- **Reference-Counted Lifecycle**: Every blob tracks `ref_count`. When a version or branch is deleted, references decrement automatically.
+- **Admin Garbage Collection (`POST /api/admin/blobs/gc`)**: Admin operator endpoint purges unreferenced (`ref_count == 0`) blobs from physical storage safely without affecting live projects.
+
+### 5. Soft-Delete Resilience
+- **Entity Soft Deletion**: `User.is_deleted` and `Project.is_deleted` flags ensure accidental deletion actions can be recovered without database corruption or orphan data, while immediately hiding deleted items from discovery APIs.

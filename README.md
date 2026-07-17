@@ -21,6 +21,8 @@ StemHub solves the version control problem that has plagued music production for
 ## Key Features
 
 - 🔄 **Git-like version control** — Commits, branches, merge, rollback
+- ⚡ **Content-Addressed Storage** — SHA-256 deduplicated project storage with manifest-based versioning and incremental uploads
+- 🎛️ **Modern DAW Plugin** — JUCE C++17 standalone & VST3 plugin with sleek developer-grade UI, searchable card grid, and offline support
 - ☁️ **Cloud-first** — Zero local file management, stream playback
 - 🔀 **Multi-DAW export** — Convert between Ableton, FL Studio, Reaper, Logic, Bitwig
 - 🤝 **Real collaboration** — Musical pull requests, timestamped comments, track locking
@@ -29,7 +31,15 @@ StemHub solves the version control problem that has plagued music production for
 
 ## Documentation
 
-Comprehensive documentation is available in our [Wiki](../../wiki):
+Comprehensive architecture, design system, and deployment documentation is available in [`docs/`](./docs/):
+- [Technical Context](./docs/TECHNICAL_CONTEXT.md) — Full stack overview, architecture, security, and accessibility standards
+- [Data & API Modeling](./docs/DATA_API_MODELING.md) — PostgreSQL relational schema, Content-Addressed Storage entity graph, and API contracts
+- [Design System](./docs/DESIGN_SYSTEM.md) — Web & Plugin visual design system, tokens, and UI mockups
+- [Plugin Full Data Flow](./docs/plugin-data-flow.md) — End-to-end JUCE plugin lifecycle, CAS push/pull, and background job architecture
+- [Content-Addressed Storage](./docs/content-addressed-storage.md) — Project-scoped blob deduplication, reference counting, and garbage collection
+- [Deployment & Resilience](./docs/DEPLOYMENT_RESILIENCE.md) — CI/CD pipelines, startup migration/auth guards, health probes, and backup strategy
+
+Additional guides can also be found in our [Wiki](../../wiki).
 
 ---
 

@@ -23,11 +23,11 @@
 
 - **The Team**: Erwan, Raphaël, JB, Dryss, Hubert, Gabin
 - **Technical Stack**:
-    - Frontend: React.js (Next.js)
-    - Backend: Python (FastAPI)
+    - Frontend: Next.js 16 (React 19) with TypeScript & Tailwind CSS
+    - Backend: Python 3.10+ (FastAPI) with async SQLAlchemy 2.0
     - Database: PostgreSQL
-    - Storage: Google Cloud Storage (GCS)
-    - DAW Plugin: C++
+    - Storage: Content-Addressed Storage over Google Cloud Storage (GCS) / Local filesystem
+    - DAW Plugin: JUCE C++17 (VST3 & Standalone)
 
 ---
 
@@ -52,12 +52,14 @@
 For a detailed visual representation and API contract, see the [Data & API Modeling](./DATA_API_MODELING.md).
 
 ## Database (Metadata): PostgreSQL
-- **Why?** Need for strict relations (A Project has multiple Versions, a Version has multiple Tracks). NoSQL (Mongo) would be too messy to manage precise versioning history (Git-like).
+- **Why?** Need for strict relational integrity (Projects, Branches, Versions, Tracks, and Blobs).
+- **Soft Deletion**: `User.is_deleted` and `Project.is_deleted` with indexed `deleted_at` timestamps prevent deleted entities from leaking into public feeds while maintaining historical integrity.
 
-## File Storage (Audio): Google Cloud Storage
-
-- **Imperative**: Heavy audio and snapshots files should be stored securely in the Cloud.
-- **Upload Architecture**: Uploads are now routed through the Python server which streams/stores them to the Cloud storage service (GCS), giving the backend more control over validation and metadata generation.
+## File Storage: Content-Addressed Storage (CAS) over GCS / Local
+- **Imperative**: Heavy audio stems and DAW snapshots must be deduplicated across versions to contain storage costs and speed up iterations.
+- **Content-Addressed Architecture**: Project assets are stored in a project-scoped `Blob(project_id, sha256)` table with reference counting (`ref_count`). Uploads stream through a SHA-256 hasher.
+- **Incremental Push/Pull**: Clients check missing blobs before uploading, only sending changed files. Versions store an explicit `manifest_json` asset map (`manifest_version`).
+- **Garbage Collection**: Admin endpoint `/api/admin/blobs/gc` cleans up zero-ref blobs safely.
 
 ---
 
@@ -94,25 +96,26 @@ For a detailed visual representation and API contract, see the [Data & API Model
 # StemHub Tech Stack Summary
 
 ## 1. Frontend (User Interface)
-- **Technology**: React.js (Single Page Application).
-- **Audio Visualization**: Wavesurfer.js to display waveforms and manage smooth playback.
-- **UX/UI**: Design inspired by standards (Splice/Drive) for rapid adoption by musicians.
+- **Technology**: Next.js 16 (React 19) App Router with TypeScript and Tailwind CSS.
+- **Audio Visualization**: Wavesurfer.js client-side waveform rendering and smooth playback.
+- **UX/UI**: Modern developer-grade design system adapted for music producers.
 
 ## 2. Backend (Logic & API)
-- **Language**: Python (FastAPI).
-- **Database Migrations**: Alembic for robust schema evolution (no more automatic startup schema creation).
-- **Key Library**: PyFLP (to parse FL Studio files) and struct libraries (for binary analysis).
-- **Role**: Manages authentication, project metadata, and versioning logic.
+- **Language**: Python 3.10+ (FastAPI) with async SQLAlchemy 2.0.
+- **Database Migrations**: Alembic schema migrations with startup verification guards.
+- **Observability & Hardening**: `/health` and `/ready` probes, stdlib JSON logging + `X-Request-ID` tracing middleware, and `SECRET_KEY` startup guard rejecting weak/default keys.
+- **Key Libraries**: PyFLP (FL Studio project parsing) and Pydantic schema validation.
 
-## 3. Infrastructure & Storage (Cloud)
-- **Database**: PostgreSQL (Relational) to store links between Artists, Projects, and Versions.
-- **Heavy File Storage**: AWS S3 / Google Cloud Storage.
-- **Upload Architecture**: Direct upload to FastAPI which proxies/streams the snapshot artifact to Cloud Storage.
+## 3. DAW Plugin (JUCE C++17)
+- **Technology**: JUCE C++17 VST3 & Standalone plugin (`plugin/stemhub/`).
+- **UI Design System**: Inter & JetBrains Mono typography, dark surface hierarchy (`#121214`, `#1A1A1E`, `#26262B`), Cyan Accent (`#00E5FF`), `LoginView` with offline mode, and `DashboardView` with searchable/filterable card grid (All/Local/Cloud).
+- **CAS Integration**: Client-side SHA-256 hashing, incremental missing-blob upload (`checkMissingBlobs`), manifest-based version creation, and symmetric CAS restore.
 
-## 4. Security & DevOps
-- **Authentication**: Custom JWT-based auth with **HttpOnly Cookies**. Supports Google OAuth2.
-- **Encryption**: AES-256 for files at rest on GCS.
-- **CI/CD**: Automated deployment pipeline (GitHub Actions) with Docker.
+## 4. Infrastructure, Storage & DevOps
+- **Database**: PostgreSQL (Relational metadata + CAS `Blob` table).
+- **Storage**: Content-Addressed Storage (GCS / Local filesystem).
+- **Authentication**: Custom JWT-based auth (24h TTL) with **HttpOnly Cookies** and Google OAuth2 support.
+- **CI/CD**: GitHub Actions automated pipeline with Docker and standalone dev loop script (`watch-plugin.sh`).
 
 ---
 
