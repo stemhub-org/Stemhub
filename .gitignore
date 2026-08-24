@@ -4,6 +4,7 @@ __pycache__
 # Local CMake build artifacts
 .cmake-tmp-plugin/
 .cmake-tmp-plugin-ninja/
+build/
 
 # JUCE plugin generated folders (keep Source + CMakeLists in git)
 plugin/stemhub/Builds/
