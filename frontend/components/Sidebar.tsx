@@ -12,6 +12,7 @@ import {
     ChevronLeft,
     LogOut,
 } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 
 const navigation = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -137,9 +138,9 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                                     style={{ width: "25%" }}
                                 ></div>
                             </div>
-                            <button className="w-full text-xs font-semibold text-white bg-accent rounded-md py-2 transition-all duration-300 border border-transparent hover:bg-accent/90 hover:shadow-[0_0_15px_rgba(156,87,223,0.3)]">
+                            <Button variant="solid" size="sm" className="w-full">
                                 Upgrade Storage
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </>
