@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import NewProjectModal from "@/components/NewProjectModal";
+import { useToast } from "@/components/ToastProvider";
 
 interface ProjectItem {
     id: string;
@@ -44,6 +45,7 @@ function formatTimeAgo(dateString: string): string {
 
 export default function DashboardPage() {
     const router = useRouter();
+    const toast = useToast();
     const [user, setUser] = useState<any>(null);
     const [projects, setProjects] = useState<ProjectItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -90,7 +92,7 @@ export default function DashboardPage() {
             setNewProjectDesc("");
             setNewProjectCategory("General");
         } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to create project");
+            toast.error(err instanceof Error ? err.message : "Failed to create project");
         } finally {
             setCreating(false);
         }
