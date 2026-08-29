@@ -2,7 +2,6 @@
 
 import type React from "react";
 import { useState, useEffect, useCallback, Suspense } from "react";
-import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Settings, FileText } from "lucide-react";
@@ -22,6 +21,8 @@ import type {
     TopContributorsResponse,
 } from "@/types/project";
 import { ProjectSettings } from "./components/ProjectSettings";
+import { Card } from "@/components/ui/Card";
+import { useToast } from "@/components/ToastProvider";
 
 type CurrentUserSummary = {
     id: string;
@@ -29,24 +30,18 @@ type CurrentUserSummary = {
     username: string | null;
 };
 
-const cardHoverDark =
-    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
-
 function RepositoryPageContent() {
-    const { resolvedTheme } = useTheme();
     const searchParams = useSearchParams();
     const projectId = searchParams.get("id");
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const isDark = resolvedTheme === "dark";
-    const cardBase =
-        "rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle transition-all duration-300";
-    const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
+    const toast = useToast();
 
     // ── Data state ──
     const [summary, setSummary] = useState<ProjectSummaryResponse | null>(null);
     const [activity, setActivity] = useState<ActivityStatsResponse | null>(null);
     const [contributors, setContributors] = useState<TopContributorsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedBranchId, setSelectedBranchId] = useState<string>("");
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -83,6 +78,7 @@ function RepositoryPageContent() {
             setError(err instanceof Error ? err.message : "Failed to load project data");
         } finally {
             setIsLoading(false);
+            setHasLoadedOnce(true);
         }
     }, []);
 
@@ -91,7 +87,7 @@ function RepositoryPageContent() {
             await authFetch(`/branches/${branchId}`, { method: "DELETE" });
             if (projectId) fetchData(projectId);
         } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to delete workspace");
+            toast.error(err instanceof Error ? err.message : "Failed to delete workspace");
         }
     };
 
@@ -105,10 +101,19 @@ function RepositoryPageContent() {
             setSelectedBranchId(createdBranch.id);
             fetchData(projectId, createdBranch.id);
         } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to create workspace");
+            toast.error(err instanceof Error ? err.message : "Failed to create workspace");
             throw err;
         }
     };
+
+    useEffect(() => {
+        // Reset per-project state when navigating to a different project so a stale
+        // summary (or a branch id belonging to the previous project) can't leak into
+        // the new project's render or its next fetch.
+        setHasLoadedOnce(false);
+        setSummary(null);
+        setSelectedBranchId("");
+    }, [projectId]);
 
     useEffect(() => {
         if (projectId) {
@@ -119,7 +124,7 @@ function RepositoryPageContent() {
         }
     }, [fetchData, projectId, selectedBranchId]);
 
-    if (isLoading) {
+    if (isLoading && !hasLoadedOnce) {
         return (
             <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
@@ -184,7 +189,7 @@ function RepositoryPageContent() {
             </AnimatePresence>
 
             <div className="relative z-0 p-6 space-y-6">
-                <div className={`${cardClass} overflow-hidden`}>
+                <Card interactive padding="none" className="overflow-hidden">
                     <RepositoryPageHeader
                         ownerUsername={summary.project.owner.username}
                         projectName={summary.project.name}
@@ -197,7 +202,7 @@ function RepositoryPageContent() {
                             }
                         }}
                     />
-                </div>
+                </Card>
 
                 <div className="flex flex-wrap items-center justify-end gap-4 mt-4 mb-6 px-2">
                     <div className="flex items-center gap-4 border-b border-border-subtle flex-1 justify-end">
@@ -239,23 +244,28 @@ function RepositoryPageContent() {
                             transition={{ duration: 0.3 }}
                         >
                             <section className="flex min-w-0 flex-1 flex-col gap-6 self-start">
-                                <RepositoryBranchBar
-                                    branches={summary.branches}
-                                    selectedBranchId={selectedBranchId}
-                                    onBranchChange={setSelectedBranchId}
-                                    isOwner={currentUserId === summary.project.owner.id}
-                                    onDelete={handleDeleteBranch}
-                                    onCreate={currentUserId === summary.project.owner.id ? handleCreateBranch : undefined}
-                                />
-                                <div className={cardClass}>
+                                <div className="flex items-center gap-3">
+                                    <RepositoryBranchBar
+                                        branches={summary.branches}
+                                        selectedBranchId={selectedBranchId}
+                                        onBranchChange={setSelectedBranchId}
+                                        isOwner={currentUserId === summary.project.owner.id}
+                                        onDelete={handleDeleteBranch}
+                                        onCreate={currentUserId === summary.project.owner.id ? handleCreateBranch : undefined}
+                                    />
+                                    {isLoading && hasLoadedOnce && (
+                                        <Loader2 className="size-4 text-accent animate-spin shrink-0" aria-label="Refreshing…" />
+                                    )}
+                                </div>
+                                <Card interactive padding="none">
                                     <div className="p-8">
                                         <RepositoryAudioPlayer
                                             projectId={projectId}
                                             hasPreview={summary.has_preview}
                                         />
                                     </div>
-                                </div>
-                                <div className={`${cardClass} p-6`}>
+                                </Card>
+                                <Card interactive>
                                     <QuickExport
                                         projectId={projectId}
                                         projectName={summary.project.name}
@@ -264,43 +274,45 @@ function RepositoryPageContent() {
                                         hasPreview={summary.has_preview}
                                         hasArtifact={Boolean(latestVersion?.has_artifact)}
                                     />
-                                </div>
-                                <div className={`${cardClass} p-6`}>
+                                </Card>
+                                <Card interactive>
                                     <RecentChanges
                                         versions={summary.recent_versions}
                                         projectId={projectId}
                                         branchId={selectedBranchId || undefined}
                                     />
-                                </div>
+                                </Card>
                             </section>
 
                             <aside className="w-[28rem] shrink-0 flex flex-col gap-6">
-                                <div className={`${cardClass} p-6 overflow-hidden`}>
+                                <Card interactive className="overflow-hidden">
                                     <ContributionActivity
                                         dailyActivity={activity?.daily_activity || []}
                                         totalCommits={activity?.total_commits || 0}
                                         totalContributors={activity?.total_contributors || 0}
                                     />
-                                </div>
-                                <div className={`${cardClass} p-6 overflow-hidden`}>
+                                </Card>
+                                <Card interactive className="overflow-hidden">
                                     <TopContributors
                                         contributors={contributors?.contributors || []}
                                     />
-                                </div>
+                                </Card>
                             </aside>
                         </motion.main>
                     </>
                 )}
 
                 {activeTab === "Settings" && currentUserId && summary.project.owner.id === currentUserId && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className={`${cardClass} py-6`}
-                    >
-                        <ProjectSettings projectId={projectId!} ownerId={summary.project.owner.id} currentUserId={currentUserId} />
-                    </motion.div>
+                    <Card interactive padding="none">
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="py-6"
+                        >
+                            <ProjectSettings projectId={projectId!} ownerId={summary.project.owner.id} currentUserId={currentUserId} />
+                        </motion.div>
+                    </Card>
                 )}
             </div>
         </div>
