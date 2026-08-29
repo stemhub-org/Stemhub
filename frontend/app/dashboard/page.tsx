@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
     GitBranch,
     Clock,
@@ -11,10 +11,13 @@ import {
     Users,
     HardDrive,
     ChevronRight,
-    X,
-    Loader2,
 } from "lucide-react";
 import { authFetch } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import NewProjectModal from "@/components/NewProjectModal";
+import { useToast } from "@/components/ToastProvider";
 
 interface ProjectItem {
     id: string;
@@ -42,6 +45,7 @@ function formatTimeAgo(dateString: string): string {
 
 export default function DashboardPage() {
     const router = useRouter();
+    const toast = useToast();
     const [user, setUser] = useState<any>(null);
     const [projects, setProjects] = useState<ProjectItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -88,7 +92,7 @@ export default function DashboardPage() {
             setNewProjectDesc("");
             setNewProjectCategory("General");
         } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to create project");
+            toast.error(err instanceof Error ? err.message : "Failed to create project");
         } finally {
             setCreating(false);
         }
@@ -123,17 +127,12 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex gap-3">
-                        <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent/10 border border-accent/20 hover:bg-accent/20 hover:border-accent/40 transition-all duration-300 text-sm font-medium text-accent group">
-                            <DownloadCloud size={16} className="text-accent group-hover:scale-110 transition-transform" />
-                            <span>Import</span>
-                        </button>
-                        <button
-                            onClick={() => setShowNewProject(true)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent text-white hover:bg-accent/90 hover:shadow-[0_0_15px_rgba(156,87,223,0.4)] transition-all duration-300 text-sm font-medium"
-                        >
-                            <Plus size={16} />
-                            <span>New Project</span>
-                        </button>
+                        <Button variant="outline" icon={<DownloadCloud size={16} />}>
+                            Import
+                        </Button>
+                        <Button variant="solid" icon={<Plus size={16} />} onClick={() => setShowNewProject(true)}>
+                            New Project
+                        </Button>
                     </div>
                 </motion.div>
 
@@ -144,21 +143,21 @@ export default function DashboardPage() {
                     transition={{ duration: 0.4, delay: 0.1 }}
                     className="grid grid-cols-1 md:grid-cols-3 gap-4"
                 >
-                    <div className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
+                    <Card interactive>
                         <div className="flex items-center justify-between mb-8">
                             <div className="text-foreground transition-colors flex items-center gap-2 text-sm font-medium">
                                 <HardDrive size={16} className="text-accent group-hover:scale-110 transition-transform" />
                                 <span>Storage</span>
                             </div>
-                            <span className="text-xs font-semibold px-2 py-1 rounded bg-accent/10 text-accent border border-accent/20">Active</span>
+                            <Badge size="md">Active</Badge>
                         </div>
                         <div className="flex items-baseline gap-2">
                             <h3 className="text-3xl font-semibold tracking-tight text-foreground">{projects.length}</h3>
                             <span className="text-sm border-l border-border-subtle pl-2 text-foreground-muted">Projects</span>
                         </div>
-                    </div>
+                    </Card>
 
-                    <div className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
+                    <Card interactive>
                         <div className="flex items-center justify-between mb-8">
                             <div className="text-foreground transition-colors flex items-center gap-2 text-sm font-medium">
                                 <GitBranch size={16} className="text-accent group-hover:scale-110 transition-transform" />
@@ -169,9 +168,9 @@ export default function DashboardPage() {
                             <h3 className="text-3xl font-semibold tracking-tight text-foreground">{projects.length}</h3>
                             <span className="text-sm border-l border-border-subtle pl-2 text-foreground-muted">Total Projects</span>
                         </div>
-                    </div>
+                    </Card>
 
-                    <div className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-xl p-6 hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group">
+                    <Card interactive>
                         <div className="flex items-center justify-between mb-8">
                             <div className="text-foreground transition-colors flex items-center gap-2 text-sm font-medium">
                                 <Users size={16} className="text-accent group-hover:scale-110 transition-transform" />
@@ -182,7 +181,7 @@ export default function DashboardPage() {
                             <h3 className="text-3xl font-semibold tracking-tight text-foreground">—</h3>
                             <span className="text-sm border-l border-border-subtle pl-2 text-foreground-muted">Collaborators</span>
                         </div>
-                    </div>
+                    </Card>
                 </motion.div>
 
                 {/* Recent Projects — REAL DATA */}
@@ -199,22 +198,21 @@ export default function DashboardPage() {
                     </div>
 
                     {projects.length === 0 ? (
-                        <div className="rounded-lg bg-background-secondary dark:bg-background-tertiary border border-border-subtle p-8 text-center">
+                        <Card padding="lg" className="text-center">
                             <p className="text-foreground-muted text-sm mb-4">No projects yet. Create your first one!</p>
-                            <button
-                                onClick={() => setShowNewProject(true)}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-accent text-white hover:bg-accent/90 text-sm font-medium transition-all"
-                            >
-                                <Plus size={16} /> New Project
-                            </button>
-                        </div>
+                            <Button variant="solid" icon={<Plus size={16} />} onClick={() => setShowNewProject(true)}>
+                                New Project
+                            </Button>
+                        </Card>
                     ) : (
                         <div className="flex flex-col gap-3">
                             {projects.map((project) => (
-                                <div
+                                <Card
                                     key={project.id}
+                                    interactive
+                                    padding="sm"
                                     onClick={() => router.push(`/projects?id=${project.id}`)}
-                                    className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-background-secondary dark:bg-background-tertiary border border-border-subtle hover:border-accent/40 hover:bg-gradient-to-r hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_15px_rgba(156,87,223,0.05)] transition-all duration-300 cursor-pointer"
+                                    className="flex flex-col sm:flex-row sm:items-center justify-between"
                                 >
                                     <div className="flex items-center gap-4 mb-3 sm:mb-0">
                                         <div className="h-10 w-10 rounded-md bg-accent/10 flex items-center justify-center border border-accent/20 group-hover:border-accent/40 transition-colors">
@@ -243,125 +241,28 @@ export default function DashboardPage() {
                                     </div>
 
                                     <div className="flex items-center gap-6 text-xs text-foreground-muted font-medium sm:ml-auto">
-                                        <span className="px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 text-[10px]">
-                                            {project.category}
-                                        </span>
+                                        <Badge>{project.category}</Badge>
                                         <ChevronRight size={14} className="text-foreground-muted group-hover:text-accent transition-colors" />
                                     </div>
-                                </div>
+                                </Card>
                             ))}
                         </div>
                     )}
                 </motion.div>
             </div>
 
-            {/* New Project Modal */}
-            <AnimatePresence>
-                {showNewProject && (
-                    <>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-                            onClick={() => setShowNewProject(false)}
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="w-full max-w-md rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle p-6 shadow-2xl">
-                                <div className="flex items-center justify-between mb-6">
-                                    <h2 className="text-lg font-medium text-foreground">New Project</h2>
-                                    <button
-                                        onClick={() => setShowNewProject(false)}
-                                        className="text-foreground-muted hover:text-foreground transition-colors"
-                                    >
-                                        <X size={20} />
-                                    </button>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-foreground mb-1.5">
-                                            Project Name *
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={newProjectName}
-                                            onChange={(e) => setNewProjectName(e.target.value)}
-                                            placeholder="My Awesome Track"
-                                            className="w-full rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors"
-                                            autoFocus
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-foreground mb-1.5">
-                                            Description
-                                        </label>
-                                        <textarea
-                                            value={newProjectDesc}
-                                            onChange={(e) => setNewProjectDesc(e.target.value)}
-                                            placeholder="A short description of your project"
-                                            rows={3}
-                                            className="w-full rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors resize-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-foreground mb-1.5">
-                                            Category
-                                        </label>
-                                        <select
-                                            value={newProjectCategory}
-                                            onChange={(e) => setNewProjectCategory(e.target.value)}
-                                            className="w-full rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors"
-                                        >
-                                            <option value="General">General</option>
-                                            <option value="Electronic">Electronic</option>
-                                            <option value="Hip-Hop">Hip-Hop</option>
-                                            <option value="Pop">Pop</option>
-                                            <option value="Rock">Rock</option>
-                                            <option value="Jazz">Jazz</option>
-                                            <option value="Classical">Classical</option>
-                                            <option value="Other">Other</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div className="flex justify-end gap-3 mt-6">
-                                    <button
-                                        onClick={() => setShowNewProject(false)}
-                                        className="px-4 py-2 rounded-lg text-sm font-medium text-foreground-muted hover:text-foreground transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleCreateProject}
-                                        disabled={!newProjectName.trim() || creating}
-                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                                    >
-                                        {creating ? (
-                                            <>
-                                                <Loader2 size={16} className="animate-spin" />
-                                                Creating…
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Plus size={16} />
-                                                Create Project
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
+            <NewProjectModal
+                open={showNewProject}
+                onClose={() => setShowNewProject(false)}
+                name={newProjectName}
+                onNameChange={setNewProjectName}
+                description={newProjectDesc}
+                onDescriptionChange={setNewProjectDesc}
+                category={newProjectCategory}
+                onCategoryChange={setNewProjectCategory}
+                creating={creating}
+                onCreate={handleCreateProject}
+            />
         </div>
     );
 }
