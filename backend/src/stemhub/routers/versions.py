@@ -8,12 +8,13 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from stemhub.database import get_db
-from stemhub.models import Blob, Collaborator, Version, Branch, Project, User
+from stemhub.models import Blob, Collaborator, Track, Version, Branch, Project, User
 from stemhub.schemas import (
     MixerDiffChange,
     MixerDiffResponse,
     MixerDiffSummary,
     OwnerSummary,
+    TrackSummary,
     VersionCreate,
     VersionDiffHistoryEntry,
     VersionFromManifestCreate,
@@ -468,15 +469,12 @@ async def list_version_diff_history(
     return history_entries
 
 
-@router.get("/versions/{version_id}", response_model=VersionResponse)
-async def get_version(
+async def _get_version_with_access(
+    *,
     version_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Get a specific version by ID.
-    """
+    current_user: User,
+    db: AsyncSession,
+) -> Version:
     result = await db.execute(
         select(Version, Branch.project_id).join(Branch).join(Project).where(
             Version.id == version_id,
@@ -492,6 +490,91 @@ async def get_version(
     if not await _can_access_project(project_id=project_id, current_user=current_user, db=db):
         raise HTTPException(status_code=404, detail="Version not found")
     return version
+
+
+def _file_type_from_filename(filename: str) -> str | None:
+    if "." not in filename:
+        return None
+    return filename.rsplit(".", 1)[-1].lower()
+
+
+def _tracks_from_manifest(manifest: dict) -> list[TrackSummary]:
+    """Map manifest_json["tracks"] (see VersionManifestV1) to TrackSummary rows."""
+    summaries: list[TrackSummary] = []
+    for index, track in enumerate(manifest.get("tracks") or []):
+        if not isinstance(track, dict):
+            continue
+        sha256 = track.get("sha256")
+        name = track.get("name")
+        if not isinstance(sha256, str) or not isinstance(name, str):
+            continue
+        filename = track.get("filename")
+        summaries.append(
+            TrackSummary(
+                # sha256 alone isn't guaranteed unique across tracks (two
+                # tracks may intentionally reference identical audio), so
+                # suffix with the manifest position to keep ids unique.
+                id=f"{sha256}:{index}",
+                name=name,
+                file_type=_file_type_from_filename(filename) if isinstance(filename, str) else None,
+                bpm=track.get("bpm"),
+                key=track.get("key"),
+                duration_seconds=track.get("duration_seconds"),
+                size_bytes=track.get("size_bytes"),
+                source="manifest",
+            )
+        )
+    return summaries
+
+
+@router.get("/versions/{version_id}", response_model=VersionResponse)
+async def get_version(
+    version_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get a specific version by ID.
+    """
+    return await _get_version_with_access(version_id=version_id, current_user=current_user, db=db)
+
+
+@router.get("/versions/{version_id}/tracks", response_model=List[TrackSummary])
+async def list_version_tracks(
+    version_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List the stems/tracks known for a version.
+
+    Reads whichever track-data source the version actually has: the
+    content-addressed manifest (populated by the from-manifest create flow)
+    or the legacy Track table (populated by nothing today, kept for forward
+    compatibility). Returns an empty list, not an error, when neither is
+    populated — most FL Studio snapshot-flow versions have no per-track data.
+    """
+    version = await _get_version_with_access(version_id=version_id, current_user=current_user, db=db)
+
+    if isinstance(version.manifest_json, dict):
+        return _tracks_from_manifest(version.manifest_json)
+
+    result = await db.execute(select(Track).where(Track.version_id == version_id))
+    return [
+        TrackSummary(
+            id=str(track.id),
+            name=track.name,
+            # Normalize to match the manifest path's format (no leading dot) —
+            # Track.file_type is stored with a leading dot (e.g. ".wav").
+            file_type=track.file_type.lstrip(".") if track.file_type else None,
+            bpm=track.bpm,
+            key=track.key,
+            duration_seconds=track.duration,
+            size_bytes=None,
+            source="legacy",
+        )
+        for track in result.scalars().all()
+    ]
 
 @router.delete("/versions/{version_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_version(

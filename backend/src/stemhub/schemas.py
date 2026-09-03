@@ -247,6 +247,27 @@ class VersionDiffHistoryEntry(BaseModel):
     changes: list[MixerDiffChange] = []
 
 
+class TrackSummary(BaseModel):
+    """A single stem/track surfaced for the repository overview UI.
+
+    Sourced from whichever of the two track-data paths a version actually
+    has: the content-addressed manifest (`Version.manifest_json["tracks"]`,
+    populated by the from-manifest create flow) or the legacy `Track` table
+    (populated by nothing today, kept for forward compatibility). A version
+    with neither yields an empty list — callers should treat that as "no
+    per-track data available for this version", not an error.
+    """
+
+    id: str
+    name: str
+    file_type: Optional[str] = None
+    bpm: Optional[int] = None
+    key: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    size_bytes: Optional[int] = None
+    source: Literal["manifest", "legacy"]
+
+
 class ProjectDetail(BaseModel):
     id: UUID
     name: str
