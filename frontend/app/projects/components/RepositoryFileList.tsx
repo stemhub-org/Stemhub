@@ -1,47 +1,36 @@
 "use client";
 
-import { Folder, FileAudio, Trash2 } from "lucide-react";
-import type { Track } from "@/types/project";
+import { Folder, FileAudio } from "lucide-react";
+import type { TrackSummary } from "@/types/project";
+import { Badge } from "@/components/ui/Badge";
 
-function formatTimeAgo(dateString: string | null) {
-    if (!dateString) return "Unknown date";
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    if (seconds < 60) return "Just now";
-    
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-    
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days} day${days > 1 ? 's' : ''} ago`;
-    
-    const months = Math.floor(days / 30);
-    if (months < 12) return `${months} month${months > 1 ? 's' : ''} ago`;
-    
-    const years = Math.floor(months / 12);
-    return `${years} year${years > 1 ? 's' : ''} ago`;
+function formatDuration(seconds: number | null): string {
+    if (seconds == null) return "—";
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function formatSize(bytes: number | null): string {
+    if (bytes == null) return "—";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 interface RepositoryFileListProps {
-    tracks: Track[];
-    isOwner?: boolean;
-    onDeleteTrack?: (trackId: string) => void;
+    tracks: TrackSummary[];
 }
 
-function ItemIcon({ fileType }: { fileType: string }) {
+function ItemIcon({ fileType }: { fileType: string | null }) {
     const iconClass = "size-5 shrink-0 text-accent";
-    if (fileType === ".json" || fileType === "folder") {
+    if (fileType === "json" || fileType === "folder") {
         return <Folder className={iconClass} aria-hidden />;
     }
     return <FileAudio className={iconClass} aria-hidden />;
 }
 
-export function RepositoryFileList({ tracks, isOwner, onDeleteTrack }: RepositoryFileListProps) {
+export function RepositoryFileList({ tracks }: RepositoryFileListProps) {
     return (
         <div>
             <div className="border-b border-foreground/[0.08] bg-foreground/[0.02] px-6 py-3">
@@ -49,53 +38,38 @@ export function RepositoryFileList({ tracks, isOwner, onDeleteTrack }: Repositor
                     className="mb-3 text-sm font-medium text-foreground"
                     style={{ fontFamily: "var(--font-syne)" }}
                 >
-                    Files
+                    Stems
                 </h3>
-                <div className={`grid gap-4 text-xs font-medium uppercase tracking-wide text-foreground/60 ${isOwner ? 'grid-cols-[1fr_2fr_1fr_auto_auto]' : 'grid-cols-[1fr_2fr_1fr_auto]'}`}>
+                <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 text-xs font-medium uppercase tracking-wide text-foreground/60">
                     <span>Name</span>
-                    <span>Type</span>
-                    <span>Added</span>
-                    <span>Format</span>
-                    {isOwner && <span></span>}
+                    <span>Key</span>
+                    <span>BPM</span>
+                    <span>Duration</span>
+                    <span>Size</span>
                 </div>
             </div>
             {tracks.length === 0 ? (
                 <div className="px-6 py-8 text-center text-sm text-foreground/50">
-                    No files yet
+                    No per-stem data available for this version.
                 </div>
             ) : (
                 <ul className="divide-y divide-foreground/[0.06]" role="list">
                     {tracks.map((track) => (
-                        <li key={track.id} className={`grid gap-4 px-6 py-4 transition-colors hover:bg-foreground/[0.03] items-center ${isOwner ? 'grid-cols-[1fr_2fr_1fr_auto_auto]' : 'grid-cols-[1fr_2fr_1fr_auto]'}`}>
+                        <li
+                            key={track.id}
+                            className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-6 py-4 transition-colors hover:bg-foreground/[0.03]"
+                        >
                             <span className="flex min-w-0 items-center gap-3 truncate">
                                 <ItemIcon fileType={track.file_type} />
                                 <span className="truncate font-medium text-foreground">
                                     {track.name}
                                 </span>
+                                {track.source === "manifest" && <Badge size="sm">stored</Badge>}
                             </span>
-                            <span className="truncate text-sm text-foreground/70">
-                                Audio Track
-                            </span>
-                            <span className="truncate text-sm text-foreground/50">
-                                {track.created_at ? formatTimeAgo(track.created_at) : "Unknown"}
-                            </span>
-                            <span className="shrink-0 text-sm text-foreground/60">
-                                {track.file_type}
-                            </span>
-                            {isOwner && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (onDeleteTrack && window.confirm(`Are you sure you want to delete track '${track.name}'?`)) {
-                                            onDeleteTrack(track.id);
-                                        }
-                                    }}
-                                    className="text-foreground/40 hover:text-red-500 transition-colors shrink-0 flex items-center justify-center p-1"
-                                    title="Delete Track"
-                                >
-                                    <Trash2 className="size-4" />
-                                </button>
-                            )}
+                            <span className="text-sm text-foreground/70">{track.key ?? "—"}</span>
+                            <span className="text-sm text-foreground/70">{track.bpm ?? "—"}</span>
+                            <span className="text-sm text-foreground/70">{formatDuration(track.duration_seconds)}</span>
+                            <span className="text-sm text-foreground/60">{formatSize(track.size_bytes)}</span>
                         </li>
                     ))}
                 </ul>

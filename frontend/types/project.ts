@@ -62,6 +62,18 @@ export interface Track {
     created_at: string | null;
 }
 
+// ── Track summary (from GET /versions/{id}/tracks) ──
+export interface TrackSummary {
+    id: string;
+    name: string;
+    file_type: string | null;
+    bpm: number | null;
+    key: string | null;
+    duration_seconds: number | null;
+    size_bytes: number | null;
+    source: "manifest" | "legacy";
+}
+
 // ── Project detail ──
 export interface ProjectDetail {
     id: string;
