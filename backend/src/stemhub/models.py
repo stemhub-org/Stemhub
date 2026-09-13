@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, Integer
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, String, Text, Integer
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -116,6 +116,47 @@ class Version(Base):
     author: Mapped["User | None"] = relationship("User", foreign_keys=[created_by])
     parent: Mapped["Version | None"] = relationship("Version", remote_side="Version.id", backref="children")
     tracks: Mapped[list["Track"]] = relationship("Track", back_populates="version")
+
+
+class PullRequest(Base):
+    """Proposal to merge one branch into another within the same project.
+
+    Lifecycle: OPEN → MERGED (merge engine, issue #253) or OPEN → CLOSED
+    (closed without merge). MERGED and CLOSED are terminal.
+    """
+    __tablename__ = "pull_request"
+    __table_args__ = (
+        # Kept as a plain String + CHECK rather than a native Postgres ENUM so
+        # adding a status later is a one-line migration, not an ALTER TYPE.
+        CheckConstraint("status IN ('OPEN', 'MERGED', 'CLOSED')", name="ck_pull_request_status"),
+        # Same invariant as the API-level 400: a branch cannot be merged into itself.
+        CheckConstraint("source_branch_id <> target_branch_id", name="ck_pull_request_distinct_branches"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    # Redundant with source/target branch's project but stored so the per-project
+    # listing needs no join and cross-project PRs are impossible by construction.
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("project.id"), nullable=False, index=True)
+    source_branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branch.id"), nullable=False)
+    target_branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branch.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN")  # OPEN, MERGED, CLOSED
+    # Placeholder for the merge engine (issue #253); schema intentionally undefined here.
+    conflict_resolution: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # ── Relationships ──
+    # Two FKs point at branch, so each relationship must name its own FK column
+    # or SQLAlchemy raises AmbiguousForeignKeysError at mapper configuration.
+    project: Mapped["Project"] = relationship("Project")
+    source_branch: Mapped["Branch"] = relationship("Branch", foreign_keys=[source_branch_id])
+    target_branch: Mapped["Branch"] = relationship("Branch", foreign_keys=[target_branch_id])
+    author: Mapped["User | None"] = relationship("User", foreign_keys=[created_by])
 
 
 class Blob(Base):
