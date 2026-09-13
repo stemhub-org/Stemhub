@@ -15,6 +15,7 @@ from .routers.admin import router as admin_router
 from .routers.explore import router as explore_router
 from .routers.community import router as community_router
 from .routers.blobs import router as blobs_router
+from .routers.pull_requests import router as pull_requests_router
 from .database import engine
 from .migrations import check_migrations_async
 from .logging_config import RequestIdMiddleware, configure_logging
@@ -74,6 +75,7 @@ app.include_router(admin_router)
 app.include_router(explore_router)
 app.include_router(community_router)
 app.include_router(blobs_router)
+app.include_router(pull_requests_router)
 
 
 @app.get("/")

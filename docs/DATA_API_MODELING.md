@@ -16,6 +16,8 @@ erDiagram
     PROJECT ||--o{ COLLABORATOR : has
     BRANCH ||--o{ VERSION : contains
     VERSION ||--o{ TRACK : "consists of"
+    PROJECT ||--o{ PULL_REQUEST : has
+    BRANCH ||--o{ PULL_REQUEST : "source / target"
     
     USER {
         uuid id PK
@@ -69,6 +71,22 @@ erDiagram
         string name "e.g. Kick, Lead Synth"
         string file_type ".json"
         string storage_path
+    }
+
+    PULL_REQUEST {
+        uuid id PK
+        uuid project_id FK
+        uuid source_branch_id FK
+        uuid target_branch_id FK
+        string title
+        string description
+        string status "OPEN, MERGED, CLOSED"
+        jsonb conflict_resolution "Reserved for the merge engine"
+        uuid created_by FK
+        datetime created_at
+        datetime closed_at
+        boolean is_deleted
+        datetime deleted_at
     }
 ```
 
@@ -147,6 +165,10 @@ The core engine of StemHub for DAW project synchronization (Git-like workflow).
 | `/branches/{id}/versions/` | `POST` | `id` | Create a new version record. |
 | `/versions/{id}/artifact` | `POST` | `id` | **Upload version snapshot/artifact.** |
 | `/versions/{id}/artifact` | `GET` | `id` | **Download version snapshot/artifact.** |
+| `/projects/{id}/pull-requests` | `GET` | `id` | List pull requests of a project. |
+| `/projects/{id}/pull-requests` | `POST` | `id` | Open a pull request (source → target branch, same project). |
+| `/pull-requests/{id}` | `GET` | `id` | Get a pull request. |
+| `/pull-requests/{id}/close` | `POST` | `id` | Close without merging (`OPEN` → `CLOSED`; `409` if not open). Merge is a separate, future endpoint. |
 
 **Flow for New Version (Push):**
 1. Client calls `POST /branches/{id}/versions` with metadata to create a version record.
