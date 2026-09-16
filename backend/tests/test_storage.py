@@ -99,7 +99,8 @@ def test_gcs_storage_service_roundtrip(monkeypatch) -> None:
             with open(source_path, "rb") as file:
                 uploaded_blobs[self.path] = file.read()
 
-        def upload_from_file(self, source_file) -> None:
+        def upload_from_file(self, source_file, size=None) -> None:
+            del size
             uploaded_blobs[self.path] = source_file.read()
 
         def reload(self) -> None:

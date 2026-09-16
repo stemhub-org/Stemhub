@@ -24,6 +24,8 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # ── Relationships ──
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="owner")
@@ -95,13 +97,38 @@ class Version(Base):
     artifact_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)  # SHA-256 for integrity verification
     source_daw: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_project_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # ── Version payload ──
+    # snapshot_manifest is the legacy field: it stores the DAW mixer state that
+    # was extracted from the (whole) artifact bundle uploaded via the old flow.
+    # It will keep being written by the legacy POST /versions endpoint until
+    # the plugin migrates to the manifest-based flow.
     snapshot_manifest: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # manifest_json is the content-addressed manifest (see
+    # docs/content-addressed-storage.md). Populated only by the new
+    # manifest-based version-create endpoint. When set, artifact_path /
+    # artifact_size_bytes / artifact_checksum are unused. manifest_version
+    # is the schema version of this JSON blob so future readers can migrate.
+    manifest_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    manifest_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # ── Relationships ──
     branch: Mapped["Branch"] = relationship("Branch", back_populates="versions")
     author: Mapped["User | None"] = relationship("User", foreign_keys=[created_by])
     parent: Mapped["Version | None"] = relationship("Version", remote_side="Version.id", backref="children")
     tracks: Mapped[list["Track"]] = relationship("Track", back_populates="version")
+
+
+class Blob(Base):
+    """Content-addressed blob. Project-scoped for privacy — see docs/content-addressed-storage.md."""
+    __tablename__ = "blob"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("project.id", ondelete="CASCADE"), primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    mime_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    storage_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    ref_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class Track(Base):

@@ -194,6 +194,40 @@ public:
         return juce::Result::fail("download not implemented in tests");
     }
 
+    ApiResult<std::vector<juce::String>> checkMissingBlobs(const juce::String& projectId,
+                                                            const std::vector<juce::String>& sha256s,
+                                                            const juce::String& accessToken) const override
+    {
+        juce::ignoreUnused(projectId, sha256s, accessToken);
+        return { std::vector<juce::String>{}, {} };
+    }
+
+    ApiResult<juce::var> uploadBlob(const juce::String& projectId,
+                                     const juce::String& sha256,
+                                     const juce::File& file,
+                                     const juce::String& accessToken) const override
+    {
+        juce::ignoreUnused(projectId, sha256, file, accessToken);
+        return makeApiError("uploadBlob not implemented in tests");
+    }
+
+    ApiResult<juce::var> createVersionFromManifest(const juce::String& branchId,
+                                                    const juce::var& payload,
+                                                    const juce::String& accessToken) const override
+    {
+        juce::ignoreUnused(branchId, payload, accessToken);
+        return makeApiError("createVersionFromManifest not implemented in tests");
+    }
+
+    juce::Result downloadBlob(const juce::String& projectId,
+                               const juce::String& sha256,
+                               const juce::File& destinationFile,
+                               const juce::String& accessToken) const override
+    {
+        juce::ignoreUnused(projectId, sha256, destinationFile, accessToken);
+        return juce::Result::fail("downloadBlob not implemented in tests");
+    }
+
     bool cachedSessionIsValid { true };
     std::vector<Project> projects;
     std::map<juce::String, std::vector<Branch>> projectBranches;

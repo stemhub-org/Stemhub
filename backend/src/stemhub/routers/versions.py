@@ -8,7 +8,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from stemhub.database import get_db
-from stemhub.models import Collaborator, Version, Branch, Project, User
+from stemhub.models import Blob, Collaborator, Version, Branch, Project, User
 from stemhub.schemas import (
     MixerDiffChange,
     MixerDiffResponse,
@@ -16,6 +16,7 @@ from stemhub.schemas import (
     OwnerSummary,
     VersionCreate,
     VersionDiffHistoryEntry,
+    VersionFromManifestCreate,
     VersionResponse,
     VersionWithAuthor,
 )
@@ -24,6 +25,26 @@ from stemhub.flp_mixer_snapshot import MixerSnapshotError, diff_mixer_project_sn
 from stemhub.storage import StorageError, StorageService, get_storage_service
 
 router = APIRouter(tags=["versions"])
+
+
+def _extract_manifest_blob_shas(manifest: dict) -> set[str]:
+    """Return every sha256 referenced by a v1 manifest.
+
+    Defensive: reads only the fields we know about and skips anything else.
+    Callers should already have validated the manifest at write time.
+    """
+    shas: set[str] = set()
+    project_file = manifest.get("project_file") or {}
+    if isinstance(project_file, dict):
+        sha = project_file.get("sha256")
+        if isinstance(sha, str):
+            shas.add(sha)
+    for track in manifest.get("tracks") or []:
+        if isinstance(track, dict):
+            sha = track.get("sha256")
+            if isinstance(sha, str):
+                shas.add(sha)
+    return shas
 
 
 async def _can_access_project(
@@ -188,6 +209,80 @@ async def create_version(
     await db.commit()
     await db.refresh(db_version)
     return db_version
+
+
+@router.post(
+    "/branches/{branch_id}/versions/from-manifest",
+    response_model=VersionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_version_from_manifest(
+    branch_id: UUID,
+    payload: VersionFromManifestCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new version by referencing already-uploaded blobs.
+
+    The manifest lists SHA-256 hashes for the project file and every track.
+    All referenced blobs must already exist in the project (uploaded via
+    PUT /projects/{pid}/blobs/{sha256}). ref_count is bumped atomically
+    with the Version row insert.
+
+    See docs/content-addressed-storage.md.
+    """
+    result = await db.execute(
+        select(Branch).join(Project).where(
+            Branch.id == branch_id,
+            Branch.is_deleted == False,
+            Project.is_deleted == False,
+        )
+    )
+    branch = result.scalars().first()
+    if branch is None:
+        raise HTTPException(status_code=404, detail="Branch not found or you don't have access")
+    if not await _can_access_project(project_id=branch.project_id, current_user=current_user, db=db):
+        raise HTTPException(status_code=404, detail="Branch not found or you don't have access")
+
+    manifest = payload.manifest
+    required_shas = manifest.all_blob_shas()
+
+    existing_result = await db.execute(
+        select(Blob).where(
+            Blob.project_id == branch.project_id,
+            Blob.sha256.in_(required_shas),
+        )
+    )
+    existing_blobs = list(existing_result.scalars().all())
+    existing_shas = {b.sha256 for b in existing_blobs}
+    missing = required_shas - existing_shas
+    if missing:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "missing_blobs",
+                "missing": sorted(missing),
+            },
+        )
+
+    for blob in existing_blobs:
+        blob.ref_count = blob.ref_count + 1
+
+    db_version = Version(
+        branch_id=branch_id,
+        created_by=current_user.id,
+        commit_message=payload.commit_message,
+        parent_version_id=payload.parent_version_id,
+        source_daw=manifest.source_daw,
+        source_project_filename=manifest.source_project_filename,
+        manifest_json=manifest.model_dump(mode="json"),
+        manifest_version=manifest.manifest_version,
+    )
+    db.add(db_version)
+    await db.commit()
+    await db.refresh(db_version)
+    return db_version
+
 
 @router.get("/branches/{branch_id}/versions/", response_model=List[VersionResponse])
 async def list_versions(
@@ -408,7 +503,7 @@ async def delete_version(
     Delete a version.
     """
     result = await db.execute(
-        select(Version).join(Branch).join(Project).where(
+        select(Version, Branch.project_id).join(Branch, Version.branch_id == Branch.id).join(Project, Branch.project_id == Project.id).where(
             Version.id == version_id,
             Project.owner_id == current_user.id,
             Version.is_deleted == False,
@@ -416,9 +511,29 @@ async def delete_version(
             Project.is_deleted == False
         )
     )
-    version = result.scalars().first()
-    if not version:
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Version not found")
+    version, project_id = row
+
+    # If this is a CAS version, decrement ref_count on each referenced blob.
+    # Blobs whose ref_count drops to 0 will be reclaimed by the GC sweep after
+    # the grace window (see docs/content-addressed-storage.md).
+    if version.manifest_json:
+        try:
+            referenced_shas = _extract_manifest_blob_shas(version.manifest_json)
+        except (KeyError, TypeError):
+            referenced_shas = set()
+        if referenced_shas:
+            blob_result = await db.execute(
+                select(Blob).where(
+                    Blob.project_id == project_id,
+                    Blob.sha256.in_(referenced_shas),
+                )
+            )
+            for blob in blob_result.scalars().all():
+                if blob.ref_count > 0:
+                    blob.ref_count = blob.ref_count - 1
 
     version.is_deleted = True
     version.deleted_at = datetime.now(timezone.utc)

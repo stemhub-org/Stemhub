@@ -150,3 +150,21 @@ def test_admin_stats_rejects_unauthenticated():
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Could not validate credentials"
+
+
+def test_admin_blobs_gc_rejects_non_admin():
+    regular_user = _build_user(is_admin=False)
+    client = _create_test_client(current_user=regular_user)
+
+    response = client.post("/api/admin/blobs/gc")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Admin privileges required"
+
+
+def test_admin_blobs_gc_rejects_unauthenticated():
+    client = _create_test_client()
+
+    response = client.post("/api/admin/blobs/gc")
+
+    assert response.status_code == 401
