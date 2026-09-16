@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* text-foreground-muted (optionally at reduced opacity, e.g. /70) is the
+   sanctioned convention for de-emphasized text — prefer it over ad hoc
+   text-foreground/40|50|60 opacity variants in new/touched code. */
 :root {
   --background: #FFFFFF;
   --background-secondary: #F4F4F5;
@@ -10,6 +13,7 @@
   --foreground-muted: #71717A;
   --border-subtle: rgba(0, 0, 0, 0.08);
   --border-hover: rgba(0, 0, 0, 0.15);
+  --shadow-glow-accent: 0 0 15px rgba(156, 87, 223, 0.3);
 }
 
 .dark {
@@ -34,6 +38,8 @@
   --color-foreground-muted: var(--foreground-muted);
   --color-border-subtle: var(--border-subtle);
   --color-border-hover: var(--border-hover);
+  --font-display: var(--font-syne);
+  --ease-brand: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 html {

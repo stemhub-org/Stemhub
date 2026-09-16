@@ -249,7 +249,13 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     except jwt.PyJWTError:
         raise credentials_exception
         
-    result = await db.execute(select(User).where(User.email == email, User.is_active == True))
+    result = await db.execute(
+        select(User).where(
+            User.email == email,
+            User.is_active == True,
+            User.is_deleted == False,
+        )
+    )
     user = result.scalars().first()
     if user is None:
         raise credentials_exception

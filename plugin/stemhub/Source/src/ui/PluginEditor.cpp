@@ -538,7 +538,10 @@ void StemhubAudioProcessorEditor::handleRestoreClick()
                 juce::Logger::writeToLog("[Restore] UI -> requesting restore from confirmation callback: "
                                          + folder.getFullPathName() + ", version="
                                          + versionToRestore);
-                mutableEditor->audioProcessor.requestRestoreVersion(versionToRestore, folder);
+                // Content-addressed restore: pulls only referenced blobs (verified by SHA-256).
+                // See docs/content-addressed-storage.md. The legacy zip-download path remains
+                // available via audioProcessor.requestRestoreVersion() if a rollback is needed.
+                mutableEditor->audioProcessor.requestRestoreVersionContentAddressed(versionToRestore, folder);
                 mutableEditor->refreshSessionUi();
             }));
     };
@@ -600,7 +603,11 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
 
 void StemhubAudioProcessorEditor::triggerPushVersion(const juce::String& commitMessage)
 {
-    audioProcessor.requestPushVersion(commitMessage, kDawName);
+    // Content-addressed push: uploads only novel blobs (SHA-256 dedup within
+    // the project). See docs/content-addressed-storage.md. The legacy
+    // whole-bundle path remains available via
+    // audioProcessor.requestPushVersion() if a rollback is needed.
+    audioProcessor.requestPushVersionContentAddressed(commitMessage, kDawName);
     refreshSessionUi();
 }
 
