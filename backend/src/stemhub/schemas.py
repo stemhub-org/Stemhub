@@ -87,6 +87,34 @@ class BranchResponse(BranchBase):
     class Config:
         from_attributes = True
 
+# ── Pull Request Schemas ──
+
+PullRequestStatus = Literal["OPEN", "MERGED", "CLOSED"]
+
+class PullRequestCreate(BaseModel):
+    source_branch_id: UUID
+    target_branch_id: UUID
+    title: str = Field(min_length=1, max_length=255)
+    description: Optional[str] = None
+
+class PullRequestResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    source_branch_id: UUID
+    target_branch_id: UUID
+    title: str
+    description: Optional[str] = None
+    status: PullRequestStatus
+    conflict_resolution: Optional[dict[str, Any]] = None
+    created_by: Optional[UUID] = None
+    created_at: datetime
+    closed_at: Optional[datetime] = None
+    is_deleted: bool
+    deleted_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # ── Version Schemas ──
 
 class VersionBase(BaseModel):
