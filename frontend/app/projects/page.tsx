@@ -293,9 +293,10 @@ function RepositoryPageContent() {
                                 </Card>
                                 <Card className="flex flex-wrap items-center gap-3">
                                     {(() => {
-                                        // has_artifact only reflects the legacy whole-file artifact path;
-                                        // manifest/CAS versions store their content as tracks instead, so
-                                        // treat either signal as "this version has real data".
+                                        // Two independent "has data" signals coexist:
+                                        //   - has_artifact: pre-manifest full-bundle upload (single blob)
+                                        //   - tracks.length > 0: CAS manifest with per-stem entries (spec §7)
+                                        // A version is "stored" if either is present.
                                         const hasStoredData = Boolean(latestVersion?.has_artifact) || tracks.length > 0;
                                         return (
                                             <Badge tone={hasStoredData ? "success" : "neutral"}>

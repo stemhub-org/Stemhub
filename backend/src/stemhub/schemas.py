@@ -250,12 +250,13 @@ class VersionDiffHistoryEntry(BaseModel):
 class TrackSummary(BaseModel):
     """A single stem/track surfaced for the repository overview UI.
 
-    Sourced from whichever of the two track-data paths a version actually
-    has: the content-addressed manifest (`Version.manifest_json["tracks"]`,
-    populated by the from-manifest create flow) or the legacy `Track` table
-    (populated by nothing today, kept for forward compatibility). A version
-    with neither yields an empty list — callers should treat that as "no
-    per-track data available for this version", not an error.
+    Sourced from `Version.manifest_json["tracks"]` (content-addressed
+    manifest, spec §7). A version with no manifest yields an empty list —
+    callers should treat that as "no per-track data available", not an error.
+
+    `file_type` is derived from the display filename and is display-only per
+    spec §7 (filenames are not authoritative); nothing downstream should
+    trust it for MIME dispatch or storage decisions.
     """
 
     id: str
@@ -265,7 +266,6 @@ class TrackSummary(BaseModel):
     key: Optional[str] = None
     duration_seconds: Optional[int] = None
     size_bytes: Optional[int] = None
-    source: Literal["manifest", "legacy"]
 
 
 class ProjectDetail(BaseModel):

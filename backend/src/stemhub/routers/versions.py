@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from datetime import datetime, timezone
 from typing import List
@@ -8,7 +9,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from stemhub.database import get_db
-from stemhub.models import Blob, Collaborator, Track, Version, Branch, Project, User
+from stemhub.models import Blob, Collaborator, Version, Branch, Project, User
 from stemhub.schemas import (
     MixerDiffChange,
     MixerDiffResponse,
@@ -24,6 +25,8 @@ from stemhub.schemas import (
 from stemhub.auth import get_current_user
 from stemhub.flp_mixer_snapshot import MixerSnapshotError, diff_mixer_project_snapshots, load_fl_studio_mixer_snapshot
 from stemhub.storage import StorageError, StorageService, get_storage_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["versions"])
 
@@ -499,14 +502,24 @@ def _file_type_from_filename(filename: str) -> str | None:
 
 
 def _tracks_from_manifest(manifest: dict) -> list[TrackSummary]:
-    """Map manifest_json["tracks"] (see VersionManifestV1) to TrackSummary rows."""
+    """Map manifest_json["tracks"] (see VersionManifestV1) to TrackSummary rows.
+
+    Skips malformed entries so one bad row (unexpected shape from an older
+    plugin build, hand-edited row) doesn't 500 the endpoint. Logs each skip
+    so corrupt manifests remain visible in ops.
+    """
     summaries: list[TrackSummary] = []
     for index, track in enumerate(manifest.get("tracks") or []):
         if not isinstance(track, dict):
+            logger.warning("Skipping non-dict manifest track at index %d", index)
             continue
         sha256 = track.get("sha256")
         name = track.get("name")
         if not isinstance(sha256, str) or not isinstance(name, str):
+            logger.warning(
+                "Skipping manifest track at index %d: missing/invalid sha256 or name",
+                index,
+            )
             continue
         filename = track.get("filename")
         summaries.append(
@@ -514,6 +527,8 @@ def _tracks_from_manifest(manifest: dict) -> list[TrackSummary]:
                 # sha256 alone isn't guaranteed unique across tracks (two
                 # tracks may intentionally reference identical audio), so
                 # suffix with the manifest position to keep ids unique.
+                # Stability of this id depends on the plugin emitting tracks
+                # in a deterministic order; see follow-up plugin issue.
                 id=f"{sha256}:{index}",
                 name=name,
                 file_type=_file_type_from_filename(filename) if isinstance(filename, str) else None,
@@ -521,7 +536,6 @@ def _tracks_from_manifest(manifest: dict) -> list[TrackSummary]:
                 key=track.get("key"),
                 duration_seconds=track.get("duration_seconds"),
                 size_bytes=track.get("size_bytes"),
-                source="manifest",
             )
         )
     return summaries
@@ -548,33 +562,16 @@ async def list_version_tracks(
     """
     List the stems/tracks known for a version.
 
-    Reads whichever track-data source the version actually has: the
-    content-addressed manifest (populated by the from-manifest create flow)
-    or the legacy Track table (populated by nothing today, kept for forward
-    compatibility). Returns an empty list, not an error, when neither is
-    populated — most FL Studio snapshot-flow versions have no per-track data.
+    Reads from `Version.manifest_json` (content-addressed manifest, spec §7).
+    Returns an empty list, not an error, when the version has no manifest —
+    pre-manifest full-bundle uploads and FL Studio snapshot-flow versions
+    both fall in that category.
     """
     version = await _get_version_with_access(version_id=version_id, current_user=current_user, db=db)
 
     if isinstance(version.manifest_json, dict):
         return _tracks_from_manifest(version.manifest_json)
-
-    result = await db.execute(select(Track).where(Track.version_id == version_id))
-    return [
-        TrackSummary(
-            id=str(track.id),
-            name=track.name,
-            # Normalize to match the manifest path's format (no leading dot) —
-            # Track.file_type is stored with a leading dot (e.g. ".wav").
-            file_type=track.file_type.lstrip(".") if track.file_type else None,
-            bpm=track.bpm,
-            key=track.key,
-            duration_seconds=track.duration,
-            size_bytes=None,
-            source="legacy",
-        )
-        for track in result.scalars().all()
-    ]
+    return []
 
 @router.delete("/versions/{version_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_version(
