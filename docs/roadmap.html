@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StemHub — Roadmap & Chronologie Officielle (Tech 4 / EIP)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0E0E10;
+      --card-bg: #16161A;
+      --card-border: #26262F;
+      --accent: #9C57DF;
+      --cyan: #00E5FF;
+      --green: #00E676;
+      --yellow: #FFD600;
+      --text: #F1F1F1;
+      --text-muted: #9E9EA8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, sans-serif;
+      padding: 30px 20px 60px;
+      line-height: 1.5;
+    }
+    .container { max-width: 1350px; margin: 0 auto; }
+    
+    header {
+      text-align: center;
+      margin-bottom: 35px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 25px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: rgba(156, 87, 223, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(156, 87, 223, 0.35);
+      margin-bottom: 10px;
+    }
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #FFFFFF 40%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+    p.subtitle { color: var(--text-muted); font-size: 1rem; }
+    
+    .btn-export {
+      margin-top: 15px;
+      background: var(--accent);
+      color: #FFF;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.2s;
+    }
+    .btn-export:hover { opacity: 0.9; }
+
+    .section-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 30px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    }
+    .section-card h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #FFF;
+    }
+
+    /* ── High-End Monthly Stepper Timeline (Zero Text Cropping) ── */
+    .timeline-scroller {
+      overflow-x: auto;
+      padding-bottom: 12px;
+    }
+    .month-columns {
+      display: grid;
+      grid-template-columns: repeat(11, minmax(210px, 1fr));
+      gap: 16px;
+      min-width: 2400px;
+    }
+    .month-card {
+      background: #111114;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .month-header {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--cyan);
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .month-badge {
+      font-size: 0.7rem;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+
+    /* Event Cards inside Months */
+    .event-card {
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 8px;
+      padding: 10px 12px;
+      border-left: 3px solid #555;
+      font-size: 0.82rem;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .event-card.yellow { border-left-color: var(--yellow); background: rgba(255, 214, 0, 0.04); }
+    .event-card.green { border-left-color: var(--green); background: rgba(0, 230, 118, 0.04); }
+    .event-card.purple { border-left-color: var(--accent); background: rgba(156, 87, 223, 0.05); }
+    .event-card.cyan { border-left-color: var(--cyan); background: rgba(0, 229, 255, 0.04); }
+    
+    .event-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .event-card.yellow .event-tag { color: var(--yellow); }
+    .event-card.green .event-tag { color: var(--green); }
+    .event-card.purple .event-tag { color: var(--accent); }
+    .event-card.cyan .event-tag { color: var(--cyan); }
+
+    .event-title {
+      font-weight: 600;
+      color: #FFF;
+      font-size: 0.86rem;
+      line-height: 1.35;
+    }
+    .event-desc {
+      color: var(--text-muted);
+      font-size: 0.76rem;
+      line-height: 1.3;
+    }
+
+    /* ── Deliverables Table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      font-size: 0.9rem;
+    }
+    th {
+      text-align: left;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--card-border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+    }
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+    .date-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: var(--cyan);
+      white-space: nowrap;
+      font-size: 0.85rem;
+    }
+    .tag {
+      display: inline-block;
+      padding: 3px 7px;
+      border-radius: 5px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .tag-comm { background: rgba(0, 230, 118, 0.15); color: var(--green); border: 1px solid rgba(0, 230, 118, 0.3); }
+    .tag-ux { background: rgba(156, 87, 223, 0.15); color: var(--accent); border: 1px solid rgba(156, 87, 223, 0.3); }
+    .tag-mentor { background: rgba(255, 214, 0, 0.15); color: var(--yellow); border: 1px solid rgba(255, 214, 0, 0.3); }
+    .tag-jury { background: rgba(0, 229, 255, 0.15); color: var(--cyan); border: 1px solid rgba(0, 229, 255, 0.3); }
+
+    @media print {
+      body { background: #FFF; color: #000; padding: 0; }
+      .section-card { border: 1px solid #DDD; box-shadow: none; background: #FFF; color: #000; }
+      .btn-export { display: none; }
+      h1 { -webkit-text-fill-color: #000; }
+      .month-card { background: #FFF; border-color: #DDD; }
+      .event-card { background: #F9F9F9; }
+      .event-title { color: #000; }
+      .event-desc { color: #555; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">Epitech EIP Solution Track (Tech 4)</div>
+      <h1>StemHub — Roadmap & Chronologie Officielle</h1>
+      <p class="subtitle">Feuille de route 2026 - 2027 jusqu'au Jury Greenlight de Juillet 2027</p>
+      <button class="btn-export" onclick="window.print()">🖨️ Imprimer / Exporter en PDF</button>
+    </header>
+
+    <!-- SECTION 1 : VISUAL ROADMAP STEPPER MATRIX -->
+    <div class="section-card">
+      <h2><span>📊</span> Vue Chronologique par Mois (Défilement Horizontal)</h2>
+      
+      <div class="timeline-scroller">
+        <div class="month-columns">
+          
+          <!-- SEPT 2026 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Septembre 2026</span>
+              <span class="month-badge">Mois 1</span>
+            </div>
+            <div class="event-card yellow">
+              <span class="event-tag">👥 Mentorat</span>
+              <div class="event-title">Séances 1 & 2</div>
+              <div class="event-desc">Découverte du projet et premières pistes d'objectifs.</div>
+            </div>
+            <div class="event-card cyan">
+              <span class="event-tag">⚙️ Tech (M1)</span>
+              <div class="event-title">Schéma JSON Canonique</div>
+              <div class="event-desc">Définition du modèle Pydantic v1.0 avec PyFLP.</div>
+            </div>
+          </div>
+
+          <!-- OCT 2026 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Octobre 2026</span>
+              <span class="month-badge">Mois 2</span>
+            </div>
+            <div class="event-card yellow">
+              <span class="event-tag">⚠️ Mentorat S3 (19 Oct)</span>
+              <div class="event-title">Verrouillage Objectifs</div>
+              <div class="event-desc">Choix définitif des 2 objectifs complémentaires.</div>
+            </div>
+            <div class="event-card green">
+              <span class="event-tag">📢 Communauté</span>
+              <div class="event-title">Profil Cible & 2 Canaux</div>
+              <div class="event-desc">Lancement des canaux et calendrier éditorial 3 mois.</div>
+            </div>
+            <div class="event-card cyan">
+              <span class="event-tag">⚙️ Tech (M1)</span>
+              <div class="event-title">Base Pull Request API</div>
+              <div class="event-desc">Modèles BDD, migrations et endpoints de PR.</div>
+            </div>
+          </div>
+
+          <!-- NOV 2026 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Novembre 2026</span>
+              <span class="month-badge">Mois 3</span>
+            </div>
+            <div class="event-card purple">
+              <span class="event-tag">🎨 UX / UI</span>
+              <div class="event-title">Scénarios & User Journey</div>
+              <div class="event-desc">Parcours utilisateur complet et priorisation.</div>
+            </div>
+            <div class="event-card yellow">
+              <span class="event-tag">👥 Mentorat</span>
+              <div class="event-title">Séances 4 & 5</div>
+              <div class="event-desc">Suivi d'avancement et revues d'objectifs.</div>
+            </div>
+            <div class="event-card cyan">
+              <span class="event-tag">⚙️ Tech (M2)</span>
+              <div class="event-title">Moteur de Merge</div>
+              <div class="event-desc">Comparateur de JSON et calcul des deltas.</div>
+            </div>
+          </div>
+
+          <!-- DEC 2026 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Décembre 2026</span>
+              <span class="month-badge">Mois 4</span>
+            </div>
+            <div class="event-card purple">
+              <span class="event-tag">🎨 UX / UI</span>
+              <div class="event-title">Maquette Figma v1</div>
+              <div class="event-desc">Wireframes + prototype interactif du parcours PR.</div>
+            </div>
+            <div class="event-card yellow">
+              <span class="event-tag">👥 Mentorat</span>
+              <div class="event-title">Séance 6 & Mapping</div>
+              <div class="event-desc">Cartographie qualifiée de 10 à 15 acteurs.</div>
+            </div>
+            <div class="event-card cyan">
+              <span class="event-tag">⚙️ Tech (M2)</span>
+              <div class="event-title">Web PR Diff UI</div>
+              <div class="event-desc">Comparaison de mixer côte à côte.</div>
+            </div>
+          </div>
+
+          <!-- JANV 2027 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Janvier 2027</span>
+              <span class="month-badge">Mois 5</span>
+            </div>
+            <div class="event-card purple">
+              <span class="event-tag">🎨 UX / UI</span>
+              <div class="event-title">Tests UX Round 1</div>
+              <div class="event-desc">5 tests individuels sur la maquette Figma v1.</div>
+            </div>
+            <div class="event-card green">
+              <span class="event-tag">📢 Communauté</span>
+              <div class="event-title">Stratégie Recrutement</div>
+              <div class="event-desc">Note de cadrage pour recruter les 20 testeurs.</div>
+            </div>
+            <div class="event-card yellow">
+              <span class="event-tag">👥 Mentorat</span>
+              <div class="event-title">Séance 8 : Bilan</div>
+              <div class="event-desc">Point d'étape sur les livrables semestriels.</div>
+            </div>
+            <div class="event-card cyan">
+              <span class="event-tag">⚙️ Tech (M3)</span>
+              <div class="event-title">Cloudflare R2</div>
+              <div class="event-desc">Intégration du stockage sans frais d'egress.</div>
+            </div>
+          </div>
+
+          <!-- FEV 2027 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Février 2027</span>
+              <span class="month-badge">Mois 6</span>
+            </div>
+            <div class="event-card green">
+              <span class="event-tag">📢 Communauté</span>
+              <div class="event-title">Lancement Recrutement</div>
+              <div class="event-desc">Campagne active auprès des producteurs.</div>
+            </div>
+            <div class="event-card purple">
+              <span class="event-tag">🎨 UX / UI</span>
+              <div class="event-title">Maquette Figma v2</div>
+              <div class="event-desc">Itération issue des retours du Test 1.</div>
+            </div>
+            <div class="event-card cyan">
+              <span class="event-tag">⚙️ Tech (M3)</span>
+              <div class="event-title">Packaging Plugin</div>
+              <div class="event-desc">Installeurs macOS et Windows pour la beta.</div>
+            </div>
+          </div>
+
+          <!-- MARS 2027 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Mars 2027</span>
+              <span class="month-badge">Mois 7</span>
+            </div>
+            <div class="event-card green">
+              <span class="event-tag">🚀 Beta Launch</span>
+              <div class="event-title">20 Testeurs Onboardés</div>
+              <div class="event-desc">Lancement officiel du beta test en conditions réelles.</div>
+            </div>
+            <div class="event-card purple">
+              <span class="event-tag">🎨 UX / UI</span>
+              <div class="event-title">Tests UX Round 2</div>
+              <div class="event-desc">5 tests sur la maquette v2 + personas réels.</div>
+            </div>
+            <div class="event-card cyan">
+              <span class="event-tag">⚙️ Tech (M4)</span>
+              <div class="event-title">Support Beta & Hotfixes</div>
+              <div class="event-desc">Suivi en direct des 20 producteurs.</div>
+            </div>
+          </div>
+
+          <!-- AVRIL 2027 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Avril 2027</span>
+              <span class="month-badge">Mois 8</span>
+            </div>
+            <div class="event-card green">
+              <span class="event-tag">📢 Communauté</span>
+              <div class="event-title">Beta Test en cours</div>
+              <div class="event-desc">Collecte continue des retours et métriques.</div>
+            </div>
+            <div class="event-card purple">
+              <span class="event-tag">🎨 UX / UI</span>
+              <div class="event-title">Maquette Figma v3</div>
+              <div class="event-desc">Version finale + comparatif v1/v2/v3.</div>
+            </div>
+          </div>
+
+          <!-- MAI 2027 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Mai 2027</span>
+              <span class="month-badge">Mois 9</span>
+            </div>
+            <div class="event-card green">
+              <span class="event-tag">📢 Communauté</span>
+              <div class="event-title">Fiche Résultats Beta</div>
+              <div class="event-desc">Bilan complet + Restitution publique.</div>
+            </div>
+            <div class="event-card purple">
+              <span class="event-tag">🎨 UX / UI</span>
+              <div class="event-title">Bilan UX & Preuves</div>
+              <div class="event-desc">Documentation finale et captures produit.</div>
+            </div>
+            <div class="event-card yellow">
+              <span class="event-tag">👥 Mentorat S13</span>
+              <div class="event-title">Consolidation Finale</div>
+              <div class="event-desc">Revue de tous les dossiers avant le jury.</div>
+            </div>
+          </div>
+
+          <!-- JUIN 2027 -->
+          <div class="month-card">
+            <div class="month-header">
+              <span>Juin 2027</span>
+              <span class="month-badge">Mois 10</span>
+            </div>
+            <div class="event-card cyan">
+              <span class="event-tag">⚙️ Tech (M5)</span>
+              <div class="event-title">Polish & Répétitions</div>
+              <div class="event-desc">Optimisations, répétitions du pitch et démo live.</div>
+            </div>
+          </div>
+
+          <!-- JUILLET 2027 -->
+          <div class="month-card" style="border-color: var(--cyan); background: rgba(0, 229, 255, 0.03);">
+            <div class="month-header" style="color: var(--cyan);">
+              <span>Juillet 2027</span>
+              <span class="month-badge" style="color: var(--cyan); background: rgba(0, 229, 255, 0.15);">Jury</span>
+            </div>
+            <div class="event-card cyan" style="border-left-width: 4px; padding: 14px 12px;">
+              <span class="event-tag" style="font-size: 0.8rem;">🏆 ÉCHÉANCE FINALE</span>
+              <div class="event-title" style="font-size: 1rem; margin-top: 4px;">SOUTENANCE GREENLIGHT</div>
+              <div class="event-desc">Présentation devant le jury Epitech avec démo live du produit complet.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 2 : DELIVERABLES TABLE -->
+    <div class="section-card">
+      <h2><span>📋</span> Tableau Récapitulatif des Livrables</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Échéance</th>
+            <th>Catégorie</th>
+            <th>Livrable Exigé par Epitech</th>
+            <th>Critères & Preuves de Validation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="date-pill">Septembre 2026</td>
+            <td><span class="tag tag-mentor">Mentorat</span></td>
+            <td><strong>Cadrage initial</strong></td>
+            <td>Séances 1 & 2 : découverte du projet et premières pistes avec le mentor.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Octobre 2026</td>
+            <td><span class="tag tag-comm">Communauté</span></td>
+            <td><strong>Profil cible & Canaux</strong></td>
+            <td>Critères vérifiables de la cible + 2 canaux publics ouverts avec rôles définis.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Octobre 2026</td>
+            <td><span class="tag tag-comm">Communauté</span></td>
+            <td><strong>Ligne éditoriale</strong></td>
+            <td>Ligne éditoriale écrite et planning sur 3 mois (au moins 2 posts/mois/canal).</td>
+          </tr>
+          <tr>
+            <td class="date-pill">19 Octobre 2026</td>
+            <td><span class="tag tag-mentor">Mentorat (S3)</span></td>
+            <td><strong>⚠️ Verrouillage Objectifs</strong></td>
+            <td>Validation définitive des 2 objectifs complémentaires (aucun changement possible ensuite).</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Novembre 2026</td>
+            <td><span class="tag tag-ux">UX / UI</span></td>
+            <td><strong>Démarche de design</strong></td>
+            <td>Scénarios d'usage, User Journey complet et priorisation du parcours principal.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Décembre 2026</td>
+            <td><span class="tag tag-ux">UX / UI</span></td>
+            <td><strong>Maquette Figma v1</strong></td>
+            <td>Wireframes + prototype Figma haute-fidélité interactif du parcours principal.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Décembre 2026</td>
+            <td><span class="tag tag-mentor">Complémentaire</span></td>
+            <td><strong>Mapping Qualifié</strong></td>
+            <td>Cartographie qualifiée de 10 à 15 acteurs (Partenaires / Relais / Experts).</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Janvier 2027</td>
+            <td><span class="tag tag-comm">Communauté</span></td>
+            <td><strong>Stratégie Recrutement</strong></td>
+            <td>Note écrite de la stratégie de recrutement des beta-testeurs.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Janvier 2027</td>
+            <td><span class="tag tag-ux">UX / UI</span></td>
+            <td><strong>Tests UX Round 1</strong></td>
+            <td>Protocole écrit + passation de tests sur maquette avec au moins 5 personnes cibles (verbatims).</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Février 2027</td>
+            <td><span class="tag tag-comm">Communauté</span></td>
+            <td><strong>Lancement Recrutement</strong></td>
+            <td>Lancement officiel de la campagne de recrutement des testeurs.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Février 2027</td>
+            <td><span class="tag tag-ux">UX / UI</span></td>
+            <td><strong>Maquette Figma v2</strong></td>
+            <td>Maquette modifiée suite au Test 1 + tableau comparatif des changements.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Mars 2027</td>
+            <td><span class="tag tag-comm">Communauté</span></td>
+            <td><strong>20 Beta-Testeurs</strong></td>
+            <td>Liste qualifiée de 20 beta-testeurs externes actifs + 2 personas réels sourcés.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Mars 2027</td>
+            <td><span class="tag tag-ux">UX / UI</span></td>
+            <td><strong>Tests UX Round 2</strong></td>
+            <td>Deuxième round de tests UX sur la maquette v2 avec 5 personnes cibles.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Mars à Mai 2027</td>
+            <td><span class="tag tag-comm">Communauté</span></td>
+            <td><strong>🚀 Déroulement Beta Test</strong></td>
+            <td>Campagne en conditions réelles sur le produit développé (parcours, hypothèses, suivi).</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Avril 2027</td>
+            <td><span class="tag tag-ux">UX / UI</span></td>
+            <td><strong>Maquette Figma v3</strong></td>
+            <td>Maquette v3 finale + comparaison complète des versions v1 / v2 / v3.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Mai 2027</td>
+            <td><span class="tag tag-comm">Communauté</span></td>
+            <td><strong>Fiche de Résultats Beta</strong></td>
+            <td>Bilan complet : panel, hypothèses validées/invalidées, retours consolidés, bugs classés.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Mai 2027</td>
+            <td><span class="tag tag-comm">Communauté</span></td>
+            <td><strong>Restitution Communauté</strong></td>
+            <td>Tableau de bord à jour + preuve publique des retours pris en compte.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Fin Mai 2027</td>
+            <td><span class="tag tag-ux">UX / UI</span></td>
+            <td><strong>Bilan UX & Documentation</strong></td>
+            <td>Synthèse UX, documentation des composants UI et captures de l'intégration dans le produit.</td>
+          </tr>
+          <tr>
+            <td class="date-pill">Juillet 2027</td>
+            <td><span class="tag tag-jury">🏆 Jury EIP</span></td>
+            <td><strong>SOUTENANCE GREENLIGHT</strong></td>
+            <td>Passage devant le jury avec démo live du produit et dossier de preuves complet.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
