@@ -1,8 +1,7 @@
 """Tests for GET /versions/{id}/tracks.
 
-Covers the two track-data sources a version can have (manifest_json vs. the
-legacy Track table) and the no-data case, per the source selection logic in
-stemhub.routers.versions.list_version_tracks.
+Reads only from `Version.manifest_json` (spec §7 CAS). Pre-manifest
+versions yield an empty list.
 """
 from __future__ import annotations
 
@@ -14,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
-from stemhub.models import Track, User, Version
+from stemhub.models import User, Version
 from stemhub.routers import versions as versions_router_module
 from stemhub.routers.versions import router as versions_router
 
@@ -40,35 +39,12 @@ def _build_version(*, manifest_json: dict | None = None) -> Version:
     )
 
 
-class _FakeTrackResult:
-    def __init__(self, tracks: list[Track]) -> None:
-        self._tracks = tracks
-
-    def scalars(self):
-        return self
-
-    def all(self):
-        return self._tracks
-
-
-class _TrackTableSession:
-    """Only answers the `select(Track).where(...)` query the endpoint issues
-    once _get_version_with_access has been monkeypatched away."""
-
-    def __init__(self, tracks: list[Track]) -> None:
-        self.tracks = tracks
-
-    async def execute(self, statement):
-        del statement
-        return _FakeTrackResult(self.tracks)
-
-
-def _create_test_client(*, monkeypatch, current_user: User, version: Version, session=None):
+def _create_test_client(*, monkeypatch, current_user: User, version: Version):
     app = FastAPI()
     app.include_router(versions_router)
 
     async def override_db():
-        yield session or object()
+        yield object()
 
     async def override_current_user():
         return current_user
@@ -121,7 +97,6 @@ def test_list_tracks_from_manifest(monkeypatch) -> None:
         "key": "Cm",
         "duration_seconds": 12,
         "size_bytes": 1024,
-        "source": "manifest",
     }
 
 
@@ -149,37 +124,9 @@ def test_list_tracks_manifest_ids_unique_even_with_duplicate_blob(monkeypatch) -
     assert {t["name"] for t in payload} == {"Kick", "Kick (copy)"}
 
 
-def test_list_tracks_from_legacy_table_when_no_manifest(monkeypatch) -> None:
+def test_list_tracks_empty_when_version_has_no_manifest(monkeypatch) -> None:
     version = _build_version(manifest_json=None)
-    track = Track(
-        id=uuid.uuid4(),
-        version_id=version.id,
-        name="Lead Synth",
-        file_type=".wav",
-        bpm=140,
-        key="Am",
-        duration=30,
-    )
-    session = _TrackTableSession([track])
-    client = _create_test_client(monkeypatch=monkeypatch, current_user=_build_user(), version=version, session=session)
-
-    response = client.get(f"/versions/{version.id}/tracks")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert len(payload) == 1
-    assert payload[0]["id"] == str(track.id)
-    assert payload[0]["name"] == "Lead Synth"
-    assert payload[0]["source"] == "legacy"
-    assert payload[0]["size_bytes"] is None
-    # Normalized to match the manifest path's format (no leading dot).
-    assert payload[0]["file_type"] == "wav"
-
-
-def test_list_tracks_empty_when_no_track_data(monkeypatch) -> None:
-    version = _build_version(manifest_json=None)
-    session = _TrackTableSession([])
-    client = _create_test_client(monkeypatch=monkeypatch, current_user=_build_user(), version=version, session=session)
+    client = _create_test_client(monkeypatch=monkeypatch, current_user=_build_user(), version=version)
 
     response = client.get(f"/versions/{version.id}/tracks")
 

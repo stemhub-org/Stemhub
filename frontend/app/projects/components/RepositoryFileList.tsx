@@ -2,7 +2,6 @@
 
 import { Folder, FileAudio } from "lucide-react";
 import type { TrackSummary } from "@/types/project";
-import { Badge } from "@/components/ui/Badge";
 
 function formatDuration(seconds: number | null): string {
     if (seconds == null) return "—";
@@ -64,7 +63,6 @@ export function RepositoryFileList({ tracks }: RepositoryFileListProps) {
                                 <span className="truncate font-medium text-foreground">
                                     {track.name}
                                 </span>
-                                {track.source === "manifest" && <Badge size="sm">stored</Badge>}
                             </span>
                             <span className="text-sm text-foreground/70">{track.key ?? "—"}</span>
                             <span className="text-sm text-foreground/70">{track.bpm ?? "—"}</span>
