@@ -172,6 +172,7 @@ The core engine of StemHub for DAW project synchronization (Git-like workflow).
 | `/projects/{id}/pull-requests` | `POST` | `id` | Open a pull request (source → target branch, same project). `409` if an `OPEN` one already exists for the same pair. |
 | `/pull-requests/{id}` | `GET` | `id` | Get a pull request. |
 | `/pull-requests/{id}/close` | `POST` | `id` | Close without merging (`OPEN` → `CLOSED`; `409` if not open). Merge is a separate, future endpoint. |
+| `/pull-requests/{id}/reopen` | `POST` | `id` | Reopen (`CLOSED` → `OPEN`; `409` if not closed or if another `OPEN` PR exists for the pair). Re-snapshots both heads. |
 
 **Flow for New Version (Push):**
 1. Client calls `POST /branches/{id}/versions` with metadata to create a version record.
@@ -198,11 +199,13 @@ The core engine of StemHub for DAW project synchronization (Git-like workflow).
 **Pull requests — state machine and invariants:**
 
 ```
-OPEN ──/close──▶ CLOSED
+OPEN ──/close───▶ CLOSED
+  ▲◀──/reopen───────┘
   └───/merge (#253)──▶ MERGED
 ```
 
-- `MERGED` and `CLOSED` are terminal; any transition from a non-`OPEN` PR answers `409`.
+- `MERGED` is terminal (the branch has been promoted). `CLOSED` can be reopened. Any other transition answers `409`.
+- Reopening clears `closed_at` / `closed_by` and re-snapshots both heads: it re-proposes the branches as they are now, so the stale guard of #253 does not reject a PR knowingly reopened after the target moved.
 - At most one `OPEN` pull request per ordered `(source_branch_id, target_branch_id)` pair, enforced by the partial unique index `uq_pull_request_open_pair` (`WHERE status = 'OPEN' AND is_deleted = false`). Closed, merged or soft-deleted PRs never block a new one; the reverse direction is a different pair.
 - `source_head_version_id` / `target_head_version_id` snapshot the latest live version of each branch when the PR is opened (`NULL` if the branch had none). `Branch` has no head pointer, so this is the only record of what was proposed. The merge engine (#253) compares `target_head_version_id` with the live head of the target to refuse a stale promotion.
 - `created_by` / `closed_by` record who opened and who closed the PR (nullable: a user may be soft-deleted, and `closed_by` is unset until closure).
