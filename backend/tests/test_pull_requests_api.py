@@ -7,6 +7,8 @@ Covers:
 - GET /projects/{pid}/pull-requests: list, 404 without project access.
 - GET /pull-requests/{id}: get by id, 404 without project access.
 - POST /pull-requests/{id}/close: OPEN → CLOSED with closed_at/closed_by; non-OPEN → 409.
+- POST /pull-requests/{id}/reopen: CLOSED → OPEN, clears closed_*, re-snapshots
+  heads; non-CLOSED → 409; another OPEN PR on the same pair → 409.
 
 The merge engine (issue #253) is out of scope: there is no /merge endpoint here.
 """
@@ -92,7 +94,8 @@ def _pull_request(
         status=status,
         created_by=created_by,
         created_at=datetime.now(timezone.utc),
-        closed_at=None,
+        closed_by=created_by if status == "CLOSED" else None,
+        closed_at=datetime.now(timezone.utc) if status == "CLOSED" else None,
         is_deleted=is_deleted,
         deleted_at=datetime.now(timezone.utc) if is_deleted else None,
     )
@@ -598,3 +601,83 @@ def test_close_pull_request_requires_write_access() -> None:
 
     assert response.status_code == 404
     assert pr.status == "OPEN"
+
+
+# ── Reopen ──
+
+
+def test_reopen_pull_request_restores_open_and_resnapshots_heads() -> None:
+    session, project, main, feature = _owned_project_session()
+    pr = _pull_request(project, feature, main, status="CLOSED", created_by=session.user.id)
+    session.pull_requests.append(pr)
+    # The branch moved while the PR was closed: reopening proposes the new head.
+    head = _version(feature.id, created_at=datetime.now(timezone.utc))
+    session.versions.append(head)
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/reopen")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "OPEN"
+    assert body["closed_at"] is None
+    assert body["closed_by"] is None
+    assert body["source_head_version_id"] == str(head.id)
+    assert body["target_head_version_id"] is None
+    assert pr.status == "OPEN"
+    assert session.commit_calls == 1
+
+
+def test_reopen_pull_request_already_open_returns_409() -> None:
+    session, project, main, feature = _owned_project_session()
+    pr = _pull_request(project, feature, main, status="OPEN")
+    session.pull_requests.append(pr)
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/reopen")
+
+    assert response.status_code == 409, response.text
+    assert session.commit_calls == 0
+
+
+def test_reopen_pull_request_merged_returns_409() -> None:
+    """MERGED is terminal: the branch has been promoted, nothing to reopen."""
+    session, project, main, feature = _owned_project_session()
+    pr = _pull_request(project, feature, main, status="MERGED")
+    session.pull_requests.append(pr)
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/reopen")
+
+    assert response.status_code == 409, response.text
+    assert pr.status == "MERGED"
+
+
+def test_reopen_pull_request_blocked_by_other_open_pr_on_same_pair() -> None:
+    session, project, main, feature = _owned_project_session()
+    closed = _pull_request(project, feature, main, status="CLOSED")
+    session.pull_requests.append(closed)
+    session.pull_requests.append(_pull_request(project, feature, main, status="OPEN"))
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{closed.id}/reopen")
+
+    assert response.status_code == 409, response.text
+    assert closed.status == "CLOSED"
+
+
+def test_reopen_pull_request_requires_write_access() -> None:
+    session, project, main, feature = _owned_project_session()
+    pr = _pull_request(project, feature, main, status="CLOSED")
+    session.pull_requests.append(pr)
+    viewer = _user()
+    session.collaborators.append(
+        Collaborator(project_id=project.id, user_id=viewer.id, role="Viewer")
+    )
+    session.user = viewer
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/reopen")
+
+    assert response.status_code == 404, response.text
+    assert pr.status == "CLOSED"
