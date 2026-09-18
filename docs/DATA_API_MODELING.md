@@ -81,9 +81,12 @@ erDiagram
         string title
         string description
         string status "OPEN, MERGED, CLOSED"
+        uuid source_head_version_id FK "Head of source at open time"
+        uuid target_head_version_id FK "Head of target at open time"
         jsonb conflict_resolution "Reserved for the merge engine"
         uuid created_by FK
         datetime created_at
+        uuid closed_by FK
         datetime closed_at
         boolean is_deleted
         datetime deleted_at
@@ -166,7 +169,7 @@ The core engine of StemHub for DAW project synchronization (Git-like workflow).
 | `/versions/{id}/artifact` | `POST` | `id` | **Upload version snapshot/artifact.** |
 | `/versions/{id}/artifact` | `GET` | `id` | **Download version snapshot/artifact.** |
 | `/projects/{id}/pull-requests` | `GET` | `id` | List pull requests of a project. |
-| `/projects/{id}/pull-requests` | `POST` | `id` | Open a pull request (source → target branch, same project). |
+| `/projects/{id}/pull-requests` | `POST` | `id` | Open a pull request (source → target branch, same project). `409` if an `OPEN` one already exists for the same pair. |
 | `/pull-requests/{id}` | `GET` | `id` | Get a pull request. |
 | `/pull-requests/{id}/close` | `POST` | `id` | Close without merging (`OPEN` → `CLOSED`; `409` if not open). Merge is a separate, future endpoint. |
 
@@ -191,6 +194,19 @@ The core engine of StemHub for DAW project synchronization (Git-like workflow).
   "commit_message": "Added lead synth"
 }
 ```
+
+**Pull requests — state machine and invariants:**
+
+```
+OPEN ──/close──▶ CLOSED
+  └───/merge (#253)──▶ MERGED
+```
+
+- `MERGED` and `CLOSED` are terminal; any transition from a non-`OPEN` PR answers `409`.
+- At most one `OPEN` pull request per ordered `(source_branch_id, target_branch_id)` pair, enforced by the partial unique index `uq_pull_request_open_pair` (`WHERE status = 'OPEN' AND is_deleted = false`). Closed, merged or soft-deleted PRs never block a new one; the reverse direction is a different pair.
+- `source_head_version_id` / `target_head_version_id` snapshot the latest live version of each branch when the PR is opened (`NULL` if the branch had none). `Branch` has no head pointer, so this is the only record of what was proposed. The merge engine (#253) compares `target_head_version_id` with the live head of the target to refuse a stale promotion.
+- `created_by` / `closed_by` record who opened and who closed the PR (nullable: a user may be soft-deleted, and `closed_by` is unset until closure).
+- `conflict_resolution` (JSONB) is reserved for the merge engine. Its shape is **not defined yet** — it will be specified in #253 alongside the first conflict-handling code, and documented here at that point.
 
 ---
 
