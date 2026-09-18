@@ -1,11 +1,12 @@
 """Tests for the pull-request lifecycle endpoints (issue #250).
 
 Covers:
-- POST /projects/{pid}/pull-requests: create, source == target → 400,
-  branch from another project (or soft-deleted) → 404.
+- POST /projects/{pid}/pull-requests: create (captures both branch heads),
+  source == target → 400, branch from another project (or soft-deleted) → 404,
+  duplicate OPEN PR on the same branch pair → 409.
 - GET /projects/{pid}/pull-requests: list, 404 without project access.
 - GET /pull-requests/{id}: get by id, 404 without project access.
-- POST /pull-requests/{id}/close: OPEN → CLOSED with closed_at; non-OPEN → 409.
+- POST /pull-requests/{id}/close: OPEN → CLOSED with closed_at/closed_by; non-OPEN → 409.
 
 The merge engine (issue #253) is out of scope: there is no /merge endpoint here.
 """
@@ -22,7 +23,7 @@ from sqlalchemy.sql.elements import False_, True_
 
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
-from stemhub.models import Branch, Collaborator, Project, PullRequest, User
+from stemhub.models import Branch, Collaborator, Project, PullRequest, User, Version
 from stemhub.routers.pull_requests import router as pull_requests_router
 
 
@@ -58,6 +59,16 @@ def _branch(project_id: uuid.UUID, name: str = "main", *, is_deleted: bool = Fal
         project_id=project_id,
         name=name,
         created_at=datetime.now(timezone.utc),
+        is_deleted=is_deleted,
+    )
+
+
+def _version(branch_id: uuid.UUID, *, created_at: datetime, is_deleted: bool = False) -> Version:
+    return Version(
+        id=uuid.uuid4(),
+        branch_id=branch_id,
+        commit_message="v",
+        created_at=created_at,
         is_deleted=is_deleted,
     )
 
@@ -101,6 +112,7 @@ class FakeSession:
         self.projects: list[Project] = []
         self.collaborators: list[Collaborator] = []
         self.branches: list[Branch] = []
+        self.versions: list[Version] = []
         self.pull_requests: list[PullRequest] = []
         self.commit_calls = 0
 
@@ -143,11 +155,19 @@ class _FakeResult:
             Project: s.projects,
             Collaborator: s.collaborators,
             Branch: s.branches,
+            Version: s.versions,
             PullRequest: s.pull_requests,
         }
         if entity not in rows_by_entity:
             raise NotImplementedError(f"FakeSession does not know how to answer: {entity}")
-        return [row for row in rows_by_entity[entity] if _row_matches(row, self.stmt.whereclause)]
+        rows = [row for row in rows_by_entity[entity] if _row_matches(row, self.stmt.whereclause)]
+        # Honour ORDER BY so `.first()` on the head-version query is meaningful.
+        for order in reversed(list(self.stmt._order_by_clauses)):
+            rows.sort(
+                key=lambda row: getattr(row, order.element.name),
+                reverse=order.modifier is operators.desc_op,
+            )
+        return rows
 
     def scalars(self):
         return _FakeScalars(self._match())
@@ -252,11 +272,96 @@ def test_create_pull_request_returns_open_pr() -> None:
     assert body["status"] == "OPEN"
     assert body["created_by"] == str(session.user.id)
     assert body["closed_at"] is None
+    assert body["closed_by"] is None
     assert body["conflict_resolution"] is None
     assert body["is_deleted"] is False
     assert body["deleted_at"] is None
     assert len(session.pull_requests) == 1
     assert session.commit_calls == 1
+
+
+def test_create_pull_request_captures_branch_heads() -> None:
+    """The head of each branch (latest live version) is snapshotted at open time
+    so the merge engine can later detect that the target moved (issue #253)."""
+    session, project, main, feature = _owned_project_session()
+    old = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    new = datetime(2026, 2, 1, tzinfo=timezone.utc)
+    main_old = _version(main.id, created_at=old)
+    main_head = _version(main.id, created_at=new)
+    feature_head = _version(feature.id, created_at=old)
+    # A newer but soft-deleted version must not be picked as head.
+    feature_deleted = _version(feature.id, created_at=new, is_deleted=True)
+    session.versions.extend([main_old, main_head, feature_head, feature_deleted])
+    client = _make_client(session)
+
+    response = client.post(
+        f"/projects/{project.id}/pull-requests",
+        json={"source_branch_id": str(feature.id), "target_branch_id": str(main.id), "title": "t"},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["source_head_version_id"] == str(feature_head.id)
+    assert body["target_head_version_id"] == str(main_head.id)
+
+
+def test_create_pull_request_heads_are_null_on_empty_branches() -> None:
+    session, project, main, feature = _owned_project_session()
+    client = _make_client(session)
+
+    response = client.post(
+        f"/projects/{project.id}/pull-requests",
+        json={"source_branch_id": str(feature.id), "target_branch_id": str(main.id), "title": "t"},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["source_head_version_id"] is None
+    assert response.json()["target_head_version_id"] is None
+
+
+def test_create_pull_request_rejects_duplicate_open_pr() -> None:
+    session, project, main, feature = _owned_project_session()
+    session.pull_requests.append(_pull_request(project, feature, main, status="OPEN"))
+    client = _make_client(session)
+
+    response = client.post(
+        f"/projects/{project.id}/pull-requests",
+        json={"source_branch_id": str(feature.id), "target_branch_id": str(main.id), "title": "t"},
+    )
+
+    assert response.status_code == 409, response.text
+    assert len(session.pull_requests) == 1
+
+
+def test_create_pull_request_allows_new_pr_after_previous_closed() -> None:
+    """Only OPEN PRs block a duplicate; a closed or soft-deleted one on the
+    same pair does not (mirrors the partial unique index)."""
+    session, project, main, feature = _owned_project_session()
+    session.pull_requests.append(_pull_request(project, feature, main, status="CLOSED"))
+    session.pull_requests.append(_pull_request(project, feature, main, status="OPEN", is_deleted=True))
+    client = _make_client(session)
+
+    response = client.post(
+        f"/projects/{project.id}/pull-requests",
+        json={"source_branch_id": str(feature.id), "target_branch_id": str(main.id), "title": "t"},
+    )
+
+    assert response.status_code == 201, response.text
+    assert len(session.pull_requests) == 3
+
+
+def test_create_pull_request_allows_reverse_direction() -> None:
+    """(A → B) open does not block (B → A): the pair is ordered."""
+    session, project, main, feature = _owned_project_session()
+    session.pull_requests.append(_pull_request(project, feature, main, status="OPEN"))
+    client = _make_client(session)
+
+    response = client.post(
+        f"/projects/{project.id}/pull-requests",
+        json={"source_branch_id": str(main.id), "target_branch_id": str(feature.id), "title": "t"},
+    )
+
+    assert response.status_code == 201, response.text
 
 
 def test_create_pull_request_rejects_same_source_and_target() -> None:
@@ -435,7 +540,7 @@ def test_get_pull_request_returns_404_for_unknown_id() -> None:
 # ── Close ──
 
 
-def test_close_pull_request_marks_closed_with_timestamp() -> None:
+def test_close_pull_request_marks_closed_with_timestamp_and_closer() -> None:
     session, project, main, feature = _owned_project_session()
     pr = _pull_request(project, feature, main)
     session.pull_requests.append(pr)
@@ -447,8 +552,10 @@ def test_close_pull_request_marks_closed_with_timestamp() -> None:
     body = response.json()
     assert body["status"] == "CLOSED"
     assert body["closed_at"] is not None
+    assert body["closed_by"] == str(session.user.id)
     assert pr.status == "CLOSED"
     assert pr.closed_at is not None
+    assert pr.closed_by == session.user.id
     assert session.commit_calls == 1
 
 
