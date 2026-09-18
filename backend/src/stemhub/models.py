@@ -121,8 +121,8 @@ class Version(Base):
 class PullRequest(Base):
     """Proposal to merge one branch into another within the same project.
 
-    Lifecycle: OPEN → MERGED (merge engine, issue #253) or OPEN → CLOSED
-    (closed without merge). MERGED and CLOSED are terminal.
+    Lifecycle: OPEN → MERGED (merge engine, issue #253) or OPEN ⇄ CLOSED
+    (closed without merge, can be reopened). Only MERGED is terminal.
     """
     __tablename__ = "pull_request"
     __table_args__ = (

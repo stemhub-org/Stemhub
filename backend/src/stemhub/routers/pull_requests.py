@@ -1,8 +1,9 @@
 """Pull-request lifecycle endpoints (issue #250).
 
 A pull request proposes merging a source branch into a target branch of the
-same project. This router only covers the data model and the OPEN → CLOSED
-transition; the merge engine (OPEN → MERGED, conflict resolution) is issue #253.
+same project. This router covers the data model and the OPEN ⇄ CLOSED
+transitions; the merge engine (OPEN → MERGED, conflict resolution) is issue
+#253. MERGED is terminal.
 
 Access control: creating and closing require write access (owner or
 Admin/Editor collaborator); listing and reading require read access. Both
@@ -43,6 +44,29 @@ async def _branch_head_id(*, branch_id: UUID, db: AsyncSession) -> UUID | None:
     )
     head = result.scalars().first()
     return head.id if head else None
+
+
+async def _ensure_no_other_open_pull_request(
+    *, source_branch_id: UUID, target_branch_id: UUID, db: AsyncSession
+) -> None:
+    """Application-level twin of the partial unique index
+    uq_pull_request_open_pair, so the client gets a 409 rather than a 500
+    from the IntegrityError. The index remains the actual guarantee under
+    concurrent requests.
+    """
+    result = await db.execute(
+        select(PullRequest).where(
+            PullRequest.source_branch_id == source_branch_id,
+            PullRequest.target_branch_id == target_branch_id,
+            PullRequest.status == "OPEN",
+            PullRequest.is_deleted == False,
+        )
+    )
+    if result.scalars().first() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="An open pull request already exists for these branches",
+        )
 
 
 async def _get_pull_request_or_404(*, pull_request_id: UUID, db: AsyncSession) -> PullRequest:
@@ -107,23 +131,9 @@ async def create_pull_request(
     if found_ids != {pr_in.source_branch_id, pr_in.target_branch_id}:
         raise HTTPException(status_code=404, detail="Branch not found")
 
-    # Application-level check mirroring the partial unique index
-    # uq_pull_request_open_pair, so the client gets a 409 rather than a 500
-    # from the IntegrityError. The index remains the actual guarantee under
-    # concurrent requests.
-    result = await db.execute(
-        select(PullRequest).where(
-            PullRequest.source_branch_id == pr_in.source_branch_id,
-            PullRequest.target_branch_id == pr_in.target_branch_id,
-            PullRequest.status == "OPEN",
-            PullRequest.is_deleted == False,
-        )
+    await _ensure_no_other_open_pull_request(
+        source_branch_id=pr_in.source_branch_id, target_branch_id=pr_in.target_branch_id, db=db
     )
-    if result.scalars().first() is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="An open pull request already exists for these branches",
-        )
 
     pull_request = PullRequest(
         project_id=project.id,
@@ -178,6 +188,44 @@ async def close_pull_request(
     pull_request.status = "CLOSED"
     pull_request.closed_at = datetime.now(timezone.utc)
     pull_request.closed_by = current_user.id
+    await db.commit()
+    await db.refresh(pull_request)
+    return pull_request
+
+
+@router.post("/pull-requests/{pull_request_id}/reopen", response_model=PullRequestResponse)
+async def reopen_pull_request(
+    pull_request_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reopen a closed pull request (CLOSED → OPEN).
+
+    Only CLOSED can be reopened: MERGED means the branch was promoted, there
+    is nothing left to propose. Reopening re-proposes the branches as they
+    are *now*, so both head snapshots are taken again — otherwise the stale
+    guard of the merge engine (#253) would reject a PR the user knowingly
+    reopened after the target moved.
+    """
+    pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
+    await get_project_with_write_access(project_id=pull_request.project_id, current_user=current_user, db=db)
+
+    if pull_request.status != "CLOSED":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Pull request is {pull_request.status}, only CLOSED can be reopened",
+        )
+    await _ensure_no_other_open_pull_request(
+        source_branch_id=pull_request.source_branch_id,
+        target_branch_id=pull_request.target_branch_id,
+        db=db,
+    )
+
+    pull_request.status = "OPEN"
+    pull_request.closed_at = None
+    pull_request.closed_by = None
+    pull_request.source_head_version_id = await _branch_head_id(branch_id=pull_request.source_branch_id, db=db)
+    pull_request.target_head_version_id = await _branch_head_id(branch_id=pull_request.target_branch_id, db=db)
     await db.commit()
     await db.refresh(pull_request)
     return pull_request
