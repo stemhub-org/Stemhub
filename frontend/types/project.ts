@@ -62,6 +62,19 @@ export interface Track {
     created_at: string | null;
 }
 
+// ── Track summary (from GET /versions/{id}/tracks) ──
+// Sourced from Version.manifest_json (CAS, spec §7). `file_type` is derived
+// from the display filename and is display-only.
+export interface TrackSummary {
+    id: string;
+    name: string;
+    file_type: string | null;
+    bpm: number | null;
+    key: string | null;
+    duration_seconds: number | null;
+    size_bytes: number | null;
+}
+
 // ── Project detail ──
 export interface ProjectDetail {
     id: string;

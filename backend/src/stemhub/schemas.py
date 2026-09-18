@@ -87,6 +87,34 @@ class BranchResponse(BranchBase):
     class Config:
         from_attributes = True
 
+# ── Pull Request Schemas ──
+
+PullRequestStatus = Literal["OPEN", "MERGED", "CLOSED"]
+
+class PullRequestCreate(BaseModel):
+    source_branch_id: UUID
+    target_branch_id: UUID
+    title: str = Field(min_length=1, max_length=255)
+    description: Optional[str] = None
+
+class PullRequestResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    source_branch_id: UUID
+    target_branch_id: UUID
+    title: str
+    description: Optional[str] = None
+    status: PullRequestStatus
+    conflict_resolution: Optional[dict[str, Any]] = None
+    created_by: Optional[UUID] = None
+    created_at: datetime
+    closed_at: Optional[datetime] = None
+    is_deleted: bool
+    deleted_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # ── Version Schemas ──
 
 class VersionBase(BaseModel):
@@ -245,6 +273,27 @@ class VersionDiffHistoryEntry(BaseModel):
     status_message: Optional[str] = None
     summary: Optional[MixerDiffSummary] = None
     changes: list[MixerDiffChange] = []
+
+
+class TrackSummary(BaseModel):
+    """A single stem/track surfaced for the repository overview UI.
+
+    Sourced from `Version.manifest_json["tracks"]` (content-addressed
+    manifest, spec §7). A version with no manifest yields an empty list —
+    callers should treat that as "no per-track data available", not an error.
+
+    `file_type` is derived from the display filename and is display-only per
+    spec §7 (filenames are not authoritative); nothing downstream should
+    trust it for MIME dispatch or storage decisions.
+    """
+
+    id: str
+    name: str
+    file_type: Optional[str] = None
+    bpm: Optional[int] = None
+    key: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    size_bytes: Optional[int] = None
 
 
 class ProjectDetail(BaseModel):
