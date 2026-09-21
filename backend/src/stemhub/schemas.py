@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field
 
 # ── User Schemas ──
 
@@ -59,6 +59,7 @@ class ProjectUpdate(BaseModel):
 class ProjectResponse(ProjectBase):
     id: UUID
     owner_id: UUID
+    tags: Optional[list[str]] = None
     created_at: datetime
     is_deleted: bool
     deleted_at: Optional[datetime] = None
