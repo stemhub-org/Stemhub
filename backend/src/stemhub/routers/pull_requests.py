@@ -1,9 +1,10 @@
 """Pull-request lifecycle endpoints (issue #250).
 
 A pull request proposes merging a source branch into a target branch of the
-same project. This router covers the data model and the OPEN ⇄ CLOSED
-transitions; the merge engine (OPEN → MERGED, conflict resolution) is issue
-#253. MERGED is terminal.
+same project. This router covers the data model and the OPEN → CLOSED
+transition; the merge engine (OPEN → MERGED) is issue #253. Both MERGED and
+CLOSED are terminal — a closed PR is not reopened, users open a new one
+(SPECIFICATION.md §7, §19).
 
 Access control: creating and closing require write access (owner or
 Admin/Editor collaborator); listing and reading require read access. Both
@@ -188,44 +189,6 @@ async def close_pull_request(
     pull_request.status = "CLOSED"
     pull_request.closed_at = datetime.now(timezone.utc)
     pull_request.closed_by = current_user.id
-    await db.commit()
-    await db.refresh(pull_request)
-    return pull_request
-
-
-@router.post("/pull-requests/{pull_request_id}/reopen", response_model=PullRequestResponse)
-async def reopen_pull_request(
-    pull_request_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Reopen a closed pull request (CLOSED → OPEN).
-
-    Only CLOSED can be reopened: MERGED means the branch was promoted, there
-    is nothing left to propose. Reopening re-proposes the branches as they
-    are *now*, so both head snapshots are taken again — otherwise the stale
-    guard of the merge engine (#253) would reject a PR the user knowingly
-    reopened after the target moved.
-    """
-    pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
-    await get_project_with_write_access(project_id=pull_request.project_id, current_user=current_user, db=db)
-
-    if pull_request.status != "CLOSED":
-        raise HTTPException(
-            status_code=409,
-            detail=f"Pull request is {pull_request.status}, only CLOSED can be reopened",
-        )
-    await _ensure_no_other_open_pull_request(
-        source_branch_id=pull_request.source_branch_id,
-        target_branch_id=pull_request.target_branch_id,
-        db=db,
-    )
-
-    pull_request.status = "OPEN"
-    pull_request.closed_at = None
-    pull_request.closed_by = None
-    pull_request.source_head_version_id = await _branch_head_id(branch_id=pull_request.source_branch_id, db=db)
-    pull_request.target_head_version_id = await _branch_head_id(branch_id=pull_request.target_branch_id, db=db)
     await db.commit()
     await db.refresh(pull_request)
     return pull_request
