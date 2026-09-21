@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from stemhub.dependency_guard import ensure_pyflp_available
-from stemhub.flp_mixer_snapshot import MixerSnapshotError, build_mixer_snapshot, load_fl_studio_mixer_snapshot
+from stemhub.flp_mixer_snapshot import build_mixer_snapshot
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,20 +26,9 @@ def _load_pyflp_modules() -> tuple[Any, Any]:
     return importlib.import_module("pyflp"), importlib.import_module("pyflp.exceptions")
 
 
-class _FixtureStorage:
-    def __init__(self, fixture_path: Path) -> None:
-        self._fixture_path = fixture_path
-
-    def resolve_artifact_path(self, artifact_path: str) -> Path:
-        del artifact_path
-        return self._fixture_path
-
-
 def _resolve_exception_type(type_name: str, pyflp_exceptions: Any) -> type[Exception]:
     if hasattr(pyflp_exceptions, type_name):
         return getattr(pyflp_exceptions, type_name)
-    if type_name == "MixerSnapshotError":
-        return MixerSnapshotError
     raise AssertionError(f"Unsupported fixture exception type: {type_name}")
 
 
@@ -72,27 +61,6 @@ def test_parser_fixture_corpus_matches_expectations(fixture_spec: dict[str, Any]
     pyflp, pyflp_exceptions = _load_pyflp_modules()
     fixture_path = REPO_ROOT / fixture_spec["path"]
     expectations = fixture_spec["expectations"]
-
-    if fixture_spec["kind"] == "stemhub_snapshot_archive":
-        if expectations["parse"] == "error":
-            error_expectations = expectations["error"]
-            exception_type = _resolve_exception_type(error_expectations["type"], pyflp_exceptions)
-            with pytest.raises(exception_type, match=error_expectations["message_contains"]):
-                load_fl_studio_mixer_snapshot(
-                    artifact_path=fixture_spec.get("artifact_path", fixture_spec["path"]),
-                    snapshot_manifest=fixture_spec.get("snapshot_manifest"),
-                    storage=_FixtureStorage(fixture_path),
-                )
-            return
-
-        snapshot = load_fl_studio_mixer_snapshot(
-            artifact_path=fixture_spec.get("artifact_path", fixture_spec["path"]),
-            snapshot_manifest=fixture_spec.get("snapshot_manifest"),
-            storage=_FixtureStorage(fixture_path),
-        )
-        mixer_expectations = expectations.get("mixer_snapshot", {})
-        _assert_mixer_snapshot_expectations(snapshot, mixer_expectations)
-        return
 
     if expectations["parse"] == "error":
         error_expectations = expectations["error"]

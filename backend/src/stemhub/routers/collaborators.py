@@ -1,35 +1,21 @@
+from typing import List
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from typing import List
-from uuid import UUID
 
-from stemhub.database import get_db
-from stemhub.models import Collaborator, Project, User
-from stemhub.schemas import CollaboratorCreate, CollaboratorResponse
 from stemhub.auth import get_current_user
+from stemhub.database import get_db
+from stemhub.models import Collaborator, User
+from stemhub.routers._project_access import (
+    get_project_with_owner_access,
+    get_project_with_read_access,
+)
+from stemhub.schemas import CollaboratorCreate, CollaboratorResponse
 
 router = APIRouter(tags=["collaborators"])
-
-
-async def _get_owned_project(
-    *,
-    project_id: UUID,
-    current_user: User,
-    db: AsyncSession,
-) -> Project:
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.is_deleted == False,
-        )
-    )
-    project = result.scalars().first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found or you don't have access")
-    return project
 
 
 @router.post("/projects/{project_id}/collaborators/", response_model=CollaboratorResponse, status_code=status.HTTP_201_CREATED)
@@ -42,7 +28,7 @@ async def add_collaborator(
     """
     Add a collaborator to a project. Only the project owner can add collaborators.
     """
-    await _get_owned_project(project_id=project_id, current_user=current_user, db=db)
+    await get_project_with_owner_access(project_id=project_id, current_user=current_user, db=db)
 
     # Check the target user exists
     result = await db.execute(select(User).where(User.username == collab_in.username))
@@ -91,27 +77,10 @@ async def list_collaborators(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    List all collaborators for a project.
-    Accessible by the project owner or any collaborator of the project.
-    """
-    # Check if user is owner or collaborator
-    project_result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.is_deleted == False)
+    """List all collaborators for a project (owner or any collaborator)."""
+    await get_project_with_read_access(
+        project_id=project_id, current_user=current_user, db=db
     )
-    project = project_result.scalars().first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    if project.owner_id != current_user.id:
-        collab_result = await db.execute(
-            select(Collaborator).where(
-                Collaborator.project_id == project_id,
-                Collaborator.user_id == current_user.id,
-            )
-        )
-        if not collab_result.scalars().first():
-            raise HTTPException(status_code=403, detail="Access denied")
 
     result = await db.execute(
         select(Collaborator)
@@ -131,7 +100,7 @@ async def remove_collaborator(
     """
     Remove a collaborator from a project. Only the project owner can remove collaborators.
     """
-    await _get_owned_project(project_id=project_id, current_user=current_user, db=db)
+    await get_project_with_owner_access(project_id=project_id, current_user=current_user, db=db)
 
     result = await db.execute(
         select(Collaborator).where(

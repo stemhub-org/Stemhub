@@ -14,14 +14,17 @@ import { QuickExport } from "./components/QuickExport";
 import { RecentChanges } from "./components/RecentChanges";
 import { ContributionActivity } from "./components/ContributionActivity";
 import { TopContributors } from "./components/TopContributors";
+import { RepositoryFileList } from "./components/RepositoryFileList";
 import { authFetch } from "@/lib/api";
 import type {
     ProjectSummaryResponse,
     ActivityStatsResponse,
     TopContributorsResponse,
+    TrackSummary,
 } from "@/types/project";
 import { ProjectSettings } from "./components/ProjectSettings";
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ToastProvider";
 
 type CurrentUserSummary = {
@@ -48,6 +51,7 @@ function RepositoryPageContent() {
     const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
     const [currentUsername, setCurrentUsername] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"Project" | "Settings">("Project");
+    const [tracks, setTracks] = useState<TrackSummary[]>([]);
 
     const fetchData = useCallback(async (projectId: string, branchId?: string) => {
         setIsLoading(true);
@@ -123,6 +127,28 @@ function RepositoryPageContent() {
             setError("No project ID provided. Add ?id=<project-uuid> to the URL.");
         }
     }, [fetchData, projectId, selectedBranchId]);
+
+    // Best-effort: per-stem data only exists for versions created via the
+    // manifest/CAS flow. Fetched separately so a failure here never blocks
+    // the rest of the project overview.
+    useEffect(() => {
+        const versionId = summary?.latest_version_id;
+        if (!versionId) {
+            setTracks([]);
+            return;
+        }
+        let cancelled = false;
+        authFetch<TrackSummary[]>(`/versions/${versionId}/tracks`)
+            .then((data) => {
+                if (!cancelled) setTracks(data);
+            })
+            .catch(() => {
+                if (!cancelled) setTracks([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [summary?.latest_version_id]);
 
     if (isLoading && !hasLoadedOnce) {
         return (
@@ -264,6 +290,31 @@ function RepositoryPageContent() {
                                             hasPreview={summary.has_preview}
                                         />
                                     </div>
+                                </Card>
+                                <Card className="flex flex-wrap items-center gap-3">
+                                    {(() => {
+                                        // Two independent "has data" signals coexist:
+                                        //   - has_artifact: pre-manifest full-bundle upload (single blob)
+                                        //   - tracks.length > 0: CAS manifest with per-stem entries (spec §7)
+                                        // A version is "stored" if either is present.
+                                        const hasStoredData = Boolean(latestVersion?.has_artifact) || tracks.length > 0;
+                                        return (
+                                            <Badge tone={hasStoredData ? "success" : "neutral"}>
+                                                {hasStoredData ? "Data stored" : "No artifact"}
+                                            </Badge>
+                                        );
+                                    })()}
+                                    {latestVersion?.source_daw && (
+                                        <Badge tone="accent">{latestVersion.source_daw}</Badge>
+                                    )}
+                                    {latestVersion?.source_project_filename && (
+                                        <span className="text-sm text-foreground-muted truncate">
+                                            {latestVersion.source_project_filename}
+                                        </span>
+                                    )}
+                                </Card>
+                                <Card interactive padding="none">
+                                    <RepositoryFileList tracks={tracks} />
                                 </Card>
                                 <Card interactive>
                                     <QuickExport
