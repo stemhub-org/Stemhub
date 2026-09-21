@@ -119,26 +119,16 @@ class PullRequestResponse(BaseModel):
 
 # ── Version Schemas ──
 
-class VersionBase(BaseModel):
-    commit_message: Optional[str] = None
-    parent_version_id: Optional[UUID] = None
-    artifact_path: Optional[str] = None
-    artifact_size_bytes: Optional[int] = None
-    artifact_checksum: Optional[str] = None
-    source_daw: Optional[str] = None
-    source_project_filename: Optional[str] = None
-    snapshot_manifest: Optional[dict[str, Any]] = None
-    manifest_json: Optional[dict[str, Any]] = None
-    manifest_version: Optional[int] = None
-
-class VersionCreate(VersionBase):
-    pass
-
-
-class VersionResponse(VersionBase):
+class VersionResponse(BaseModel):
     id: UUID
     branch_id: UUID
     created_by: Optional[UUID] = None
+    commit_message: Optional[str] = None
+    parent_version_id: Optional[UUID] = None
+    source_daw: Optional[str] = None
+    source_project_filename: Optional[str] = None
+    manifest_json: Optional[dict[str, Any]] = None
+    manifest_version: Optional[int] = None
     created_at: datetime
     is_deleted: bool
     deleted_at: Optional[datetime] = None
@@ -241,7 +231,6 @@ class VersionWithAuthor(BaseModel):
     created_at: datetime
     branch_name: str
     author: Optional[OwnerSummary] = None
-    has_artifact: bool = False
     source_daw: Optional[str] = None
     source_project_filename: Optional[str] = None
 
