@@ -1,10 +1,11 @@
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, HTTPException, status
-from sqlalchemy import select, desc
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models import Challenge, Event, ChallengeParticipant, EventAttendee, User
@@ -20,9 +21,8 @@ async def get_community_challenges(
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db)
 ):
-    from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
-    
+
     stmt = select(Challenge)
     
     if status == "active":
@@ -41,9 +41,8 @@ async def get_community_events(
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db)
 ):
-    from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
-    
+
     # Upcoming events
     stmt = select(Event).where(Event.event_date >= now).order_by(Event.event_date).limit(limit).offset(offset)
     
@@ -83,7 +82,6 @@ async def register_event(
         raise HTTPException(status_code=404, detail="Event not found")
 
     # Prevent registration for events that have already occurred
-    from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
     if event.event_date < now:
         raise HTTPException(status_code=400, detail="Cannot register for past event")
