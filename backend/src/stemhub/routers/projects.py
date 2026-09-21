@@ -1,28 +1,33 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timezone
-from sqlalchemy.future import select
 from sqlalchemy import or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
-from sqlalchemy.orm import joinedload, selectinload
+from stemhub.auth import get_current_user
 from stemhub.database import get_db
 from stemhub.models import Branch, Collaborator, Project, User, Version
+from stemhub.routers._project_access import (
+    get_project_with_owner_access,
+    get_project_with_read_access,
+    get_project_with_write_access,
+)
 from stemhub.schemas import (
-    ProjectCreate, 
-    ProjectUpdate, 
-    ProjectResponse, 
-    ProjectSummaryResponse,
-    ProjectDetail,
-    OwnerSummary,
     BranchResponse,
+    OwnerSummary,
+    ProjectCreate,
+    ProjectDetail,
+    ProjectResponse,
+    ProjectSummaryResponse,
+    ProjectUpdate,
     VersionWithAuthor,
 )
-from stemhub.auth import get_current_user
 from stemhub.storage import (
     StorageNotFoundError,
     StorageService,
@@ -30,37 +35,6 @@ from stemhub.storage import (
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-
-
-async def _get_project_with_access(
-    *,
-    project_id: UUID,
-    current_user: User,
-    db: AsyncSession,
-) -> Project:
-    project_result = await db.execute(
-        select(Project)
-        .options(joinedload(Project.owner))
-        .where(
-            Project.id == project_id,
-            Project.is_deleted == False,
-        )
-    )
-    project = project_result.scalars().first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    if project.owner_id != current_user.id:
-        collab_result = await db.execute(
-            select(Collaborator).where(
-                Collaborator.project_id == project_id,
-                Collaborator.user_id == current_user.id,
-            )
-        )
-        if not collab_result.scalars().first():
-            raise HTTPException(status_code=403, detail="Access denied")
-
-    return project
 
 
 def _resolve_media_type(file_path: Path) -> str:
@@ -130,10 +104,13 @@ async def get_project(
     db: AsyncSession = Depends(get_db),
     storage: StorageService = Depends(get_storage_service),
 ):
-    """
-    Get a specific project by ID, including branches and recent versions.
-    """
-    project = await _get_project_with_access(project_id=project_id, current_user=current_user, db=db)
+    """Get a specific project by ID, including branches and recent versions."""
+    project = await get_project_with_read_access(
+        project_id=project_id, current_user=current_user, db=db
+    )
+    # Owner is used for the response payload — load it explicitly since the
+    # shared access helper doesn't eager-load relationships.
+    await db.refresh(project, attribute_names=["owner"])
 
     # ── 2. Fetch branches ──
     branch_result = await db.execute(
@@ -217,7 +194,9 @@ async def upload_project_preview(
     db: AsyncSession = Depends(get_db),
     storage: StorageService = Depends(get_storage_service),
 ):
-    project = await _get_project_with_access(project_id=project_id, current_user=current_user, db=db)
+    project = await get_project_with_write_access(
+        project_id=project_id, current_user=current_user, db=db
+    )
 
     if not preview.filename:
         raise HTTPException(status_code=400, detail="Uploaded preview must include a filename")
@@ -243,7 +222,9 @@ async def download_project_preview(
     db: AsyncSession = Depends(get_db),
     storage: StorageService = Depends(get_storage_service),
 ):
-    project = await _get_project_with_access(project_id=project_id, current_user=current_user, db=db)
+    project = await get_project_with_read_access(
+        project_id=project_id, current_user=current_user, db=db
+    )
 
     try:
         preview_path = storage.resolve_project_preview_path(project.id)
@@ -264,7 +245,9 @@ async def delete_project_preview(
     db: AsyncSession = Depends(get_db),
     storage: StorageService = Depends(get_storage_service),
 ):
-    project = await _get_project_with_access(project_id=project_id, current_user=current_user, db=db)
+    project = await get_project_with_write_access(
+        project_id=project_id, current_user=current_user, db=db
+    )
     storage.delete_project_preview(project.id)
 
 @router.put("/{project_id}", response_model=ProjectResponse)
@@ -272,38 +255,30 @@ async def update_project(
     project_id: UUID,
     project_in: ProjectUpdate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Update a project by ID.
-    """
-    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id, Project.is_deleted == False))
-    project = result.scalars().first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    update_data = project_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
+    """Update a project by ID (owner only)."""
+    project = await get_project_with_owner_access(
+        project_id=project_id, current_user=current_user, db=db
+    )
+    for field, value in project_in.model_dump(exclude_unset=True).items():
         setattr(project, field, value)
-        
+
     await db.commit()
     await db.refresh(project)
     return project
+
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project_id: UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Delete a project by ID.
-    """
-    result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user.id, Project.is_deleted == False))
-    project = result.scalars().first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-        
+    """Delete a project by ID (owner only)."""
+    project = await get_project_with_owner_access(
+        project_id=project_id, current_user=current_user, db=db
+    )
     project.is_deleted = True
     project.deleted_at = datetime.now(timezone.utc)
     await db.commit()
