@@ -121,8 +121,9 @@ class Version(Base):
 class PullRequest(Base):
     """Proposal to merge one branch into another within the same project.
 
-    Lifecycle: OPEN → MERGED (merge engine, issue #253) or OPEN ⇄ CLOSED
-    (closed without merge, can be reopened). Only MERGED is terminal.
+    Lifecycle: OPEN → MERGED (merge engine, issue #253) or OPEN → CLOSED
+    (closed without merge). Both MERGED and CLOSED are terminal — a closed PR
+    is not reopened, users open a new one (SPECIFICATION.md §7, §19).
     """
     __tablename__ = "pull_request"
     __table_args__ = (
@@ -157,8 +158,6 @@ class PullRequest(Base):
     # refuse a stale promotion. NULL when the branch had no version yet.
     source_head_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=True)
     target_head_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=True)
-    # Placeholder for the merge engine (issue #253); schema intentionally undefined here.
-    conflict_resolution: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     closed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)

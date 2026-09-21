@@ -107,7 +107,6 @@ class PullRequestResponse(BaseModel):
     status: PullRequestStatus
     source_head_version_id: Optional[UUID] = None
     target_head_version_id: Optional[UUID] = None
-    conflict_resolution: Optional[dict[str, Any]] = None
     created_by: Optional[UUID] = None
     created_at: datetime
     closed_by: Optional[UUID] = None
