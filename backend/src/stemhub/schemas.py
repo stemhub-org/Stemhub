@@ -267,6 +267,27 @@ class VersionDiffHistoryEntry(BaseModel):
     changes: list[MixerDiffChange] = []
 
 
+class TrackSummary(BaseModel):
+    """A single stem/track surfaced for the repository overview UI.
+
+    Sourced from `Version.manifest_json["tracks"]` (content-addressed
+    manifest, spec §7). A version with no manifest yields an empty list —
+    callers should treat that as "no per-track data available", not an error.
+
+    `file_type` is derived from the display filename and is display-only per
+    spec §7 (filenames are not authoritative); nothing downstream should
+    trust it for MIME dispatch or storage decisions.
+    """
+
+    id: str
+    name: str
+    file_type: Optional[str] = None
+    bpm: Optional[int] = None
+    key: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    size_bytes: Optional[int] = None
+
+
 class ProjectDetail(BaseModel):
     id: UUID
     name: str
