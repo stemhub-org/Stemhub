@@ -59,6 +59,24 @@ def _write_stream_and_hash(source: BinaryIO, destination: Path) -> tuple[int, st
     return size_bytes, checksum.hexdigest()
 
 
+def _hash_stream_to_tempfile(source: BinaryIO) -> tuple[Path, int, str]:
+    checksum = hashlib.sha256()
+    size_bytes = 0
+
+    fd, temp_path = tempfile.mkstemp(prefix="stemhub-upload-")
+    tmp = Path(temp_path)
+    with os.fdopen(fd, "wb") as output:
+        while True:
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
+            checksum.update(chunk)
+            size_bytes += len(chunk)
+            output.write(chunk)
+
+    return tmp, size_bytes, checksum.hexdigest()
+
+
 def _delete_files_in_directory(directory: Path) -> bool:
     if not directory.is_dir():
         return False
@@ -72,22 +90,6 @@ def _delete_files_in_directory(directory: Path) -> bool:
 
 
 class StorageService(ABC):
-    @abstractmethod
-    def store_version_artifact(
-        self,
-        *,
-        project_id: UUID,
-        branch_id: UUID,
-        version_id: UUID,
-        filename: str,
-        source: BinaryIO,
-    ) -> StoredArtifact:
-        raise NotImplementedError
-
-    @abstractmethod
-    def resolve_artifact_path(self, artifact_path: str) -> Path:
-        raise NotImplementedError
-
     @abstractmethod
     def store_project_preview(
         self,
@@ -109,6 +111,35 @@ class StorageService(ABC):
     @abstractmethod
     def delete_project_preview(self, project_id: UUID) -> bool:
         raise NotImplementedError
+
+    # ── Content-addressed blob operations ──
+
+    @abstractmethod
+    def store_blob(
+        self,
+        *,
+        project_id: UUID,
+        source: BinaryIO,
+    ) -> StoredArtifact:
+        """Store a blob and return its SHA-256, size, and storage_uri (StoredArtifact.path)."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def resolve_blob_path(self, storage_uri: str) -> Path:
+        raise NotImplementedError
+
+    @abstractmethod
+    def delete_blob(self, storage_uri: str) -> bool:
+        raise NotImplementedError
+
+    def get_blob_download_url(self, storage_uri: str, *, ttl_seconds: int = 900) -> str | None:
+        """Return a URL the client can download the blob from directly.
+
+        Only meaningful for storage backends that support presigned URLs
+        (e.g. GCS). Local FS returns None; the caller should fall back to
+        streaming via FileResponse.
+        """
+        return None
 
 
 class GCSStorageService(StorageService):
@@ -143,54 +174,6 @@ class GCSStorageService(StorageService):
 
         self._bucket = self._client.bucket(bucket_name)
 
-    def store_version_artifact(
-        self,
-        *,
-        project_id: UUID,
-        branch_id: UUID,
-        version_id: UUID,
-        filename: str,
-        source: BinaryIO,
-    ) -> StoredArtifact:
-        safe_filename = _safe_filename(filename, "snapshot.bin")
-        artifact_path = self._build_artifact_path(project_id, branch_id, version_id, safe_filename)
-
-        _rewind_if_possible(source)
-
-        blob = self._bucket.blob(artifact_path)
-        
-        # Stream the file-like object directly to Google Cloud Storage
-        # This completely avoids writing the file to the local disk.
-        blob.upload_from_file(source)
-        
-        # Reload to get the size and hash computed by GCS
-        blob.reload()
-
-        return StoredArtifact(
-            path=self._to_reference_path(artifact_path),
-            size_bytes=blob.size,
-            checksum_sha256=blob.md5_hash, # We use GCS's native md5_hash instead of calculating SHA256 manually
-        )
-
-    def resolve_artifact_path(self, artifact_path: str) -> Path:
-        blob_path = self._to_blob_path(artifact_path)
-        blob = self._bucket.blob(blob_path)
-
-        try:
-            temp_handle, temp_path = tempfile.mkstemp(prefix="stemhub-artifact-")
-            os.close(temp_handle)
-            temp_file = Path(temp_path)
-            if not blob.exists():
-                raise StorageNotFoundError("Artifact file not found")
-            blob.download_to_filename(str(temp_file))
-            return temp_file
-        except StorageNotFoundError:
-            raise
-        except Exception as exc:
-            if "temp_file" in locals() and temp_file.exists():
-                temp_file.unlink()
-            raise StorageNotFoundError(str(exc)) from exc
-
     def store_project_preview(
         self,
         *,
@@ -200,21 +183,24 @@ class GCSStorageService(StorageService):
     ) -> StoredArtifact:
         safe_filename = _safe_filename(filename, "preview.wav")
         prefix = self._build_project_preview_prefix(project_id)
-        artifact_path = f"{prefix}/{safe_filename}"
+        object_path = f"{prefix}/{safe_filename}"
 
         for old_blob in self._client.list_blobs(self._bucket_name, prefix=f"{prefix}/"):
             old_blob.delete()
 
         _rewind_if_possible(source)
-
-        blob = self._bucket.blob(artifact_path)
-        blob.upload_from_file(source)
-        blob.reload()
+        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
+        try:
+            blob = self._bucket.blob(object_path)
+            with tmp_path.open("rb") as upload_source:
+                blob.upload_from_file(upload_source, size=size_bytes)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
         return StoredArtifact(
-            path=self._to_reference_path(artifact_path),
-            size_bytes=blob.size,
-            checksum_sha256=blob.md5_hash,
+            path=self._to_reference_path(object_path),
+            size_bytes=size_bytes,
+            checksum_sha256=checksum_sha256,
         )
 
     def has_project_preview(self, project_id: UUID) -> bool:
@@ -250,68 +236,90 @@ class GCSStorageService(StorageService):
             deleted = True
         return deleted
 
-    def _build_artifact_path(self, project_id: UUID, branch_id: UUID, version_id: UUID, filename: str) -> str:
-        return (
-            f"projects/{project_id}/branches/{branch_id}/versions/{version_id}/snapshot/{filename}"
+    def store_blob(
+        self,
+        *,
+        project_id: UUID,
+        source: BinaryIO,
+    ) -> StoredArtifact:
+        _rewind_if_possible(source)
+        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
+        try:
+            blob_path = self._build_blob_path(project_id, checksum_sha256)
+            gcs_blob = self._bucket.blob(blob_path)
+            # No pre-check via exists(): the DB-level idempotency check in the
+            # blobs router already gates duplicate uploads. Overwriting with
+            # identical bytes is safe (content-addressed by SHA-256).
+            with tmp_path.open("rb") as upload_source:
+                gcs_blob.upload_from_file(upload_source, size=size_bytes)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        return StoredArtifact(
+            path=self._to_reference_path(blob_path),
+            size_bytes=size_bytes,
+            checksum_sha256=checksum_sha256,
         )
+
+    def resolve_blob_path(self, storage_uri: str) -> Path:
+        blob_path = self._to_blob_path(storage_uri)
+        gcs_blob = self._bucket.blob(blob_path)
+
+        temp_file: Path | None = None
+        try:
+            temp_handle, temp_path = tempfile.mkstemp(prefix="stemhub-blob-")
+            os.close(temp_handle)
+            temp_file = Path(temp_path)
+            if not gcs_blob.exists():
+                raise StorageNotFoundError("Blob not found")
+            gcs_blob.download_to_filename(str(temp_file))
+            return temp_file
+        except StorageNotFoundError:
+            raise
+        except Exception as exc:
+            if temp_file is not None and temp_file.exists():
+                temp_file.unlink()
+            raise StorageNotFoundError(str(exc)) from exc
+
+    def delete_blob(self, storage_uri: str) -> bool:
+        blob_path = self._to_blob_path(storage_uri)
+        gcs_blob = self._bucket.blob(blob_path)
+        if not gcs_blob.exists():
+            return False
+        gcs_blob.delete()
+        return True
+
+    def get_blob_download_url(self, storage_uri: str, *, ttl_seconds: int = 900) -> str | None:
+        from datetime import timedelta
+        blob_path = self._to_blob_path(storage_uri)
+        gcs_blob = self._bucket.blob(blob_path)
+        return gcs_blob.generate_signed_url(
+            expiration=timedelta(seconds=ttl_seconds),
+            method="GET",
+            version="v4",
+        )
+
+    def _build_blob_path(self, project_id: UUID, sha256: str) -> str:
+        # Fan out by first 2 hex chars to keep any single "directory" small.
+        return f"projects/{project_id}/blobs/{sha256[:2]}/{sha256}"
 
     def _build_project_preview_prefix(self, project_id: UUID) -> str:
         return f"projects/{project_id}/preview"
 
-    def _to_reference_path(self, artifact_path: str) -> str:
-        return f"{self._GCS_SCHEME}{self._bucket_name}/{artifact_path}"
+    def _to_reference_path(self, object_path: str) -> str:
+        return f"{self._GCS_SCHEME}{self._bucket_name}/{object_path}"
 
-    def _to_blob_path(self, artifact_path: str) -> str:
+    def _to_blob_path(self, storage_uri: str) -> str:
         reference_prefix = f"{self._GCS_SCHEME}{self._bucket_name}/"
-        if artifact_path.startswith(reference_prefix):
-            return artifact_path[len(reference_prefix):]
-        return artifact_path
+        if storage_uri.startswith(reference_prefix):
+            return storage_uri[len(reference_prefix):]
+        return storage_uri
 
 
 class LocalFilesystemStorageService(StorageService):
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
         self.root.mkdir(parents=True, exist_ok=True)
-
-    def store_version_artifact(
-        self,
-        *,
-        project_id: UUID,
-        branch_id: UUID,
-        version_id: UUID,
-        filename: str,
-        source: BinaryIO,
-    ) -> StoredArtifact:
-        safe_filename = _safe_filename(filename, "snapshot.bin")
-        relative_path = (
-            Path("projects")/ str(project_id)
-            / "branches"/ str(branch_id)
-            / "versions"/ str(version_id)
-            / "snapshot"/ safe_filename
-        )
-        destination = self.root / relative_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-
-        _rewind_if_possible(source)
-        size_bytes, checksum_sha256 = _write_stream_and_hash(source, destination)
-
-        return StoredArtifact(
-            path=relative_path.as_posix(),
-            size_bytes=size_bytes,
-            checksum_sha256=checksum_sha256,
-        )
-
-    def resolve_artifact_path(self, artifact_path: str) -> Path:
-        candidate = (self.root / artifact_path).resolve()
-        try:
-            candidate.relative_to(self.root)
-        except ValueError as exc:
-            raise StorageNotFoundError("Artifact path is outside of the storage root") from exc
-
-        if not candidate.is_file():
-            raise StorageNotFoundError("Artifact file not found")
-
-        return candidate
 
     def store_project_preview(
         self,
@@ -365,6 +373,58 @@ class LocalFilesystemStorageService(StorageService):
             pass
 
         return deleted
+
+    def store_blob(
+        self,
+        *,
+        project_id: UUID,
+        source: BinaryIO,
+    ) -> StoredArtifact:
+        _rewind_if_possible(source)
+        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
+        try:
+            relative_path = self._blob_relative_path(project_id, checksum_sha256)
+            destination = self.root / relative_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if not destination.exists():
+                tmp_path.rename(destination)
+            else:
+                tmp_path.unlink(missing_ok=True)
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+        return StoredArtifact(
+            path=relative_path.as_posix(),
+            size_bytes=size_bytes,
+            checksum_sha256=checksum_sha256,
+        )
+
+    def resolve_blob_path(self, storage_uri: str) -> Path:
+        candidate = (self.root / storage_uri).resolve()
+        try:
+            candidate.relative_to(self.root)
+        except ValueError as exc:
+            raise StorageNotFoundError("Blob path is outside of the storage root") from exc
+
+        if not candidate.is_file():
+            raise StorageNotFoundError("Blob not found")
+
+        return candidate
+
+    def delete_blob(self, storage_uri: str) -> bool:
+        candidate = (self.root / storage_uri).resolve()
+        try:
+            candidate.relative_to(self.root)
+        except ValueError:
+            return False
+        if not candidate.is_file():
+            return False
+        candidate.unlink()
+        return True
+
+    def _blob_relative_path(self, project_id: UUID, sha256: str) -> Path:
+        return Path("projects") / str(project_id) / "blobs" / sha256[:2] / sha256
 
 
 def _default_artifact_root() -> Path:

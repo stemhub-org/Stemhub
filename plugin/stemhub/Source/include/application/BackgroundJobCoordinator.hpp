@@ -56,7 +56,12 @@ public:
             if (currentGeneration != requestGeneration.load())
                 return;
 
-            JobResult result { currentGeneration, requestId, taskFn() };
+            auto payload = taskFn();
+
+            if (currentGeneration != requestGeneration.load())
+                return;
+
+            JobResult result { currentGeneration, requestId, std::move(payload) };
 
             {
                 const std::lock_guard<std::mutex> lock(resultMutex);

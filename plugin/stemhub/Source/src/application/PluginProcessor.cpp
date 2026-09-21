@@ -69,6 +69,7 @@ StemhubAudioProcessor::StemhubAudioProcessor()
 StemhubAudioProcessor::~StemhubAudioProcessor()
 {
     juce::Logger::writeToLog("StemhubAudioProcessor destructor");
+    backgroundJobs.invalidateSession();
     cancelPendingUpdate();
     uninstallStemhubFileLogger();
 }

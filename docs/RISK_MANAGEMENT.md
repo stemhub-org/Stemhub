@@ -1,38 +1,32 @@
-# Risk Management - StemHub
+# Risk Management
 
-## Part 1: Risk Management
+> Deep-dive extending [SPECIFICATION.md §18](./SPECIFICATION.md). The spec lists risks tied to specific delivery decisions; this file is the broader operational register with Probability × Impact scoring.
 
-Unlike the **SWOT** analysis (Workshop 4) which focuses on strategic business risks, here we focus on **Project & Operational Risks**. You must prove that you can keep the ship afloat even during a storm.
+**Scale:** Probability and Impact both 1 (low) → 5 (critical). Criticality = P × I.
 
-### The Risk Matrix
-You must identify risks and classify them based on **Probability** (Likelihood) and **Impact** (Severity).
+## Risk register
 
-| Risk | Probability (1-5) | Impact (1-5) | Criticality (P*I) | Mitigation Strategy |
-| :--- | :---: | :---: | :---: | :--- |
+| Risk | P | I | Criticality | Mitigation |
+|---|:-:|:-:|:-:|---|
 | **Technical** | | | | |
-| Dependence on external services (e.g., Google Cloud Storage, GitHub) reliability or cost changes | 2 | 5 | **10** | Plan a proxy service or abstraction layer to switch providers easily if needed. |
-| Critical bug in audio processing/merging affecting project integrity | 3 | 5 | **15** | Implement comprehensive unit and integration tests; manual review of audio processing logic. |
-| Large file handling (Stems/Projects) causing slow uploads/performance issues | 4 | 3 | **12** | Implement chunked uploads; Use CDN caching (Cloudflare); Background processing for audio analysis. |
-| Browser compatibility issues with Web Audio API features | 3 | 4 | **12** | Extensive cross-browser testing (Chrome, Firefox, Safari); Graceful degradation for unsupported features. |
+| Dependence on external services (GCS, Google OAuth, GitHub) — availability or pricing changes | 2 | 5 | **10** | Abstraction layer (`StorageService` already exists) to swap providers without touching business logic. |
+| Critical bug in DAW-project parsing or diff logic corrupts a version | 3 | 5 | **15** | Checksum verification on every download (SPEC §5.2); unit + integration tests over `PyFLP_v2`; manual review of parsing changes. |
+| Large-file uploads slow enough that testers churn on medium/large projects | 4 | 3 | **12** | Chunked / resumable uploads; move to signed direct-to-GCS URLs (SPEC §5.2 blocker); background compression. |
+| Browser incompat with Web Audio API for the waveform preview | 3 | 4 | **12** | Cross-browser test matrix (Chrome, Firefox, Safari); graceful fallback when features unavailable. |
 | **Operational** | | | | |
-| Key team member (e.g., Lead Developer)is unavailable | 3 | 5 | **15** | **Bus Factor**: Enforce documentation and code reviews to share knowledge across the team. |
-| Project scope creep delays MVP release | 4 | 4 | **16** | Strict adherence to MVP features; move non-essential features to post-launch backlog. |
-| Data Storage Costs Scaling Unexpectedly | 3 | 4 | **12** | Implement storage quotas per user tier; automated cleanup policies for old/deleted projects; cost monitoring alerts. |
-| User Adoption Barrier (Complexity of Version Control for Musicians) | 4 | 5 | **20** | Simplify UI/UX (avoid Git jargon like "commit/merge"); provide interactive tutorials and "Simple Mode" by default. |
+| User adoption barrier: Git jargon (commit/merge/PR) alienates musicians | 4 | 5 | **20** | Music-friendly wording ("save version", "propose changes"); "simple mode" default; interactive first-run tutorial; SUS ≥ 70 target. |
+| Storage costs scale faster than revenue | 3 | 4 | **12** | Per-tier storage quotas; automated cleanup for soft-deleted projects after 30 days (SPEC §11.3); cost-monitoring alerts. |
 | **Security** | | | | |
-| User database leak (emails, passwords) | 1 | 5 | **5** | Encrypt sensitive data at rest; Regular security audits and pentests. |
-| Leak of unreleased music tracks (Intellectual Property theft) | 2 | 5 | **10** | Signed URLs for temporary access; strict ACLs on storage buckets; audit logs for access. |
-| DDoS Attack on API or Storage Infrastructure | 2 | 4 | **8** | Use Cloudflare DDoS protection; Rate limiting on API endpoints; Infrastructure auto-scaling. |
+| User database leak (emails, hashes) | 1 | 5 | **5** | Password hashing (Argon2/bcrypt); AES-256 at rest (GCS default); scheduled security audits; MFA post-MVP (SPEC §11.5). |
+| Leak of unreleased music (IP theft) | 2 | 5 | **10** | Signed URLs with short expiry; strict ACLs on GCS; audit logs for every artifact access; project-scoped blobs (no global dedupe oracle — see [content-addressed-storage.md](./content-addressed-storage.md)). |
+| DDoS on API or storage | 2 | 4 | **8** | Cloud Armor + Cloudflare; per-endpoint rate limiting; Cloud Run auto-scaling. |
 
-### Mitigation Strategies
+> Spec-tied risks (bus factor, scope creep on Ableton, visual identity slippage, legal review timing, signed-URL migration, plugin real-time safety) are tracked in [SPECIFICATION.md §18](./SPECIFICATION.md) — not duplicated here.
 
-For each critical risk, you need a plan:
+## Mitigation-strategy taxonomy
 
-*   **Avoid**: Change the plan to bypass the risk.
-    *   *Example*: Do not store credit card details directly; use a payment processor like Stripe.
-*   **Reduce**: Take action to lower the probability or impact.
-    *   *Example*: Implement automated backups to reduce the impact of data loss.
-*   **Transfer**: Insure against the risk or outsource it.
-    - *Example*: Use managed services (like GCS, Managed PostgreSQL) to transfer infrastructure management risks.
-*   **Accept**: Acknowledge the risk (if low criticality) and monitor it.
-    *   *Example*: Accept minor UI glitches in beta release to focus on core functionality.
+Every critical risk gets one of four responses:
+- **Avoid** — change the plan so the risk cannot occur (e.g. delegate card handling to Stripe, never store PANs).
+- **Reduce** — lower probability or impact (e.g. automated backups; checksum-on-download).
+- **Transfer** — outsource to a managed service or insurer (e.g. GCS, Cloud SQL).
+- **Accept** — acknowledge and monitor (e.g. minor UI polish gaps during beta).

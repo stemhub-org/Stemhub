@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "plugin/stemhub/Source/**"
+      - "plugin/stemhub/tests/**"
       - "plugin/stemhub/CMakeLists.txt"
       - ".github/workflows/plugin-build.yml"
   push:
@@ -11,6 +12,7 @@ on:
       - main
     paths:
       - "plugin/stemhub/Source/**"
+      - "plugin/stemhub/tests/**"
       - "plugin/stemhub/CMakeLists.txt"
       - ".github/workflows/plugin-build.yml"
   workflow_dispatch:
@@ -64,8 +66,15 @@ jobs:
       - name: Configure CMake
         run: cmake -S plugin/stemhub -B build/plugin-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCOPY_PLUGIN=OFF -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
 
-      - name: Build plugin
-        run: cmake --build build/plugin-linux --parallel
+      - name: Build plugin and headless plugin tests
+        run: cmake --build build/plugin-linux --target stemhub_VST3 stemhub_plugin_tests --parallel
+
+      - name: Run headless plugin tests
+        run: |
+          test_bin="$(find build/plugin-linux/stemhub_plugin_tests_artefacts -type f -name 'stemhub_plugin_tests' -print -quit)"
+          test -n "$test_bin"
+          echo "Running plugin tests: $test_bin"
+          "$test_bin"
 
       - name: Verify VST3 artifact exists
         run: |

@@ -17,7 +17,7 @@ function AuthCallbackContent() {
     return (
         <div className="flex min-h-screen items-center justify-center bg-background px-6">
             <p className="text-foreground/50" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Connexion en cours...
+                Connection in progress...
             </p>
         </div>
     );
@@ -25,7 +25,7 @@ function AuthCallbackContent() {
 
 export default function AuthCallback() {
     return (
-        <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-foreground/50">Connexion en cours...</div>}>
+        <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-foreground/50">Connection in progress...</div>}>
             <AuthCallbackContent />
         </Suspense>
     );

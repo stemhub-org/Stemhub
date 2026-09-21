@@ -4,13 +4,13 @@ import type React from "react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
 import { RepositoryHeader } from "../components/RepositoryHeader";
 import { ArrowLeft, Loader2, Info } from "lucide-react";
 import { authFetch } from "@/lib/api";
 import type { ProjectSummaryResponse, VersionDiffHistoryEntry } from "@/types/project";
 import { RepositoryBranchBar } from "../components/RepositoryBranchBar";
+import { Card } from "@/components/ui/Card";
 
 function formatTimeAgo(dateString: string): string {
     const now = new Date();
@@ -48,19 +48,11 @@ function producerFriendlyCopy(text: string): string {
         .replace(/\bbranch\b/g, "workspace");
 }
 
-const cardBase =
-    "rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle p-6 transition-all duration-300";
-const cardHoverDark =
-    "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.08)]";
-
 function ProjectChangesContent() {
-    const { resolvedTheme } = useTheme();
     const router = useRouter();
     const searchParams = useSearchParams();
     const projectId = searchParams.get("id");
     const branchIdFromQuery = searchParams.get("branch_id") || "";
-    const isDark = resolvedTheme === "dark";
-    const cardClass = `${cardBase} ${isDark ? cardHoverDark : ""}`;
 
     const [summary, setSummary] = useState<ProjectSummaryResponse | null>(null);
     const [historyEntries, setHistoryEntries] = useState<VersionDiffHistoryEntry[]>([]);
@@ -173,7 +165,7 @@ function ProjectChangesContent() {
                     <ArrowLeft className="size-4" aria-hidden />
                     Back to project
                 </Link>
-                <div className={cardClass}>
+                <Card interactive>
                     <div className="mb-6 flex flex-col gap-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
@@ -318,7 +310,7 @@ function ProjectChangesContent() {
                             })}
                         </ul>
                     )}
-                </div>
+                </Card>
             </div>
         </div>
     );

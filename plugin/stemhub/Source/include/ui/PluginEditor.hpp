@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "application/PluginProcessor.hpp"
 #include "ui/Views.hpp"
+#include "ui/PluginTheme.hpp"
 
 class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     private juce::ChangeListener,
@@ -46,6 +47,8 @@ private:
     LoginView loginView;
     ProjectSelectionView projectSelectionView;
     DashboardView dashboardView;
+    stemhub::plugin::theme::StemhubPluginLookAndFeel pluginLookAndFeel;
+    juce::LookAndFeel* previousLookAndFeel { nullptr };
     StemhubAudioProcessor& audioProcessor;
     std::unique_ptr<juce::FileChooser> projectFileChooser;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessorEditor)

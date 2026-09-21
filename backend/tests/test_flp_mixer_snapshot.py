@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import sys
 import types
-import zipfile
 from pathlib import Path
 
 from stemhub.flp_mixer_snapshot import (
     MixerInsertSnapshot,
     MixerProjectSnapshot,
     MixerSlotSnapshot,
-    MixerSnapshotError,
     build_mixer_snapshot,
     load_fl_studio_mixer_snapshot,
 )
@@ -66,12 +64,14 @@ class FakeProject:
 
 
 class FakeStorage:
-    def __init__(self, artifact_file: Path) -> None:
-        self.artifact_file = artifact_file
+    """Fake CAS storage that hands back a pre-written .flp path for any storage_uri."""
 
-    def resolve_artifact_path(self, artifact_path: str) -> Path:
-        del artifact_path
-        return self.artifact_file
+    def __init__(self, blob_file: Path) -> None:
+        self.blob_file = blob_file
+
+    def resolve_blob_path(self, storage_uri: str) -> Path:
+        del storage_uri
+        return self.blob_file
 
 
 def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
@@ -148,14 +148,10 @@ def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
     )
 
 
-def test_load_fl_studio_mixer_snapshot_extracts_manifest_flp_and_cleans_remote_temp_file(
-    tmp_path,
-    monkeypatch,
-) -> None:
+def test_load_fl_studio_mixer_snapshot_reads_blob_and_records_hash(tmp_path, monkeypatch) -> None:
     flp_bytes = b"fake flp bytes"
-    snapshot_zip = tmp_path / "artifact.zip"
-    with zipfile.ZipFile(snapshot_zip, "w") as archive:
-        archive.writestr("Projects/demo/project.flp", flp_bytes)
+    flp_blob = tmp_path / "project.flp"
+    flp_blob.write_bytes(flp_bytes)
 
     parsed_paths: list[Path] = []
 
@@ -166,88 +162,25 @@ def test_load_fl_studio_mixer_snapshot_extracts_manifest_flp_and_cleans_remote_t
     monkeypatch.setattr("stemhub.flp_mixer_snapshot.ensure_pyflp_available", lambda: None)
     monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=fake_parse))
 
-    storage = FakeStorage(snapshot_zip)
+    storage = FakeStorage(flp_blob)
     snapshot = load_fl_studio_mixer_snapshot(
-        artifact_path="gcs://demo-bucket/projects/demo/snapshot.zip",
-        snapshot_manifest={"flp_relative_path": "Projects/demo/project.flp"},
+        storage_uri="projects/demo/blobs/00/deadbeef",
         storage=storage,
     )
 
     assert snapshot.inserts == (
-        MixerInsertSnapshot(
-            iid=0,
-            name="Master",
-            enabled=None,
-            volume=None,
-            pan=None,
-            slots=(),
-        ),
+        MixerInsertSnapshot(iid=0, name="Master", enabled=None, volume=None, pan=None, slots=()),
     )
     assert snapshot.flp_size_bytes == len(flp_bytes)
     assert snapshot.flp_sha256 is not None
     assert snapshot.mixer_supported is True
-    assert len(parsed_paths) == 1
-    assert parsed_paths[0].name == "project.flp"
-    assert not parsed_paths[0].exists()
-    assert not snapshot_zip.exists()
-
-
-def test_load_fl_studio_mixer_snapshot_falls_back_to_first_flp_entry(tmp_path, monkeypatch) -> None:
-    flp_bytes = b"fake flp bytes"
-    snapshot_zip = tmp_path / "artifact.zip"
-    with zipfile.ZipFile(snapshot_zip, "w") as archive:
-        archive.writestr("manifest.json", "{}")
-        archive.writestr("nested/beat.flp", flp_bytes)
-
-    def fake_parse(path: Path):
-        assert Path(path).name == "beat.flp"
-        return FakeProject(mixer=[])
-
-    monkeypatch.setattr("stemhub.flp_mixer_snapshot.ensure_pyflp_available", lambda: None)
-    monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=fake_parse))
-
-    storage = FakeStorage(snapshot_zip)
-    snapshot = load_fl_studio_mixer_snapshot(
-        artifact_path="projects/demo/artifact.zip",
-        snapshot_manifest={"flp_relative_path": "missing/project.flp"},
-        storage=storage,
-    )
-
-    assert snapshot.inserts == ()
-    assert snapshot.flp_size_bytes == len(flp_bytes)
-    assert snapshot.flp_sha256 is not None
-    assert snapshot.mixer_supported is False
-    assert snapshot_zip.exists()
-
-
-def test_load_fl_studio_mixer_snapshot_errors_when_snapshot_has_no_flp(tmp_path, monkeypatch) -> None:
-    snapshot_zip = tmp_path / "artifact.zip"
-    with zipfile.ZipFile(snapshot_zip, "w") as archive:
-        archive.writestr("manifest.json", "{}")
-        archive.writestr("preview/latest_track.wav", b"no project here")
-
-    monkeypatch.setattr("stemhub.flp_mixer_snapshot.ensure_pyflp_available", lambda: None)
-    monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=lambda path: path))
-
-    storage = FakeStorage(snapshot_zip)
-
-    try:
-        load_fl_studio_mixer_snapshot(
-            artifact_path="projects/demo/artifact.zip",
-            snapshot_manifest={"flp_relative_path": "missing/project.flp"},
-            storage=storage,
-        )
-    except MixerSnapshotError as exc:
-        assert str(exc) == "Snapshot archive does not contain an FL Studio project file."
-    else:
-        raise AssertionError("Expected MixerSnapshotError when snapshot zip does not contain a .flp file")
+    assert parsed_paths == [flp_blob]
 
 
 def test_load_fl_studio_mixer_snapshot_falls_back_to_binary_snapshot_on_parser_failure(tmp_path, monkeypatch) -> None:
     flp_bytes = b"fake flp bytes"
-    snapshot_zip = tmp_path / "artifact.zip"
-    with zipfile.ZipFile(snapshot_zip, "w") as archive:
-        archive.writestr("nested/demo.flp", flp_bytes)
+    flp_blob = tmp_path / "project.flp"
+    flp_blob.write_bytes(flp_bytes)
 
     def fake_parse(path: Path):
         del path
@@ -256,12 +189,9 @@ def test_load_fl_studio_mixer_snapshot_falls_back_to_binary_snapshot_on_parser_f
     monkeypatch.setattr("stemhub.flp_mixer_snapshot.ensure_pyflp_available", lambda: None)
     monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=fake_parse))
 
-    storage = FakeStorage(snapshot_zip)
-
     snapshot = load_fl_studio_mixer_snapshot(
-        artifact_path="projects/demo/artifact.zip",
-        snapshot_manifest={"flp_relative_path": "nested/demo.flp"},
-        storage=storage,
+        storage_uri="projects/demo/blobs/00/deadbeef",
+        storage=FakeStorage(flp_blob),
     )
 
     assert snapshot.inserts == ()
