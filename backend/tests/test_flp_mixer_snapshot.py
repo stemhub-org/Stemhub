@@ -58,6 +58,27 @@ class FakeInsert:
         return iter(self._slots)
 
 
+class FakeInsertMissingParams:
+    """Reproduces PyFLP_v2's Insert.__iter__ raising KeyError("params") when the
+    mixer params event doesn't cover this insert's index (see issue #240:
+    "Partial mixer inserts from some FL projects can crash snapshot extraction").
+    """
+
+    def __init__(self, *, iid: int | None, name: str | None = None) -> None:
+        self.iid = iid
+        self.name = name
+        self.enabled = None
+        self.volume = None
+        self.pan = None
+
+    def __iter__(self):
+        def _raise():
+            raise KeyError("params")
+            yield  # pragma: no cover - unreachable, keeps this a generator function
+
+        return _raise()
+
+
 class FakeProject:
     def __init__(self, mixer) -> None:
         self.mixer = mixer
@@ -199,3 +220,29 @@ def test_load_fl_studio_mixer_snapshot_falls_back_to_binary_snapshot_on_parser_f
     assert snapshot.flp_sha256 is not None
     assert snapshot.mixer_supported is False
     assert snapshot.parse_error == "low-level parser crash"
+
+
+def test_build_mixer_snapshot_survives_insert_missing_params(caplog) -> None:
+    """Regression test for issue #240: an insert whose mixer params event is
+    missing must not crash snapshot extraction; it should degrade to an
+    insert with no slots and log why, instead of failing silently."""
+    project = FakeProject(
+        mixer=[FakeInsertMissingParams(iid=61, name="Insert 61 (VST, unknown marker)")]
+    )
+
+    with caplog.at_level("WARNING"):
+        snapshot = build_mixer_snapshot(project)
+
+    assert snapshot.inserts == (
+        MixerInsertSnapshot(
+            iid=61,
+            name="Insert 61 (VST, unknown marker)",
+            enabled=None,
+            volume=None,
+            pan=None,
+            slots=(),
+        ),
+    )
+    assert snapshot.mixer_supported is True
+    assert "iid=61" in caplog.text
+    assert "params" in caplog.text
