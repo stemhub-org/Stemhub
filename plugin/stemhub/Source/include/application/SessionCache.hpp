@@ -10,5 +10,10 @@ juce::String loadLastOpenedProjectFilePath();
 void saveAccessToken(const juce::String& token);
 void saveProjectId(const juce::String& projectId);
 void saveLastOpenedProjectFilePath(const juce::String& projectFilePath);
+void clearProjectId();
+void clearLastOpenedProjectFilePath();
+void clearProjectContext();
+void setCacheFileOverrideForTesting(const juce::File& file);
+void clearCacheFileOverrideForTesting();
 void clear();
 }

@@ -2,12 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import importlib
-import tempfile
-import zipfile
-from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from stemhub.dependency_guard import ensure_pyflp_available
 from stemhub.storage import StorageService
@@ -73,78 +69,38 @@ class MixerDiffResult:
 
 def load_fl_studio_mixer_snapshot(
     *,
-    artifact_path: str,
-    snapshot_manifest: dict[str, Any] | None,
+    storage_uri: str,
     storage: StorageService,
 ) -> MixerProjectSnapshot:
-    """Load a mixer-only snapshot from a stored version artifact."""
-    if not artifact_path:
-        raise MixerSnapshotError("Version artifact path is missing.")
+    """Load a mixer snapshot from a content-addressed .flp blob.
+
+    The manifest_json.project_file blob is the raw .flp — no bundle/zip
+    unpacking needed. See docs/content-addressed-storage.md.
+    """
+    if not storage_uri:
+        raise MixerSnapshotError("Version has no project-file blob to read.")
 
     ensure_pyflp_available()
     pyflp = importlib.import_module("pyflp")
 
-    with _resolved_artifact_file(storage, artifact_path) as snapshot_zip_path:
-        with tempfile.TemporaryDirectory(prefix="stemhub-flp-snapshot-") as extract_root:
-            flp_path = extract_flp_from_snapshot(
-                snapshot_zip_path=snapshot_zip_path,
-                snapshot_manifest=snapshot_manifest,
-                extract_root=Path(extract_root),
-            )
-            flp_bytes = flp_path.read_bytes()
-            try:
-                project = pyflp.parse(flp_path)
-            except Exception as exc:  # pragma: no cover - parser internals vary by FLP shape
-                return MixerProjectSnapshot(
-                    inserts=(),
-                    flp_sha256=hashlib.sha256(flp_bytes).hexdigest(),
-                    flp_size_bytes=len(flp_bytes),
-                    mixer_supported=False,
-                    parse_error=str(exc),
-                )
+    flp_path = storage.resolve_blob_path(storage_uri)
+    flp_bytes = flp_path.read_bytes()
+    try:
+        project = pyflp.parse(flp_path)
+    except Exception as exc:  # pragma: no cover - parser internals vary by FLP shape
+        return MixerProjectSnapshot(
+            inserts=(),
+            flp_sha256=hashlib.sha256(flp_bytes).hexdigest(),
+            flp_size_bytes=len(flp_bytes),
+            mixer_supported=False,
+            parse_error=str(exc),
+        )
 
     return build_mixer_snapshot(
         project,
         flp_sha256=hashlib.sha256(flp_bytes).hexdigest(),
         flp_size_bytes=len(flp_bytes),
     )
-
-
-def extract_flp_from_snapshot(
-    *,
-    snapshot_zip_path: Path,
-    snapshot_manifest: dict[str, Any] | None,
-    extract_root: Path,
-) -> Path:
-    """Extract the FL Studio project file from a StemHub snapshot zip."""
-    try:
-        snapshot_zip = zipfile.ZipFile(snapshot_zip_path)
-    except zipfile.BadZipFile as exc:
-        raise MixerSnapshotError("Version artifact is not a valid snapshot archive.") from exc
-
-    manifest_path = _normalize_archive_member(snapshot_manifest, "flp_relative_path")
-    fallback_filename = _normalize_archive_member(snapshot_manifest, "source_project_filename")
-
-    with snapshot_zip:
-        candidate_name = None
-        for member_name in (manifest_path, fallback_filename):
-            if member_name and _zip_entry_exists(snapshot_zip, member_name):
-                candidate_name = member_name
-                break
-
-        if candidate_name is None:
-            candidate_name = _find_first_flp_entry(snapshot_zip)
-
-        if candidate_name is None:
-            raise MixerSnapshotError("Snapshot archive does not contain an FL Studio project file.")
-
-        extracted_path = _build_safe_extract_path(extract_root, candidate_name)
-        extracted_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with snapshot_zip.open(candidate_name) as source, extracted_path.open("wb") as destination:
-            destination.write(source.read())
-
-    return extracted_path
 
 
 def build_mixer_snapshot(
@@ -156,7 +112,7 @@ def build_mixer_snapshot(
     inserts: list[MixerInsertSnapshot] = []
 
     for insert in getattr(project, "mixer", []):
-        iid = getattr(insert, "iid", None)
+        iid = _safe_model_attr(insert, "iid")
         if iid is None or iid == -1:
             continue
 
@@ -164,10 +120,10 @@ def build_mixer_snapshot(
         inserts.append(
             MixerInsertSnapshot(
                 iid=int(iid),
-                name=_normalize_optional_text(getattr(insert, "name", None)),
-                enabled=_coerce_optional_bool(getattr(insert, "enabled", None)),
-                volume=_coerce_optional_int(getattr(insert, "volume", None)),
-                pan=_coerce_optional_int(getattr(insert, "pan", None)),
+                name=_normalize_optional_text(_safe_model_attr(insert, "name")),
+                enabled=_coerce_optional_bool(_safe_model_attr(insert, "enabled")),
+                volume=_coerce_optional_int(_safe_model_attr(insert, "volume")),
+                pan=_coerce_optional_int(_safe_model_attr(insert, "pan")),
                 slots=slots,
             )
         )
@@ -353,27 +309,30 @@ def diff_mixer_project_snapshots(
 def _build_slot_snapshots(insert: Any) -> tuple[MixerSlotSnapshot, ...]:
     slots: list[MixerSlotSnapshot] = []
 
-    for slot in insert:
-        name = _normalize_optional_text(getattr(slot, "name", None))
-        internal_name = _normalize_optional_text(getattr(slot, "internal_name", None))
-        plugin_key = _resolve_slot_plugin_key(slot, name=name, internal_name=internal_name)
-        if not any((name, internal_name, plugin_key)):
-            continue
+    try:
+        for slot in insert:
+            name = _normalize_optional_text(_safe_model_attr(slot, "name"))
+            internal_name = _normalize_optional_text(_safe_model_attr(slot, "internal_name"))
+            plugin_key = _resolve_slot_plugin_key(slot, name=name, internal_name=internal_name)
+            if not any((name, internal_name, plugin_key)):
+                continue
 
-        slot_index = getattr(slot, "index", None)
-        if slot_index is None:
-            continue
+            slot_index = _safe_model_attr(slot, "index")
+            if slot_index is None:
+                continue
 
-        slots.append(
-            MixerSlotSnapshot(
-                index=int(slot_index),
-                name=name,
-                internal_name=internal_name,
-                enabled=_coerce_optional_bool(getattr(slot, "enabled", None)),
-                mix=_coerce_optional_int(getattr(slot, "mix", None)),
-                plugin_key=plugin_key,
+            slots.append(
+                MixerSlotSnapshot(
+                    index=int(slot_index),
+                    name=name,
+                    internal_name=internal_name,
+                    enabled=_coerce_optional_bool(_safe_model_attr(slot, "enabled")),
+                    mix=_coerce_optional_int(_safe_model_attr(slot, "mix")),
+                    plugin_key=plugin_key,
+                )
             )
-        )
+    except Exception:
+        return tuple(slots)
 
     slots.sort(key=lambda item: item.index)
     return tuple(slots)
@@ -486,7 +445,7 @@ def _resolve_slot_plugin_key(
     name: str | None,
     internal_name: str | None,
 ) -> str | None:
-    plugin = getattr(slot, "plugin", None)
+    plugin = _safe_model_attr(slot, "plugin")
     plugin_type = type(plugin).__name__ if plugin is not None else None
     plugin_type = _normalize_optional_text(plugin_type)
 
@@ -499,50 +458,19 @@ def _resolve_slot_plugin_key(
     return plugin_type
 
 
-def _normalize_archive_member(snapshot_manifest: dict[str, Any] | None, key: str) -> str | None:
-    if not snapshot_manifest:
-        return None
-
-    value = snapshot_manifest.get(key)
-    if not isinstance(value, str):
-        return None
-
-    normalized = value.replace("\\", "/").strip("/")
-    return normalized or None
-
-
-def _build_safe_extract_path(extract_root: Path, member_name: str) -> Path:
-    extracted_path = (extract_root / member_name).resolve()
-    try:
-        extracted_path.relative_to(extract_root.resolve())
-    except ValueError as exc:
-        raise MixerSnapshotError("Snapshot archive contains an invalid FL Studio project path.") from exc
-    return extracted_path
-
-
-def _find_first_flp_entry(snapshot_zip: zipfile.ZipFile) -> str | None:
-    for member in snapshot_zip.infolist():
-        if member.is_dir():
-            continue
-        if member.filename.lower().endswith(".flp"):
-            return member.filename
-    return None
-
-
-def _zip_entry_exists(snapshot_zip: zipfile.ZipFile, member_name: str) -> bool:
-    try:
-        snapshot_zip.getinfo(member_name)
-    except KeyError:
-        return False
-    return True
-
-
 def _normalize_optional_text(value: Any) -> str | None:
     if value is None:
         return None
 
     text = str(value).strip()
     return text or None
+
+
+def _safe_model_attr(obj: Any, name: str) -> Any:
+    try:
+        return getattr(obj, name, None)
+    except Exception:
+        return None
 
 
 def _coerce_optional_int(value: Any) -> int | None:
@@ -608,11 +536,3 @@ def _format_scalar_value(value: int | None) -> str:
     return str(value)
 
 
-@contextmanager
-def _resolved_artifact_file(storage: StorageService, artifact_path: str) -> Iterator[Path]:
-    resolved_path = storage.resolve_artifact_path(artifact_path)
-    try:
-        yield resolved_path
-    finally:
-        if artifact_path.startswith("gcs://") and resolved_path.exists():
-            resolved_path.unlink()

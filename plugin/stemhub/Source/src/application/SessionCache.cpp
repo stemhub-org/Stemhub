@@ -2,8 +2,15 @@
 
 namespace
 {
+juce::File cacheFileOverride;
+bool useInMemoryCacheOverride = false;
+juce::var inMemoryCacheOverride;
+
 juce::File resolveSessionCacheFile()
 {
+    if (cacheFileOverride.getFullPathName().isNotEmpty())
+        return cacheFileOverride;
+
     return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
         .getChildFile("Stemhub")
         .getChildFile("session.json");
@@ -11,6 +18,9 @@ juce::File resolveSessionCacheFile()
 
 juce::var loadCachedSessionJson()
 {
+    if (useInMemoryCacheOverride)
+        return inMemoryCacheOverride;
+
     const auto sessionFile = resolveSessionCacheFile();
     if (!sessionFile.existsAsFile())
         return {};
@@ -21,6 +31,20 @@ juce::var loadCachedSessionJson()
 
 void updateCachedSession(const std::function<void(juce::DynamicObject&)>& updater)
 {
+    if (useInMemoryCacheOverride)
+    {
+        const auto existing = loadCachedSessionJson();
+        juce::DynamicObject::Ptr sessionObject;
+        if (auto* object = existing.getDynamicObject(); object != nullptr)
+            sessionObject = object;
+        else
+            sessionObject = new juce::DynamicObject();
+
+        updater(*sessionObject);
+        inMemoryCacheOverride = juce::var(sessionObject.get());
+        return;
+    }
+
     const auto sessionFile = resolveSessionCacheFile();
     const auto sessionDirectory = sessionFile.getParentDirectory();
     if ((!sessionDirectory.exists() && !sessionDirectory.createDirectory()) || !sessionDirectory.isDirectory())
@@ -97,8 +121,53 @@ void saveLastOpenedProjectFilePath(const juce::String& projectFilePath)
     });
 }
 
+void clearProjectId()
+{
+    updateCachedSession([](juce::DynamicObject& sessionObject)
+    {
+        sessionObject.removeProperty("last_project_id");
+    });
+}
+
+void clearLastOpenedProjectFilePath()
+{
+    updateCachedSession([](juce::DynamicObject& sessionObject)
+    {
+        sessionObject.removeProperty("last_opened_project_file");
+    });
+}
+
+void clearProjectContext()
+{
+    updateCachedSession([](juce::DynamicObject& sessionObject)
+    {
+        sessionObject.removeProperty("last_project_id");
+        sessionObject.removeProperty("last_opened_project_file");
+    });
+}
+
+void setCacheFileOverrideForTesting(const juce::File& file)
+{
+    cacheFileOverride = file;
+    useInMemoryCacheOverride = true;
+    inMemoryCacheOverride = juce::var();
+}
+
+void clearCacheFileOverrideForTesting()
+{
+    cacheFileOverride = juce::File();
+    useInMemoryCacheOverride = false;
+    inMemoryCacheOverride = juce::var();
+}
+
 void clear()
 {
+    if (useInMemoryCacheOverride)
+    {
+        inMemoryCacheOverride = juce::var();
+        return;
+    }
+
     const auto sessionFile = resolveSessionCacheFile();
     if (sessionFile.existsAsFile())
         sessionFile.deleteFile();

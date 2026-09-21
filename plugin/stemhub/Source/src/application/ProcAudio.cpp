@@ -120,12 +120,20 @@ void StemhubAudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce
 
 bool StemhubAudioProcessor::hasEditor() const
 {
+#if STEMHUB_PLUGIN_HEADLESS_TESTS
+    return false;
+#else
     return true;
+#endif
 }
 
 juce::AudioProcessorEditor* StemhubAudioProcessor::createEditor()
 {
+#if STEMHUB_PLUGIN_HEADLESS_TESTS
+    return nullptr;
+#else
     return new StemhubAudioProcessorEditor(*this);
+#endif
 }
 
 void StemhubAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
@@ -142,4 +150,3 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new StemhubAudioProcessor();
 }
-

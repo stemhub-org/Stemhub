@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 # ── User Schemas ──
 
@@ -59,6 +59,7 @@ class ProjectUpdate(BaseModel):
 class ProjectResponse(ProjectBase):
     id: UUID
     owner_id: UUID
+    tags: Optional[list[str]] = None
     created_at: datetime
     is_deleted: bool
     deleted_at: Optional[datetime] = None
@@ -87,32 +88,97 @@ class BranchResponse(BranchBase):
     class Config:
         from_attributes = True
 
+# ── Pull Request Schemas ──
+
+PullRequestStatus = Literal["OPEN", "MERGED", "CLOSED"]
+
+class PullRequestCreate(BaseModel):
+    source_branch_id: UUID
+    target_branch_id: UUID
+    title: str = Field(min_length=1, max_length=255)
+    description: Optional[str] = None
+
+class PullRequestResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    source_branch_id: UUID
+    target_branch_id: UUID
+    title: str
+    description: Optional[str] = None
+    status: PullRequestStatus
+    source_head_version_id: Optional[UUID] = None
+    target_head_version_id: Optional[UUID] = None
+    created_by: Optional[UUID] = None
+    created_at: datetime
+    closed_by: Optional[UUID] = None
+    closed_at: Optional[datetime] = None
+    is_deleted: bool
+    deleted_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # ── Version Schemas ──
 
-class VersionBase(BaseModel):
-    commit_message: Optional[str] = None
-    parent_version_id: Optional[UUID] = None
-    artifact_path: Optional[str] = None
-    artifact_size_bytes: Optional[int] = None
-    artifact_checksum: Optional[str] = None
-    source_daw: Optional[str] = None
-    source_project_filename: Optional[str] = None
-    snapshot_manifest: Optional[dict[str, Any]] = None
-
-class VersionCreate(VersionBase):
-    pass
-
-
-class VersionResponse(VersionBase):
+class VersionResponse(BaseModel):
     id: UUID
     branch_id: UUID
     created_by: Optional[UUID] = None
+    commit_message: Optional[str] = None
+    parent_version_id: Optional[UUID] = None
+    source_daw: Optional[str] = None
+    source_project_filename: Optional[str] = None
+    manifest_json: Optional[dict[str, Any]] = None
+    manifest_version: Optional[int] = None
     created_at: datetime
     is_deleted: bool
     deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+# ── Content-Addressed Manifest (v1) ──
+#
+# See docs/content-addressed-storage.md. Every blob reference is a hex
+# SHA-256 that must already exist in the project's blob table (uploaded
+# via PUT /projects/{pid}/blobs/{sha256}) before a version can reference it.
+
+_SHA256_HEX_RE = "^[0-9a-f]{64}$"
+
+
+class ManifestBlobRef(BaseModel):
+    sha256: str = Field(pattern=_SHA256_HEX_RE)
+    size_bytes: int = Field(ge=0)
+    filename: str = Field(min_length=1, max_length=255)
+
+
+class ManifestTrack(ManifestBlobRef):
+    name: str = Field(min_length=1, max_length=255)
+    bpm: Optional[int] = Field(default=None, ge=1, le=1000)
+    key: Optional[str] = Field(default=None, max_length=10)
+    duration_seconds: Optional[int] = Field(default=None, ge=0)
+
+
+class VersionManifestV1(BaseModel):
+    manifest_version: Literal[1] = 1
+    source_daw: Optional[str] = Field(default=None, max_length=50)
+    source_project_filename: Optional[str] = Field(default=None, max_length=255)
+    project_file: ManifestBlobRef
+    tracks: list[ManifestTrack] = Field(default_factory=list, max_length=500)
+    mixer_state: Optional[dict[str, Any]] = None
+
+    def all_blob_shas(self) -> set[str]:
+        shas = {self.project_file.sha256}
+        shas.update(t.sha256 for t in self.tracks)
+        return shas
+
+
+class VersionFromManifestCreate(BaseModel):
+    commit_message: Optional[str] = Field(default=None, max_length=500)
+    parent_version_id: Optional[UUID] = None
+    manifest: VersionManifestV1
+
 
 # ── Collaborator Schemas ──
 
@@ -166,7 +232,6 @@ class VersionWithAuthor(BaseModel):
     created_at: datetime
     branch_name: str
     author: Optional[OwnerSummary] = None
-    has_artifact: bool = False
     source_daw: Optional[str] = None
     source_project_filename: Optional[str] = None
 
@@ -200,6 +265,27 @@ class VersionDiffHistoryEntry(BaseModel):
     status_message: Optional[str] = None
     summary: Optional[MixerDiffSummary] = None
     changes: list[MixerDiffChange] = []
+
+
+class TrackSummary(BaseModel):
+    """A single stem/track surfaced for the repository overview UI.
+
+    Sourced from `Version.manifest_json["tracks"]` (content-addressed
+    manifest, spec §7). A version with no manifest yields an empty list —
+    callers should treat that as "no per-track data available", not an error.
+
+    `file_type` is derived from the display filename and is display-only per
+    spec §7 (filenames are not authoritative); nothing downstream should
+    trust it for MIME dispatch or storage decisions.
+    """
+
+    id: str
+    name: str
+    file_type: Optional[str] = None
+    bpm: Optional[int] = None
+    key: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    size_bytes: Optional[int] = None
 
 
 class ProjectDetail(BaseModel):
@@ -299,6 +385,35 @@ class EventResponse(BaseModel):
     host_name: str
     event_date: datetime
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# ── Admin Schemas ──
+
+class DailySignup(BaseModel):
+    date: str
+    count: int
+
+class AdminStats(BaseModel):
+    total_users: int
+    total_projects: int
+    active_users: int
+    admin_users: int
+    public_projects: int
+    private_projects: int
+    signups_last_30_days: list[DailySignup]
+
+class UserWithProjects(UserResponse):
+    project_count: int
+
+class RecentUser(BaseModel):
+    id: UUID
+    username: str
+    email: EmailStr
+    avatar_url: Optional[str] = None
+    created_at: datetime
+    is_admin: bool
 
     class Config:
         from_attributes = True

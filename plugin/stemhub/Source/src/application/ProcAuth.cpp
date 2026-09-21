@@ -15,8 +15,17 @@ void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
             currentUser.reset();
             access_tkn.clear();
             versionControlService.clearAccessToken();
-            authErrorMessage.clear();
-            sessionState = {};
+            projectSelectionStatusMessage.clear();
+            activeProjectStatusMessage.clear();
+            projects.clear();
+            branches.clear();
+            versionHistory.clear();
+            selectedVersionId.clear();
+            clearSelectedProject();
+            pendingProjectFile = juce::File();
+            selectedProjectFile = juce::File();
+            authErrorMessage = "Saved session expired. Please sign in again.";
+            setAuthState(AuthState::authError);
             sendChangeMessage();
             return;
         }
@@ -150,11 +159,22 @@ void StemhubAudioProcessor::requestRestoreCachedProjectContext()
         return project.id == cachedProjectId;
     });
     if (projectIt == projects.end())
+    {
+        stemhub::sessioncache::clearProjectContext();
+        setOperationState(OperationState::idle);
+        projectSelectionStatusMessage = "Last opened project is no longer available. Choose another project.";
+        sendChangeMessage();
         return;
+    }
 
     const auto cachedProjectFilePath = stemhub::sessioncache::loadLastOpenedProjectFilePath().trim();
     const auto cachedProjectFile = juce::File(cachedProjectFilePath);
-    const auto localProjectFile = cachedProjectFile.existsAsFile() ? cachedProjectFile : juce::File();
+    const auto hasCachedProjectFilePath = cachedProjectFilePath.isNotEmpty();
+    const auto hasUsableCachedProjectFile = cachedProjectFile.existsAsFile();
+    if (hasCachedProjectFilePath && !hasUsableCachedProjectFile)
+        stemhub::sessioncache::clearLastOpenedProjectFilePath();
+
+    const auto localProjectFile = hasUsableCachedProjectFile ? cachedProjectFile : juce::File();
     juce::Logger::writeToLog("[Restore] CachedProjectContext -> projectId="
                              + cachedProjectId
                              + ", cachedProjectFilePath="
@@ -168,10 +188,13 @@ void StemhubAudioProcessor::requestRestoreCachedProjectContext()
 
     const auto projectsSnapshot = projects;
     const auto token = access_tkn;
-    enqueueBackgroundTask([this, cachedProjectId, projectsSnapshot, token, localProjectFile]() -> BackgroundJobPayload
+    const auto selectionRequestId = beginSelectionRequest();
+    enqueueBackgroundTask([this, cachedProjectId, projectsSnapshot, token, localProjectFile, selectionRequestId]() -> BackgroundJobPayload
     {
         auto result = performOpenProjectRequest(cachedProjectId, localProjectFile, projectsSnapshot, token, false);
+        result.selectionRequestId = selectionRequestId;
         result.shouldAutoOpenLocalFile = false;
+        result.fromCachedProjectRestore = true;
         return result;
     });
 }

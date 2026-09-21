@@ -5,6 +5,7 @@ import { Bell, Sun, User as UserIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/Button";
 
 type TopNavProps = {
     onToggleSidebar?: () => void;
@@ -85,19 +86,19 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
             </div>
 
             <div className="flex items-center gap-4">
-                <button
-                    className="p-2 rounded-full hover:bg-foreground/5 text-foreground/70 hover:text-foreground transition-colors"
+                <Button
+                    variant="icon"
                     aria-label="Toggle theme"
                     title={isDark ? "Light mode" : "Dark mode"}
                     onClick={() => setTheme(isDark ? "light" : "dark")}
                 >
                     <Sun size={18} className="text-accent" />
-                </button>
+                </Button>
 
-                <button className="relative p-2 rounded-full hover:bg-foreground/5 text-foreground/70 hover:text-foreground transition-colors">
+                <Button variant="icon" className="relative">
                     <Bell size={20} />
                     <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent border-2 border-background"></span>
-                </button>
+                </Button>
 
                 <div className="h-8 w-px bg-foreground/10 mx-2"></div>
 

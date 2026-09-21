@@ -27,3 +27,6 @@ plugin/stemhub/JUCE/
 # local storage data for projects
 backend/data/
 backend/.secrets/
+
+# Python packaging build artifacts
+backend/src/*.egg-info/

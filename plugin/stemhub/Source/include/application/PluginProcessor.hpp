@@ -4,6 +4,7 @@
 #include <memory>
 #include <JuceHeader.h>
 #include <optional>
+#include <atomic>
 #include <vector>
 #include <variant>
 #include "application/BackgroundJobCoordinator.hpp"
@@ -95,11 +96,19 @@ public:
     void requestSelectBranch(juce::String branchId);
     void requestRefreshVersionHistory();
     void requestPushVersion(juce::String commitMessage, juce::String dawName);
+    // Content-addressed variant: uploads only novel blobs instead of the full
+    // whole-project bundle. See docs/content-addressed-storage.md.
+    void requestPushVersionContentAddressed(juce::String commitMessage, juce::String dawName);
     void requestRestoreVersion(const juce::String& versionId, const juce::File& destinationFolder);
+    // Content-addressed restore: fetches the version's manifest and downloads
+    // only the referenced blobs into destinationFolder, verifying SHA-256.
+    // See docs/content-addressed-storage.md.
+    void requestRestoreVersionContentAddressed(const juce::String& versionId, const juce::File& destinationFolder);
 
     void setSelectedVersionId(juce::String versionId);
     VersionControlService& getVersionControlService() noexcept { return versionControlService; }
     IProjectApi& getApiClient() noexcept { return *apiClient; }
+    void flushPendingBackgroundResultsForTesting();
 
 private:
     void handleAsyncUpdate() override;
@@ -116,6 +125,7 @@ private:
 
     struct ProjectActivationJobResult
     {
+        uint64_t selectionRequestId {};
         std::optional<Project> selectedProject;
         std::vector<Project> projects;
         std::vector<Branch> branches;
@@ -129,10 +139,12 @@ private:
         juce::String activeProjectStatusMessage;
         bool refreshProjects { false };
         bool shouldAutoOpenLocalFile { true };
+        bool fromCachedProjectRestore { false };
     };
 
     struct BranchHistoryJobResult
     {
+        uint64_t selectionRequestId {};
         std::vector<VersionSummary> versions;
         juce::String branchId;
         juce::String branchName;
@@ -165,6 +177,7 @@ private:
     void enqueueBackgroundTask(std::function<BackgroundJobPayload()> job);
 
     RestoreVersionJobResult performRestoreVersionRequest(const juce::String& versionId, const juce::File& destinationFile) const;
+    RestoreVersionJobResult performRestoreVersionContentAddressedRequest(const juce::String& versionId, const juce::File& destinationFolder);
     AuthRequestResult performSignInRequest(const juce::String& email, const juce::String& password) const;
     AuthRequestResult performRestoreCachedSessionRequest(const juce::String& token) const;
     ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,
@@ -184,6 +197,12 @@ private:
                                                    const juce::String& branchId,
                                                    const juce::String& commitMessage,
                                                    const juce::String& dawName);
+    PushVersionJobResult performPushVersionContentAddressedRequest(const juce::File& projectFile,
+                                                                    const juce::File& projectRootDirectory,
+                                                                    const std::optional<Project>& project,
+                                                                    const juce::String& branchId,
+                                                                    const juce::String& commitMessage,
+                                                                    const juce::String& dawName);
     void applyBackgroundResult(BackgroundJobResult result);
     void applyAuthRequestResult(AuthRequestResult result);
     void applyProjectActivationResult(ProjectActivationJobResult result);
@@ -193,6 +212,8 @@ private:
     void requestRestoreCachedProjectContext();
     void setWorkingCopyContext(const juce::File& workingFile, const juce::String& versionId);
     void clearWorkingCopyContext();
+    uint64_t beginSelectionRequest() noexcept;
+    [[nodiscard]] bool isCurrentSelectionRequest(uint64_t requestId) const noexcept;
     [[nodiscard]] bool hasCleanWorkingCopy(const juce::File& workingFile) const;
     [[nodiscard]] juce::String getCurrentOpenedVersionIdFromPath() const;
     void setCurrentOpenedVersionId(juce::String versionId);
@@ -223,4 +244,5 @@ private:
     int64 workingCopyFileSize { 0 };
     int64 workingCopyFileModTime { 0 };
     bool didAttemptCachedSessionRestore { false };
+    std::atomic<uint64_t> activeSelectionRequestId { 0 };
 };
