@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, Integer
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -92,22 +92,10 @@ class Version(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    artifact_path: Mapped[str | None] = mapped_column(String, nullable=True)  # .als, .flp pointer
-    artifact_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    artifact_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)  # SHA-256 for integrity verification
     source_daw: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_project_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # ── Version payload ──
-    # snapshot_manifest is the legacy field: it stores the DAW mixer state that
-    # was extracted from the (whole) artifact bundle uploaded via the old flow.
-    # It will keep being written by the legacy POST /versions endpoint until
-    # the plugin migrates to the manifest-based flow.
-    snapshot_manifest: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    # manifest_json is the content-addressed manifest (see
-    # docs/content-addressed-storage.md). Populated only by the new
-    # manifest-based version-create endpoint. When set, artifact_path /
-    # artifact_size_bytes / artifact_checksum are unused. manifest_version
-    # is the schema version of this JSON blob so future readers can migrate.
+    # Content-addressed manifest — see docs/content-addressed-storage.md.
+    # manifest_version is the JSON schema version so future readers can migrate.
     manifest_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     manifest_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
@@ -115,7 +103,66 @@ class Version(Base):
     branch: Mapped["Branch"] = relationship("Branch", back_populates="versions")
     author: Mapped["User | None"] = relationship("User", foreign_keys=[created_by])
     parent: Mapped["Version | None"] = relationship("Version", remote_side="Version.id", backref="children")
-    tracks: Mapped[list["Track"]] = relationship("Track", back_populates="version")
+
+
+class PullRequest(Base):
+    """Proposal to merge one branch into another within the same project.
+
+    Lifecycle: OPEN → MERGED (merge engine, issue #253) or OPEN → CLOSED
+    (closed without merge). Both MERGED and CLOSED are terminal — a closed PR
+    is not reopened, users open a new one (SPECIFICATION.md §7, §19).
+    """
+    __tablename__ = "pull_request"
+    __table_args__ = (
+        # Kept as a plain String + CHECK rather than a native Postgres ENUM so
+        # adding a status later is a one-line migration, not an ALTER TYPE.
+        CheckConstraint("status IN ('OPEN', 'MERGED', 'CLOSED')", name="ck_pull_request_status"),
+        # Same invariant as the API-level 400: a branch cannot be merged into itself.
+        CheckConstraint("source_branch_id <> target_branch_id", name="ck_pull_request_distinct_branches"),
+        # At most one OPEN pull request per ordered (source, target) pair, as on
+        # GitHub. Partial so closed/merged/soft-deleted PRs never block a new one.
+        Index(
+            "uq_pull_request_open_pair",
+            "source_branch_id",
+            "target_branch_id",
+            unique=True,
+            postgresql_where=text("status = 'OPEN' AND is_deleted = false"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    # Redundant with source/target branch's project but stored so the per-project
+    # listing needs no join and cross-project PRs are impossible by construction.
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("project.id"), nullable=False, index=True)
+    source_branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branch.id"), nullable=False)
+    target_branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branch.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN")  # OPEN, MERGED, CLOSED
+    # Head (latest live version) of each branch when the PR was opened. Branch
+    # has no head pointer, so this is the only record of what was proposed; the
+    # merge engine (issue #253) compares target_head against the live head to
+    # refuse a stale promotion. NULL when the branch had no version yet.
+    source_head_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=True)
+    target_head_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    closed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # ── Relationships ──
+    # Two FKs point at branch, so each relationship must name its own FK column
+    # or SQLAlchemy raises AmbiguousForeignKeysError at mapper configuration.
+    project: Mapped["Project"] = relationship("Project")
+    source_branch: Mapped["Branch"] = relationship("Branch", foreign_keys=[source_branch_id])
+    target_branch: Mapped["Branch"] = relationship("Branch", foreign_keys=[target_branch_id])
+    # Same story for users: created_by and closed_by both point at users.id.
+    author: Mapped["User | None"] = relationship("User", foreign_keys=[created_by])
+    closer: Mapped["User | None"] = relationship("User", foreign_keys=[closed_by])
+    source_head_version: Mapped["Version | None"] = relationship("Version", foreign_keys=[source_head_version_id])
+    target_head_version: Mapped["Version | None"] = relationship("Version", foreign_keys=[target_head_version_id])
 
 
 class Blob(Base):
@@ -129,23 +176,6 @@ class Blob(Base):
     storage_uri: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     ref_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-
-
-class Track(Base):
-    __tablename__ = "track"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    version_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)  # e.g. Kick, Lead Synth
-    file_type: Mapped[str] = mapped_column(String(50), default=".json")
-    bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    key: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    duration: Mapped[int | None] = mapped_column(Integer, nullable=True)  # in seconds
-    storage_path: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=True)
-
-    # ── Relationships ──
-    version: Mapped["Version"] = relationship("Version", back_populates="tracks")
 
 
 # ── Social & Feed Models ──
