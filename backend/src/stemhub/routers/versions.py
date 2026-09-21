@@ -1,27 +1,34 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
+from stemhub.auth import get_current_user
 from stemhub.database import get_db
-from stemhub.models import Blob, Collaborator, Version, Branch, Project, User
+from stemhub.flp_mixer_snapshot import (
+    MixerSnapshotError,
+    diff_mixer_project_snapshots,
+    load_fl_studio_mixer_snapshot,
+)
+from stemhub.models import Blob, Branch, Project, Version, User
+from stemhub.routers._project_access import (
+    get_project_with_owner_access,
+    get_project_with_read_access,
+)
 from stemhub.schemas import (
     MixerDiffChange,
     MixerDiffResponse,
     MixerDiffSummary,
     OwnerSummary,
-    VersionCreate,
     VersionDiffHistoryEntry,
     VersionFromManifestCreate,
     VersionResponse,
     VersionWithAuthor,
 )
-from stemhub.auth import get_current_user
-from stemhub.flp_mixer_snapshot import MixerSnapshotError, diff_mixer_project_snapshots, load_fl_studio_mixer_snapshot
 from stemhub.storage import StorageError, StorageService, get_storage_service
 
 router = APIRouter(tags=["versions"])
@@ -45,34 +52,6 @@ def _extract_manifest_blob_shas(manifest: dict) -> set[str]:
             if isinstance(sha, str):
                 shas.add(sha)
     return shas
-
-
-async def _can_access_project(
-    *,
-    project_id: UUID,
-    current_user: User,
-    db: AsyncSession,
-) -> bool:
-    project_result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.is_deleted == False,
-        )
-    )
-    project = project_result.scalars().first()
-    if not project:
-        return False
-
-    if project.owner_id == current_user.id:
-        return True
-
-    collaborator_result = await db.execute(
-        select(Collaborator).where(
-            Collaborator.project_id == project_id,
-            Collaborator.user_id == current_user.id,
-        )
-    )
-    return collaborator_result.scalars().first() is not None
 
 
 async def _get_branch_with_access(
@@ -482,15 +461,16 @@ async def get_version(
             Version.id == version_id,
             Version.is_deleted == False,
             Branch.is_deleted == False,
-            Project.is_deleted == False
+            Project.is_deleted == False,
         )
     )
     row = result.first()
     if not row:
         raise HTTPException(status_code=404, detail="Version not found")
     version, project_id = row
-    if not await _can_access_project(project_id=project_id, current_user=current_user, db=db):
-        raise HTTPException(status_code=404, detail="Version not found")
+    await get_project_with_read_access(
+        project_id=project_id, current_user=current_user, db=db
+    )
     return version
 
 @router.delete("/versions/{version_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -499,22 +479,25 @@ async def delete_version(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Delete a version.
-    """
+    """Delete a version (owner only)."""
     result = await db.execute(
-        select(Version, Branch.project_id).join(Branch, Version.branch_id == Branch.id).join(Project, Branch.project_id == Project.id).where(
+        select(Version, Branch.project_id)
+        .join(Branch, Version.branch_id == Branch.id)
+        .join(Project, Branch.project_id == Project.id)
+        .where(
             Version.id == version_id,
-            Project.owner_id == current_user.id,
             Version.is_deleted == False,
             Branch.is_deleted == False,
-            Project.is_deleted == False
+            Project.is_deleted == False,
         )
     )
     row = result.first()
     if not row:
         raise HTTPException(status_code=404, detail="Version not found")
     version, project_id = row
+    await get_project_with_owner_access(
+        project_id=project_id, current_user=current_user, db=db
+    )
 
     # If this is a CAS version, decrement ref_count on each referenced blob.
     # Blobs whose ref_count drops to 0 will be reclaimed by the GC sweep after

@@ -1,53 +1,27 @@
 from datetime import datetime, timedelta, timezone
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, cast, Date
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from typing import List
 from uuid import UUID
 
+from fastapi import APIRouter, Depends
+from sqlalchemy import Date, cast, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
+from stemhub.auth import get_current_user
 from stemhub.database import get_db
-from stemhub.models import Version, Branch, Project, User, Collaborator
+from stemhub.models import Branch, User, Version
+from stemhub.routers._project_access import get_project_with_read_access
 from stemhub.schemas import (
     ActivityStatsResponse,
+    ContributorStats,
     DailyActivity,
     TopContributorsResponse,
-    ContributorStats,
 )
-from stemhub.auth import get_current_user
 
 router = APIRouter(tags=["stats"])
 
 ACTIVITY_WEEKS = 26
 ACTIVITY_DAYS = ACTIVITY_WEEKS * 7
-
-
-async def _check_project_access(
-    *,
-    project_id: UUID,
-    current_user: User,
-    db: AsyncSession,
-) -> Project:
-    """Verify the project exists and the user is the owner or a collaborator."""
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.is_deleted == False)
-    )
-    project = result.scalars().first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    if project.owner_id != current_user.id:
-        collab_result = await db.execute(
-            select(Collaborator).where(
-                Collaborator.project_id == project_id,
-                Collaborator.user_id == current_user.id,
-            )
-        )
-        if not collab_result.scalars().first():
-            raise HTTPException(status_code=403, detail="Access denied")
-
-    return project
 
 
 @router.get("/projects/{project_id}/stats/activity", response_model=ActivityStatsResponse)
@@ -60,7 +34,7 @@ async def get_activity_stats(
     Get contribution activity for the last 26 weeks.
     Returns daily commit counts, total commits, and total unique contributors.
     """
-    await _check_project_access(project_id=project_id, current_user=current_user, db=db)
+    await get_project_with_read_access(project_id=project_id, current_user=current_user, db=db)
 
     since = datetime.now(timezone.utc) - timedelta(days=ACTIVITY_DAYS)
 
@@ -137,7 +111,7 @@ async def get_top_contributors(
     """
     Get the top contributors for a project, ranked by number of commits.
     """
-    await _check_project_access(project_id=project_id, current_user=current_user, db=db)
+    await get_project_with_read_access(project_id=project_id, current_user=current_user, db=db)
 
     # Get all branch IDs for this project
     branch_result = await db.execute(
