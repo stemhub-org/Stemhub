@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, desc, func
@@ -51,7 +50,7 @@ async def get_explore_projects(
             category=p.category,
             tags=p.tags,
             like_count=p.like_count,
-            bpm=None,  # Note: bpm/key are stored on Track instances
+            bpm=None,
             key=None,
             created_at=p.created_at,
             owner={"id": p.owner.id, "username": p.owner.username}

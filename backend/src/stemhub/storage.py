@@ -91,22 +91,6 @@ def _delete_files_in_directory(directory: Path) -> bool:
 
 class StorageService(ABC):
     @abstractmethod
-    def store_version_artifact(
-        self,
-        *,
-        project_id: UUID,
-        branch_id: UUID,
-        version_id: UUID,
-        filename: str,
-        source: BinaryIO,
-    ) -> StoredArtifact:
-        raise NotImplementedError
-
-    @abstractmethod
-    def resolve_artifact_path(self, artifact_path: str) -> Path:
-        raise NotImplementedError
-
-    @abstractmethod
     def store_project_preview(
         self,
         *,
@@ -190,52 +174,6 @@ class GCSStorageService(StorageService):
 
         self._bucket = self._client.bucket(bucket_name)
 
-    def store_version_artifact(
-        self,
-        *,
-        project_id: UUID,
-        branch_id: UUID,
-        version_id: UUID,
-        filename: str,
-        source: BinaryIO,
-    ) -> StoredArtifact:
-        safe_filename = _safe_filename(filename, "snapshot.bin")
-        artifact_path = self._build_artifact_path(project_id, branch_id, version_id, safe_filename)
-
-        _rewind_if_possible(source)
-        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
-        try:
-            blob = self._bucket.blob(artifact_path)
-            with tmp_path.open("rb") as upload_source:
-                blob.upload_from_file(upload_source, size=size_bytes)
-        finally:
-            tmp_path.unlink(missing_ok=True)
-
-        return StoredArtifact(
-            path=self._to_reference_path(artifact_path),
-            size_bytes=size_bytes,
-            checksum_sha256=checksum_sha256,
-        )
-
-    def resolve_artifact_path(self, artifact_path: str) -> Path:
-        blob_path = self._to_blob_path(artifact_path)
-        blob = self._bucket.blob(blob_path)
-
-        try:
-            temp_handle, temp_path = tempfile.mkstemp(prefix="stemhub-artifact-")
-            os.close(temp_handle)
-            temp_file = Path(temp_path)
-            if not blob.exists():
-                raise StorageNotFoundError("Artifact file not found")
-            blob.download_to_filename(str(temp_file))
-            return temp_file
-        except StorageNotFoundError:
-            raise
-        except Exception as exc:
-            if "temp_file" in locals() and temp_file.exists():
-                temp_file.unlink()
-            raise StorageNotFoundError(str(exc)) from exc
-
     def store_project_preview(
         self,
         *,
@@ -245,7 +183,7 @@ class GCSStorageService(StorageService):
     ) -> StoredArtifact:
         safe_filename = _safe_filename(filename, "preview.wav")
         prefix = self._build_project_preview_prefix(project_id)
-        artifact_path = f"{prefix}/{safe_filename}"
+        object_path = f"{prefix}/{safe_filename}"
 
         for old_blob in self._client.list_blobs(self._bucket_name, prefix=f"{prefix}/"):
             old_blob.delete()
@@ -253,14 +191,14 @@ class GCSStorageService(StorageService):
         _rewind_if_possible(source)
         tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
         try:
-            blob = self._bucket.blob(artifact_path)
+            blob = self._bucket.blob(object_path)
             with tmp_path.open("rb") as upload_source:
                 blob.upload_from_file(upload_source, size=size_bytes)
         finally:
             tmp_path.unlink(missing_ok=True)
 
         return StoredArtifact(
-            path=self._to_reference_path(artifact_path),
+            path=self._to_reference_path(object_path),
             size_bytes=size_bytes,
             checksum_sha256=checksum_sha256,
         )
@@ -324,7 +262,24 @@ class GCSStorageService(StorageService):
         )
 
     def resolve_blob_path(self, storage_uri: str) -> Path:
-        return self.resolve_artifact_path(storage_uri)
+        blob_path = self._to_blob_path(storage_uri)
+        gcs_blob = self._bucket.blob(blob_path)
+
+        temp_file: Path | None = None
+        try:
+            temp_handle, temp_path = tempfile.mkstemp(prefix="stemhub-blob-")
+            os.close(temp_handle)
+            temp_file = Path(temp_path)
+            if not gcs_blob.exists():
+                raise StorageNotFoundError("Blob not found")
+            gcs_blob.download_to_filename(str(temp_file))
+            return temp_file
+        except StorageNotFoundError:
+            raise
+        except Exception as exc:
+            if temp_file is not None and temp_file.exists():
+                temp_file.unlink()
+            raise StorageNotFoundError(str(exc)) from exc
 
     def delete_blob(self, storage_uri: str) -> bool:
         blob_path = self._to_blob_path(storage_uri)
@@ -344,11 +299,6 @@ class GCSStorageService(StorageService):
             version="v4",
         )
 
-    def _build_artifact_path(self, project_id: UUID, branch_id: UUID, version_id: UUID, filename: str) -> str:
-        return (
-            f"projects/{project_id}/branches/{branch_id}/versions/{version_id}/snapshot/{filename}"
-        )
-
     def _build_blob_path(self, project_id: UUID, sha256: str) -> str:
         # Fan out by first 2 hex chars to keep any single "directory" small.
         return f"projects/{project_id}/blobs/{sha256[:2]}/{sha256}"
@@ -356,60 +306,20 @@ class GCSStorageService(StorageService):
     def _build_project_preview_prefix(self, project_id: UUID) -> str:
         return f"projects/{project_id}/preview"
 
-    def _to_reference_path(self, artifact_path: str) -> str:
-        return f"{self._GCS_SCHEME}{self._bucket_name}/{artifact_path}"
+    def _to_reference_path(self, object_path: str) -> str:
+        return f"{self._GCS_SCHEME}{self._bucket_name}/{object_path}"
 
-    def _to_blob_path(self, artifact_path: str) -> str:
+    def _to_blob_path(self, storage_uri: str) -> str:
         reference_prefix = f"{self._GCS_SCHEME}{self._bucket_name}/"
-        if artifact_path.startswith(reference_prefix):
-            return artifact_path[len(reference_prefix):]
-        return artifact_path
+        if storage_uri.startswith(reference_prefix):
+            return storage_uri[len(reference_prefix):]
+        return storage_uri
 
 
 class LocalFilesystemStorageService(StorageService):
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
         self.root.mkdir(parents=True, exist_ok=True)
-
-    def store_version_artifact(
-        self,
-        *,
-        project_id: UUID,
-        branch_id: UUID,
-        version_id: UUID,
-        filename: str,
-        source: BinaryIO,
-    ) -> StoredArtifact:
-        safe_filename = _safe_filename(filename, "snapshot.bin")
-        relative_path = (
-            Path("projects")/ str(project_id)
-            / "branches"/ str(branch_id)
-            / "versions"/ str(version_id)
-            / "snapshot"/ safe_filename
-        )
-        destination = self.root / relative_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-
-        _rewind_if_possible(source)
-        size_bytes, checksum_sha256 = _write_stream_and_hash(source, destination)
-
-        return StoredArtifact(
-            path=relative_path.as_posix(),
-            size_bytes=size_bytes,
-            checksum_sha256=checksum_sha256,
-        )
-
-    def resolve_artifact_path(self, artifact_path: str) -> Path:
-        candidate = (self.root / artifact_path).resolve()
-        try:
-            candidate.relative_to(self.root)
-        except ValueError as exc:
-            raise StorageNotFoundError("Artifact path is outside of the storage root") from exc
-
-        if not candidate.is_file():
-            raise StorageNotFoundError("Artifact file not found")
-
-        return candidate
 
     def store_project_preview(
         self,
@@ -491,7 +401,16 @@ class LocalFilesystemStorageService(StorageService):
         )
 
     def resolve_blob_path(self, storage_uri: str) -> Path:
-        return self.resolve_artifact_path(storage_uri)
+        candidate = (self.root / storage_uri).resolve()
+        try:
+            candidate.relative_to(self.root)
+        except ValueError as exc:
+            raise StorageNotFoundError("Blob path is outside of the storage root") from exc
+
+        if not candidate.is_file():
+            raise StorageNotFoundError("Blob not found")
+
+        return candidate
 
     def delete_blob(self, storage_uri: str) -> bool:
         candidate = (self.root / storage_uri).resolve()
