@@ -14,39 +14,32 @@ from stemhub.storage import (
 )
 
 
-def test_local_filesystem_storage_persists_artifact_with_expected_metadata(tmp_path) -> None:
+def test_local_filesystem_storage_persists_blob_with_content_addressed_path(tmp_path) -> None:
     storage = LocalFilesystemStorageService(tmp_path)
-    payload = b"demo snapshot payload"
+    payload = b"demo blob payload"
+    project_id = UUID("11111111-1111-1111-1111-111111111111")
 
-    stored = storage.store_version_artifact(
-        project_id="11111111-1111-1111-1111-111111111111",
-        branch_id="22222222-2222-2222-2222-222222222222",
-        version_id="33333333-3333-3333-3333-333333333333",
-        filename="../unsafe-demo.flp",
-        source=io.BytesIO(payload),
-    )
+    stored = storage.store_blob(project_id=project_id, source=io.BytesIO(payload))
 
-    expected_relative_path = (
-        "projects/11111111-1111-1111-1111-111111111111/"
-        "branches/22222222-2222-2222-2222-222222222222/"
-        "versions/33333333-3333-3333-3333-333333333333/"
-        "snapshot/unsafe-demo.flp"
-    )
+    expected_sha = hashlib.sha256(payload).hexdigest()
+    expected_relative_path = f"projects/{project_id}/blobs/{expected_sha[:2]}/{expected_sha}"
 
     assert stored.path == expected_relative_path
     assert stored.size_bytes == len(payload)
-    assert stored.checksum_sha256 == hashlib.sha256(payload).hexdigest()
-    assert storage.resolve_artifact_path(stored.path).read_bytes() == payload
+    assert stored.checksum_sha256 == expected_sha
+    assert storage.resolve_blob_path(stored.path).read_bytes() == payload
 
 
 def test_local_filesystem_storage_rejects_path_traversal(tmp_path) -> None:
     storage = LocalFilesystemStorageService(tmp_path)
 
     with pytest.raises(StorageNotFoundError):
-        storage.resolve_artifact_path("../outside.flp")
+        storage.resolve_blob_path("../outside.flp")
 
 
-def test_get_storage_service_defaults_to_localfs(tmp_path) -> None:
+def test_get_storage_service_defaults_to_localfs(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("STEMHUB_STORAGE_PROVIDER", raising=False)
+    monkeypatch.setenv("STEMHUB_ARTIFACTS_ROOT", str(tmp_path / "artifacts"))
     storage = get_storage_service()
     assert isinstance(storage, LocalFilesystemStorageService)
     assert storage.root.name == "artifacts"
@@ -144,18 +137,16 @@ def test_gcs_storage_service_roundtrip(monkeypatch) -> None:
     storage = get_storage_service()
     assert isinstance(storage, GCSStorageService)
 
-    payload = b"demo gcs snapshot"
-    artifact = storage.store_version_artifact(
-        project_id=UUID("11111111-1111-1111-1111-111111111111"),
-        branch_id=UUID("22222222-2222-2222-2222-222222222222"),
-        version_id=UUID("33333333-3333-3333-3333-333333333333"),
-        filename="demo.flp",
-        source=io.BytesIO(payload),
+    payload = b"demo gcs blob"
+    project_id = UUID("11111111-1111-1111-1111-111111111111")
+    stored = storage.store_blob(project_id=project_id, source=io.BytesIO(payload))
+
+    expected_sha = hashlib.sha256(payload).hexdigest()
+    assert stored.path.startswith(
+        f"gcs://test-bucket/projects/{project_id}/blobs/{expected_sha[:2]}/{expected_sha}"
     )
+    assert stored.size_bytes == len(payload)
 
-    assert artifact.path.startswith("gcs://test-bucket/projects/11111111-1111-1111-1111-111111111111/")
-    assert artifact.size_bytes == len(payload)
-
-    downloaded = storage.resolve_artifact_path(artifact.path)
+    downloaded = storage.resolve_blob_path(stored.path)
     assert downloaded.read_bytes() == payload
     downloaded.unlink()
