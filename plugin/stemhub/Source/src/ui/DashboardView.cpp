@@ -7,15 +7,27 @@ namespace
 namespace theme = stemhub::plugin::theme;
 using Theme = theme::PluginTheme;
 
+constexpr int kTileHeight = 176;
+constexpr int kTileGap = 12;
+constexpr int kTilePadding = 16;
+constexpr auto kTileSpanProperty = "stemhubSpan";
+
+// History timeline: nodes sit on a rule in a fixed gutter left of every row.
+constexpr int kTimelineGutter = 28;
+constexpr int kTimelineRuleX = 9;
+constexpr int kVersionRowHeight = 50;
+
 void invokeIfBound(const std::function<void()>& callback)
 {
     if (callback != nullptr)
         callback();
 }
 
-void applyButtonAvailability(juce::Component& button, bool isAvailable)
+// Copies the callback before running it: the handler may rebuild (and delete) the component that owns it.
+void invokeDetached(const std::function<void()>& callback)
 {
-    button.setEnabled(isAvailable);
+    if (auto detached = callback)
+        detached();
 }
 
 void setMappedComboItems(juce::ComboBox& combo,
@@ -85,36 +97,6 @@ juce::String makeSlug(const juce::String& text)
     return slug.trimCharactersAtStart("-").trimCharactersAtEnd("-");
 }
 
-juce::String shortenPath(const juce::String& path, int maxLength = 42)
-{
-    if (path.length() <= maxLength)
-        return path;
-
-    const auto tailLength = juce::jmax(12, maxLength / 2);
-    const auto headLength = juce::jmax(10, maxLength - tailLength - 3);
-    return path.substring(0, headLength) + "..." + path.substring(path.length() - tailLength);
-}
-
-juce::String extractVersionShortId(const juce::String& label)
-{
-    const auto separator = label.indexOf(" - ");
-    return separator > 0 ? label.substring(0, separator) : label.substring(0, juce::jmin(8, label.length()));
-}
-
-juce::String extractVersionTitle(const juce::String& label)
-{
-    const auto separator = label.indexOf(" - ");
-    const auto suffix = label.lastIndexOf(" (");
-
-    if (separator < 0)
-        return label;
-
-    if (suffix > separator)
-        return label.substring(separator + 3, suffix);
-
-    return label.substring(separator + 3);
-}
-
 bool isGenericSnapshotTitle(const juce::String& title)
 {
     const auto trimmed = title.trim();
@@ -123,19 +105,13 @@ bool isGenericSnapshotTitle(const juce::String& title)
         || trimmed.equalsIgnoreCase("no save note");
 }
 
-juce::String extractVersionTimestamp(const juce::String& label)
+juce::String displayTitleFor(const VersionListItem& version)
 {
-    const auto suffix = label.lastIndexOf(" (");
-    if (suffix < 0 || !label.endsWithChar(')'))
-        return {};
-
-    return label.substring(suffix + 2, label.length() - 1);
+    return isGenericSnapshotTitle(version.message) ? juce::String("Untitled snapshot") : version.message.trim();
 }
 
-juce::String makeStatusChipText(theme::MessageStatus status, const juce::String& message)
+juce::String makeStatusChipText(theme::MessageStatus status)
 {
-    juce::ignoreUnused(message);
-
     switch (status)
     {
         case theme::MessageStatus::loading:
@@ -159,138 +135,197 @@ juce::String metaSeparator()
     return "  " + theme::middleDot() + "  ";
 }
 
-juce::String formatIndex(int index)
+juce::String twoDigits(int value)
 {
-    return juce::String(index + 1).paddedLeft('0', 2);
+    return juce::String(value).paddedLeft('0', 2);
 }
 
-void styleSectionLabel(juce::Label& label, const juce::String& text, juce::Colour colour = Theme::kForegroundSubtle)
+bool hasTime(const juce::Time& time)
 {
-    theme::styleMetaLabel(label, text, colour);
+    return time.toMilliseconds() > 0;
 }
 
-void styleBodyLabel(juce::Label& label, const juce::String& text, bool muted = false, float size = 12.5f)
+juce::String formatRelativeTime(const juce::Time& time)
 {
-    label.setText(text, juce::dontSendNotification);
-    label.setFont(theme::bodyFont(size));
-    label.setColour(juce::Label::textColourId, muted ? Theme::kForegroundSubtle : Theme::kForeground);
-    label.setJustificationType(juce::Justification::centredLeft);
-    label.setMinimumHorizontalScale(1.0f);
-    label.setBorderSize({});
+    if (!hasTime(time))
+        return {};
+
+    const auto seconds = (juce::Time::getCurrentTime() - time).inSeconds();
+    if (seconds < 60.0)
+        return "Just now";
+    if (seconds < 3600.0)
+        return juce::String(static_cast<int>(seconds / 60.0)) + " min ago";
+    if (seconds < 86400.0)
+        return juce::String(static_cast<int>(seconds / 3600.0)) + " h ago";
+    if (seconds < 2.0 * 86400.0)
+        return "Yesterday";
+    if (seconds < 7.0 * 86400.0)
+        return juce::String(static_cast<int>(seconds / 86400.0)) + " days ago";
+
+    return time.formatted("%d %b %Y");
 }
 
-void styleFilterButton(juce::TextButton& button, bool selected)
+juce::String formatTimestamp(const juce::Time& time, bool withYear)
 {
-    theme::styleSegmentButton(button, selected);
+    if (!hasTime(time))
+        return "Unknown time";
+
+    return time.formatted(withYear ? "%a %d %b %Y, %H:%M" : "%a %d %b, %H:%M");
 }
 
-// Copies the callback before running it: the handler may rebuild (and delete) the card that owns it.
-void invokeDetached(const std::function<void()>& callback)
-{
-    if (auto detached = callback)
-        detached();
-}
+//==============================================================================
+// Projects grid
 
-struct ProjectCardData
-{
-    juce::String name;
-    juce::String path;
-    juce::String badge;
-    int index { 0 };
-    bool selected { false };
-    bool enabled { true };
-};
-
-juce::String normalizeProjectCardLine(const juce::String& value)
-{
-    auto normalized = value.toLowerCase().trim();
-    normalized = normalized.upToLastOccurrenceOf(".", false, false);
-    normalized = normalized.replaceCharacters("_-", "  ");
-    normalized = normalized.retainCharacters("abcdefghijklmnopqrstuvwxyz0123456789 ");
-
-    while (normalized.contains("  "))
-        normalized = normalized.replace("  ", " ");
-
-    return normalized.trim();
-}
-
-class ProjectCardComponent final : public juce::Component
+class NewProjectTileComponent final : public juce::Component
 {
 public:
-    std::function<void()> onSelect;
+    NewProjectTileComponent()
+    {
+        setInterceptsMouseClicks(false, true);
+        setTitle("New project");
+    }
+
+    void setState(bool linkedFile, const juce::String& filePath)
+    {
+        hasFile = linkedFile;
+        path = filePath;
+        repaint();
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        const auto bounds = getLocalBounds();
+        g.setColour(Theme::kPaper);
+        g.fillRect(bounds);
+
+        auto content = bounds.reduced(kTilePadding);
+        auto header = content.removeFromTop(18);
+        g.setColour(Theme::kAccent);
+        g.fillRect(header.removeFromLeft(8).withSizeKeepingCentre(8, 8));
+        header.removeFromLeft(8);
+        theme::paintMetaText(g, "New project", header, Theme::kInk);
+
+        content.removeFromBottom(16 + 8 + 34); // button + link/meta row, laid out by the view
+        content.removeFromTop(12);
+
+        if (hasFile)
+        {
+            const juce::File file(path);
+            theme::paintMetaText(g, "From", content.removeFromTop(14), Theme::kInkSubtle, juce::Justification::centredLeft, 9.5f);
+            content.removeFromTop(2);
+            g.setColour(Theme::kInk);
+            g.setFont(theme::headingFont(14.5f));
+            g.drawFittedText(file.getFileName(), content.removeFromTop(20), juce::Justification::centredLeft, 1, 1.0f);
+            g.setColour(Theme::kInkSubtle);
+            g.setFont(theme::bodyFont(11.5f));
+            g.drawFittedText(file.getParentDirectory().getFullPathName(), content.removeFromTop(16),
+                             juce::Justification::centredLeft, 1, 1.0f);
+        }
+        else
+        {
+            g.setColour(Theme::kInkSubtle);
+            g.setFont(theme::bodyFont(12.5f));
+            g.drawFittedText("Turn the DAW project you are working on into a StemHub project.",
+                             content, juce::Justification::topLeft, 3, 1.0f);
+
+            const auto metaRow = bounds.reduced(kTilePadding).removeFromBottom(16);
+            theme::paintMetaText(g, ".flp  " + theme::middleDot() + "  .als", metaRow, Theme::kInkSubtle,
+                                 juce::Justification::centredLeft, 9.5f);
+        }
+    }
+
+private:
+    bool hasFile { false };
+    juce::String path;
+};
+
+class ProjectTileComponent final : public juce::Component
+{
+public:
     std::function<void()> onOpen;
 
-    ProjectCardComponent()
+    ProjectTileComponent()
     {
         setMouseCursor(juce::MouseCursor::PointingHandCursor);
     }
 
-    void setData(ProjectCardData nextData)
+    void setData(ProjectListItem nextProject, int nextIndex, bool isSelected)
     {
-        data = std::move(nextData);
-        setTitle(data.name);
+        project = std::move(nextProject);
+        index = nextIndex;
+        selected = isSelected;
+        setTitle(project.name);
+        setDescription(project.description);
         repaint();
     }
+
+    void setSelected(bool isSelected)
+    {
+        selected = isSelected;
+        repaint();
+    }
+
+    [[nodiscard]] const juce::String& getProjectId() const noexcept { return project.id; }
 
     void paint(juce::Graphics& g) override
     {
         const auto hovered = isMouseOver(true);
         const auto bounds = getLocalBounds();
+        const auto foreground = selected ? Theme::kInk : Theme::kForeground;
+        const auto subtle = selected ? Theme::kInk.withAlpha(0.66f) : Theme::kForegroundSubtle;
 
-        g.setColour(hovered ? Theme::kSurfaceElevated : Theme::kSurface);
+        g.setColour(selected ? Theme::kAccent : (hovered ? Theme::kSurfaceElevated : Theme::kSurface));
         g.fillRect(bounds);
-        g.setColour(data.selected ? Theme::kAccent
-                                  : (hovered ? Theme::kForeground.withAlpha(0.32f) : Theme::kSurfaceBorder));
-        g.drawRect(bounds, 1);
-
-        if (data.selected)
+        if (!selected)
         {
-            g.setColour(Theme::kAccent);
-            g.fillRect(bounds.withWidth(3));
+            g.setColour(hovered ? Theme::kForeground.withAlpha(0.35f) : Theme::kSurfaceBorder);
+            g.drawRect(bounds, 1);
         }
 
-        auto content = bounds.reduced(18, 0);
+        auto content = bounds.reduced(kTilePadding);
 
-        g.setColour(data.selected || hovered ? Theme::kAccent : Theme::kForegroundTertiary);
-        g.setFont(theme::labelFont(11.0f));
-        g.drawText(formatIndex(data.index), content.removeFromLeft(36), juce::Justification::centredLeft, false);
+        auto header = content.removeFromTop(18);
+        theme::paintMetaText(g, twoDigits(index + 1), header, subtle);
+        const auto visibility = juce::String(project.isPublic ? "Public" : "Private");
+        const auto tagArea = header.removeFromRight(static_cast<int>(theme::tagWidth(visibility))).toFloat();
+        const auto tagColour = selected ? Theme::kInk : (project.isPublic ? Theme::kAccent : Theme::kForegroundSubtle);
+        theme::paintTag(g, visibility, tagArea, tagColour.withMultipliedAlpha(project.isPublic || selected ? 1.0f : 0.6f),
+                        tagColour, true);
 
-        g.setColour(data.selected || hovered ? Theme::kAccent : Theme::kForegroundSubtle);
-        g.setFont(theme::headingFont(17.0f));
-        g.drawText(theme::arrowRight(), content.removeFromRight(20), juce::Justification::centredRight, false);
-        content.removeFromRight(16);
+        content.removeFromTop(14);
+        theme::paintSequencerArt(g, content.removeFromTop(38).toFloat(), project.id + project.name, 3, 16,
+                                 selected ? Theme::kInk.withAlpha(0.28f)
+                                          : Theme::kForeground.withAlpha(hovered ? 0.36f : 0.2f),
+                                 selected ? Theme::kInk : Theme::kAccent);
 
-        const auto badgeArea = content.removeFromRight(86).withSizeKeepingCentre(86, 22).toFloat();
-        if (data.enabled)
-            theme::paintTag(g, data.badge, badgeArea, Theme::kAccent, Theme::kAccent, true);
-        else
-            theme::paintTag(g, data.badge, badgeArea, Theme::kForegroundTertiary, Theme::kForegroundSubtle, true);
-        content.removeFromRight(20);
-
-        if (content.getWidth() > 360)
+        auto metaRow = content.removeFromBottom(16);
+        if (hovered || selected)
         {
-            const auto patternArea = content.removeFromRight(112).withSizeKeepingCentre(112, 22).toFloat();
-            theme::paintBlockPattern(g, patternArea, data.name, 12,
-                                     Theme::kForeground.withAlpha(hovered ? 0.34f : 0.16f),
-                                     Theme::kAccent.withAlpha(hovered ? 1.0f : 0.5f));
-            content.removeFromRight(20);
+            g.setColour(selected ? Theme::kInk : Theme::kAccent);
+            g.setFont(theme::headingFont(15.0f));
+            g.drawText(theme::arrowRight(), metaRow.removeFromRight(18), juce::Justification::centredRight, false);
+            metaRow.removeFromRight(6);
         }
 
-        const auto normalizedName = normalizeProjectCardLine(data.name);
-        const auto normalizedPath = normalizeProjectCardLine(data.path);
-        const auto showPath = data.path.isNotEmpty() && normalizedPath.isNotEmpty() && normalizedPath != normalizedName;
+        const auto category = project.category.trim().isNotEmpty() ? project.category.trim() : juce::String("Project");
+        const auto categoryWidth = juce::jmin(metaRow.getWidth(),
+                                              static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(
+                                                  theme::labelFont(9.5f), category.toUpperCase()))));
+        theme::paintMetaText(g, category, metaRow.removeFromLeft(categoryWidth), subtle, juce::Justification::centredLeft, 9.5f);
 
-        auto textArea = content.withSizeKeepingCentre(content.getWidth(), showPath ? 38 : 22);
-        g.setColour(Theme::kForeground);
-        g.setFont(theme::headingFont(15.5f));
-        g.drawText(data.name, textArea.removeFromTop(22), juce::Justification::centredLeft, true);
-
-        if (showPath)
+        if (project.description.trim().isNotEmpty() && metaRow.getWidth() > 30)
         {
-            g.setColour(Theme::kForegroundSubtle);
+            metaRow.removeFromLeft(4);
+            g.setColour(subtle);
             g.setFont(theme::bodyFont(11.5f));
-            g.drawText(shortenPath(data.path), textArea, juce::Justification::centredLeft, true);
+            g.drawText(theme::middleDot() + "  " + project.description.trim(), metaRow, juce::Justification::centredLeft, true);
         }
+
+        content.removeFromBottom(8);
+        juce::StringArray words;
+        words.addTokens(project.name.toUpperCase(), " ", "");
+        const auto fontSize = theme::fitDisplayFontSize(words, static_cast<float>(content.getWidth()), 17.0f, 12.0f);
+        theme::paintDisplayText(g, project.name.toUpperCase(), content, fontSize, foreground, 2, true);
     }
 
     void mouseEnter(const juce::MouseEvent&) override { repaint(); }
@@ -299,105 +334,167 @@ public:
     void mouseUp(const juce::MouseEvent& event) override
     {
         if (event.mouseWasClicked())
-            invokeDetached(onSelect);
-    }
-
-    void mouseDoubleClick(const juce::MouseEvent&) override
-    {
-        juce::ignoreUnused(onOpen);
+            invokeDetached(onOpen);
     }
 
 private:
-    ProjectCardData data;
-};
-
-struct VersionCardData
-{
-    juce::String title;
-    juce::String meta;
-    juce::String shortId;
+    ProjectListItem project;
     int index { 0 };
     bool selected { false };
-    bool placeholder { false };
 };
 
-class VersionCardComponent final : public juce::Component
+// Loading skeletons and empty states share the grid so the layout never jumps.
+class PlaceholderTileComponent final : public juce::Component
 {
 public:
-    std::function<void()> onSelect;
-
-    void setData(VersionCardData nextData)
+    PlaceholderTileComponent(juce::String titleText, juce::String messageText, juce::String patternSeed)
+        : title(std::move(titleText)), message(std::move(messageText)), seed(std::move(patternSeed))
     {
-        data = std::move(nextData);
-        setTitle(data.title);
-        setMouseCursor(data.placeholder ? juce::MouseCursor::NormalCursor : juce::MouseCursor::PointingHandCursor);
-        repaint();
+        setInterceptsMouseClicks(false, false);
     }
 
     void paint(juce::Graphics& g) override
     {
         const auto bounds = getLocalBounds();
+        g.setColour(Theme::kSurfaceBorder);
+        g.drawRect(bounds, 1);
+
+        auto content = bounds.reduced(kTilePadding);
+        content.removeFromTop(18 + 14);
+        theme::paintSequencerArt(g, content.removeFromTop(38).withWidth(juce::jmin(content.getWidth(), 184)).toFloat(),
+                                 seed, 3, 16, Theme::kForeground.withAlpha(0.08f), Theme::kForeground.withAlpha(0.16f));
+
+        if (title.isEmpty())
+            return;
+
+        auto text = content.removeFromBottom(58);
+        theme::paintDisplayText(g, title, text.removeFromTop(22), 17.0f, Theme::kForeground, 1);
+        text.removeFromTop(6);
+        g.setColour(Theme::kForegroundSubtle);
+        g.setFont(theme::bodyFont(12.0f));
+        g.drawFittedText(message, text, juce::Justification::topLeft, 2, 1.0f);
+    }
+
+private:
+    juce::String title;
+    juce::String message;
+    juce::String seed;
+};
+
+//==============================================================================
+// Session history timeline
+
+struct VersionRowData
+{
+    VersionListItem version;
+    int number { 0 };
+    bool selected { false };
+    bool isLast { false };
+    bool placeholder { false };
+};
+
+class VersionRowComponent final : public juce::Component
+{
+public:
+    std::function<void()> onSelect;
+
+    void setData(VersionRowData nextData)
+    {
+        data = std::move(nextData);
+        setTitle(data.placeholder ? juce::String("No snapshots yet") : displayTitleFor(data.version));
+        setMouseCursor(data.placeholder ? juce::MouseCursor::NormalCursor : juce::MouseCursor::PointingHandCursor);
+        repaint();
+    }
+
+    void setSelected(bool isSelected)
+    {
+        data.selected = isSelected;
+        repaint();
+    }
+
+    [[nodiscard]] const juce::String& getVersionId() const noexcept { return data.version.id; }
+
+    void paint(juce::Graphics& g) override
+    {
+        const auto bounds = getLocalBounds();
         const auto hovered = !data.placeholder && isMouseOver(true);
-        const auto ink = data.selected;
+        const auto centreY = static_cast<float>(bounds.getCentreY());
+        auto block = bounds.withTrimmedLeft(kTimelineGutter - 6);
 
         if (data.selected)
         {
             g.setColour(Theme::kAccent);
-            g.fillRect(bounds);
+            g.fillRect(block);
+        }
+        else if (hovered)
+        {
+            g.setColour(Theme::kSurface);
+            g.fillRect(block);
+        }
+
+        g.setColour(Theme::kSurfaceBorder);
+        g.fillRect(static_cast<float>(kTimelineRuleX), 0.0f, 1.0f,
+                   data.isLast ? centreY : static_cast<float>(bounds.getHeight()));
+
+        const juce::Rectangle<float> node { static_cast<float>(kTimelineRuleX) + 0.5f - 5.0f, centreY - 5.0f, 10.0f, 10.0f };
+        if (data.placeholder)
+        {
+            g.setColour(Theme::kBackground);
+            g.fillRect(node);
+            g.setColour(Theme::kForegroundTertiary);
+            g.drawRect(node, 1.0f);
+        }
+        else if (data.version.isOpenInDaw)
+        {
+            g.setColour(Theme::kAccent);
+            g.fillRect(node);
         }
         else
         {
-            if (hovered)
-            {
-                g.setColour(Theme::kSurface);
-                g.fillRect(bounds);
-            }
-
-            g.setColour(Theme::kBorderSubtle);
-            g.fillRect(bounds.withTop(bounds.getBottom() - 1));
+            g.setColour(data.selected ? Theme::kForeground : Theme::kBackground);
+            g.fillRect(node);
+            g.setColour(Theme::kForeground.withAlpha(data.selected ? 1.0f : 0.45f));
+            g.drawRect(node, 1.0f);
         }
 
-        auto content = bounds.reduced(16, 0);
+        const auto ink = data.selected;
+        auto content = block.reduced(12, 0);
 
         if (data.placeholder)
         {
-            theme::paintBlockPattern(g, content.removeFromLeft(96).withSizeKeepingCentre(96, 18).toFloat(),
-                                     "empty-history", 10, Theme::kForeground.withAlpha(0.12f),
-                                     Theme::kForeground.withAlpha(0.24f));
-            content.removeFromLeft(18);
+            auto text = content.withSizeKeepingCentre(content.getWidth(), 36);
+            g.setColour(Theme::kForegroundSubtle);
+            g.setFont(theme::headingFont(13.5f));
+            g.drawText("No snapshots yet", text.removeFromTop(20), juce::Justification::centredLeft, true);
+            g.setColour(Theme::kForegroundTertiary);
+            g.setFont(theme::bodyFont(11.5f));
+            g.drawText("Your first save starts this timeline.", text, juce::Justification::centredLeft, true);
+            return;
         }
-        else
+
+        const auto relative = formatRelativeTime(data.version.createdAt);
+        theme::paintMetaText(g, relative, content.removeFromRight(84), ink ? Theme::kInk.withAlpha(0.7f) : Theme::kForegroundSubtle,
+                             juce::Justification::centredRight, 9.5f);
+
+        if (data.version.isOpenInDaw)
         {
-            g.setColour(ink ? Theme::kInk : (hovered ? Theme::kAccent : Theme::kForegroundTertiary));
-            g.setFont(theme::labelFont(11.0f));
-            g.drawText(formatIndex(data.index), content.removeFromLeft(36), juce::Justification::centredLeft, false);
-
-            if (data.shortId.isNotEmpty())
-            {
-                g.setColour(ink ? Theme::kInk.withAlpha(0.7f) : Theme::kForegroundTertiary);
-                g.setFont(theme::monoFont(11.0f));
-                g.drawText(data.shortId, content.removeFromRight(72), juce::Justification::centredRight, true);
-                content.removeFromRight(16);
-            }
-
-            if (content.getWidth() > 380)
-            {
-                theme::paintBlockPattern(g, content.removeFromRight(92).withSizeKeepingCentre(92, 18).toFloat(),
-                                         data.shortId + data.title, 10,
-                                         ink ? Theme::kInk.withAlpha(0.28f) : Theme::kForeground.withAlpha(hovered ? 0.3f : 0.14f),
-                                         ink ? Theme::kInk : Theme::kAccent.withAlpha(hovered ? 1.0f : 0.55f));
-                content.removeFromRight(20);
-            }
+            const auto label = juce::String("In DAW");
+            const auto width = static_cast<int>(theme::tagWidth(label));
+            content.removeFromRight(10);
+            const auto tagArea = content.removeFromRight(width).withSizeKeepingCentre(width, 18).toFloat();
+            theme::paintTag(g, label, tagArea, ink ? Theme::kInk : Theme::kAccent, ink ? Theme::kInk : Theme::kAccent, true);
         }
+        content.removeFromRight(12);
 
-        auto textArea = content.withSizeKeepingCentre(content.getWidth(), 36);
+        auto text = content.withSizeKeepingCentre(content.getWidth(), 36);
         g.setColour(ink ? Theme::kInk : Theme::kForeground);
-        g.setFont(theme::headingFont(14.0f));
-        g.drawText(data.title, textArea.removeFromTop(20), juce::Justification::centredLeft, true);
+        g.setFont(theme::headingFont(13.5f));
+        g.drawText(displayTitleFor(data.version), text.removeFromTop(20), juce::Justification::centredLeft, true);
 
-        g.setColour(ink ? Theme::kInk.withAlpha(0.72f) : Theme::kForegroundSubtle);
+        g.setColour(ink ? Theme::kInk.withAlpha(0.7f) : Theme::kForegroundSubtle);
         g.setFont(theme::bodyFont(11.5f));
-        g.drawText(data.meta, textArea, juce::Justification::centredLeft, true);
+        g.drawText("V" + twoDigits(data.number) + metaSeparator() + formatTimestamp(data.version.createdAt, false),
+                   text, juce::Justification::centredLeft, true);
     }
 
     void mouseEnter(const juce::MouseEvent&) override { repaint(); }
@@ -405,388 +502,400 @@ public:
 
     void mouseUp(const juce::MouseEvent& event) override
     {
-        if (event.mouseWasClicked())
+        if (!data.placeholder && event.mouseWasClicked())
             invokeDetached(onSelect);
     }
 
 private:
-    VersionCardData data;
+    VersionRowData data;
 };
 }
 
+//==============================================================================
 ProjectSelectionView::ProjectSelectionView()
 {
     addAndMakeVisible(titleLabel);
-    titleLabel.setText("YOUR PROJECTS.", juce::dontSendNotification);
-    titleLabel.setFont(theme::displayFont(34.0f));
+    titleLabel.setText("PROJECTS", juce::dontSendNotification);
+    titleLabel.setFont(theme::displayFont(21.0f));
     titleLabel.setColour(juce::Label::textColourId, Theme::kForeground);
-    titleLabel.setJustificationType(juce::Justification::bottomLeft);
+    titleLabel.setJustificationType(juce::Justification::centredLeft);
     titleLabel.setMinimumHorizontalScale(1.0f);
     titleLabel.setBorderSize({});
 
-    addAndMakeVisible(subtitleLabel);
-    styleBodyLabel(subtitleLabel, "Pick up a session where you left it, or start one from a DAW file.", true, 13.0f);
+    addAndMakeVisible(accountLabel);
+    theme::styleMetaLabel(accountLabel, {}, Theme::kForegroundSubtle);
+    accountLabel.setJustificationType(juce::Justification::centredRight);
 
     addAndMakeVisible(statusLabel);
+    theme::makeInlineStatus(statusLabel);
     theme::styleStatusLabel(statusLabel, {}, theme::MessageStatus::neutral);
     statusLabel.setVisible(false);
 
-    addAndMakeVisible(projectFileLabel);
-    styleBodyLabel(projectFileLabel, "Choose a DAW project file to create new projects.", false, 12.5f);
-    projectFileLabel.setFont(theme::mediumFont(12.5f));
-
     addAndMakeVisible(searchInput);
     theme::styleTextInput(searchInput, "Search projects");
-    searchInput.onTextChange = [this]
-    {
-        rebuildProjectCards();
-        resized();
-    };
+    searchInput.onTextChange = [this] { rebuildProjectTiles(); };
+    searchInput.onEscapeKey = [this] { searchInput.clear(); rebuildProjectTiles(); };
 
-    addAndMakeVisible(filterAllButton);
-    filterAllButton.onClick = [this]
+    const auto bindFilter = [this](juce::TextButton& button, ProjectFilter filter)
     {
-        activeProjectFilter = ProjectFilter::All;
-        updateProjectFilterButtons();
-        rebuildProjectCards();
+        addAndMakeVisible(button);
+        button.onClick = [this, filter]
+        {
+            activeProjectFilter = filter;
+            updateProjectFilterButtons();
+            rebuildProjectTiles();
+        };
     };
-
-    addAndMakeVisible(filterLocalButton);
-    filterLocalButton.onClick = [this]
-    {
-        activeProjectFilter = ProjectFilter::Local;
-        updateProjectFilterButtons();
-        rebuildProjectCards();
-    };
-
-    addAndMakeVisible(filterCloudButton);
-    filterCloudButton.onClick = [this]
-    {
-        activeProjectFilter = ProjectFilter::Cloud;
-        updateProjectFilterButtons();
-        rebuildProjectCards();
-    };
-    filterLocalButton.setConnectedEdges(juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);
-    filterCloudButton.setConnectedEdges(juce::Button::ConnectedOnLeft);
-    filterAllButton.setConnectedEdges(juce::Button::ConnectedOnRight);
+    bindFilter(filterAllButton, ProjectFilter::All);
+    bindFilter(filterPrivateButton, ProjectFilter::Private);
+    bindFilter(filterPublicButton, ProjectFilter::Public);
     updateProjectFilterButtons();
 
-    addAndMakeVisible(emptyStateTitle);
-    emptyStateTitle.setText("NOTHING HERE YET.", juce::dontSendNotification);
-    emptyStateTitle.setFont(theme::displayFont(20.0f));
-    emptyStateTitle.setColour(juce::Label::textColourId, Theme::kForeground);
-    emptyStateTitle.setJustificationType(juce::Justification::centred);
-    emptyStateTitle.setMinimumHorizontalScale(1.0f);
-    emptyStateTitle.setVisible(false);
+    addAndMakeVisible(projectGridViewport);
+    projectGridViewport.setViewedComponent(&projectGridContent, false);
+    projectGridViewport.setScrollBarsShown(true, false);
+    projectGridViewport.setScrollBarThickness(8);
 
-    addAndMakeVisible(emptyStateSubtle);
-    emptyStateSubtle.setText("Search returned nothing, or your account has no linked projects yet.", juce::dontSendNotification);
-    emptyStateSubtle.setFont(theme::bodyFont(12.5f));
-    emptyStateSubtle.setColour(juce::Label::textColourId, Theme::kForegroundSubtle);
-    emptyStateSubtle.setJustificationType(juce::Justification::centredTop);
-    emptyStateSubtle.setMinimumHorizontalScale(1.0f);
-    emptyStateSubtle.setVisible(false);
+    // The "new project" controls live inside the first grid tile, so they scroll with it.
+    projectGridContent.addAndMakeVisible(chooseProjectFileButton);
+    chooseProjectFileButton.onClick = [this] { invokeIfBound(onChooseProjectFile); };
 
-    addAndMakeVisible(projectComboBox);
-    theme::styleComboBox(projectComboBox);
-    projectComboBox.setVisible(false);
-
-    addAndMakeVisible(projectListViewport);
-    projectListViewport.setViewedComponent(&projectListContent, false);
-    projectListViewport.setScrollBarsShown(true, false);
-    projectListViewport.setScrollBarThickness(8);
-
-    addAndMakeVisible(chooseProjectFileButton);
-    chooseProjectFileButton.setButtonText("Choose file");
-    theme::styleSecondaryButton(chooseProjectFileButton);
-    chooseProjectFileButton.onClick = [this]
-    {
-        invokeIfBound(onChooseProjectFile);
-    };
-
-    addAndMakeVisible(openProjectButton);
-    openProjectButton.setVisible(false);
-    openProjectButton.onClick = [this]
-    {
-        invokeIfBound(onOpenProject);
-    };
-
-    addAndMakeVisible(createProjectButton);
-    createProjectButton.setButtonText("New project  +");
-    theme::stylePrimaryButton(createProjectButton);
-    createProjectButton.setTooltip("Choose a DAW project file first, then create a StemHub project from it.");
-    createProjectButton.onClick = [this]
-    {
-        invokeIfBound(onCreateProject);
-    };
+    projectGridContent.addAndMakeVisible(createProjectButton);
+    createProjectButton.onClick = [this] { invokeIfBound(onCreateProject); };
 
     addAndMakeVisible(signOutButton);
     signOutButton.setButtonText("Sign out");
     theme::styleGhostButton(signOutButton);
-    signOutButton.onClick = [this]
-    {
-        invokeIfBound(onSignOut);
-    };
+    signOutButton.onClick = [this] { invokeIfBound(onSignOut); };
+
+    updateNewProjectControls();
+    rebuildProjectTiles();
 }
 
 void ProjectSelectionView::setMessage(const juce::String& message, stemhub::plugin::theme::MessageStatus status)
 {
     theme::styleStatusLabel(statusLabel, message, status);
+    const auto isProblem = status == theme::MessageStatus::warning || status == theme::MessageStatus::error;
+    statusLabel.setColour(juce::Label::textColourId, isProblem ? Theme::kForeground : Theme::kForegroundSubtle);
+    statusLabel.setFont(theme::bodyFont(12.0f));
     statusLabel.setTooltip(message);
     statusLabel.setVisible(message.isNotEmpty());
+
+    const auto wasLoading = isLoadingProjects;
+    isLoadingProjects = status == theme::MessageStatus::loading;
+    if (wasLoading != isLoadingProjects)
+        rebuildProjectTiles();
+
     resized();
 }
 
-void ProjectSelectionView::setProjects(const std::vector<juce::String>& projectNames,
-                                       const std::vector<juce::String>& projectIds,
-                                       const juce::String& selectedProjectId)
+void ProjectSelectionView::setProjects(const std::vector<ProjectListItem>& projects, const juce::String& projectId)
 {
-    allProjects.clear();
-    allProjects.reserve(std::min(projectNames.size(), projectIds.size()));
-    for (size_t i = 0; i < projectNames.size() && i < projectIds.size(); ++i)
-        allProjects.emplace_back(projectNames[i], projectIds[i]);
+    allProjects = projects;
 
-    projectComboBox.clear(juce::dontSendNotification);
-    comboProjectIds = projectIds;
+    const auto stillListed = [this](const juce::String& id)
+    {
+        return std::any_of(allProjects.begin(), allProjects.end(), [&id](const auto& project) { return project.id == id; });
+    };
 
-    for (size_t i = 0; i < projectNames.size() && i < projectIds.size(); ++i)
-        projectComboBox.addItem(projectNames[i], static_cast<int>(i) + 1);
+    if (projectId.isNotEmpty())
+        selectedProjectId = projectId;
+    else if (!stillListed(selectedProjectId))
+        selectedProjectId.clear();
 
-    if (selectedProjectId.isNotEmpty())
-        selectProjectById(selectedProjectId, false);
-    else if (!comboProjectIds.empty())
-        projectComboBox.setSelectedId(1, juce::dontSendNotification);
-
-    rebuildProjectCards();
+    rebuildProjectTiles();
+    repaint();
 }
 
-void ProjectSelectionView::setSelectedProjectFileMessage(const juce::String& message)
-{
-    projectFileLabel.setText(message, juce::dontSendNotification);
-    projectFileLabel.setTooltip(message);
-    rebuildProjectCards();
-}
-
-void ProjectSelectionView::setProjectFileSelectionState(bool fileSelected, const juce::String& selectedProjectFilePath)
+void ProjectSelectionView::setProjectFileSelectionState(bool fileSelected, const juce::String& selectedProjectFilePathToShow)
 {
     hasProjectFile = fileSelected;
-
-    const auto fileInfo = hasProjectFile
-                              ? shortenPath(selectedProjectFilePath.isNotEmpty() ? selectedProjectFilePath
-                                                                                  : "DAW project file selected.")
-                              : juce::String("Choose a DAW project file to create new projects.");
-    projectFileLabel.setText(fileInfo, juce::dontSendNotification);
-    projectFileLabel.setTooltip(selectedProjectFilePath);
-    projectFileLabel.setColour(juce::Label::textColourId, hasProjectFile ? Theme::kForeground : Theme::kForegroundSubtle);
-
-    createProjectButton.setVisible(true);
-    applyButtonAvailability(createProjectButton, canCreateProject);
-    rebuildProjectCards();
-    resized();
-}
-
-void ProjectSelectionView::setHasExistingProjects(bool hasProjects)
-{
-    hasExistingProjects = hasProjects;
-    rebuildProjectCards();
-    resized();
+    selectedProjectFilePath = fileSelected ? selectedProjectFilePathToShow : juce::String();
+    canCreateProject = canCreateProject && hasProjectFile;
+    updateNewProjectControls();
+    rebuildProjectTiles();
 }
 
 void ProjectSelectionView::setCanCreateProject(bool canCreate)
 {
     canCreateProject = canCreate && hasProjectFile;
-    createProjectButton.setVisible(true);
-    applyButtonAvailability(createProjectButton, canCreateProject);
-    repaint();
+    updateNewProjectControls();
 }
 
-juce::String ProjectSelectionView::getSelectedProjectId() const
+void ProjectSelectionView::setAccountName(const juce::String& accountName)
 {
-    return getMappedComboSelection(projectComboBox, comboProjectIds);
+    accountLabel.setText(accountName.toUpperCase(), juce::dontSendNotification);
+    resized();
 }
 
 void ProjectSelectionView::paint(juce::Graphics& g)
 {
     g.fillAll(Theme::kBackground);
 
-    theme::paintMetaText(g, "StemHub / Projects", metaRowBounds, Theme::kForeground);
+    theme::paintLogoTile(g, headerLogoBounds.toFloat(), Theme::kForeground, Theme::kInk);
+    theme::paintMetaText(g,
+                         isLoadingProjects && allProjects.empty() ? juce::String("--")
+                                                                  : twoDigits(static_cast<int>(allProjects.size())),
+                         projectCountBounds,
+                         Theme::kForegroundSubtle);
+
     g.setColour(Theme::kSurfaceBorder);
-    g.fillRect(metaRowBounds.getX(), metaRowBounds.getBottom() + 10, getWidth() - 2 * metaRowBounds.getX(), 1);
-
-    if (!fileStripBounds.isEmpty())
-    {
-        g.setColour(Theme::kSurface);
-        g.fillRect(fileStripBounds);
-        g.setColour(Theme::kSurfaceBorder);
-        g.drawRect(fileStripBounds, 1);
-
-        auto labelArea = fileStripBounds.reduced(14, 0).removeFromLeft(96);
-        g.setColour(hasProjectFile ? Theme::kAccent : Theme::kForegroundTertiary);
-        g.fillRect(labelArea.removeFromLeft(6).withSizeKeepingCentre(6, 6));
-        labelArea.removeFromLeft(8);
-        theme::paintMetaText(g, "Project file", labelArea, Theme::kForegroundSubtle);
-    }
-
-    if (emptyStateTitle.isVisible() && !emptyStateBounds.isEmpty())
-    {
-        g.setColour(Theme::kSurfaceBorder);
-        g.drawRect(emptyStateBounds, 1);
-
-        const auto pattern = emptyStateBounds.withSizeKeepingCentre(184, 34)
-                                 .withY(emptyStateBounds.getCentreY() - 64)
-                                 .toFloat();
-        theme::paintBlockPattern(g, pattern, "no-projects", 16,
-                                 Theme::kForeground.withAlpha(0.18f), Theme::kAccent);
-    }
+    g.fillRect(24, headerDividerY, getWidth() - 48, 1);
+    g.setColour(Theme::kBorderSubtle);
+    g.fillRect(24, filterAllButton.getBottom() - 1, getWidth() - 48, 1);
 }
 
 void ProjectSelectionView::resized()
 {
-    auto area = getLocalBounds().reduced(24, 18);
+    auto area = getLocalBounds().reduced(24, 16);
 
-    auto metaRow = area.removeFromTop(24);
-    signOutButton.setBounds(metaRow.removeFromRight(96));
-    metaRowBounds = metaRow;
-    area.removeFromTop(10 + 1 + 18);
+    auto header = area.removeFromTop(36);
+    headerLogoBounds = header.removeFromLeft(28).withSizeKeepingCentre(28, 28);
+    header.removeFromLeft(12);
+    const auto titleWidth = static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(titleLabel.getFont(),
+                                                                                              titleLabel.getText()))) + 4;
+    titleLabel.setBounds(header.removeFromLeft(titleWidth).withSizeKeepingCentre(titleWidth, 26));
+    header.removeFromLeft(10);
+    projectCountBounds = header.removeFromLeft(28).withTrimmedTop(2);
 
-    auto titleRow = area.removeFromTop(40);
-    createProjectButton.setBounds(titleRow.removeFromRight(168).withTrimmedTop(2));
-    titleRow.removeFromRight(16);
-    titleLabel.setBounds(titleRow);
+    signOutButton.setBounds(header.removeFromRight(84));
 
-    area.removeFromTop(6);
-    subtitleLabel.setBounds(area.removeFromTop(18));
-    area.removeFromTop(18);
+    if (accountLabel.getText().isNotEmpty())
+    {
+        const auto accountWidth = juce::jmin(140, static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(
+                                                      accountLabel.getFont(), accountLabel.getText()))) + 4);
+        header.removeFromRight(4);
+        accountLabel.setBounds(header.removeFromRight(accountWidth));
+        header.removeFromRight(18);
+    }
+    else
+    {
+        accountLabel.setBounds({});
+        header.removeFromRight(12);
+    }
 
-    auto toolbarRow = area.removeFromTop(38);
-    auto filterBounds = toolbarRow.removeFromRight(222);
-    toolbarRow.removeFromRight(10);
-    searchInput.setBounds(toolbarRow);
+    const auto searchWidth = juce::jmin(220, header.getWidth());
+    searchInput.setBounds(header.removeFromRight(searchWidth).withSizeKeepingCentre(searchWidth, 34));
 
-    const auto segmentWidth = filterBounds.getWidth() / 3;
-    filterAllButton.setBounds(filterBounds.removeFromLeft(segmentWidth));
-    filterLocalButton.setBounds(filterBounds.removeFromLeft(segmentWidth));
-    filterCloudButton.setBounds(filterBounds);
+    area.removeFromTop(12);
+    headerDividerY = area.getY();
+    area.removeFromTop(1 + 10);
 
-    area.removeFromTop(10);
-
-    fileStripBounds = area.removeFromTop(46);
-    auto fileRow = fileStripBounds.reduced(7, 7);
-    chooseProjectFileButton.setBounds(fileRow.removeFromRight(124));
-    fileRow.removeFromRight(12);
-    fileRow.removeFromLeft(7 + 96 + 10);
-    projectFileLabel.setBounds(fileRow);
-
-    area.removeFromTop(10);
+    auto tabsRow = area.removeFromTop(30);
+    for (auto* tab : { &filterAllButton, &filterPrivateButton, &filterPublicButton })
+    {
+        const auto width = static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(
+                               theme::labelFont(10.5f), tab->getButtonText().toUpperCase()))) + 4;
+        tab->setBounds(tabsRow.removeFromLeft(width));
+        tabsRow.removeFromLeft(22);
+    }
 
     if (statusLabel.isVisible())
     {
-        statusLabel.setBounds(area.removeFromTop(32));
-        area.removeFromTop(10);
+        const auto textWidth = static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(statusLabel.getFont(),
+                                                                                                 statusLabel.getText())));
+        const auto width = juce::jmin(tabsRow.getWidth(), textWidth + 20);
+        statusLabel.setBounds(tabsRow.removeFromRight(width).withTrimmedBottom(4));
     }
     else
     {
-        statusLabel.setBounds(0, 0, 0, 0);
+        statusLabel.setBounds({});
     }
 
-    auto listArea = area;
-    projectListViewport.setBounds(listArea);
-
-    if (projectCards.isEmpty())
-    {
-        projectListContent.setBounds(0, 0, listArea.getWidth(), listArea.getHeight());
-        emptyStateBounds = listArea;
-        auto emptyBounds = listArea.withSizeKeepingCentre(listArea.getWidth() - 64, 70)
-                               .withY(listArea.getCentreY() - 22);
-        emptyStateTitle.setBounds(emptyBounds.removeFromTop(28));
-        emptyBounds.removeFromTop(6);
-        emptyStateSubtle.setBounds(emptyBounds.removeFromTop(36));
-    }
-    else
-    {
-        emptyStateBounds = {};
-        const int cardHeight = 64;
-        const int spacing = 6;
-        const auto needsScroll = static_cast<int>(projectCards.size()) * (cardHeight + spacing) - spacing > listArea.getHeight();
-        const auto cardWidth = listArea.getWidth() - (needsScroll ? 12 : 0);
-        int y = 0;
-        for (auto* card : projectCards)
-        {
-            card->setBounds(0, y, cardWidth, cardHeight);
-            y += cardHeight + spacing;
-        }
-
-        projectListContent.setBounds(0, 0, cardWidth, juce::jmax(listArea.getHeight(), y - spacing));
-        emptyStateTitle.setBounds(0, 0, 0, 0);
-        emptyStateSubtle.setBounds(0, 0, 0, 0);
-    }
+    area.removeFromTop(16);
+    area.removeFromBottom(2);
+    projectGridViewport.setBounds(area);
+    layoutProjectGrid();
 }
 
-void ProjectSelectionView::rebuildProjectCards()
+void ProjectSelectionView::layoutProjectGrid()
 {
-    projectCards.clear(true);
+    const auto layoutWithWidth = [this](int width, bool apply)
+    {
+        const auto columns = width >= 560 ? 3 : 2;
+        const auto tileWidth = (width - kTileGap * (columns - 1)) / columns;
+        int column = 0;
+        int row = 0;
+
+        for (auto* tile : projectTiles)
+        {
+            const auto span = juce::jlimit(1, columns, static_cast<int>(tile->getProperties().getWithDefault(kTileSpanProperty, 1)));
+            if (column + span > columns)
+            {
+                column = 0;
+                ++row;
+            }
+
+            if (apply)
+                tile->setBounds(column * (tileWidth + kTileGap),
+                                row * (kTileHeight + kTileGap),
+                                tileWidth * span + kTileGap * (span - 1),
+                                kTileHeight);
+
+            column += span;
+        }
+
+        const auto rows = projectTiles.isEmpty() ? 0 : row + 1;
+        return rows * kTileHeight + juce::jmax(0, rows - 1) * kTileGap;
+    };
+
+    auto width = projectGridViewport.getWidth();
+    if (layoutWithWidth(width, false) > projectGridViewport.getHeight())
+        width -= 12;
+
+    const auto height = layoutWithWidth(width, true);
+    projectGridContent.setSize(width, height);
+
+    juce::Rectangle<int> newTileBounds;
+    for (auto* tile : projectTiles)
+        if (dynamic_cast<NewProjectTileComponent*>(tile) != nullptr)
+            newTileBounds = tile->getBounds();
+
+    auto inner = newTileBounds.reduced(kTilePadding);
+    const auto bottomRow = inner.removeFromBottom(16);
+    inner.removeFromBottom(8);
+    const auto buttonRow = inner.removeFromBottom(34);
+
+    if (hasProjectFile)
+    {
+        createProjectButton.setBounds(buttonRow);
+        chooseProjectFileButton.setBounds(bottomRow.withWidth(juce::jmin(bottomRow.getWidth(), 96)));
+    }
+    else
+    {
+        createProjectButton.setBounds({});
+        chooseProjectFileButton.setBounds(buttonRow);
+    }
+
+    createProjectButton.toFront(false);
+    chooseProjectFileButton.toFront(false);
+}
+
+void ProjectSelectionView::rebuildProjectTiles()
+{
+    projectTiles.clear(true);
+
+    auto* newTile = new NewProjectTileComponent();
+    newTile->setState(hasProjectFile, selectedProjectFilePath);
+    projectTiles.add(newTile);
+    projectGridContent.addAndMakeVisible(newTile);
 
     const auto query = searchInput.getText().trim().toLowerCase();
-    const auto currentSelection = getSelectedProjectId();
 
-    for (const auto& [name, id] : allProjects)
+    for (size_t i = 0; i < allProjects.size(); ++i)
     {
-        if (query.isNotEmpty() && !name.toLowerCase().contains(query) && !id.toLowerCase().contains(query))
+        const auto& project = allProjects[i];
+
+        if ((activeProjectFilter == ProjectFilter::Private && project.isPublic)
+            || (activeProjectFilter == ProjectFilter::Public && !project.isPublic))
             continue;
 
-        auto* card = static_cast<ProjectCardComponent*>(projectCards.add(new ProjectCardComponent()));
-        card->setData(ProjectCardData {
-            name,
-            projectFileLabel.getText().isNotEmpty() ? projectFileLabel.getText() : juce::String("Choose a DAW project file"),
-            hasProjectFile ? juce::String("Synced") : juce::String("Link file"),
-            projectCards.size() - 1,
-            id == currentSelection,
-            hasProjectFile
-        });
-        card->onSelect = [this, id]
+        if (query.isNotEmpty()
+            && !project.name.toLowerCase().contains(query)
+            && !project.description.toLowerCase().contains(query)
+            && !project.category.toLowerCase().contains(query))
+            continue;
+
+        auto* tile = new ProjectTileComponent();
+        tile->setData(project, static_cast<int>(i), project.id == selectedProjectId);
+        tile->onOpen = [this, id = project.id]
         {
             selectProjectById(id, true);
         };
-        card->onOpen = [this, id]
-        {
-            selectProjectById(id, false);
-            invokeIfBound(onOpenProject);
-        };
-        projectListContent.addAndMakeVisible(card);
+        projectTiles.add(tile);
+        projectGridContent.addAndMakeVisible(tile);
     }
 
-    const bool hasVisibleProjects = !projectCards.isEmpty();
-    emptyStateTitle.setVisible(!hasVisibleProjects);
-    emptyStateSubtle.setVisible(!hasVisibleProjects);
-    projectListViewport.setVisible(hasVisibleProjects);
-    resized();
+    if (projectTiles.size() == 1)
+    {
+        if (isLoadingProjects && allProjects.empty())
+        {
+            for (int i = 0; i < 2; ++i)
+            {
+                auto* skeleton = new PlaceholderTileComponent({}, {}, "loading-" + juce::String(i));
+                projectTiles.add(skeleton);
+                projectGridContent.addAndMakeVisible(skeleton);
+            }
+        }
+        else
+        {
+            juce::String title = "NOTHING HERE YET.";
+            juce::String message = "Projects you create or join on StemHub show up here.";
+
+            if (query.isNotEmpty())
+            {
+                title = "NO MATCH.";
+                message = "Nothing matches \"" + searchInput.getText().trim() + "\". Try another name.";
+            }
+            else if (activeProjectFilter != ProjectFilter::All && !allProjects.empty())
+            {
+                title = activeProjectFilter == ProjectFilter::Public ? "NO PUBLIC PROJECTS." : "NO PRIVATE PROJECTS.";
+                message = "Switch to All to see every project on this account.";
+            }
+
+            auto* empty = new PlaceholderTileComponent(title, message, "no-projects");
+            empty->getProperties().set(kTileSpanProperty, 2);
+            projectTiles.add(empty);
+            projectGridContent.addAndMakeVisible(empty);
+        }
+    }
+
+    layoutProjectGrid();
     repaint();
 }
 
 void ProjectSelectionView::updateProjectFilterButtons()
 {
-    styleFilterButton(filterAllButton, activeProjectFilter == ProjectFilter::All);
-    styleFilterButton(filterLocalButton, activeProjectFilter == ProjectFilter::Local);
-    styleFilterButton(filterCloudButton, activeProjectFilter == ProjectFilter::Cloud);
+    theme::styleTabButton(filterAllButton, activeProjectFilter == ProjectFilter::All);
+    theme::styleTabButton(filterPrivateButton, activeProjectFilter == ProjectFilter::Private);
+    theme::styleTabButton(filterPublicButton, activeProjectFilter == ProjectFilter::Public);
+}
+
+void ProjectSelectionView::updateNewProjectControls()
+{
+    if (hasProjectFile)
+    {
+        theme::stylePrimaryButton(createProjectButton);
+        createProjectButton.setButtonText("Create project  +");
+        createProjectButton.setTooltip("Create a StemHub project from this DAW file.");
+        createProjectButton.setVisible(true);
+        createProjectButton.setEnabled(canCreateProject);
+
+        theme::styleLinkButton(chooseProjectFileButton, Theme::kInkSubtle, Theme::kInk);
+        chooseProjectFileButton.setButtonText("Change file");
+        chooseProjectFileButton.getProperties().set("underlined", true);
+        chooseProjectFileButton.getProperties().set("stemhubAlignLeft", true);
+    }
+    else
+    {
+        createProjectButton.setVisible(false);
+
+        theme::stylePrimaryButton(chooseProjectFileButton);
+        chooseProjectFileButton.setColour(juce::TextButton::buttonColourId, Theme::kInk);
+        chooseProjectFileButton.setColour(juce::TextButton::textColourOffId, Theme::kPaper);
+        chooseProjectFileButton.setColour(juce::TextButton::textColourOnId, Theme::kPaper);
+        chooseProjectFileButton.setButtonText("Choose DAW file  " + theme::arrowRight());
+        chooseProjectFileButton.getProperties().set("underlined", false);
+        chooseProjectFileButton.getProperties().set("stemhubAlignLeft", false);
+    }
+
+    chooseProjectFileButton.setTooltip("Pick the .flp or .als file this project should track.");
+    layoutProjectGrid();
 }
 
 void ProjectSelectionView::selectProjectById(const juce::String& projectId, bool triggerOpen)
 {
-    for (size_t i = 0; i < comboProjectIds.size(); ++i)
-    {
-        if (comboProjectIds[i] == projectId)
-        {
-            projectComboBox.setSelectedId(static_cast<int>(i) + 1, juce::dontSendNotification);
-            break;
-        }
-    }
+    selectedProjectId = projectId;
 
-    rebuildProjectCards();
+    for (auto* tile : projectTiles)
+        if (auto* projectTile = dynamic_cast<ProjectTileComponent*>(tile))
+            projectTile->setSelected(projectTile->getProjectId() == selectedProjectId);
 
     if (triggerOpen)
         invokeIfBound(onOpenProject);
 }
 
+//==============================================================================
 DashboardView::DashboardView()
 {
     addAndMakeVisible(headerProjectLabel);
@@ -800,130 +909,99 @@ DashboardView::DashboardView()
     theme::makeStatusChip(projectStatusLabel);
     theme::styleStatusLabel(projectStatusLabel, "Ready", theme::MessageStatus::neutral);
 
-    addAndMakeVisible(snapshotSectionLabel);
-    styleSectionLabel(snapshotSectionLabel, "Current snapshot", Theme::kAccent);
-
-    addAndMakeVisible(snapshotTitleLabel);
-    snapshotTitleLabel.setText("NO SNAPSHOTS YET.", juce::dontSendNotification);
-    snapshotTitleLabel.setFont(theme::displayFont(28.0f));
-    snapshotTitleLabel.setColour(juce::Label::textColourId, Theme::kForeground);
-    snapshotTitleLabel.setMinimumHorizontalScale(1.0f);
-    snapshotTitleLabel.setBorderSize({});
-
-    addAndMakeVisible(snapshotMetaLabel);
-    styleBodyLabel(snapshotMetaLabel, "Save a new snapshot to start history.", true, 12.0f);
-
     addAndMakeVisible(actionHintLabel);
-    styleBodyLabel(actionHintLabel, "Create a snapshot to preserve your work.", true, 12.0f);
-
-    addAndMakeVisible(historyLabel);
-    styleSectionLabel(historyLabel, "Session history", Theme::kForeground);
-
-    addAndMakeVisible(footerPathLabel);
-    styleBodyLabel(footerPathLabel, "~/", true, 11.0f);
+    theme::makeInlineStatus(actionHintLabel);
+    theme::styleStatusLabel(actionHintLabel, {}, theme::MessageStatus::neutral);
 
     addAndMakeVisible(footerCloudLabel);
-    styleBodyLabel(footerCloudLabel, "stemhub.io/project", false, 11.0f);
     footerCloudLabel.setFont(theme::semiboldFont(11.0f));
-    footerCloudLabel.setJustificationType(juce::Justification::centred);
+    footerCloudLabel.setColour(juce::Label::textColourId, Theme::kForegroundSubtle);
+    footerCloudLabel.setJustificationType(juce::Justification::centredRight);
+    footerCloudLabel.setMinimumHorizontalScale(1.0f);
+    footerCloudLabel.setBorderSize({});
 
     addAndMakeVisible(footerStorageLabel);
     footerStorageLabel.setFont(theme::labelFont(10.0f));
-    footerStorageLabel.setColour(juce::Label::textColourId, Theme::kForegroundSubtle);
+    footerStorageLabel.setColour(juce::Label::textColourId, Theme::kForegroundTertiary);
     footerStorageLabel.setJustificationType(juce::Justification::centredRight);
     footerStorageLabel.setMinimumHorizontalScale(1.0f);
     footerStorageLabel.setBorderSize({});
 
+    addAndMakeVisible(restoreHintLabel);
+    restoreHintLabel.setText("Replaces your local project file with this version. You confirm first.",
+                             juce::dontSendNotification);
+    restoreHintLabel.setFont(theme::bodyFont(11.5f));
+    restoreHintLabel.setColour(juce::Label::textColourId, Theme::kInkSubtle);
+    restoreHintLabel.setJustificationType(juce::Justification::topLeft);
+    restoreHintLabel.setMinimumHorizontalScale(1.0f);
+    restoreHintLabel.setBorderSize({});
+
     addAndMakeVisible(branchComboBox);
     branchComboBox.setTextWhenNothingSelected("Workspace");
     theme::styleComboBox(branchComboBox);
-    branchComboBox.onChange = [this]
-    {
-        invokeIfBound(onBranchChange);
-    };
-
-    addAndMakeVisible(versionComboBox);
-    theme::styleComboBox(versionComboBox);
-    versionComboBox.setVisible(false);
-    versionComboBox.onChange = [this]
-    {
-        updateSnapshotSummary();
-        invokeIfBound(onVersionSelectionChange);
-    };
+    branchComboBox.onChange = [this] { invokeIfBound(onBranchChange); };
 
     addAndMakeVisible(backToProjectsButton);
     backToProjectsButton.setButtonText(theme::arrowLeft() + "  Projects");
     theme::styleGhostButton(backToProjectsButton);
-    backToProjectsButton.onClick = [this]
-    {
-        invokeIfBound(onBackToProjects);
-    };
+    backToProjectsButton.onClick = [this] { invokeIfBound(onBackToProjects); };
 
-    addChildComponent(commitMessageInput);
-    theme::styleTextInput(commitMessageInput, "Describe this save");
-    commitMessageInput.setVisible(false);
+    addAndMakeVisible(commitMessageInput);
+    theme::styleTextInput(commitMessageInput, "What changed? (optional)");
+    commitMessageInput.onReturnKey = [this] { invokeIfBound(onSave); };
 
     addAndMakeVisible(saveChanges);
     saveChanges.setButtonText("Save snapshot");
     theme::stylePrimaryButton(saveChanges);
-    saveChanges.setTooltip("Save a new version of this project (Cmd/Ctrl + S).");
-    saveChanges.onClick = [this]
-    {
-        invokeIfBound(onSave);
-    };
+    saveChanges.setTooltip("Save the working copy as a new version (Cmd/Ctrl + S).");
+    saveChanges.onClick = [this] { invokeIfBound(onSave); };
 
     addAndMakeVisible(syncButton);
     syncButton.setButtonText("Sync");
-    theme::styleSecondaryButton(syncButton);
-    syncButton.setTooltip("Fetch the latest version history.");
-    syncButton.onClick = [this]
-    {
-        invokeIfBound(onSync);
-    };
+    theme::styleGhostButton(syncButton);
+    syncButton.setTooltip("Fetch the latest history for this branch.");
+    syncButton.onClick = [this] { invokeIfBound(onSync); };
 
     addAndMakeVisible(signOutButton);
     signOutButton.setButtonText("Sign out");
     theme::styleGhostButton(signOutButton);
-    signOutButton.onClick = [this]
-    {
-        invokeIfBound(onSignOut);
-    };
+    signOutButton.onClick = [this] { invokeIfBound(onSignOut); };
 
     addAndMakeVisible(restoreButton);
-    restoreButton.setButtonText("Restore");
-    theme::styleSecondaryButton(restoreButton);
-    restoreButton.setTooltip("Restore the selected snapshot into your project folder.");
-    restoreButton.onClick = [this]
-    {
-        invokeIfBound(onRestore);
-    };
+    restoreButton.setButtonText("Restore this version");
+    theme::stylePrimaryButton(restoreButton);
+    restoreButton.setColour(juce::TextButton::buttonColourId, Theme::kInk);
+    restoreButton.setColour(juce::TextButton::textColourOffId, Theme::kPaper);
+    restoreButton.setColour(juce::TextButton::textColourOnId, Theme::kPaper);
+    restoreButton.onClick = [this] { invokeIfBound(onRestore); };
 
     addAndMakeVisible(versionListViewport);
     versionListViewport.setViewedComponent(&versionListContent, false);
     versionListViewport.setScrollBarsShown(true, false);
     versionListViewport.setScrollBarThickness(8);
 
+    rebuildVersionRows();
+    updateDetailControls();
     updateFooterSummary();
 }
 
 void DashboardView::setProjectStatusMessage(const juce::String& message, stemhub::plugin::theme::MessageStatus status)
 {
-    theme::styleStatusLabel(projectStatusLabel, makeStatusChipText(status, message), status);
+    theme::styleStatusLabel(projectStatusLabel, makeStatusChipText(status), status);
     projectStatusLabel.setTooltip(message);
-    actionHintLabel.setText(message.isNotEmpty() ? message : "Create a snapshot to preserve your work.", juce::dontSendNotification);
-    actionHintLabel.setColour(juce::Label::textColourId,
-                              status == theme::MessageStatus::error ? Theme::kError : Theme::kForegroundSubtle);
+
+    theme::styleStatusLabel(actionHintLabel, message.isNotEmpty() ? message : juce::String("Ready."), status);
+    const auto isProblem = status == theme::MessageStatus::warning || status == theme::MessageStatus::error;
+    actionHintLabel.setColour(juce::Label::textColourId, isProblem ? Theme::kForeground : Theme::kForegroundSubtle);
+    actionHintLabel.setFont(theme::bodyFont(11.5f));
+    actionHintLabel.setTooltip(message);
 }
 
-void DashboardView::setSelectedProjectFileMessage(const juce::String& message)
+void DashboardView::setSelectedProjectFilePath(const juce::String& projectFilePath)
 {
-    footerPathLabel.setTooltip(message);
-
-    if (getSelectedVersionId().isEmpty())
-    {
-        snapshotMetaLabel.setText(message, juce::dontSendNotification);
-        snapshotMetaLabel.setTooltip(message);
-    }
+    selectedProjectFilePath = projectFilePath;
+    updateFooterSummary();
+    repaint();
 }
 
 void DashboardView::setProjectNameMessage(const juce::String& message)
@@ -936,7 +1014,6 @@ void DashboardView::setProjectNameMessage(const juce::String& message)
 void DashboardView::setBranchNameMessage(const juce::String& message)
 {
     branchComboBox.setTooltip(message);
-    updateSnapshotSummary();
 }
 
 void DashboardView::setBranches(const std::vector<juce::String>& branchNames,
@@ -946,14 +1023,21 @@ void DashboardView::setBranches(const std::vector<juce::String>& branchNames,
     setMappedComboItems(branchComboBox, comboBranchIds, branchNames, branchIds, selectedBranchId);
 }
 
-void DashboardView::setVersions(const std::vector<juce::String>& versionLabels,
-                                const std::vector<juce::String>& versionIds,
-                                const juce::String& selectedVersionId)
+void DashboardView::setVersions(const std::vector<VersionListItem>& versionItems, const juce::String& versionId)
 {
-    versionDisplayLabels = versionLabels;
-    setMappedComboItems(versionComboBox, comboVersionIds, versionLabels, versionIds, selectedVersionId);
-    rebuildVersionCards();
-    updateSnapshotSummary();
+    versions = versionItems;
+
+    const auto isListed = std::any_of(versions.begin(), versions.end(), [&versionId](const auto& version)
+    {
+        return version.id == versionId;
+    });
+
+    // Fall back to the newest version, as the history always did.
+    selectedVersionId = isListed ? versionId : (versions.empty() ? juce::String() : versions.front().id);
+
+    rebuildVersionRows();
+    updateDetailControls();
+    repaint();
 }
 
 void DashboardView::setPackagedFiles(const juce::String& rootLabel, const std::vector<juce::String>& relativeFilePaths)
@@ -961,6 +1045,7 @@ void DashboardView::setPackagedFiles(const juce::String& rootLabel, const std::v
     juce::ignoreUnused(rootLabel);
     packagedFileCount = static_cast<int>(relativeFilePaths.size());
     updateFooterSummary();
+    repaint();
 }
 
 juce::String DashboardView::getSelectedBranchId() const
@@ -968,228 +1053,265 @@ juce::String DashboardView::getSelectedBranchId() const
     return getMappedComboSelection(branchComboBox, comboBranchIds);
 }
 
-juce::String DashboardView::getSelectedVersionId() const
+const VersionListItem* DashboardView::findSelectedVersion() const
 {
-    return getMappedComboSelection(versionComboBox, comboVersionIds);
+    const auto index = indexOfSelectedVersion();
+    return index >= 0 ? &versions[static_cast<size_t>(index)] : nullptr;
+}
+
+int DashboardView::indexOfSelectedVersion() const
+{
+    for (size_t i = 0; i < versions.size(); ++i)
+        if (versions[i].id == selectedVersionId)
+            return static_cast<int>(i);
+
+    return -1;
 }
 
 void DashboardView::paint(juce::Graphics& g)
 {
     g.fillAll(Theme::kBackground);
 
-    const auto left = 20;
-    const auto width = getWidth() - 2 * left;
-
     theme::paintLogoTile(g, headerLogoBounds.toFloat(), Theme::kForeground, Theme::kInk);
 
     g.setColour(Theme::kSurfaceBorder);
-    g.fillRect(left, headerDividerY, width, 1);
-    g.fillRect(left, historyDividerY, width, 1);
-    g.fillRect(left, footerDividerY, width, 1);
+    g.fillRect(24, headerDividerY, getWidth() - 48, 1);
+    g.fillRect(24, statusBarDividerY, getWidth() - 48, 1);
 
-    const auto hasSnapshot = getSelectedVersionId().isNotEmpty();
-    theme::paintBlockPattern(g, heroPatternBounds.toFloat(),
-                             hasSnapshot ? getSelectedVersionId() : juce::String("no-snapshot"),
-                             14,
-                             Theme::kForeground.withAlpha(hasSnapshot ? 0.9f : 0.16f),
-                             hasSnapshot ? Theme::kAccent : Theme::kForeground.withAlpha(0.3f));
+    theme::paintMetaText(g, "Branch", branchCaptionBounds, Theme::kForegroundSubtle);
 
-    const auto versionCount = static_cast<int>(comboVersionIds.size());
+    // Working copy: the head of the timeline, not yet saved.
+    {
+        const auto ruleX = workingCopyBounds.getX() + kTimelineRuleX;
+        auto content = workingCopyBounds.withTrimmedLeft(kTimelineGutter);
+        auto metaRow = content.removeFromTop(16);
+        const juce::Rectangle<float> node { static_cast<float>(ruleX) + 0.5f - 6.0f,
+                                            static_cast<float>(metaRow.getCentreY()) - 6.0f, 12.0f, 12.0f };
+
+        g.setColour(Theme::kSurfaceBorder);
+        g.fillRect(static_cast<float>(ruleX), node.getBottom(), 1.0f,
+                   static_cast<float>(versionListViewport.getY() - static_cast<int>(node.getBottom())));
+        g.setColour(Theme::kBackground);
+        g.fillRect(node);
+        g.setColour(Theme::kAccent);
+        g.drawRect(node, 1.5f);
+
+        const auto fileName = selectedProjectFilePath.isNotEmpty() ? juce::File(selectedProjectFilePath).getFileName()
+                                                                   : juce::String("No local file yet");
+        auto fileText = fileName;
+        if (packagedFileCount > 1)
+            fileText += metaSeparator() + juce::String(packagedFileCount) + " files";
+
+        const auto metaWidth = static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(theme::labelFont(10.0f),
+                                                                                               "WORKING COPY"))) + 2;
+        theme::paintMetaText(g, "Working copy", metaRow.removeFromLeft(metaWidth), Theme::kForeground);
+        metaRow.removeFromLeft(14);
+        g.setColour(Theme::kForegroundSubtle);
+        g.setFont(theme::bodyFont(11.5f));
+        g.drawText(fileText, metaRow, juce::Justification::centredRight, true);
+    }
+
+    // Detail card for the selected version, Paper on Ink like the sign-in card.
+    g.setColour(Theme::kPaper);
+    g.fillRect(detailBounds);
+
+    auto card = detailBounds.reduced(20);
+    card.removeFromBottom(restoreButton.isVisible() ? 30 + 8 + 40 + 14 : 0);
+
+    const auto* version = findSelectedVersion();
+    const auto versionIndex = indexOfSelectedVersion();
+    const auto versionCount = static_cast<int>(versions.size());
+
+    auto metaRow = card.removeFromTop(16);
+    g.setColour(Theme::kAccent);
+    g.fillRect(metaRow.removeFromLeft(8).withSizeKeepingCentre(8, 8));
+    metaRow.removeFromLeft(8);
+
+    if (version != nullptr && version->isOpenInDaw)
+    {
+        const auto label = juce::String("In your DAW");
+        const auto width = static_cast<int>(theme::tagWidth(label));
+        theme::paintTag(g, label, metaRow.removeFromRight(width).withSizeKeepingCentre(width, 18).toFloat(),
+                        Theme::kAccent, Theme::kInk);
+        metaRow.removeFromRight(8);
+    }
+
     theme::paintMetaText(g,
-                         versionCount == 1 ? juce::String("1 snapshot") : juce::String(versionCount) + " snapshots",
-                         historyCountBounds,
-                         Theme::kForegroundSubtle,
-                         juce::Justification::centredRight);
+                         version != nullptr ? "Version " + twoDigits(versionCount - versionIndex) + " / " + twoDigits(versionCount)
+                                            : juce::String("Version --"),
+                         metaRow, Theme::kInk);
+
+    card.removeFromTop(16);
+
+    if (version == nullptr)
+    {
+        const auto height = theme::paintDisplayText(g, "NOTHING SAVED YET.", card, 22.0f, Theme::kInk, 2);
+        card.removeFromTop(height + 18);
+        theme::paintSequencerArt(g, card.removeFromTop(30).toFloat(), "empty-history", 2, 14,
+                                 Theme::kInk.withAlpha(0.1f), Theme::kInk.withAlpha(0.2f));
+        card.removeFromTop(18);
+        g.setColour(Theme::kInkSubtle);
+        g.setFont(theme::bodyFont(12.5f));
+        g.drawFittedText("Write what changed, then Save snapshot to start this branch's history.",
+                         card.removeFromTop(54), juce::Justification::topLeft, 3, 1.0f);
+        return;
+    }
+
+    const auto title = displayTitleFor(*version).toUpperCase();
+    juce::StringArray words;
+    words.addTokens(title, " ", "");
+    const auto titleSize = theme::fitDisplayFontSize(words, static_cast<float>(card.getWidth()), 22.0f, 15.0f);
+    const auto titleHeight = theme::paintDisplayText(g, title, card.withHeight(80), titleSize, Theme::kInk, 3);
+    card.removeFromTop(titleHeight + 18);
+
+    theme::paintBlockPattern(g, card.removeFromTop(28).toFloat(), version->id, 18, Theme::kInk, Theme::kAccent);
+    card.removeFromTop(16);
+
+    const auto addFact = [&g, &card](const juce::String& key, const juce::String& value, bool mono)
+    {
+        if (value.isEmpty() || card.getHeight() < 26)
+            return;
+
+        auto row = card.removeFromTop(26);
+        g.setColour(Theme::kPaperBorder);
+        g.fillRect(row.removeFromTop(1));
+        theme::paintMetaText(g, key, row.removeFromLeft(58), Theme::kInkSubtle, juce::Justification::centredLeft, 9.5f);
+        g.setColour(Theme::kInk);
+        g.setFont(mono ? theme::monoFont(11.5f) : theme::mediumFont(12.0f));
+        g.drawText(value, row, juce::Justification::centredLeft, true);
+    };
+
+    addFact("Saved", formatTimestamp(version->createdAt, true), false);
+    addFact("DAW", version->sourceDaw, false);
+    addFact("File", version->sourceFilename, false);
+    addFact("Size", version->sizeBytes > 0 ? juce::File::descriptionOfSizeInBytes(version->sizeBytes) : juce::String(), false);
+    addFact("ID", version->id.substring(0, 8), true);
 }
 
 void DashboardView::resized()
 {
-    auto area = getLocalBounds().reduced(20, 16);
+    auto area = getLocalBounds().reduced(24, 16);
 
     auto header = area.removeFromTop(36);
-    backToProjectsButton.setBounds(header.removeFromLeft(112));
+    backToProjectsButton.setBounds(header.removeFromLeft(104));
     header.removeFromLeft(12);
     headerLogoBounds = header.removeFromLeft(28).withSizeKeepingCentre(28, 28);
     header.removeFromLeft(12);
-
-    signOutButton.setBounds(header.removeFromRight(92));
-    header.removeFromRight(6);
-    branchComboBox.setBounds(header.removeFromRight(148).withSizeKeepingCentre(148, 32));
+    signOutButton.setBounds(header.removeFromRight(84));
     header.removeFromRight(8);
-    projectStatusLabel.setBounds(header.removeFromRight(100).withSizeKeepingCentre(100, 26));
-    header.removeFromRight(12);
+    projectStatusLabel.setBounds(header.removeFromRight(104).withSizeKeepingCentre(104, 26));
+    header.removeFromRight(16);
     headerProjectLabel.setBounds(header.withSizeKeepingCentre(header.getWidth(), 22));
 
     area.removeFromTop(12);
     headerDividerY = area.getY();
-    area.removeFromTop(22);
+    area.removeFromTop(1 + 14);
 
-    auto hero = area.removeFromTop(82);
-    const auto patternWidth = juce::jmin(210, hero.getWidth() / 3);
-    heroPatternBounds = hero.removeFromRight(patternWidth).withSizeKeepingCentre(patternWidth, 50);
-    hero.removeFromRight(24);
-    snapshotSectionLabel.setBounds(hero.removeFromTop(14));
-    hero.removeFromTop(8);
-    snapshotTitleLabel.setBounds(hero.removeFromTop(36));
-    updateSnapshotTitleFont();
-    hero.removeFromTop(4);
-    snapshotMetaLabel.setBounds(hero.removeFromTop(18));
+    auto statusBar = area.removeFromBottom(18);
+    area.removeFromBottom(10);
+    statusBarDividerY = area.getBottom();
+    area.removeFromBottom(14);
 
-    area.removeFromTop(14);
-    auto actionButtons = area.removeFromTop(46);
-    restoreButton.setBounds(actionButtons.removeFromRight(120));
-    actionButtons.removeFromRight(8);
-    syncButton.setBounds(actionButtons.removeFromRight(120));
-    actionButtons.removeFromRight(8);
-    saveChanges.setBounds(actionButtons);
-    area.removeFromTop(8);
-    actionHintLabel.setBounds(area.removeFromTop(18));
+    footerStorageLabel.setBounds(statusBar.removeFromRight(120));
+    statusBar.removeFromRight(12);
+    footerCloudLabel.setBounds(statusBar.removeFromRight(170));
+    statusBar.removeFromRight(16);
+    actionHintLabel.setBounds(statusBar);
 
-    area.removeFromTop(14);
-    historyDividerY = area.getY();
+    detailBounds = area.removeFromRight(juce::jlimit(220, 280, area.getWidth() * 2 / 5));
+    area.removeFromRight(20);
 
-    auto footer = area.removeFromBottom(30);
-    footerDividerY = footer.getY();
-    footer.removeFromTop(1);
-    auto footerRow = footer.withTrimmedTop(4);
-    footerStorageLabel.setBounds(footerRow.removeFromRight(150));
-    footerRow.removeFromRight(12);
-    footerPathLabel.setBounds(footerRow.removeFromLeft(footerRow.getWidth() / 2));
-    footerCloudLabel.setBounds(footerRow);
+    auto card = detailBounds.reduced(20);
+    restoreHintLabel.setBounds(card.removeFromBottom(30));
+    card.removeFromBottom(8);
+    restoreButton.setBounds(card.removeFromBottom(40));
 
-    auto historyHeader = area.removeFromTop(40);
-    historyCountBounds = historyHeader.removeFromRight(160);
-    historyLabel.setBounds(historyHeader.withSizeKeepingCentre(historyHeader.getWidth(), 14));
+    auto historyHeader = area.removeFromTop(30);
+    const auto captionWidth = static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(theme::labelFont(10.0f),
+                                                                                                "BRANCH"))) + 12;
+    branchCaptionBounds = historyHeader.removeFromLeft(captionWidth);
+    syncButton.setBounds(historyHeader.removeFromRight(64));
+    historyHeader.removeFromRight(8);
+    branchComboBox.setBounds(historyHeader.removeFromLeft(juce::jmin(170, historyHeader.getWidth())));
 
-    const auto listBounds = area;
-    versionListViewport.setBounds(listBounds);
+    area.removeFromTop(16);
+    workingCopyBounds = area.removeFromTop(16 + 8 + 38);
+    auto controls = workingCopyBounds.withTrimmedLeft(kTimelineGutter).withTrimmedTop(16 + 8);
+    saveChanges.setBounds(controls.removeFromRight(128));
+    controls.removeFromRight(8);
+    commitMessageInput.setBounds(controls);
 
-    const int rowHeight = 54;
-    const auto needsScroll = static_cast<int>(versionCards.size()) * rowHeight > listBounds.getHeight();
-    const auto rowWidth = listBounds.getWidth() - (needsScroll ? 12 : 0);
-    int y = 0;
-    for (auto* card : versionCards)
-    {
-        card->setBounds(0, y, rowWidth, rowHeight);
-        y += rowHeight;
-    }
-    versionListContent.setBounds(0, 0, rowWidth, juce::jmax(listBounds.getHeight(), y));
+    area.removeFromTop(12);
+    versionListViewport.setBounds(area);
+    layoutVersionRows();
 }
 
-void DashboardView::rebuildVersionCards()
+void DashboardView::rebuildVersionRows()
 {
-    versionCards.clear(true);
+    versionRows.clear(true);
 
-    if (comboVersionIds.empty() || versionDisplayLabels.empty())
+    if (versions.empty())
     {
-        auto* card = static_cast<VersionCardComponent*>(versionCards.add(new VersionCardComponent()));
-        card->setData(VersionCardData { "No snapshots yet", "Save a new snapshot to start this history.", {}, 0, false, true });
-        versionListContent.addAndMakeVisible(card);
-        resized();
-        repaint();
+        auto* row = new VersionRowComponent();
+        VersionRowData placeholder;
+        placeholder.isLast = true;
+        placeholder.placeholder = true;
+        row->setData(placeholder);
+        versionRows.add(row);
+        versionListContent.addAndMakeVisible(row);
+        layoutVersionRows();
         return;
     }
 
-    const auto selectedVersionId = getSelectedVersionId();
-
-    for (size_t i = 0; i < comboVersionIds.size() && i < versionDisplayLabels.size(); ++i)
+    const auto count = static_cast<int>(versions.size());
+    for (int i = 0; i < count; ++i)
     {
-        auto* card = static_cast<VersionCardComponent*>(versionCards.add(new VersionCardComponent()));
-        const auto& versionId = comboVersionIds[i];
-        const auto& label = versionDisplayLabels[i];
-        const auto shortId = extractVersionShortId(label);
-        auto meta = extractVersionTimestamp(label);
-        if (meta.isEmpty())
-            meta = "Version " + shortId;
+        const auto& version = versions[static_cast<size_t>(i)];
+        auto* row = new VersionRowComponent();
 
-        card->setData(VersionCardData {
-            isGenericSnapshotTitle(extractVersionTitle(label)) ? juce::String("Snapshot")
-                                                               : extractVersionTitle(label),
-            meta,
-            shortId,
-            static_cast<int>(i),
-            versionId == selectedVersionId,
-            false
-        });
-        card->onSelect = [this, versionId]
+        VersionRowData data;
+        data.version = version;
+        data.number = count - i; // history is newest first; V01 is the first save
+        data.selected = version.id == selectedVersionId;
+        data.isLast = i == count - 1;
+        row->setData(std::move(data));
+        row->onSelect = [this, id = version.id]
         {
-            selectVersionById(versionId, true);
+            selectVersionById(id, true);
         };
-        versionListContent.addAndMakeVisible(card);
+        versionRows.add(row);
+        versionListContent.addAndMakeVisible(row);
     }
 
-    resized();
+    layoutVersionRows();
+}
+
+void DashboardView::layoutVersionRows()
+{
+    const auto listHeight = static_cast<int>(versionRows.size()) * kVersionRowHeight;
+    const auto needsScroll = listHeight > versionListViewport.getHeight();
+    const auto rowWidth = versionListViewport.getWidth() - (needsScroll ? 12 : 0);
+
+    int y = 0;
+    for (auto* row : versionRows)
+    {
+        row->setBounds(0, y, rowWidth, kVersionRowHeight);
+        y += kVersionRowHeight;
+    }
+
+    versionListContent.setSize(rowWidth, y);
+}
+
+void DashboardView::updateDetailControls()
+{
+    const auto hasVersion = findSelectedVersion() != nullptr;
+    restoreButton.setVisible(hasVersion);
+    restoreHintLabel.setVisible(hasVersion);
     repaint();
-}
-
-void DashboardView::updateSnapshotSummary()
-{
-    const auto selectedVersionId = getSelectedVersionId();
-
-    if (selectedVersionId.isEmpty())
-    {
-        snapshotTitleLabel.setText("NO SNAPSHOTS YET.", juce::dontSendNotification);
-        juce::String metadata = branchComboBox.getText().isNotEmpty() ? branchComboBox.getText() : juce::String();
-        if (selectedProjectFilePath.isNotEmpty())
-        {
-            if (metadata.isNotEmpty())
-                metadata += metaSeparator();
-            metadata += shortenPath(selectedProjectFilePath);
-        }
-
-        if (metadata.isNotEmpty())
-            snapshotMetaLabel.setText(metadata, juce::dontSendNotification);
-        updateSnapshotTitleFont();
-        repaint();
-        return;
-    }
-
-    for (size_t i = 0; i < comboVersionIds.size() && i < versionDisplayLabels.size(); ++i)
-    {
-        if (comboVersionIds[i] != selectedVersionId)
-            continue;
-
-        const auto extractedTitle = extractVersionTitle(versionDisplayLabels[i]);
-        snapshotTitleLabel.setText((isGenericSnapshotTitle(extractedTitle) ? juce::String("Latest snapshot")
-                                                                           : extractedTitle).toUpperCase(),
-                                   juce::dontSendNotification);
-
-        auto metadata = extractVersionTimestamp(versionDisplayLabels[i]);
-        if (metadata.isEmpty())
-            metadata = "Version " + extractVersionShortId(versionDisplayLabels[i]);
-
-        if (branchComboBox.getText().isNotEmpty())
-            metadata += metaSeparator() + branchComboBox.getText();
-
-        if (selectedProjectFilePath.isNotEmpty())
-            metadata += metaSeparator() + shortenPath(selectedProjectFilePath, 34);
-
-        snapshotMetaLabel.setText(metadata, juce::dontSendNotification);
-        updateSnapshotTitleFont();
-        repaint();
-        return;
-    }
-}
-
-void DashboardView::updateSnapshotTitleFont()
-{
-    const auto availableWidth = static_cast<float>(snapshotTitleLabel.getWidth());
-    if (availableWidth <= 0.0f)
-        return;
-
-    // Shrink long save notes before truncating them.
-    snapshotTitleLabel.setFont(theme::displayFont(
-        theme::fitDisplayFontSize({ snapshotTitleLabel.getText() }, availableWidth, 28.0f, 19.0f)));
 }
 
 void DashboardView::updateFooterSummary()
 {
-    const auto displayPath = selectedProjectFilePath.isNotEmpty()
-                                 ? shortenPath(selectedProjectFilePath, 34)
-                                 : juce::String("~/No local project selected");
-    footerPathLabel.setText(displayPath, juce::dontSendNotification);
-    footerPathLabel.setTooltip(selectedProjectFilePath);
-
     const auto slug = makeSlug(headerProjectLabel.getText());
     footerCloudLabel.setText("stemhub.io/" + (slug.isNotEmpty() ? slug : juce::String("project")), juce::dontSendNotification);
 
@@ -1206,20 +1328,19 @@ void DashboardView::updateFooterSummary()
     }
 
     footerStorageLabel.setText(storage.toUpperCase(), juce::dontSendNotification);
+    footerStorageLabel.setTooltip(selectedProjectFilePath);
 }
 
 void DashboardView::selectVersionById(const juce::String& versionId, bool triggerChange)
 {
-    for (size_t i = 0; i < comboVersionIds.size(); ++i)
-    {
-        if (comboVersionIds[i] != versionId)
-            continue;
+    selectedVersionId = versionId;
 
-        versionComboBox.setSelectedId(static_cast<int>(i) + 1,
-                                      triggerChange ? juce::sendNotificationSync : juce::dontSendNotification);
-        break;
-    }
+    for (auto* row : versionRows)
+        if (auto* versionRow = dynamic_cast<VersionRowComponent*>(row))
+            versionRow->setSelected(versionRow->getVersionId() == selectedVersionId);
 
-    rebuildVersionCards();
-    updateSnapshotSummary();
+    updateDetailControls();
+
+    if (triggerChange)
+        invokeIfBound(onVersionSelectionChange);
 }
