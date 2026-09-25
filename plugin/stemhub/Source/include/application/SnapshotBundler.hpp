@@ -21,7 +21,7 @@ struct ContentAddressedFileEntry
     juce::File file;          // absolute local path
     juce::String sha256;      // lowercase hex, 64 chars
     juce::int64 sizeBytes { 0 };
-    juce::String filename;    // basename (for display)
+    juce::String filename;    // path relative to the snapshot root, '/'-separated
     bool isProjectFile { false };
 };
 
@@ -37,7 +37,7 @@ struct ParsedManifestEntry
 {
     juce::String sha256;
     juce::int64 sizeBytes { 0 };
-    juce::String filename;    // basename; used relative to the restore directory
+    juce::String filename;    // validated relative path inside the restore directory
     bool isProjectFile { false };
 };
 
@@ -46,7 +46,7 @@ struct ParsedManifest
     int manifestVersion { 0 };
     juce::String sourceDaw;
     juce::String sourceProjectFilename;
-    std::vector<ParsedManifestEntry> entries;   // project file first if present
+    std::vector<ParsedManifestEntry> entries;   // project file first; one entry per path
 };
 
 class SnapshotBundler
@@ -64,7 +64,12 @@ class SnapshotBundler
 
         // Parse a v1 manifest_json blob (as returned by GET /versions/{vid})
         // into a flat list of entries the caller can iterate to download blobs.
-        // Only accepts manifest_version == 1.
+        // Only accepts manifest_version == 1. Paths and hashes are validated here because a
+        // manifest can be written by any collaborator of the project.
         [[nodiscard]] static juce::Result parseContentAddressedManifest(const juce::var& manifestJson,
                                                                          ParsedManifest& outResult);
+
+        // True for a relative, '/'-separated path whose segments are all plain names, so that
+        // restoreDirectory.getChildFile(path) always stays inside restoreDirectory on every OS.
+        [[nodiscard]] static bool isSafeManifestPath(const juce::String& path);
 };

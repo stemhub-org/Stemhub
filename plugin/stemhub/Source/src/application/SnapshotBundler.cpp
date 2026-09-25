@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <map>
 
 #include "application/SnapshotBundler.hpp"
 
@@ -216,6 +217,11 @@ juce::Result SnapshotBundler::buildContentAddressedManifest(const SnapshotBundle
         if (!shouldIncludeInSnapshot(file, request.projectRootDirectory, request.sourceProjectFile))
             continue;
 
+        // Keep the folder structure: basenames alone made files from different folders collide.
+        const auto relativePath = toArchivePath(file, request.projectRootDirectory);
+        if (!isSafeManifestPath(relativePath))
+            return juce::Result::fail("Can't save \"" + relativePath + "\": rename this file and try again.");
+
         const auto sha = sha256HexOfFile(file);
         if (sha.isEmpty())
             return juce::Result::fail("Failed to hash file: " + file.getFullPathName());
@@ -224,7 +230,7 @@ juce::Result SnapshotBundler::buildContentAddressedManifest(const SnapshotBundle
         entry.file = file;
         entry.sha256 = sha;
         entry.sizeBytes = file.getSize();
-        entry.filename = file.getFileName();
+        entry.filename = relativePath;
         entry.isProjectFile = (file == request.sourceProjectFile);
 
         if (entry.isProjectFile)
@@ -261,7 +267,7 @@ juce::Result SnapshotBundler::buildContentAddressedManifest(const SnapshotBundle
     juce::DynamicObject::Ptr manifest = new juce::DynamicObject();
     manifest->setProperty("manifest_version", 1);
     manifest->setProperty("source_daw", request.sourceDaw);
-    manifest->setProperty("source_project_filename", projectEntry.filename);
+    manifest->setProperty("source_project_filename", projectEntry.file.getFileName());
     manifest->setProperty("project_file", juce::var(projectFileObj.get()));
     manifest->setProperty("tracks", juce::var(tracks));
 
@@ -277,6 +283,25 @@ juce::Result SnapshotBundler::buildContentAddressedManifest(const SnapshotBundle
 
 namespace
 {
+    constexpr int kMaxManifestPathLength = 255; // ManifestBlobRef.filename limit on the backend
+
+    bool isSha256Hex(const juce::String& value)
+    {
+        return value.length() == 64 && value.containsOnly("0123456789abcdef");
+    }
+
+    // Device names Windows resolves anywhere in a path ("NUL.wav" included).
+    bool isReservedWindowsName(const juce::String& segment)
+    {
+        static const juce::StringArray reservedNames {
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+        };
+
+        return reservedNames.contains(segment.upToFirstOccurrenceOf(".", false, false).trimEnd(), true);
+    }
+
     bool readBlobRef(const juce::var& value, ParsedManifestEntry& outEntry)
     {
         auto* obj = value.getDynamicObject();
@@ -286,8 +311,43 @@ namespace
         outEntry.sha256 = obj->getProperty("sha256").toString().toLowerCase();
         outEntry.filename = obj->getProperty("filename").toString();
         outEntry.sizeBytes = static_cast<juce::int64>(obj->getProperty("size_bytes"));
-        return outEntry.sha256.length() == 64 && outEntry.filename.isNotEmpty();
+        return isSha256Hex(outEntry.sha256) && outEntry.filename.isNotEmpty();
     }
+
+    juce::String describeManifestPath(const juce::String& path)
+    {
+        const auto printable = path.retainCharacters(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._-/()");
+        return "\"" + (printable.length() > 80 ? printable.substring(0, 80) + "..." : printable) + "\"";
+    }
+}
+
+bool SnapshotBundler::isSafeManifestPath(const juce::String& path)
+{
+    if (path.isEmpty() || path.length() > kMaxManifestPathLength)
+        return false;
+
+    // Backslashes and colons turn into separators, drive letters or streams on Windows.
+    if (path.startsWithChar('/') || path.containsAnyOf("\\:"))
+        return false;
+
+    for (const auto character : path)
+        if (character < 0x20 || character == 0x7f)
+            return false;
+
+    juce::StringArray segments;
+    segments.addTokens(path, "/", {});
+
+    for (const auto& segment : segments)
+    {
+        // Empty, "." and ".." segments navigate. Windows also drops trailing dots and spaces,
+        // so "name." and "name " would land on "name".
+        if (segment.isEmpty() || segment.endsWithChar('.') || segment.endsWithChar(' ')
+            || isReservedWindowsName(segment))
+            return false;
+    }
+
+    return true;
 }
 
 juce::Result SnapshotBundler::parseContentAddressedManifest(const juce::var& manifestJson,
@@ -311,7 +371,9 @@ juce::Result SnapshotBundler::parseContentAddressedManifest(const juce::var& man
     if (!readBlobRef(root->getProperty("project_file"), projectEntry))
         return juce::Result::fail("Manifest project_file is missing or malformed.");
     projectEntry.isProjectFile = true;
-    outResult.entries.push_back(std::move(projectEntry));
+
+    std::vector<ParsedManifestEntry> candidates;
+    candidates.push_back(std::move(projectEntry));
 
     const auto tracksVar = root->getProperty("tracks");
     if (tracksVar.isArray())
@@ -321,8 +383,30 @@ juce::Result SnapshotBundler::parseContentAddressedManifest(const juce::var& man
             ParsedManifestEntry entry;
             if (!readBlobRef(trackVar, entry))
                 return juce::Result::fail("Manifest track entry is malformed.");
-            outResult.entries.push_back(std::move(entry));
+            candidates.push_back(std::move(entry));
         }
+    }
+
+    // One file per path. Paths are compared case-insensitively because macOS and Windows
+    // file systems are; the same content listed twice is written once.
+    std::map<juce::String, juce::String> hashByPath;
+    for (auto& entry : candidates)
+    {
+        if (!isSafeManifestPath(entry.filename))
+            return juce::Result::fail("This version contains an unsafe file path "
+                                      + describeManifestPath(entry.filename) + " and was not restored.");
+
+        const auto key = entry.filename.toLowerCase();
+        if (const auto existing = hashByPath.find(key); existing != hashByPath.end())
+        {
+            if (existing->second != entry.sha256)
+                return juce::Result::fail("This version lists two different files at "
+                                          + describeManifestPath(entry.filename) + " and was not restored.");
+            continue;
+        }
+
+        hashByPath.emplace(key, entry.sha256);
+        outResult.entries.push_back(std::move(entry));
     }
 
     return juce::Result::ok();
