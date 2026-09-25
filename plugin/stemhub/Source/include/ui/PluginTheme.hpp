@@ -23,7 +23,7 @@ enum class ButtonVariant
     primary,
     secondary,
     ghost,
-    segment,
+    tab,
     link
 };
 
@@ -59,7 +59,7 @@ struct PluginTheme
     inline static const juce::Colour kError { 0xffff5a36 };
 };
 
-// Custom colour id for button outlines (secondary / segment variants).
+// Custom colour id for button outlines (secondary variant).
 inline constexpr int buttonOutlineColourId = 0x5e1b0001;
 
 juce::Colour statusColour(MessageStatus status);
@@ -67,6 +67,7 @@ juce::Colour statusColour(MessageStatus status);
 juce::String arrowRight();
 juce::String arrowLeft();
 juce::String middleDot();
+juce::String ellipsis();
 
 // Typography. All faces are embedded (see Resources/fonts) so rendering never
 // depends on what the host machine has installed.
@@ -142,7 +143,8 @@ void styleButton(juce::TextButton& button, ButtonVariant variant);
 void stylePrimaryButton(juce::TextButton& button);
 void styleSecondaryButton(juce::TextButton& button);
 void styleGhostButton(juce::TextButton& button);
-void styleSegmentButton(juce::TextButton& button, bool selected);
+// Underlined text tab; the selected tab is Paper with a Blue rule.
+void styleTabButton(juce::TextButton& button, bool selected);
 void styleLinkButton(juce::TextButton& button, juce::Colour colour, juce::Colour hoverColour);
 // Keeps a primary button painted as active while disabled (e.g. "Signing in...").
 void setButtonBusy(juce::TextButton& button, bool busy);
@@ -159,6 +161,8 @@ void styleStatusLabel(juce::Label& label,
 void adaptStatusLabelForPaper(juce::Label& label, MessageStatus severity);
 // Compact chip (severity square + uppercase text); combine with styleStatusLabel.
 void makeStatusChip(juce::Label& label);
+// Borderless status line (severity square + text); combine with styleStatusLabel.
+void makeInlineStatus(juce::Label& label);
 void styleMetaLabel(juce::Label& label, const juce::String& text, juce::Colour colour, float size = 10.0f);
 
 void paintMetaText(juce::Graphics& g,
@@ -173,6 +177,16 @@ void paintTag(juce::Graphics& g,
               juce::Colour fill,
               juce::Colour textColour,
               bool outlined = false);
+float tagWidth(const juce::String& text);
+// Word-wrapped Syne with the brand's tight leading; overflow is ellipsised on the last line.
+// Returns the painted height (cap line of the first row to the baseline of the last).
+int paintDisplayText(juce::Graphics& g,
+                     const juce::String& text,
+                     juce::Rectangle<int> area,
+                     float fontSize,
+                     juce::Colour colour,
+                     int maxLines,
+                     bool anchorBottom = false);
 // The StemHub figure "catching the signal".
 void paintLogoMark(juce::Graphics& g,
                    juce::Rectangle<float> bounds,
@@ -183,6 +197,14 @@ void paintLogoTile(juce::Graphics& g, juce::Rectangle<float> bounds, juce::Colou
 void paintBlockPattern(juce::Graphics& g,
                        juce::Rectangle<float> bounds,
                        const juce::String& seed,
+                       int steps,
+                       juce::Colour blockColour,
+                       juce::Colour accentColour);
+// Stacked block patterns, like the tracks of a step sequencer: a project's generated artwork.
+void paintSequencerArt(juce::Graphics& g,
+                       juce::Rectangle<float> bounds,
+                       const juce::String& seed,
+                       int tracks,
                        int steps,
                        juce::Colour blockColour,
                        juce::Colour accentColour);
