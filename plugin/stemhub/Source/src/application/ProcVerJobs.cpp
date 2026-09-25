@@ -155,8 +155,10 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     const juce::File& projectRootDirectory,
     const std::optional<Project>& project,
     const juce::String& branchId,
+    const juce::String& parentVersionId,
     const juce::String& commitMessage,
-    const juce::String& dawName)
+    const juce::String& dawName,
+    const juce::String& accessToken) const
 {
     PushVersionJobResult result;
 
@@ -175,18 +177,11 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
         result.errorMessage = "Choose a valid project file before saving.";
         return result;
     }
-    if (hasCleanWorkingCopy(projectFile))
-    {
-        result.errorMessage = "No local project file changes detected on disk. Save the project in FL Studio first, then click Save again.";
-        return result;
-    }
 
-    ProjectVersionContext context;
-    context.projectId = project->id;
-    context.branchId = branchId;
-    context.lastVersionId = workingCopyVersionId.isNotEmpty() ? workingCopyVersionId
-                                                             : versionControlService.getLastVersionId();
-    versionControlService.setCurrentProjectContext(context);
+    // Taken before hashing: if the DAW saves again meanwhile, the next save sees a change.
+    result.pushedProjectFile = projectFile;
+    result.pushedFileSizeBytes = projectFile.getSize();
+    result.pushedFileModTimeMs = projectFile.getLastModificationTime().toMilliseconds();
 
     SnapshotBundleRequest bundleRequest;
     bundleRequest.sourceProjectFile = projectFile;
@@ -206,23 +201,43 @@ StemhubAudioProcessor::PushVersionJobResult StemhubAudioProcessor::performPushVe
     casRequest.projectId = project->id;
     casRequest.branchId = branchId;
     casRequest.commitMessage = commitMessage;
-    casRequest.parentVersionId = context.lastVersionId;
+    casRequest.parentVersionId = parentVersionId;
     casRequest.manifest = std::move(manifest);
 
-    const auto pushStatus = versionControlService.pushVersionContentAddressed(casRequest);
+    // A service of its own: the shared one belongs to the message thread.
+    VersionControlService pushService(*apiClient);
+    pushService.setAccessToken(accessToken);
+
+    const auto pushStatus = pushService.pushVersionContentAddressed(casRequest);
     if (pushStatus.failed())
     {
         result.errorMessage = pushStatus.getErrorMessage();
         return result;
     }
 
-    result.pushedVersionId = versionControlService.getLastVersionId();
-    result.activeProjectStatusMessage = "Version saved successfully.";
+    result.pushedVersionId = pushService.getLastVersionId();
+
+    auto versionsResult = pushService.fetchVersionHistory(branchId, accessToken);
+    if (versionsResult.ok() && versionsResult.value.has_value())
+    {
+        sortVersionHistoryNewestFirst(*versionsResult.value);
+        result.refreshedVersions = std::move(*versionsResult.value);
+        result.activeProjectStatusMessage = "Version saved successfully.";
+    }
+    else
+    {
+        result.activeProjectStatusMessage = "Version saved. Sync to see it in the history ("
+            + (versionsResult.error ? versionsResult.error->message : juce::String("history unavailable")) + ").";
+    }
+
     return result;
 }
 
 StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRestoreVersionContentAddressedRequest(
-    const juce::String& versionId, const juce::File& destinationFolder)
+    const juce::String& projectId,
+    const juce::String& versionId,
+    const juce::File& destinationFolder,
+    const juce::String& accessToken) const
 {
     RestoreVersionJobResult result;
     result.restoredVersionId = versionId;
@@ -232,30 +247,24 @@ StemhubAudioProcessor::RestoreVersionJobResult StemhubAudioProcessor::performRes
         result.errorMessage = "Select a version before restoring.";
         return result;
     }
-    if (destinationFolder.exists() && !destinationFolder.isDirectory())
-    {
-        result.errorMessage = "Restore destination is not a directory: " + destinationFolder.getFullPathName();
-        return result;
-    }
-    if (!selectedProject)
+    if (projectId.isEmpty())
     {
         result.errorMessage = "Choose a project before restoring.";
         return result;
     }
-
-    // Clear any previous restore contents at that path so download starts fresh.
+    // The request picked a folder that did not exist. Anything there now is someone else's.
     if (destinationFolder.exists())
     {
-        if (!destinationFolder.deleteRecursively())
-        {
-            result.errorMessage = "Failed to clear previous restore folder at " + destinationFolder.getFullPathName();
-            return result;
-        }
+        result.errorMessage = "The restore folder already exists: " + destinationFolder.getFullPathName();
+        return result;
     }
 
+    VersionControlService restoreService(*apiClient);
+    restoreService.setAccessToken(accessToken);
+
     juce::File restoredProjectFile;
-    const auto status = versionControlService.restoreVersionFromManifest(
-        selectedProject->id, versionId, destinationFolder, restoredProjectFile);
+    const auto status = restoreService.restoreVersionFromManifest(
+        projectId, versionId, destinationFolder, restoredProjectFile);
     if (status.failed())
     {
         result.errorMessage = status.getErrorMessage();

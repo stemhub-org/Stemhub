@@ -27,6 +27,28 @@ juce::String buildJsonHeaders(const juce::String& bearerToken)
     return headers;
 }
 
+bool isRedirectStatus(const int statusCode)
+{
+    return statusCode == 301 || statusCode == 302 || statusCode == 303 || statusCode == 307 || statusCode == 308;
+}
+
+// Absolute locations are used as they are; "/path" is resolved against the request's origin.
+juce::String resolveRedirectLocation(const juce::String& requestUrl, const juce::String& location)
+{
+    if (location.startsWithIgnoreCase("https://") || location.startsWithIgnoreCase("http://"))
+        return location;
+
+    if (!location.startsWithChar('/'))
+        return {};
+
+    const auto schemeEnd = requestUrl.indexOf("://");
+    if (schemeEnd < 0)
+        return {};
+
+    const auto pathStart = requestUrl.indexOfChar(schemeEnd + 3, '/');
+    return (pathStart < 0 ? requestUrl : requestUrl.substring(0, pathStart)) + location;
+}
+
 juce::String buildBinaryHeaders(const juce::String& bearerToken)
 {
     juce::String headers;
@@ -455,9 +477,60 @@ juce::Result ApiClient::downloadBlob(const juce::String& projectId,
                                        const juce::File& destinationFile,
                                        const juce::String& accessToken) const
 {
-    // Reuse the existing downloadFile plumbing. Backend may 307-redirect to
-    // a presigned URL (GCS); juce::URL's input stream follows redirects.
-    return downloadFile("/projects/" + projectId + "/blobs/" + sha256,
-                        destinationFile,
-                        accessToken);
+    // The API answers with the bytes, or with a 307 to a presigned storage URL. That redirect
+    // is followed here rather than by JUCE, which would send our bearer token to the storage
+    // host as well (the Windows implementation re-sends every extra header).
+    const auto apiUrl = baseUrl + "/projects/" + projectId + "/blobs/" + sha256;
+
+    juce::StringPairArray responseHeaders;
+    int statusCode = 0;
+    auto stream = juce::URL(apiUrl).createInputStream(
+        juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
+            .withHttpRequestCmd("GET")
+            .withExtraHeaders(buildBinaryHeaders(accessToken))
+            .withResponseHeaders(&responseHeaders)
+            .withStatusCode(&statusCode)
+            .withNumRedirectsToFollow(0)
+            .withConnectionTimeoutMs(30000));
+
+    if (stream == nullptr)
+        return juce::Result::fail("Failed to connect to backend.");
+
+    if (isRedirectStatus(statusCode))
+    {
+        const auto storageUrl = resolveRedirectLocation(apiUrl, responseHeaders.getValue("Location", {}));
+        if (storageUrl.isEmpty())
+            return juce::Result::fail("Blob download was redirected to an invalid location.");
+
+        // Presigned URLs carry their own authorization; parsing them would re-encode the signature.
+        statusCode = 0;
+        stream = juce::URL::createWithoutParsing(storageUrl).createInputStream(
+            juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
+                .withHttpRequestCmd("GET")
+                .withStatusCode(&statusCode)
+                .withConnectionTimeoutMs(30000));
+
+        if (stream == nullptr)
+            return juce::Result::fail("Failed to connect to file storage.");
+    }
+
+    if (statusCode < 200 || statusCode >= 300)
+    {
+        const auto responseText = stream->readEntireStreamAsString();
+        return juce::Result::fail(extractErrorMessage(juce::JSON::parse(responseText),
+                                                      {},
+                                                      "Blob download failed (HTTP " + juce::String(statusCode) + ")."));
+    }
+
+    destinationFile.getParentDirectory().createDirectory();
+
+    juce::FileOutputStream output(destinationFile);
+    if (!output.openedOk())
+        return juce::Result::fail("Failed to open destination file for writing.");
+
+    if (output.writeFromInputStream(*stream, -1) < 0)
+        return juce::Result::fail("Failed to write downloaded blob to disk.");
+
+    output.flush();
+    return output.getStatus();
 }

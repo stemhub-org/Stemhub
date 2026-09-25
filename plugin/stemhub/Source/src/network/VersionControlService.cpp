@@ -331,7 +331,15 @@ juce::Result VersionControlService::restoreVersionFromManifest(const juce::Strin
 
     for (const auto& entry : parsed.entries)
     {
+        // Paths were validated when the manifest was parsed; this re-check is what guarantees
+        // nothing is ever written outside the restore folder.
         auto dest = restoreDirectory.getChildFile(entry.filename);
+        if (!dest.isAChildOf(restoreDirectory) || !dest.getParentDirectory().createDirectory())
+        {
+            for (auto& f : writtenFiles) f.deleteFile();
+            return juce::Result::fail("Could not create " + entry.filename + " inside the restore folder.");
+        }
+
         if (dest.existsAsFile())
             dest.deleteFile();
 

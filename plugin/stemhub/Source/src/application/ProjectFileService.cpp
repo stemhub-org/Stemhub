@@ -96,7 +96,11 @@ juce::String resolveRestoreProjectName(const std::vector<VersionSummary>& versio
 
     if (it != versions.end() && it->sourceProjectFilename.isNotEmpty())
     {
-        const auto sourceProjectName = juce::File(it->sourceProjectFilename).getFileNameWithoutExtension();
+        // Server-provided and possibly a path: keep the last segment, without its extension.
+        const auto sourceProjectName = juce::File::createLegalFileName(
+            it->sourceProjectFilename.replaceCharacter('\\', '/')
+                .fromLastOccurrenceOf("/", false, false)
+                .upToLastOccurrenceOf(".", false, false)).trim();
         if (sourceProjectName.isNotEmpty())
         {
             juce::Logger::writeToLog("[Restore] ProjectFileService -> found sourceProjectFilename="
@@ -108,7 +112,8 @@ juce::String resolveRestoreProjectName(const std::vector<VersionSummary>& versio
     if (it == versions.end())
         juce::Logger::writeToLog("[Restore] ProjectFileService -> version not found in provided history");
 
-    return fallbackName.isNotEmpty() ? fallbackName : "restored-project";
+    const auto legalFallbackName = juce::File::createLegalFileName(fallbackName).trim();
+    return legalFallbackName.isNotEmpty() ? legalFallbackName : "restored-project";
 }
 
 juce::Result resolveRestoreResult(const juce::File& snapshotZipFile,
