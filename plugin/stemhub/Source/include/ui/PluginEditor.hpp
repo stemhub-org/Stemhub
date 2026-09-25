@@ -1,16 +1,17 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "application/PluginProcessor.hpp"
+#include "application/StemhubSession.hpp"
 #include "ui/Views.hpp"
 #include "ui/PluginTheme.hpp"
 
+// Shows the session's state and turns clicks and shortcuts into its intents.
 class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     private juce::ChangeListener,
                                     private juce::KeyListener
 {
 public:
-    explicit StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit);
+    StemhubAudioProcessorEditor(juce::AudioProcessor& ownerProcessor, StemhubSession& sessionToShow);
     ~StemhubAudioProcessorEditor() override;
 
     using juce::Component::keyPressed;
@@ -41,9 +42,10 @@ private:
                                    std::function<void(const juce::File&)> onFolderChosen);
     void triggerPushVersion(const juce::String& commitMessage);
     bool hasActiveProjectSelection() const;
-    juce::File getEffectiveProjectFile() const;
     void showCommitMessagePopupForSave();
     void requestSaveWithCommitMessage(juce::String commitMessage);
+
+    StemhubSession& session;
     // Declared before the views: it owns the embedded brand typefaces they build fonts from.
     stemhub::plugin::theme::StemhubPluginLookAndFeel pluginLookAndFeel;
     LoginView loginView;
@@ -51,7 +53,6 @@ private:
     DashboardView dashboardView;
     std::unique_ptr<juce::AlertWindow> commitPopup;
     OperationState lastObservedOperationState { OperationState::idle };
-    StemhubAudioProcessor& audioProcessor;
     std::unique_ptr<juce::FileChooser> projectFileChooser;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessorEditor)
 };

@@ -1,31 +1,27 @@
 #pragma once
 
 #include <atomic>
-#include <deque>
 #include <functional>
-#include <JuceHeader.h>
 #include <mutex>
+#include <utility>
+#include <vector>
 
-#include <cstdint>
+#include <JuceHeader.h>
 
-template <typename Payload>
+// Runs jobs on a small thread pool and hands their results to the message thread. Which results
+// still matter is the owner's call (StemhubSession tags each one with its request epoch); this
+// class only moves them between threads and makes sure no job outlives it.
+template <typename Result>
 class BackgroundJobCoordinator
 {
 public:
-    struct JobResult
-    {
-        uint64_t requestGeneration {};
-        uint64_t requestId {};
-        Payload payload;
-    };
-
     // onResultReady is called on the worker thread each time a result is queued; it should
-    // only schedule a flushResults() on the message thread.
-    BackgroundJobCoordinator(size_t workerCount, std::function<void()> onResultReady)
+    // only schedule a takeResults() on the message thread.
+    BackgroundJobCoordinator(int workerCount, std::function<void()> onResultReady)
         : resultReadyCallback(std::move(onResultReady)),
-          backgroundJobs(juce::ThreadPoolOptions{}
-                             .withThreadName("Stemhub jobs")
-                             .withNumberOfThreads(static_cast<int>(workerCount)))
+          pool(juce::ThreadPoolOptions {}
+                   .withThreadName("Stemhub jobs")
+                   .withNumberOfThreads(workerCount))
     {
     }
 
@@ -34,58 +30,33 @@ public:
         shutdown();
     }
 
-    // Stops accepting work, drops pending results and waits for the running jobs to return.
+    // Stops accepting work, waits for the running jobs to return and drops their results.
     // Owners call this before tearing down anything a job can reach, so no job outlives it.
     void shutdown()
     {
         isClosed = true;
-        ++requestGeneration;
 
         // Running jobs are not interruptible yet; they end within their network timeouts.
-        backgroundJobs.removeAllJobs(true, -1);
+        pool.removeAllJobs(true, -1);
 
         const std::lock_guard<std::mutex> lock(resultMutex);
         pendingResults.clear();
     }
 
-    void invalidateSession()
-    {
-        ++requestGeneration;
-
-        const std::lock_guard<std::mutex> lock(resultMutex);
-        pendingResults.clear();
-    }
-
-    uint64_t getCurrentGeneration() const noexcept
-    {
-        return requestGeneration.load();
-    }
-
-    void enqueue(std::function<Payload()> task)
+    void enqueue(std::function<Result()> task)
     {
         if (isClosed)
             return;
 
-        const auto requestId = ++requestCounter;
-        const auto currentGeneration = requestGeneration.load();
-
-        backgroundJobs.addJob([this,
-                              requestId,
-                              currentGeneration,
-                              taskFn = std::move(task)]() mutable
+        pool.addJob([this, task = std::move(task)]
         {
-            if (currentGeneration != requestGeneration.load())
-                return;
-
-            auto payload = taskFn();
-
-            if (currentGeneration != requestGeneration.load())
-                return;
-
-            JobResult result { currentGeneration, requestId, std::move(payload) };
+            auto result = task();
 
             {
                 const std::lock_guard<std::mutex> lock(resultMutex);
+                if (isClosed)
+                    return;
+
                 pendingResults.push_back(std::move(result));
             }
 
@@ -93,43 +64,17 @@ public:
         });
     }
 
-    template <typename ApplyResult>
-    bool flushResults(ApplyResult&& applyResult)
+    // The results queued since the last call, oldest first.
+    std::vector<Result> takeResults()
     {
-        std::deque<JobResult> results;
-
-        {
-            const std::lock_guard<std::mutex> lock(resultMutex);
-            std::swap(results, pendingResults);
-        }
-
-        if (results.empty())
-            return false;
-
-        bool didApply = false;
-
-        while (!results.empty())
-        {
-            auto result = std::move(results.front());
-            results.pop_front();
-
-            // Checked per result: applying one may end the session (sign-out, expired token).
-            if (result.requestGeneration != requestGeneration.load())
-                continue;
-
-            applyResult(std::move(result));
-            didApply = true;
-        }
-
-        return didApply;
+        const std::lock_guard<std::mutex> lock(resultMutex);
+        return std::exchange(pendingResults, {});
     }
 
 private:
     std::function<void()> resultReadyCallback;
-    std::deque<JobResult> pendingResults;
-    mutable std::mutex resultMutex;
+    std::mutex resultMutex;
+    std::vector<Result> pendingResults;
     std::atomic<bool> isClosed { false };
-    std::atomic<uint64_t> requestGeneration { 0 };
-    std::atomic<uint64_t> requestCounter { 0 };
-    juce::ThreadPool backgroundJobs;
+    juce::ThreadPool pool;
 };

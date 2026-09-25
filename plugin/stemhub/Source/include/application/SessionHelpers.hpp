@@ -9,7 +9,8 @@
 #include "domain/Version.hpp"
 #include "domain/Project.hpp"
 
-namespace stemhub::processorhelpers
+// Small pure helpers shared by the session and its use cases.
+namespace stemhub::sessionhelpers
 {
 template <typename ResultType>
 bool hasError(const ResultType& result)
@@ -61,16 +62,6 @@ inline juce::String extractVersionPrefixFromPathPart(const juce::String& value)
     }
 
     return candidate;
-}
-
-inline bool hasVersionHintInProjectPath(const juce::File& projectFile)
-{
-    if (!projectFile.existsAsFile())
-        return false;
-
-    const auto fileHint = extractVersionPrefixFromPathPart(projectFile.getFileNameWithoutExtension());
-    const auto parentHint = extractVersionPrefixFromPathPart(projectFile.getParentDirectory().getFileName());
-    return fileHint.isNotEmpty() || parentHint.isNotEmpty();
 }
 
 inline juce::String resolveVersionIdFromProjectPath(const juce::File& projectFile,

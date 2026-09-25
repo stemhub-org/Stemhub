@@ -7,6 +7,7 @@
 
 #include "domain/Branch.hpp"
 #include "domain/Project.hpp"
+#include "domain/Status.hpp"
 #include "domain/User.hpp"
 #include "domain/Version.hpp"
 #include "domain/WorkingCopyBaseline.hpp"
@@ -17,16 +18,18 @@
 // they can run on any worker thread; the API must be safe to call from several threads.
 //
 // sessionExpired in a result means the backend refused the token (HTTP 401): the session is
-// over and the user has to sign in again.
+// over and the user has to sign in again. requestEpoch is filled in by the session, which only
+// applies results of its latest request.
 namespace stemhub::usecases
 {
 struct AuthRequestResult
 {
+    uint64_t requestEpoch {};
     std::optional<User> user;
     std::vector<Project> projects;
     juce::String token;
     juce::String authErrorMessage;
-    juce::String projectSelectionStatusMessage;
+    Status projectsStatus;
     bool fromCachedSession { false };
     bool sessionExpired { false };
 };
@@ -48,7 +51,7 @@ AuthRequestResult restoreSession(const IProjectApi& api, const RestoreSessionInp
 
 struct ProjectActivationJobResult
 {
-    uint64_t selectionRequestId {};
+    uint64_t requestEpoch {};
     std::optional<Project> selectedProject;
     std::vector<Project> projects;
     std::vector<Branch> branches;
@@ -62,7 +65,7 @@ struct ProjectActivationJobResult
     // The latest version was just restored into projectFile; it should be opened in the DAW.
     bool didRestoreLatest { false };
     juce::String errorMessage;
-    juce::String activeProjectStatusMessage;
+    Status status;
     bool refreshProjects { false };
     bool fromCachedProjectRestore { false };
     bool sessionExpired { false };
@@ -95,13 +98,13 @@ ProjectActivationJobResult createProject(const IProjectApi& api, const CreatePro
 
 struct BranchHistoryJobResult
 {
-    uint64_t selectionRequestId {};
+    uint64_t requestEpoch {};
     std::vector<VersionSummary> versions;
     juce::String branchId;
     juce::String branchName;
     juce::String selectedVersionId;
     juce::String errorMessage;
-    juce::String activeProjectStatusMessage;
+    Status status;
     bool sessionExpired { false };
 };
 
@@ -118,6 +121,7 @@ BranchHistoryJobResult fetchHistory(const IProjectApi& api, const FetchHistoryIn
 
 struct PushVersionJobResult
 {
+    uint64_t requestEpoch {};
     juce::String pushedVersionId;
     // The pushed file as the new version, with its size and modification time from before it
     // was hashed: if the DAW saves again meanwhile, the next save sees a change.
@@ -125,7 +129,7 @@ struct PushVersionJobResult
     // Branch history fetched right after the push, so the new version shows up at once.
     std::optional<std::vector<VersionSummary>> refreshedVersions;
     juce::String errorMessage;
-    juce::String activeProjectStatusMessage;
+    Status status;
     bool sessionExpired { false };
 };
 
@@ -144,11 +148,12 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
 
 struct RestoreVersionJobResult
 {
+    uint64_t requestEpoch {};
     juce::String restoredVersionId;
     juce::File restoredProjectFile;
     WorkingCopyBaseline restoredCopy;
     juce::String errorMessage;
-    juce::String activeProjectStatusMessage;
+    Status status;
     bool sessionExpired { false };
 };
 
