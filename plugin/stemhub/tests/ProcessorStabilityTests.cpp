@@ -1058,6 +1058,90 @@ public:
             expect(olderCopy.loadFileAsString() == "flp v1", "the older copy is kept");
         }
 
+        beginTest("Signing out during a save drops its result");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+            context.processor.setOpenFileHandler([](const juce::File&) { return true; });
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+
+            signIn(context);
+            context.processor.requestOpenProject(project.id, projectFile, false);
+            expect(waitUntil(context.processor, [&context] { return context.processor.getSelectedProject().has_value()
+                                                                  && isIdle(context.processor); }),
+                   "project should open");
+
+            auto gate = std::make_shared<BlockingGate>();
+            context.api->setCheckMissingGate(project.id, gate);
+            context.processor.requestPushVersion("first", "FL Studio");
+            gate->waitUntilEntered();
+            context.processor.signOut();
+            gate->release();
+            gate->waitUntilFinished();
+
+            // The job still finishes on the server; its result must not revive the session.
+            expect(waitUntil(context.processor, [&context] { return context.api->getCreatedVersions().size() == 1; }),
+                   "the save job should finish");
+            context.processor.flushPendingBackgroundResultsForTesting();
+            expect(context.processor.getAuthState() == AuthState::signedOut, describeProcessorState(context.processor));
+            expect(!context.processor.getSelectedProject().has_value(), "no project after signing out");
+            expect(context.processor.getVersionHistory().empty(), "the save's history is dropped");
+        }
+
+        beginTest("A restore folder's version is the next parent but never blocks a save");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+            const auto restoredVersionId = context.api->addVersion(branch.id, "first", { { "song.flp", "flp v1" } });
+            context.api->addVersion(branch.id, "second", { { "song.flp", "flp v2" } });
+            context.processor.setOpenFileHandler([](const juce::File&) { return true; });
+
+            // A copy restored in an earlier session: only its folder name says which version it is.
+            const auto restoredFile = context.environment.root
+                                          .getChildFile("song-" + restoredVersionId.substring(0, 8))
+                                          .getChildFile("song.flp");
+            expect(restoredFile.getParentDirectory().createDirectory().wasOk());
+            expect(restoredFile.replaceWithText("flp v1"));
+
+            signIn(context);
+            context.processor.requestOpenProject(project.id, restoredFile, false);
+            expect(waitUntil(context.processor, [&context] { return context.processor.getSelectedProject().has_value()
+                                                                  && isIdle(context.processor); }),
+                   "project should open");
+
+            context.processor.requestPushVersion("from the restored copy", "FL Studio");
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.api->getCreatedVersions().size() == 3; }),
+                   "the save must not be refused: " + describeProcessorState(context.processor));
+            expect(context.api->getCreatedVersions().back().parentVersionId == restoredVersionId,
+                   "the restored version is the parent, not the branch head");
+        }
+
+        beginTest("A working-copy baseline only vouches for what it recorded");
+        {
+            TestEnvironment environment;
+            const auto file = environment.root.getChildFile("song.flp");
+            expect(file.replaceWithText("flp"));
+
+            const WorkingCopyBaseline guessed { file, "version-1" };
+            expect(guessed.isSet() && !guessed.hasRecordedState(), "a version without recorded state");
+            expect(!guessed.isUnchanged(), "an unknown state counts as changed");
+
+            const auto recorded = WorkingCopyBaseline::recordedNow(file, "version-1");
+            expect(recorded.isUnchanged(), "unchanged right after recording");
+            simulateDawSave(file, " edit");
+            expect(!recorded.isUnchanged(), "a DAW save is a change");
+
+            expect(!WorkingCopyBaseline {}.isSet() && !WorkingCopyBaseline {}.describes(file), "an empty baseline describes nothing");
+        }
+
         beginTest("The API base URL is https, or http to this machine");
         {
             using stemhub::api::chooseBaseUrl;

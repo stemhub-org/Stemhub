@@ -55,11 +55,8 @@ StemhubAudioProcessor::StemhubAudioProcessor(std::unique_ptr<IProjectApi> apiCli
     installStemhubFileLogger();
     juce::Logger::writeToLog("StemhubAudioProcessor constructor");
 
-    apiClient = std::move(apiClientProvider);
-    if (apiClient == nullptr)
-        apiClient = std::make_unique<ApiClient>();
-
-    versionControlService.setApiClient(*apiClient);
+    apiClient = apiClientProvider != nullptr ? std::shared_ptr<const IProjectApi>(std::move(apiClientProvider))
+                                             : std::make_shared<ApiClient>();
     openFileHandler = [](const juce::File& file) { return stemhub::projectfiles::openInSystem(file); };
     managedWorkingCopyFolder = stemhub::projectfiles::getDefaultManagedWorkingCopyFolder();
 }
@@ -78,10 +75,11 @@ StemhubAudioProcessor::~StemhubAudioProcessor()
     uninstallStemhubFileLogger();
 }
 
-void StemhubAudioProcessor::enqueueBackgroundTask(std::function<BackgroundJobPayload()> taskFactory)
+void StemhubAudioProcessor::enqueueBackgroundTask(std::function<BackgroundJobPayload(const IProjectApi&)> run)
 {
-    backgroundJobs.enqueue(std::move(taskFactory), [this]()
+    // The job owns a reference to the API, so it never reaches into this processor.
+    backgroundJobs.enqueue([api = apiClient, run = std::move(run)]
     {
-        triggerAsyncUpdate();
+        return run(*api);
     });
 }

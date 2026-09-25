@@ -6,8 +6,8 @@
 
 #include <JuceHeader.h>
 
-#include "application/VersionControlService.hpp"
-#include "network/ApiUtils.hpp"
+#include "application/VersionControlUtils.hpp"
+#include "domain/Project.hpp"
 
 namespace stemhub::processorhelpers
 {
@@ -108,16 +108,5 @@ inline juce::String resolveVersionIdFromProjectPath(const juce::File& projectFil
 inline bool hasProjectAndBranchSelected(const std::optional<Project>& project, const juce::String& branchId)
 {
     return project.has_value() && branchId.isNotEmpty();
-}
-
-inline ProjectVersionContext makeProjectVersionContext(const std::optional<Project>& project,
-                                                       const juce::String& branchId,
-                                                       const std::vector<VersionSummary>& versions)
-{
-    ProjectVersionContext context;
-    context.projectId = project ? project->id : juce::String();
-    context.branchId = branchId;
-    context.lastVersionId = versions.empty() ? juce::String() : versions.front().id;
-    return context;
 }
 }
