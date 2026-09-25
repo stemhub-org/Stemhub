@@ -1,12 +1,17 @@
 #pragma once
 
+#include <optional>
+
 #include <JuceHeader.h>
 
 #include "application/StemhubSession.hpp"
 
 // The plugin as the host sees it. Audio passes through untouched; everything StemHub does lives
-// in the session, which the editor drives.
-class StemhubAudioProcessor final : public juce::AudioProcessor
+// in the session, which the editor drives. The processor saves the session's project link in the
+// DAW project and hands it back when the project loads.
+class StemhubAudioProcessor final : public juce::AudioProcessor,
+                                    private juce::ChangeListener,
+                                    private juce::AsyncUpdater
 {
 public:
     StemhubAudioProcessor();
@@ -48,8 +53,21 @@ private:
         ~FileLoggerScope();
     };
 
+    void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+    // Hands the link the host restored to the session, on the message thread.
+    void handleAsyncUpdate() override;
+    // Makes what the host saves follow the session's link, and tells the host when it changed.
+    void updateLinkForHost();
+
     // Declared before the session, so the log outlives the session's jobs.
     FileLoggerScope fileLogger;
+
+    // Hosts save and restore state from any thread, so these are only used under linkLock; the
+    // session itself stays on the message thread.
+    juce::SpinLock linkLock;
+    ProjectLink linkForHost;
+    std::optional<ProjectLink> linkFromHost;
+
     StemhubSession session;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)

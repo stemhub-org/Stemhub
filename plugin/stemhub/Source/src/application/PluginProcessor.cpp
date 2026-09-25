@@ -1,4 +1,5 @@
 #include "application/PluginProcessor.hpp"
+#include "application/PluginState.hpp"
 #include "ui/PluginEditor.hpp"
 
 namespace
@@ -32,14 +33,17 @@ StemhubAudioProcessor::StemhubAudioProcessor()
     : AudioProcessor(BusesProperties()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      session(std::make_shared<ApiClient>())
+      session(std::make_shared<ApiClient>(), SessionStorage::forCurrentUser())
 {
     juce::Logger::writeToLog("StemhubAudioProcessor constructor");
+    session.addChangeListener(this);
 }
 
 StemhubAudioProcessor::~StemhubAudioProcessor()
 {
     juce::Logger::writeToLog("StemhubAudioProcessor destructor");
+    cancelPendingUpdate();
+    session.removeChangeListener(this);
 }
 
 const juce::String StemhubAudioProcessor::getName() const
@@ -156,15 +160,64 @@ juce::AudioProcessorEditor* StemhubAudioProcessor::createEditor()
     return new StemhubAudioProcessorEditor(*this, session);
 }
 
-// Nothing is stored in the host project yet.
 void StemhubAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    juce::ignoreUnused(destData);
+    ProjectLink link;
+    {
+        const juce::SpinLock::ScopedLockType lock(linkLock);
+        link = linkForHost;
+    }
+
+    destData = stemhub::pluginstate::encode(link);
 }
 
 void StemhubAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused(data, sizeInBytes);
+    auto link = stemhub::pluginstate::decode(data, static_cast<size_t>(juce::jmax(0, sizeInBytes)));
+    {
+        const juce::SpinLock::ScopedLockType lock(linkLock);
+        linkForHost = link;
+        linkFromHost = std::move(link);
+    }
+
+    triggerAsyncUpdate();
+}
+
+void StemhubAudioProcessor::handleAsyncUpdate()
+{
+    std::optional<ProjectLink> link;
+    {
+        const juce::SpinLock::ScopedLockType lock(linkLock);
+        std::swap(link, linkFromHost);
+    }
+
+    if (link.has_value())
+        session.restoreLink(std::move(*link));
+
+    // The session keeps a project that is already open, or takes a restore hand-off instead.
+    updateLinkForHost();
+}
+
+void StemhubAudioProcessor::changeListenerCallback(juce::ChangeBroadcaster* source)
+{
+    juce::ignoreUnused(source);
+    updateLinkForHost();
+}
+
+void StemhubAudioProcessor::updateLinkForHost()
+{
+    const auto& link = session.getState().link;
+    bool didChange = false;
+    {
+        const juce::SpinLock::ScopedLockType lock(linkLock);
+        didChange = linkForHost != link;
+        if (didChange)
+            linkForHost = link;
+    }
+
+    // Marks the DAW project as modified, so the new link is saved with it.
+    if (didChange)
+        updateHostDisplay(ChangeDetails().withNonParameterStateChanged(true));
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

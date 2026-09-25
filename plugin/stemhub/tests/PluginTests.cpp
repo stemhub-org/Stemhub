@@ -9,9 +9,15 @@
 
 #include <JuceHeader.h>
 
-#include "application/StemhubSession.hpp"
-#include "application/SessionCache.hpp"
+#if ! JUCE_WINDOWS
+ #include <sys/stat.h>
+#endif
+
+#include "application/CredentialStore.hpp"
+#include "application/PluginState.hpp"
+#include "application/RestoreHandoff.hpp"
 #include "application/SnapshotBundler.hpp"
+#include "application/StemhubSession.hpp"
 #include "network/ApiConfig.hpp"
 #include "network/ApiJson.hpp"
 
@@ -581,43 +587,56 @@ struct TestEnvironment
                    .getChildFile(juce::Uuid().toString()))
     {
         root.createDirectory();
-        stemhub::sessioncache::setCacheFileOverrideForTesting(root.getChildFile("session.json"));
-        stemhub::sessioncache::clear();
     }
 
     ~TestEnvironment()
     {
-        stemhub::sessioncache::clear();
-        stemhub::sessioncache::clearCacheFileOverrideForTesting();
         root.deleteRecursively();
     }
 
     juce::File root;
 };
 
-// A session on the fake backend. Files it would open in the DAW are recorded instead, and the
-// latest versions it restores go under the test folder.
+// A plugin instance's session on the fake backend, with the stores every instance on the machine
+// shares under a temporary folder. Files a session would open in the DAW are recorded instead.
 struct TestContext
 {
     TestContext()
     {
-        session.setOpenFileHandler([this](const juce::File& file)
-        {
-            openedFiles.add(file);
-            return canOpenFiles;
-        });
-        session.setManagedWorkingCopyFolder(environment.root.getChildFile("managed"));
+        recordOpenedFiles(session);
+    }
+
+    // Another plugin instance, as the DAW creates one for each project it opens.
+    std::unique_ptr<StemhubSession> makeInstance()
+    {
+        auto instance = std::make_unique<StemhubSession>(api, storage);
+        recordOpenedFiles(*instance);
+        return instance;
     }
 
     [[nodiscard]] const SessionState& state() const noexcept { return session.getState(); }
     [[nodiscard]] bool isIdle() const noexcept { return !session.isBusy(); }
+    [[nodiscard]] const juce::File& handoffFile() const noexcept { return storage.restoreHandoffFile; }
 
-    // Declared first, so it is cleaned up after the session and the jobs that use its files.
+    // Declared first, so it is cleaned up after the sessions and the jobs that use its files.
     TestEnvironment environment;
     std::shared_ptr<FakeProjectApi> api { std::make_shared<FakeProjectApi>() };
+    SessionStorage storage { std::make_shared<InMemoryCredentialStore>(),
+                             environment.root.getChildFile("pending-restore.json"),
+                             environment.root.getChildFile("managed") };
     juce::Array<juce::File> openedFiles;
     bool canOpenFiles { true };
-    StemhubSession session { api };
+    StemhubSession session { api, storage };
+
+private:
+    void recordOpenedFiles(StemhubSession& target)
+    {
+        target.setOpenFileHandler([this](const juce::File& file)
+        {
+            openedFiles.add(file);
+            return canOpenFiles;
+        });
+    }
 };
 
 class StemhubTest : public juce::UnitTest
@@ -628,21 +647,30 @@ protected:
     {
     }
 
-    void signIn(TestContext& context)
+    // Waits for the linked project too, when there is one.
+    void signIn(StemhubSession& session)
     {
-        context.session.requestSignIn("user@example.com", "secret");
-        expect(waitUntil(context.session, [&context] { return context.state().authState == AuthState::signedIn && context.isIdle(); }),
-               "sign-in should succeed: " + describe(context.session));
+        session.requestSignIn("user@example.com", "secret");
+        expect(waitUntil(session, [&session] { return session.getState().authState == AuthState::signedIn && !session.isBusy(); }),
+               "sign-in should succeed: " + describe(session));
     }
 
-    void openProject(TestContext& context, const juce::String& projectId, const juce::File& projectFile)
+    // With the saved token, as when the plugin window opens.
+    void restoreSavedSession(StemhubSession& session)
     {
-        context.session.requestOpenProject(projectId, projectFile);
-        expect(waitUntil(context.session, [&context, projectId]
+        session.requestRestoreSavedSession();
+        expect(waitUntil(session, [&session] { return session.getState().authState == AuthState::signedIn && !session.isBusy(); }),
+               "the saved session should restore: " + describe(session));
+    }
+
+    void openProject(StemhubSession& session, const juce::String& projectId, const juce::File& projectFile)
+    {
+        session.requestOpenProject(projectId, projectFile);
+        expect(waitUntil(session, [&session, projectId]
         {
-            return context.state().selectedProject.has_value() && context.state().selectedProject->id == projectId
-                && context.isIdle();
-        }), "project should open: " + describe(context.session));
+            const auto& state = session.getState();
+            return state.selectedProject.has_value() && state.selectedProject->id == projectId && !session.isBusy();
+        }), "project should open: " + describe(session));
     }
 };
 
@@ -657,57 +685,120 @@ public:
         {
             TestContext context;
             context.api->cachedSessionIsValid = false;
-            stemhub::sessioncache::saveAccessToken("expired-token");
+            context.storage.credentials->saveToken("expired-token");
 
-            context.session.requestRestoreCachedSession();
+            context.session.requestRestoreSavedSession();
             expect(waitUntil(context.session, [&context] { return context.state().authState == AuthState::authError; }),
                    "an invalid saved token should end in authError: " + describe(context.session));
             expect(context.state().uiState == UIState::login, "the login screen stays visible");
             expect(context.state().authStatus.text.containsIgnoreCase("sign in again"), describe(context.session));
-            expect(stemhub::sessioncache::loadAccessToken().isEmpty(), "the invalid token is forgotten");
+            expect(context.storage.credentials->loadToken().isEmpty(), "the invalid token is forgotten");
         }
 
-        beginTest("A saved project that no longer exists falls back to the project grid");
+        beginTest("A DAW project reopens its linked project, branch and file");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branchMain = makeBranch("branch-main", project.id, "main");
+            const auto branchAlt = makeBranch("branch-alt", project.id, "alt");
+            context.api->projects = { makeProject("project-0", "Other"), project };
+            context.api->projectBranches[project.id] = { branchMain, branchAlt };
+            context.api->branchVersions[branchAlt.id] = { makeVersion("22222222-0000", branchAlt.id, "alt") };
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+            context.storage.credentials->saveToken("valid-token");
+
+            context.session.restoreLink({ project.id, branchAlt.id, projectFile });
+            restoreSavedSession(context.session);
+            expect(context.state().uiState == UIState::dashboard, describe(context.session));
+            expect(context.state().selectedProject.has_value() && context.state().selectedProject->id == project.id,
+                   describe(context.session));
+            expect(context.state().selectedBranchId == branchAlt.id, "the linked branch is opened, not main");
+            expect(context.state().selectedProjectFile == projectFile, "the linked file is the working file");
+            expect(context.openedFiles.isEmpty(), "reopening the link opens nothing in the DAW");
+        }
+
+        beginTest("A DAW project linked to a project that is gone shows the project grid");
         {
             TestContext context;
             context.api->projects = { makeProject("project-2", "Project Two") };
-            stemhub::sessioncache::saveAccessToken("valid-token");
-            stemhub::sessioncache::saveProjectId("missing-project");
-            stemhub::sessioncache::saveLastOpenedProjectFilePath("/tmp/missing.flp");
+            context.storage.credentials->saveToken("valid-token");
 
-            context.session.requestRestoreCachedSession();
-            expect(waitUntil(context.session, [&context]
-            {
-                return context.state().authState == AuthState::signedIn
-                    && context.state().uiState == UIState::projectSelection
-                    && context.state().projectsStatus.text.containsIgnoreCase("no longer available");
-            }), "a missing saved project should fall back to the grid: " + describe(context.session));
-            expect(context.state().projectsStatus.severity == Status::Severity::warning, "reported as a warning");
+            context.session.restoreLink({ "missing-project", "branch-1", context.environment.root.getChildFile("song.flp") });
+            restoreSavedSession(context.session);
+            expect(context.state().uiState == UIState::projectSelection, describe(context.session));
+            expect(context.state().projectsStatus.severity == Status::Severity::warning
+                       && context.state().projectsStatus.text.contains("no longer open"),
+                   describe(context.session));
             expect(!context.state().selectedProject.has_value(), "no project is selected");
-            expect(stemhub::sessioncache::loadProjectId().isEmpty(), "the saved project id is cleared");
-            expect(stemhub::sessioncache::loadLastOpenedProjectFilePath().isEmpty(), "the saved file path is cleared");
+            expect(context.state().link.projectId == "missing-project", "the link stays until another project is opened");
         }
 
-        beginTest("A saved project that fails to open leaves the session usable");
+        beginTest("A linked file that is missing keeps its place in the link");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+            context.storage.credentials->saveToken("valid-token");
+
+            const auto unpluggedFile = context.environment.root.getChildFile("External drive").getChildFile("song.flp");
+            context.session.restoreLink({ project.id, "branch-1", unpluggedFile });
+            restoreSavedSession(context.session);
+            expect(context.state().uiState == UIState::dashboard, describe(context.session));
+            expect(context.session.getEffectiveProjectFile() == juce::File(), "there is nothing to save from until it is back");
+            expect(context.state().link.workingFile == unpluggedFile, "the DAW project stays linked to it");
+        }
+
+        beginTest("A linked project that fails to open leaves the session usable");
         {
             TestContext context;
             const auto project = makeProject("project-1", "Project");
             context.api->projects = { project };
             context.api->branchErrors[project.id] = "Failed to load workspaces.";
-            stemhub::sessioncache::saveAccessToken("valid-token");
-            stemhub::sessioncache::saveProjectId(project.id);
+            context.storage.credentials->saveToken("valid-token");
 
-            context.session.requestRestoreCachedSession();
-            expect(waitUntil(context.session, [&context]
-            {
-                return context.state().authState == AuthState::signedIn
-                    && context.state().uiState == UIState::projectSelection
-                    && context.isIdle()
-                    && context.state().projectsStatus.isError();
-            }), "the failure should leave the grid usable: " + describe(context.session));
+            context.session.restoreLink({ project.id, {}, {} });
+            restoreSavedSession(context.session);
+            expect(context.state().uiState == UIState::projectSelection && context.state().projectsStatus.isError(),
+                   "the failure should leave the grid usable: " + describe(context.session));
             expect(!context.state().selectedProject.has_value(), "no project is selected");
-            expect(stemhub::sessioncache::loadProjectId().isEmpty(), "the saved project id is cleared");
             expect(context.state().projectsStatus.text.containsIgnoreCase("Failed to load workspaces"), describe(context.session));
+        }
+
+        beginTest("Each plugin instance keeps its own project, and signing out keeps the link");
+        {
+            TestContext context;
+            const auto projectA = makeProject("project-a", "Song A");
+            const auto projectB = makeProject("project-b", "Song B");
+            context.api->projects = { projectA, projectB };
+            context.api->projectBranches[projectA.id] = { makeBranch("branch-a", projectA.id, "main") };
+            context.api->projectBranches[projectB.id] = { makeBranch("branch-b", projectB.id, "main") };
+            const auto fileA = context.environment.root.getChildFile("a.flp");
+            const auto fileB = context.environment.root.getChildFile("b.flp");
+            expect(fileA.replaceWithText("a") && fileB.replaceWithText("b"));
+
+            signIn(context.session);
+            openProject(context.session, projectA.id, fileA);
+
+            // A second DAW project with the plugin: the saved token signs it in, with no link.
+            auto second = context.makeInstance();
+            restoreSavedSession(*second);
+            expect(second->getState().uiState == UIState::projectSelection, describe(*second));
+            openProject(*second, projectB.id, fileB);
+
+            expect(context.state().link == ProjectLink { projectA.id, "branch-a", fileA }, "the first instance is linked to A");
+            expect(second->getState().link == ProjectLink { projectB.id, "branch-b", fileB }, "the second one to B");
+
+            context.session.signOut();
+            expect(second->getState().authState == AuthState::signedIn, "the other instance stays signed in");
+            expect(context.state().link.projectId == projectA.id, "the DAW project keeps its link");
+
+            signIn(context.session);
+            expect(context.state().selectedProject.has_value() && context.state().selectedProject->id == projectA.id
+                       && context.state().selectedProjectFile == fileA,
+                   "signing in again reopens the linked project: " + describe(context.session));
         }
 
         beginTest("Requests made while the session is busy are ignored");
@@ -721,7 +812,7 @@ public:
             context.api->projectBranches[projectA.id] = { branchMain, branchAlt };
             context.api->projectBranches[projectB.id] = { makeBranch("branch-b", projectB.id, "main") };
             context.api->branchVersions[branchAlt.id] = { makeVersion("22222222-0000", branchAlt.id, "alt") };
-            signIn(context);
+            signIn(context.session);
 
             auto openGate = std::make_shared<BlockingGate>();
             context.api->branchFetchGates[projectA.id] = openGate;
@@ -765,8 +856,8 @@ public:
 
             const auto fileA = context.environment.root.getChildFile("a.flp");
             expect(fileA.replaceWithText("a"));
-            signIn(context);
-            openProject(context, projectA.id, fileA);
+            signIn(context.session);
+            openProject(context.session, projectA.id, fileA);
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(projectA.id, gate);
@@ -774,8 +865,8 @@ public:
             gate->waitUntilEntered();
 
             context.session.signOut();
-            signIn(context);
-            openProject(context, projectB.id, {});
+            signIn(context.session);
+            openProject(context.session, projectB.id, {});
 
             // The save still reaches the server, but its result belongs to the old session.
             gate->release();
@@ -799,8 +890,8 @@ public:
 
             const auto projectFile = context.environment.root.getChildFile("song.flp");
             expect(projectFile.replaceWithText("flp"));
-            signIn(context);
-            openProject(context, project.id, projectFile);
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(project.id, gate);
@@ -827,7 +918,7 @@ public:
                 context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
                 context.api->branchFetchGates[project.id] = gate;
                 context.api->branchFetchReturned = jobReturned;
-                signIn(context);
+                signIn(context.session);
 
                 context.session.requestOpenProject(project.id, {});
                 gate->waitUntilEntered();
@@ -858,8 +949,8 @@ public:
             expect(sourceFolder.getChildFile("Drums/kick.wav").replaceWithText("kick"));
             expect(sourceFolder.getChildFile("kick.wav").replaceWithText("a different kick"));
 
-            signIn(context);
-            openProject(context, project.id, projectFile);
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
 
             context.session.requestPushVersion("first", "FL Studio");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
@@ -873,58 +964,73 @@ public:
             const auto restoresFolder = context.environment.root.getChildFile("restores");
             expect(restoresFolder.createDirectory().wasOk());
             context.session.requestRestoreVersion(firstVersionId, restoresFolder);
-            expect(waitUntil(context.session, [&context, &restoresFolder]
-            {
-                return context.isIdle() && context.state().selectedProjectFile.isAChildOf(restoresFolder);
-            }), "restore should finish: " + describe(context.session));
-            const auto restoredFile = context.state().selectedProjectFile;
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
+                   "restore should finish: " + describe(context.session));
+            const auto restoredFile = context.openedFiles.getFirst();
             const auto restoredFolder = restoredFile.getParentDirectory();
-            expect(restoredFile.existsAsFile(), restoredFile.getFullPathName());
-            expect(restoredFolder.getFileName() == "song-" + firstVersionId.substring(0, 8), restoredFolder.getFullPathName());
+            expect(restoredFile.loadFileAsString() == "flp v1", restoredFile.getFullPathName());
+            expect(restoredFolder.getParentDirectory() == restoresFolder
+                       && restoredFolder.getFileName() == "song-" + firstVersionId.substring(0, 8),
+                   restoredFolder.getFullPathName());
             expect(restoredFolder.getChildFile("Drums/kick.wav").loadFileAsString() == "kick", "nested files keep their folder");
             expect(restoredFolder.getChildFile("kick.wav").loadFileAsString() == "a different kick", "same-name files don't collide");
-            expect(context.openedFiles.contains(restoredFile), "the restored project is opened in the DAW");
+            expect(context.state().selectedProjectFile == projectFile, "this instance stays with its own project file");
+            expect(context.handoffFile().existsAsFile(), "the restored copy waits for the instance the DAW opens");
 
-            // Saving the restored copy chains from the restored version.
+            // The DAW opens the copy with a plugin instance of its own. Its saved state is from
+            // before the first save, so it names the original file.
+            auto restoredInstance = context.makeInstance();
+            restoredInstance->restoreLink({ project.id, branch.id, projectFile });
+            expect(!context.handoffFile().exists(), "the hand-off is taken once");
+            restoreSavedSession(*restoredInstance);
+            const auto& restoredState = restoredInstance->getState();
+            expect(restoredState.selectedProjectFile == restoredFile, "the copy is that instance's working file: " + describe(*restoredInstance));
+            expect(restoredState.link.workingFile == restoredFile, "and what its DAW project will be saved with");
+            expect(restoredState.openedVersionId == firstVersionId, "the restored version is the one in the DAW");
+
+            restoredInstance->requestPushVersion("nothing new", "FL Studio");
+            expect(restoredState.sessionStatus.severity == Status::Severity::warning
+                       && restoredState.sessionStatus.text.contains("No changes"),
+                   "an unchanged copy is not saved again: " + describe(*restoredInstance));
+
+            // Saving the copy chains from the restored version.
             simulateDawSave(restoredFile, " edit 1");
-            context.session.requestPushVersion("second", "FL Studio");
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 2; }),
-                   "second save should land in the history: " + describe(context.session));
+            restoredInstance->requestPushVersion("second", "FL Studio");
+            expect(waitUntil(*restoredInstance, [&restoredInstance] { return !restoredInstance->isBusy()
+                                                                            && restoredInstance->getState().versionHistory.size() == 2; }),
+                   "second save should land in the history: " + describe(*restoredInstance));
             auto created = context.api->getCreatedVersions();
             expect(created.size() == 2 && created[1].parentVersionId == firstVersionId,
                    "the second version's parent is the restored one");
             const auto secondVersionId = created[1].id;
-            expect(context.state().versionHistory.front().id == secondVersionId, "history is refreshed after a save");
-            expect(context.state().selectedVersionId == secondVersionId, "the new version is selected");
+            expect(restoredState.versionHistory.front().id == secondVersionId, "history is refreshed after a save");
+            expect(restoredState.selectedVersionId == secondVersionId, "the new version is selected");
 
             // Nothing changed on disk: no new version, even after a refresh of the same branch.
-            context.session.requestRefreshVersionHistory();
-            expect(waitUntil(context.session, [&context] { return context.isIdle(); }), "refresh should finish");
-            context.session.requestPushVersion("no changes", "FL Studio");
-            expect(context.isIdle() && context.state().sessionStatus.severity == Status::Severity::warning
-                       && context.state().sessionStatus.text.contains("No changes"),
-                   "an unchanged file should not be saved again: " + describe(context.session));
+            restoredInstance->requestRefreshVersionHistory();
+            expect(waitUntil(*restoredInstance, [&restoredInstance] { return !restoredInstance->isBusy(); }), "refresh should finish");
+            restoredInstance->requestPushVersion("no changes", "FL Studio");
+            expect(restoredState.sessionStatus.text.contains("No changes"), describe(*restoredInstance));
             expect(context.api->getCreatedVersions().size() == 2, "no version is created for an unchanged file");
 
             simulateDawSave(restoredFile, " edit 2");
-            context.session.requestPushVersion("third", "FL Studio");
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 3; }),
-                   "third save should land in the history: " + describe(context.session));
+            restoredInstance->requestPushVersion("third", "FL Studio");
+            expect(waitUntil(*restoredInstance, [&restoredInstance] { return !restoredInstance->isBusy()
+                                                                            && restoredInstance->getState().versionHistory.size() == 3; }),
+                   "third save should land in the history: " + describe(*restoredInstance));
             created = context.api->getCreatedVersions();
             expect(created.size() == 3 && created[2].parentVersionId == secondVersionId,
                    "each save's parent is the previous save");
 
             // Restoring the same version again goes to a new folder; the edited copy stays.
-            context.session.requestRestoreVersion(firstVersionId, restoresFolder);
-            expect(waitUntil(context.session, [&context, &restoredFile]
-            {
-                return context.isIdle() && context.state().selectedProjectFile != restoredFile
-                    && context.state().selectedProjectFile.existsAsFile();
-            }), "second restore should finish: " + describe(context.session));
+            restoredInstance->requestRestoreVersion(firstVersionId, restoresFolder);
+            expect(waitUntil(*restoredInstance, [&context, &restoredInstance] { return !restoredInstance->isBusy()
+                                                                                      && context.openedFiles.size() == 2; }),
+                   "second restore should finish: " + describe(*restoredInstance));
             expect(restoredFile.loadFileAsString() == "flp v1 edit 1 edit 2", "an earlier restore is never deleted");
-            expect(context.state().selectedProjectFile.getParentDirectory().getFileName() == restoredFolder.getFileName() + " (2)",
-                   "the new folder is numbered: " + context.state().selectedProjectFile.getFullPathName());
-            expect(context.state().selectedVersionId == firstVersionId, "the numbered folder still maps to its version");
+            expect(context.openedFiles.getLast().getParentDirectory().getFileName() == restoredFolder.getFileName() + " (2)",
+                   "the new folder is numbered: " + context.openedFiles.getLast().getFullPathName());
+            expect(restoredState.selectedProjectFile == restoredFile, "the instance keeps working on its copy");
         }
 
         beginTest("Only one save runs at a time, and the project stays open meanwhile");
@@ -936,8 +1042,8 @@ public:
 
             const auto projectFile = context.environment.root.getChildFile("song.flp");
             expect(projectFile.replaceWithText("flp"));
-            signIn(context);
-            openProject(context, project.id, projectFile);
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(project.id, gate);
@@ -969,17 +1075,30 @@ public:
             const auto versionId = context.api->addVersion(branch.id, "from a collaborator",
                                                            { { "song.flp", "flp" }, { "Samples/kick.wav", "kick" } });
 
-            signIn(context);
+            signIn(context.session);
             context.session.requestOpenProject(project.id, {}, true);
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().selectedProjectFile.existsAsFile(); }),
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
                    "the latest version should be restored: " + describe(context.session));
 
-            const auto restoredFile = context.state().selectedProjectFile;
+            const auto restoredFile = context.openedFiles.getFirst();
             expect(restoredFile.isAChildOf(context.environment.root.getChildFile("managed")), restoredFile.getFullPathName());
             expect(restoredFile.getParentDirectory().getChildFile("Samples/kick.wav").loadFileAsString() == "kick");
-            expect(context.openedFiles.contains(restoredFile), "the restored copy is opened in the DAW");
-            expect(context.state().openedVersionId == versionId, "the restored version is the one in the DAW");
+            expect(context.state().selectedProject.has_value() && context.state().selectedProjectFile == juce::File(),
+                   "this instance had no copy of its own and still has none");
             expect(context.state().projectsStatus.isEmpty(), "the grid's progress message is cleared");
+
+            // The DAW opens the copy. Saved by an earlier version, its plugin state has no link;
+            // some hosts hand that empty state over twice.
+            auto restoredInstance = context.makeInstance();
+            restoredInstance->restoreLink({});
+            restoredInstance->restoreLink({});
+            expect(restoredInstance->getState().link.workingFile == restoredFile, "the hand-off is taken and kept");
+            restoreSavedSession(*restoredInstance);
+            const auto& restoredState = restoredInstance->getState();
+            expect(restoredState.selectedProject.has_value() && restoredState.selectedProject->id == project.id,
+                   "the instance takes the hand-off: " + describe(*restoredInstance));
+            expect(restoredState.selectedProjectFile == restoredFile, "and works on the restored copy");
+            expect(restoredState.openedVersionId == versionId, "the restored version is the one in the DAW");
         }
 
         beginTest("Opening a project never replaces unsaved local changes");
@@ -989,27 +1108,29 @@ public:
             const auto branch = makeBranch("branch-1", project.id, "main");
             context.api->projects = { project };
             context.api->projectBranches[project.id] = { branch };
-            context.api->addVersion(branch.id, "first", { { "song.flp", "flp v1" } });
 
-            signIn(context);
-            context.session.requestOpenProject(project.id, {}, true);
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().selectedProjectFile.existsAsFile(); }),
-                   "the first version should be restored");
-            const auto localCopy = context.state().selectedProjectFile;
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp v1"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+            context.session.requestPushVersion("first", "FL Studio");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
+                   "the first version should be saved: " + describe(context.session));
 
             // Someone saves a newer version while this copy has unsaved edits.
-            simulateDawSave(localCopy, " my edit");
+            simulateDawSave(projectFile, " my edit");
             context.api->addVersion(branch.id, "second", { { "song.flp", "flp v2" } });
 
-            context.session.requestOpenProject(project.id, localCopy, true);
+            context.session.showProjectSelection();
+            context.session.requestOpenProject(project.id, projectFile, true);
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 2; }),
                    "the project should reopen: " + describe(context.session));
-            expect(context.state().selectedProjectFile == localCopy, "the edited copy stays the working file");
-            expect(localCopy.loadFileAsString() == "flp v1 my edit", "the edited copy is untouched");
+            expect(context.state().selectedProjectFile == projectFile, "the edited copy stays the working file");
+            expect(projectFile.loadFileAsString() == "flp v1 my edit", "the edited copy is untouched");
             expect(context.state().sessionStatus.severity == Status::Severity::warning
                        && context.state().sessionStatus.text.contains("not saved"),
                    describe(context.session));
-            expect(context.openedFiles.size() == 1, "nothing else is opened in the DAW");
+            expect(context.openedFiles.isEmpty() && !context.handoffFile().exists(), "nothing is restored or opened");
         }
 
         beginTest("Opening a project updates an unchanged older copy");
@@ -1019,26 +1140,36 @@ public:
             const auto branch = makeBranch("branch-1", project.id, "main");
             context.api->projects = { project };
             context.api->projectBranches[project.id] = { branch };
-            context.api->addVersion(branch.id, "first", { { "song.flp", "flp v1" } });
 
-            signIn(context);
-            context.session.requestOpenProject(project.id, {}, true);
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().selectedProjectFile.existsAsFile(); }),
-                   "the first version should be restored");
-            const auto olderCopy = context.state().selectedProjectFile;
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp v1"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+            context.session.requestPushVersion("first", "FL Studio");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
+                   "the first version should be saved: " + describe(context.session));
+            const auto firstVersionId = context.state().workingCopy.versionId;
 
             const auto newerVersionId = context.api->addVersion(branch.id, "second", { { "song.flp", "flp v2" } });
-            context.session.requestOpenProject(project.id, olderCopy, true);
-            expect(waitUntil(context.session, [&context, &olderCopy]
-            {
-                return context.isIdle() && context.state().selectedProjectFile != olderCopy;
-            }), "the newer version should be restored: " + describe(context.session));
-            expect(context.state().selectedProjectFile.loadFileAsString() == "flp v2");
-            expect(context.state().openedVersionId == newerVersionId);
-            expect(olderCopy.loadFileAsString() == "flp v1", "the older copy is kept");
+            context.session.showProjectSelection();
+            context.session.requestOpenProject(project.id, projectFile, true);
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
+                   "the newer version should be restored: " + describe(context.session));
+            const auto newerCopy = context.openedFiles.getFirst();
+            expect(newerCopy.loadFileAsString() == "flp v2" && newerCopy.isAChildOf(context.environment.root.getChildFile("managed")),
+                   newerCopy.getFullPathName());
+            expect(context.state().selectedProjectFile == projectFile && projectFile.loadFileAsString() == "flp v1",
+                   "this instance keeps its older copy");
+            expect(context.state().openedVersionId == firstVersionId, describe(context.session));
+
+            auto newerInstance = context.makeInstance();
+            newerInstance->restoreLink({ project.id, branch.id, projectFile });
+            restoreSavedSession(*newerInstance);
+            expect(newerInstance->getState().selectedProjectFile == newerCopy, describe(*newerInstance));
+            expect(newerInstance->getState().openedVersionId == newerVersionId);
         }
 
-        beginTest("A restored project the DAW can't open is still the working copy");
+        beginTest("A restore the DAW can't open says where the copy is");
         {
             TestContext context;
             const auto project = makeProject("project-1", "Song");
@@ -1050,22 +1181,27 @@ public:
 
             const auto projectFile = context.environment.root.getChildFile("song.flp");
             expect(projectFile.replaceWithText("mine"));
-            signIn(context);
-            openProject(context, project.id, projectFile);
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
 
             context.session.requestRestoreVersion(versionId, context.environment.root);
-            expect(waitUntil(context.session, [&context, &projectFile]
-            {
-                return context.isIdle() && context.state().selectedProjectFile != projectFile;
-            }), "the restore should finish: " + describe(context.session));
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
+                   "the restore should finish: " + describe(context.session));
 
-            const auto restoredFile = context.state().selectedProjectFile;
+            const auto restoredFile = context.openedFiles.getFirst();
             expect(restoredFile.loadFileAsString() == "flp v1", restoredFile.getFullPathName());
             expect(context.state().sessionStatus.severity == Status::Severity::warning
                        && context.state().sessionStatus.text.contains(restoredFile.getFullPathName()),
                    "the user is told where the restored project is: " + describe(context.session));
-            expect(context.state().workingCopy.versionId == versionId, "the next save builds on the restored version");
-            expect(context.state().openedVersionId.isEmpty(), "the DAW is not assumed to hold it");
+            expect(context.state().selectedProjectFile == projectFile, "this instance keeps its own file");
+            expect(context.handoffFile().existsAsFile(), "the copy waits for the user to open it");
+
+            // Opened by hand, with no link saved in it: the instance picks the copy up when its
+            // window opens.
+            auto openedByHand = context.makeInstance();
+            restoreSavedSession(*openedByHand);
+            expect(openedByHand->getState().selectedProjectFile == restoredFile, describe(*openedByHand));
+            expect(openedByHand->getState().workingCopy.versionId == versionId, "it knows which version the copy holds");
         }
 
         beginTest("A restore folder's version is the next parent but never blocks a save");
@@ -1085,8 +1221,8 @@ public:
             expect(restoredFile.getParentDirectory().createDirectory().wasOk());
             expect(restoredFile.replaceWithText("flp v1"));
 
-            signIn(context);
-            openProject(context, project.id, restoredFile);
+            signIn(context.session);
+            openProject(context.session, project.id, restoredFile);
 
             context.session.requestPushVersion("from the restored copy", "FL Studio");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.api->getCreatedVersions().size() == 3; }),
@@ -1109,8 +1245,8 @@ public:
             expect(context.environment.root.getChildFile("Backup/kick copy.wav").create().wasOk());
             expect(context.environment.root.getChildFile("kick copy.wav").replaceWithText("kick"));
 
-            signIn(context);
-            openProject(context, project.id, projectFile);
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
 
             context.session.requestPushVersion("first", "FL Studio");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.api->getCreatedVersions().size() == 1; }),
@@ -1134,8 +1270,8 @@ public:
 
             const auto projectFile = context.environment.root.getChildFile("song.flp");
             expect(projectFile.replaceWithText("flp"));
-            signIn(context);
-            openProject(context, project.id, projectFile);
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
 
             context.session.requestPushVersion(juce::String::repeatedString("n", 501), "FL Studio");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
@@ -1167,8 +1303,8 @@ public:
 
             const auto projectFile = context.environment.root.getChildFile("song.flp");
             expect(projectFile.replaceWithText("mine"));
-            signIn(context);
-            openProject(context, project.id, projectFile);
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
 
             const auto restoresFolder = context.environment.root.getChildFile("restores");
             expect(restoresFolder.createDirectory().wasOk());
@@ -1181,7 +1317,7 @@ public:
             restoresFolder.findChildFiles(leftovers, juce::File::findFilesAndDirectories, true);
             expect(leftovers.isEmpty(), "the half-restored folder is removed");
             expect(context.state().selectedProjectFile == projectFile, "the working file doesn't change");
-            expect(context.openedFiles.isEmpty(), "nothing is opened in the DAW");
+            expect(context.openedFiles.isEmpty() && !context.handoffFile().exists(), "nothing is handed to the DAW");
         }
 
         beginTest("A refused token signs the user out");
@@ -1191,8 +1327,8 @@ public:
             context.api->projects = { project };
             context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
 
-            signIn(context);
-            openProject(context, project.id, {});
+            signIn(context.session);
+            openProject(context.session, project.id, {});
 
             context.api->rejectToken = true;
             context.session.requestRefreshVersionHistory();
@@ -1201,7 +1337,7 @@ public:
             expect(context.state().uiState == UIState::login, "back on the login screen");
             expect(context.state().authStatus.text.contains("expired"), describe(context.session));
             expect(!context.state().selectedProject.has_value() && context.state().accessToken.isEmpty(), "the session is cleared");
-            expect(stemhub::sessioncache::loadAccessToken().isEmpty(), "the refused token is forgotten");
+            expect(context.storage.credentials->loadToken().isEmpty(), "the refused token is forgotten");
         }
 
         beginTest("Being offline at startup keeps the saved session");
@@ -1209,17 +1345,17 @@ public:
             TestContext context;
             context.api->projects = { makeProject("project-1", "Song") };
             context.api->offline = true;
-            stemhub::sessioncache::saveAccessToken("valid-token");
+            context.storage.credentials->saveToken("valid-token");
 
-            context.session.requestRestoreCachedSession();
+            context.session.requestRestoreSavedSession();
             expect(waitUntil(context.session, [&context] { return context.state().authState == AuthState::authError; }),
                    "an unreachable server should be reported: " + describe(context.session));
             expect(context.state().authStatus.isError() && context.state().authStatus.text.contains("Can't reach StemHub"),
                    describe(context.session));
-            expect(stemhub::sessioncache::loadAccessToken() == "valid-token", "the saved token is kept");
+            expect(context.storage.credentials->loadToken() == "valid-token", "the saved token is kept");
 
             context.api->offline = false;
-            context.session.requestRestoreCachedSession();
+            context.session.requestRestoreSavedSession();
             expect(waitUntil(context.session, [&context] { return context.state().authState == AuthState::signedIn; }),
                    "the next attempt signs in: " + describe(context.session));
         }
@@ -1287,6 +1423,97 @@ public:
             expect(!recorded.isUnchanged(), "a DAW save is a change");
 
             expect(!WorkingCopyBaseline {}.isSet() && !WorkingCopyBaseline {}.describes(file), "an empty baseline describes nothing");
+        }
+    }
+};
+
+class PersistenceTests final : public StemhubTest
+{
+public:
+    PersistenceTests() : StemhubTest("Stemhub persistence") {}
+
+    void runTest() override
+    {
+        beginTest("The link saved in the DAW project reads back, and bad data is ignored");
+        {
+            namespace pluginstate = stemhub::pluginstate;
+
+            const ProjectLink link { "project-1", "branch-1", juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                                                  .getChildFile("Song & Co").getChildFile("song \"1\".flp") };
+            const auto saved = pluginstate::encode(link);
+            expect(pluginstate::decode(saved.getData(), saved.getSize()) == link, saved.toString());
+
+            expect(!pluginstate::decode(nullptr, 0).isSet(), "no state is no link");
+            const juce::String garbage = "not xml at all";
+            expect(!pluginstate::decode(garbage.toRawUTF8(), garbage.getNumBytesAsUTF8()).isSet(), "unreadable state is no link");
+            const juce::String otherPlugin = R"(<PluginState projectId="project-1"/>)";
+            expect(!pluginstate::decode(otherPlugin.toRawUTF8(), otherPlugin.getNumBytesAsUTF8()).isSet(), "another tag is no link");
+
+            const juce::String partial = R"(<StemhubState schema="1" projectId="project-1" workingFile="relative/song.flp"/>)";
+            const auto partialLink = pluginstate::decode(partial.toRawUTF8(), partial.getNumBytesAsUTF8());
+            expect(partialLink.projectId == "project-1" && partialLink.branchId.isEmpty(), "missing values stay empty");
+            expect(partialLink.workingFile == juce::File(), "a path that isn't absolute here is dropped");
+        }
+
+        beginTest("A restore hand-off goes to one instance of its project, and only for a while");
+        {
+            namespace handoff = stemhub::handoff;
+
+            TestEnvironment environment;
+            const auto location = environment.root.getChildFile("pending-restore.json");
+            const auto copy = environment.root.getChildFile("song-12345678").getChildFile("song.flp");
+            expect(copy.create().wasOk() && copy.replaceWithText("flp"));
+
+            const auto now = juce::Time::getCurrentTime();
+            const RestoreHandoff written { "project-1", "branch-1", WorkingCopyBaseline::recordedNow(copy, "version-1"), now };
+            handoff::write(location, written);
+
+            expect(!handoff::take(location, "project-2", now).has_value() && location.existsAsFile(),
+                   "another project's instance leaves it");
+            const auto taken = handoff::take(location, "project-1", now + juce::RelativeTime::minutes(9));
+            expect(taken.has_value() && taken->branchId == "branch-1" && taken->copy.versionId == "version-1"
+                       && taken->copy.describes(copy) && taken->copy.isUnchanged(),
+                   "its instance gets the copy and what it holds");
+            expect(!location.exists() && !handoff::take(location, "project-1", now).has_value(), "it is taken once");
+
+            handoff::write(location, written);
+            expect(handoff::take(location, {}, now).has_value(), "an instance without a link takes any project's");
+
+            handoff::write(location, written);
+            expect(!handoff::take(location, "project-1", now + juce::RelativeTime::minutes(11)).has_value()
+                       && !location.exists(),
+                   "one nobody took in time is dropped");
+
+            handoff::write(location, written);
+            expect(copy.deleteFile());
+            expect(!handoff::take(location, "project-1", now).has_value() && !location.exists(),
+                   "one whose copy is gone is dropped");
+        }
+
+        beginTest("The saved token is shared by instances and readable only by its user");
+        {
+            TestEnvironment environment;
+            const auto file = environment.root.getChildFile("Stemhub").getChildFile("credentials.json");
+            FileCredentialStore store(file);
+            FileCredentialStore otherInstance(file);
+
+            expect(store.loadToken().isEmpty(), "nothing saved yet");
+            store.saveToken("secret-token");
+            expect(otherInstance.loadToken() == "secret-token", "every instance reads the same token");
+
+           #if ! JUCE_WINDOWS
+            struct stat fileInfo {};
+            struct stat folderInfo {};
+            expect(::stat(file.getFullPathName().toRawUTF8(), &fileInfo) == 0
+                       && (fileInfo.st_mode & 0777) == 0600,
+                   "the file is private: " + juce::String::formatted("%o", static_cast<unsigned int>(fileInfo.st_mode & 0777)));
+            expect(::stat(file.getParentDirectory().getFullPathName().toRawUTF8(), &folderInfo) == 0
+                       && (folderInfo.st_mode & 0777) == 0700,
+                   "its folder is private: " + juce::String::formatted("%o", static_cast<unsigned int>(folderInfo.st_mode & 0777)));
+           #endif
+
+            otherInstance.clear();
+            expect(store.loadToken().isEmpty() && !file.exists(), "signing out forgets it everywhere");
         }
     }
 };
@@ -1390,6 +1617,7 @@ public:
 };
 
 SessionTests sessionTests;
+PersistenceTests persistenceTests;
 SnapshotTests snapshotTests;
 ApiTests apiTests;
 }

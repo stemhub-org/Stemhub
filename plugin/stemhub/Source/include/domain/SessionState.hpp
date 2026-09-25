@@ -7,6 +7,7 @@
 
 #include "domain/Branch.hpp"
 #include "domain/Project.hpp"
+#include "domain/ProjectLink.hpp"
 #include "domain/Status.hpp"
 #include "domain/User.hpp"
 #include "domain/Version.hpp"
@@ -47,6 +48,11 @@ struct SessionState
 
     std::optional<User> currentUser;
     juce::String accessToken;
+
+    // The StemHub project of the DAW project this instance lives in: saved there by the
+    // processor, and kept across sign-outs.
+    ProjectLink link;
+
     std::vector<Project> projects;
     std::optional<Project> selectedProject;
     std::vector<Branch> branches;
