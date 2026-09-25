@@ -379,10 +379,10 @@ void StemhubAudioProcessorEditor::launchProjectFileChooser(const juce::String& t
         audioProcessor.getPendingProjectFile(),
         kProjectFilePattern);
 
-    constexpr auto flags = juce::FileBrowserComponent::openMode
+    constexpr auto chooserFlags = juce::FileBrowserComponent::openMode
         | juce::FileBrowserComponent::canSelectFiles;
 
-    projectFileChooser->launchAsync(flags, [this, fileChosenCallback = std::move(onFileChosen)](const juce::FileChooser& chooser)
+    projectFileChooser->launchAsync(chooserFlags, [this, fileChosenCallback = std::move(onFileChosen)](const juce::FileChooser& chooser)
     {
         const auto file = chooser.getResult();
         if (file.existsAsFile() && fileChosenCallback != nullptr)
@@ -405,10 +405,10 @@ void StemhubAudioProcessorEditor::launchProjectFolderChooser(const juce::String&
         defaultFolder,
         juce::String());
 
-    constexpr auto flags = juce::FileBrowserComponent::openMode
+    constexpr auto chooserFlags = juce::FileBrowserComponent::openMode
         | juce::FileBrowserComponent::canSelectDirectories;
 
-    projectFileChooser->launchAsync(flags, [this, folderChosenCallback = std::move(onFolderChosen)](const juce::FileChooser& chooser)
+    projectFileChooser->launchAsync(chooserFlags, [this, folderChosenCallback = std::move(onFolderChosen)](const juce::FileChooser& chooser)
     {
         const auto folder = chooser.getResult();
         if (folder.isDirectory() && folderChosenCallback != nullptr)
