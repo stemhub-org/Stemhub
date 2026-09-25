@@ -30,19 +30,37 @@ void invokeDetached(const std::function<void()>& callback)
         detached();
 }
 
+bool comboHoldsItems(const juce::ComboBox& combo,
+                     const std::vector<juce::String>& mappedIds,
+                     const std::vector<juce::String>& itemNames,
+                     const std::vector<juce::String>& itemIds)
+{
+    if (mappedIds != itemIds || combo.getNumItems() != static_cast<int>(itemNames.size()))
+        return false;
+
+    for (int i = 0; i < combo.getNumItems(); ++i)
+        if (combo.getItemText(i) != itemNames[static_cast<size_t>(i)])
+            return false;
+
+    return true;
+}
+
 void setMappedComboItems(juce::ComboBox& combo,
                          std::vector<juce::String>& mappedIds,
                          const std::vector<juce::String>& itemNames,
                          const std::vector<juce::String>& itemIds,
                          const juce::String& selectedItemId)
 {
-    combo.clear(juce::dontSendNotification);
-    mappedIds.clear();
-
-    for (size_t i = 0; i < itemNames.size() && i < itemIds.size(); ++i)
+    if (!comboHoldsItems(combo, mappedIds, itemNames, itemIds))
     {
-        combo.addItem(itemNames[i], static_cast<int>(i) + 1);
-        mappedIds.push_back(itemIds[i]);
+        combo.clear(juce::dontSendNotification);
+        mappedIds.clear();
+
+        for (size_t i = 0; i < itemNames.size() && i < itemIds.size(); ++i)
+        {
+            combo.addItem(itemNames[i], static_cast<int>(i) + 1);
+            mappedIds.push_back(itemIds[i]);
+        }
     }
 
     if (mappedIds.empty())
@@ -97,17 +115,9 @@ juce::String makeSlug(const juce::String& text)
     return slug.trimCharactersAtStart("-").trimCharactersAtEnd("-");
 }
 
-bool isGenericSnapshotTitle(const juce::String& title)
-{
-    const auto trimmed = title.trim();
-    return trimmed.isEmpty()
-        || trimmed.equalsIgnoreCase("save from plugin")
-        || trimmed.equalsIgnoreCase("no save note");
-}
-
 juce::String displayTitleFor(const VersionListItem& version)
 {
-    return isGenericSnapshotTitle(version.message) ? juce::String("Untitled snapshot") : version.message.trim();
+    return version.isUntitled ? juce::String("Untitled snapshot") : version.message.trim();
 }
 
 juce::String makeStatusChipText(theme::MessageStatus status)
@@ -598,29 +608,44 @@ void ProjectSelectionView::setMessage(const juce::String& message, stemhub::plug
 
 void ProjectSelectionView::setProjects(const std::vector<ProjectListItem>& projects, const juce::String& projectId)
 {
-    allProjects = projects;
+    const auto listChanged = projects != allProjects;
+    if (listChanged)
+        allProjects = projects;
 
-    const auto stillListed = [this](const juce::String& id)
+    const auto isListed = [this](const juce::String& id)
     {
         return std::any_of(allProjects.begin(), allProjects.end(), [&id](const auto& project) { return project.id == id; });
     };
 
-    if (projectId.isNotEmpty())
-        selectedProjectId = projectId;
-    else if (!stillListed(selectedProjectId))
-        selectedProjectId.clear();
+    const auto nextSelection = projectId.isNotEmpty() ? projectId
+                                                      : (isListed(selectedProjectId) ? selectedProjectId : juce::String());
 
-    rebuildProjectTiles();
-    repaint();
+    // Tiles are rebuilt only when the list changes; a new selection is shown in place.
+    if (listChanged)
+    {
+        selectedProjectId = nextSelection;
+        rebuildProjectTiles();
+    }
+    else if (nextSelection != selectedProjectId)
+    {
+        selectProjectById(nextSelection, false);
+    }
 }
 
 void ProjectSelectionView::setProjectFileSelectionState(bool fileSelected, const juce::String& selectedProjectFilePathToShow)
 {
+    const auto path = fileSelected ? selectedProjectFilePathToShow : juce::String();
+    if (fileSelected == hasProjectFile && path == selectedProjectFilePath)
+        return;
+
     hasProjectFile = fileSelected;
-    selectedProjectFilePath = fileSelected ? selectedProjectFilePathToShow : juce::String();
+    selectedProjectFilePath = path;
     canCreateProject = canCreateProject && hasProjectFile;
+
+    if (auto* newProjectTile = dynamic_cast<NewProjectTileComponent*>(projectTiles.getFirst()))
+        newProjectTile->setState(hasProjectFile, selectedProjectFilePath);
+
     updateNewProjectControls();
-    rebuildProjectTiles();
 }
 
 void ProjectSelectionView::setCanCreateProject(bool canCreate)
@@ -631,6 +656,9 @@ void ProjectSelectionView::setCanCreateProject(bool canCreate)
 
 void ProjectSelectionView::setAccountName(const juce::String& accountName)
 {
+    if (accountLabel.getText() == accountName.toUpperCase())
+        return;
+
     accountLabel.setText(accountName.toUpperCase(), juce::dontSendNotification);
     resized();
 }
@@ -1038,25 +1066,36 @@ void DashboardView::setBranches(const std::vector<juce::String>& branchNames,
 
 void DashboardView::setVersions(const std::vector<VersionListItem>& versionItems, const juce::String& versionId)
 {
-    versions = versionItems;
-
-    const auto isListed = std::any_of(versions.begin(), versions.end(), [&versionId](const auto& version)
+    const auto isListed = std::any_of(versionItems.begin(), versionItems.end(), [&versionId](const auto& version)
     {
         return version.id == versionId;
     });
 
     // Fall back to the newest version, as the history always did.
-    selectedVersionId = isListed ? versionId : (versions.empty() ? juce::String() : versions.front().id);
+    const auto nextSelection = isListed ? versionId : (versionItems.empty() ? juce::String() : versionItems.front().id);
 
-    rebuildVersionRows();
-    updateDetailControls();
-    repaint();
+    // Rows are rebuilt only when the history changes; a new selection is shown in place.
+    if (versionItems != versions)
+    {
+        versions = versionItems;
+        selectedVersionId = nextSelection;
+        rebuildVersionRows();
+        updateDetailControls();
+        repaint();
+    }
+    else if (nextSelection != selectedVersionId)
+    {
+        selectVersionById(nextSelection, false);
+    }
 }
 
-void DashboardView::setPackagedFiles(const juce::String& rootLabel, const std::vector<juce::String>& relativeFilePaths)
+void DashboardView::setSnapshotSize(int fileCount, juce::int64 totalBytes)
 {
-    juce::ignoreUnused(rootLabel);
-    packagedFileCount = static_cast<int>(relativeFilePaths.size());
+    if (fileCount == snapshotFileCount && totalBytes == snapshotTotalBytes)
+        return;
+
+    snapshotFileCount = fileCount;
+    snapshotTotalBytes = totalBytes;
     updateFooterSummary();
     repaint();
 }
@@ -1134,8 +1173,8 @@ void DashboardView::paint(juce::Graphics& g)
         const auto fileName = selectedProjectFilePath.isNotEmpty() ? juce::File(selectedProjectFilePath).getFileName()
                                                                    : juce::String("No local file yet");
         auto fileText = fileName;
-        if (packagedFileCount > 1)
-            fileText += metaSeparator() + juce::String(packagedFileCount) + " files";
+        if (snapshotFileCount > 1)
+            fileText += metaSeparator() + juce::String(snapshotFileCount) + " files";
 
         const auto metaWidth = static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(theme::labelFont(10.0f),
                                                                                                "WORKING COPY"))) + 2;
@@ -1350,17 +1389,15 @@ void DashboardView::updateFooterSummary()
     const auto slug = makeSlug(headerProjectLabel.getText());
     footerCloudLabel.setText("stemhub.io/" + (slug.isNotEmpty() ? slug : juce::String("project")), juce::dontSendNotification);
 
+    // What a save takes, as counted in the background.
     juce::String storage;
-    if (selectedProjectFilePath.isNotEmpty())
-    {
-        const auto fileSize = juce::File(selectedProjectFilePath).getSize();
-        storage = juce::File::descriptionOfSizeInBytes(fileSize > 0 ? fileSize : 0) + " / 5 GB";
-    }
+    if (selectedProjectFilePath.isEmpty())
+        storage = "No local file";
+    else if (snapshotFileCount < 0)
+        storage = "Counting files" + theme::ellipsis();
     else
-    {
-        storage = packagedFileCount > 0 ? juce::String(packagedFileCount) + " files ready"
-                                        : juce::String("No local file");
-    }
+        storage = juce::String(snapshotFileCount) + (snapshotFileCount == 1 ? " file" : " files") + metaSeparator()
+                + juce::File::descriptionOfSizeInBytes(snapshotTotalBytes);
 
     footerStorageLabel.setText(storage.toUpperCase(), juce::dontSendNotification);
     footerStorageLabel.setTooltip(selectedProjectFilePath);

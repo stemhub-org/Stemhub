@@ -4,6 +4,7 @@
 
 #include <JuceHeader.h>
 
+#include "application/Log.hpp"
 #include "application/StemhubSession.hpp"
 
 // The plugin as the host sees it. Audio passes through untouched; everything StemHub does lives
@@ -46,13 +47,6 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
 private:
-    // Installs the shared plugin.log while at least one instance is alive.
-    struct FileLoggerScope
-    {
-        FileLoggerScope();
-        ~FileLoggerScope();
-    };
-
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
     // Hands the link the host restored to the session, on the message thread.
     void handleAsyncUpdate() override;
@@ -60,7 +54,7 @@ private:
     void updateLinkForHost();
 
     // Declared before the session, so the log outlives the session's jobs.
-    FileLoggerScope fileLogger;
+    juce::SharedResourcePointer<stemhub::log::LogFile> logFile;
 
     // Hosts save and restore state from any thread, so these are only used under linkLock; the
     // session itself stays on the message thread.

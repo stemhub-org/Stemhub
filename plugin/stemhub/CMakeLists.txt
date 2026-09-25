@@ -24,11 +24,13 @@ add_subdirectory(${JUCE_DIR} JUCE)
 # The session and everything under it. No GUI or audio code, so the tests build it without either.
 set(STEMHUB_CORE_SOURCES
     Source/src/application/CredentialStore.cpp
+    Source/src/application/Log.cpp
     Source/src/application/PluginState.cpp
     Source/src/application/ProjectFileService.cpp
     Source/src/application/RestoreHandoff.cpp
     Source/src/application/SessionStorage.cpp
     Source/src/application/SnapshotBundler.cpp
+    Source/src/application/SnapshotFiles.cpp
     Source/src/application/SnapshotSync.cpp
     Source/src/application/StemhubSession.cpp
     Source/src/application/UseCases.cpp

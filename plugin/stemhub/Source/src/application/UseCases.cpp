@@ -4,6 +4,7 @@
 #include "application/SessionHelpers.hpp"
 #include "application/ProjectFileService.hpp"
 #include "application/SnapshotBundler.hpp"
+#include "application/SnapshotFiles.hpp"
 #include "application/SnapshotSync.hpp"
 
 using namespace stemhub::sessionhelpers;
@@ -12,9 +13,6 @@ namespace stemhub::usecases
 {
 namespace
 {
-// Longest save note the backend accepts (VersionFromManifestCreate.commit_message).
-constexpr int kMaxCommitMessageLength = 500;
-
 void loadProjects(const IProjectApi& api, const juce::String& token, AuthRequestResult& result)
 {
     auto projectsResult = api.fetchProjects(token);
@@ -336,9 +334,9 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
         result.errorMessage = "Choose a project file before saving.";
         return result;
     }
-    if (input.commitMessage.length() > kMaxCommitMessageLength)
+    if (input.commitMessage.trim().length() > kMaxSaveNoteLength)
     {
-        result.errorMessage = "Save notes are limited to " + juce::String(kMaxCommitMessageLength) + " characters.";
+        result.errorMessage = "Save notes are limited to " + juce::String(kMaxSaveNoteLength) + " characters.";
         return result;
     }
 
@@ -348,8 +346,7 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
 
     SnapshotBundleRequest bundleRequest;
     bundleRequest.sourceProjectFile = input.projectFile;
-    bundleRequest.projectRootDirectory = input.projectFile.getParentDirectory();
-    bundleRequest.sourceDaw = input.dawName;
+    bundleRequest.sourceDaw = stemhub::snapshotfiles::dawNameFor(input.projectFile);
 
     ContentAddressedManifest manifest;
     const auto manifestStatus = SnapshotBundler().buildManifest(bundleRequest, manifest);
@@ -362,7 +359,8 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
     stemhub::snapshots::PushRequest pushRequest;
     pushRequest.projectId = input.projectId;
     pushRequest.branchId = input.branchId;
-    pushRequest.commitMessage = input.commitMessage;
+    pushRequest.commitMessage = input.commitMessage.trim().isNotEmpty() ? input.commitMessage.trim()
+                                                                       : juce::String(kDefaultSaveNote);
     pushRequest.parentVersionId = input.parentVersionId;
     pushRequest.manifest = std::move(manifest);
 

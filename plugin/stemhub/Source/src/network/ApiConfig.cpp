@@ -1,4 +1,5 @@
 #include "network/ApiConfig.hpp"
+#include "application/Log.hpp"
 
 #ifndef STEMHUB_DEFAULT_API_BASE_URL
  #define STEMHUB_DEFAULT_API_BASE_URL "http://localhost:8000"
@@ -55,8 +56,7 @@ juce::String chooseBaseUrl(const juce::String& fromEnvironment,
         if (const auto url = normaliseBaseUrl(candidate); url.isNotEmpty())
             return url;
 
-        juce::Logger::writeToLog("[Config] Ignoring API base URL \"" + candidate
-                                 + "\": use https, or http to localhost only.");
+        stemhub::log::warning("Ignoring API base URL \"" + candidate + "\": use https, or http to localhost only.");
     }
 
     return withoutTrailingSlashes(builtInDefault);

@@ -2,10 +2,10 @@
 
 #include <JuceHeader.h>
 
+// The files come from stemhub::snapshotfiles::collect; paths are relative to the project file's folder.
 struct SnapshotBundleRequest
 {
     juce::File sourceProjectFile;
-    juce::File projectRootDirectory;
     juce::String sourceDaw;
 };
 

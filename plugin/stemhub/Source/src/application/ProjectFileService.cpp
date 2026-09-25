@@ -31,8 +31,6 @@ juce::String resolveRestoreProjectName(const std::vector<VersionSummary>& versio
                                        const juce::String& versionId,
                                        const juce::String& fallbackName)
 {
-    juce::Logger::writeToLog("[Restore] ProjectFileService -> resolveRestoreProjectName versionId=" + versionId
-                             + ", fallback=" + fallbackName);
     const auto it = std::find_if(versions.begin(), versions.end(), [&versionId](const VersionSummary& version)
     {
         return version.id == versionId;
@@ -46,15 +44,8 @@ juce::String resolveRestoreProjectName(const std::vector<VersionSummary>& versio
                 .fromLastOccurrenceOf("/", false, false)
                 .upToLastOccurrenceOf(".", false, false)).trim();
         if (sourceProjectName.isNotEmpty())
-        {
-            juce::Logger::writeToLog("[Restore] ProjectFileService -> found sourceProjectFilename="
-                                     + it->sourceProjectFilename);
             return sourceProjectName;
-        }
     }
-
-    if (it == versions.end())
-        juce::Logger::writeToLog("[Restore] ProjectFileService -> version not found in provided history");
 
     const auto legalFallbackName = juce::File::createLegalFileName(fallbackName).trim();
     return legalFallbackName.isNotEmpty() ? legalFallbackName : "restored-project";

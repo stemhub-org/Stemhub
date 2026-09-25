@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include "application/StemhubSession.hpp"
+#include "application/Log.hpp"
 #include "application/ProjectFileService.hpp"
 #include "application/RestoreHandoff.hpp"
 #include "application/SessionHelpers.hpp"
@@ -148,6 +149,7 @@ void StemhubSession::apply(AuthRequestResult result)
         if (result.fromSavedSession)
             didAttemptSavedSessionRestore = false;
 
+        stemhub::log::warning("Sign-in failed: " + result.authErrorMessage);
         state.authState = AuthState::authError;
         state.authStatus = Status::error(result.authErrorMessage);
         return;
@@ -184,6 +186,7 @@ void StemhubSession::resetState()
 
 void StemhubSession::expireSession(const juce::String& message)
 {
+    stemhub::log::info("StemHub refused the token: signed out.");
     signOut();
     state.authState = AuthState::authError;
     state.authStatus = Status::warning(message);
@@ -322,6 +325,7 @@ void StemhubSession::apply(ProjectActivationJobResult result)
 
     if (hasError(result))
     {
+        stemhub::log::warning("Opening the project failed: " + result.errorMessage);
         state.projectsStatus = Status::error(result.errorMessage);
         return;
     }
@@ -438,6 +442,7 @@ void StemhubSession::apply(BranchHistoryJobResult result)
 
     if (hasError(result))
     {
+        stemhub::log::warning("Loading the history failed: " + result.errorMessage);
         state.sessionStatus = Status::error(result.errorMessage);
         return;
     }
@@ -457,7 +462,7 @@ void StemhubSession::apply(BranchHistoryJobResult result)
 //==============================================================================
 // Saving and restoring
 
-void StemhubSession::requestPushVersion(juce::String commitMessage, juce::String dawName)
+void StemhubSession::requestPushVersion(juce::String commitMessage)
 {
     JUCE_ASSERT_MESSAGE_THREAD
     if (isBusy())
@@ -482,7 +487,6 @@ void StemhubSession::requestPushVersion(juce::String commitMessage, juce::String
     input.branchId = state.selectedBranchId;
     input.parentVersionId = getParentVersionForNextSave(projectFile);
     input.commitMessage = std::move(commitMessage);
-    input.dawName = std::move(dawName);
     input.token = state.accessToken;
 
     enqueue([input, epoch = beginRequest()](const IProjectApi& backend) -> JobPayload
@@ -505,6 +509,7 @@ void StemhubSession::apply(PushVersionJobResult result)
 
     if (hasError(result))
     {
+        stemhub::log::warning("Saving a version failed: " + result.errorMessage);
         state.sessionStatus = Status::error(result.errorMessage);
         return;
     }
@@ -582,7 +587,7 @@ void StemhubSession::apply(RestoreVersionJobResult result)
 
     if (hasError(result))
     {
-        juce::Logger::writeToLog("[Restore] restore failed: " + result.errorMessage);
+        stemhub::log::warning("Restoring a version failed: " + result.errorMessage);
         state.sessionStatus = Status::error(result.errorMessage);
         return;
     }

@@ -62,7 +62,7 @@ public:
     void requestSelectBranch(juce::String branchId);
     void requestRefreshVersionHistory();
     // Uploads only the files the server doesn't have yet. See docs/content-addressed-storage.md.
-    void requestPushVersion(juce::String commitMessage, juce::String dawName);
+    void requestPushVersion(juce::String commitMessage);
     // Downloads the version's files into a new folder inside destinationFolder, verifying SHA-256.
     void requestRestoreVersion(const juce::String& versionId, const juce::File& destinationFolder);
     void setSelectedVersionId(juce::String versionId);

@@ -1,6 +1,7 @@
 #include <atomic>
 #include <csignal>
 #include <functional>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -17,6 +18,7 @@
 #include "application/PluginState.hpp"
 #include "application/RestoreHandoff.hpp"
 #include "application/SnapshotBundler.hpp"
+#include "application/SnapshotFiles.hpp"
 #include "application/StemhubSession.hpp"
 #include "network/ApiConfig.hpp"
 #include "network/ApiJson.hpp"
@@ -861,7 +863,7 @@ public:
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(projectA.id, gate);
-            context.session.requestPushVersion("from A", "FL Studio");
+            context.session.requestPushVersion("from A");
             gate->waitUntilEntered();
 
             context.session.signOut();
@@ -895,7 +897,7 @@ public:
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(project.id, gate);
-            context.session.requestPushVersion("first", "FL Studio");
+            context.session.requestPushVersion("first");
             gate->waitUntilEntered();
             context.session.signOut();
             gate->release();
@@ -952,7 +954,7 @@ public:
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
 
-            context.session.requestPushVersion("first", "FL Studio");
+            context.session.requestPushVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    "first save should land in the history: " + describe(context.session));
             const auto firstVersionId = context.api->getCreatedVersions().at(0).id;
@@ -988,14 +990,14 @@ public:
             expect(restoredState.link.workingFile == restoredFile, "and what its DAW project will be saved with");
             expect(restoredState.openedVersionId == firstVersionId, "the restored version is the one in the DAW");
 
-            restoredInstance->requestPushVersion("nothing new", "FL Studio");
+            restoredInstance->requestPushVersion("nothing new");
             expect(restoredState.sessionStatus.severity == Status::Severity::warning
                        && restoredState.sessionStatus.text.contains("No changes"),
                    "an unchanged copy is not saved again: " + describe(*restoredInstance));
 
             // Saving the copy chains from the restored version.
             simulateDawSave(restoredFile, " edit 1");
-            restoredInstance->requestPushVersion("second", "FL Studio");
+            restoredInstance->requestPushVersion("second");
             expect(waitUntil(*restoredInstance, [&restoredInstance] { return !restoredInstance->isBusy()
                                                                             && restoredInstance->getState().versionHistory.size() == 2; }),
                    "second save should land in the history: " + describe(*restoredInstance));
@@ -1009,12 +1011,12 @@ public:
             // Nothing changed on disk: no new version, even after a refresh of the same branch.
             restoredInstance->requestRefreshVersionHistory();
             expect(waitUntil(*restoredInstance, [&restoredInstance] { return !restoredInstance->isBusy(); }), "refresh should finish");
-            restoredInstance->requestPushVersion("no changes", "FL Studio");
+            restoredInstance->requestPushVersion("no changes");
             expect(restoredState.sessionStatus.text.contains("No changes"), describe(*restoredInstance));
             expect(context.api->getCreatedVersions().size() == 2, "no version is created for an unchanged file");
 
             simulateDawSave(restoredFile, " edit 2");
-            restoredInstance->requestPushVersion("third", "FL Studio");
+            restoredInstance->requestPushVersion("third");
             expect(waitUntil(*restoredInstance, [&restoredInstance] { return !restoredInstance->isBusy()
                                                                             && restoredInstance->getState().versionHistory.size() == 3; }),
                    "third save should land in the history: " + describe(*restoredInstance));
@@ -1033,6 +1035,47 @@ public:
             expect(restoredState.selectedProjectFile == restoredFile, "the instance keeps working on its copy");
         }
 
+        beginTest("A save leaves out a copy restored into its own folder");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+
+            const auto folder = context.environment.root.getChildFile("Song");
+            const auto projectFile = folder.getChildFile("song.flp");
+            expect(folder.getChildFile("kick.wav").create().wasOk() && folder.getChildFile("kick.wav").replaceWithText("kick"));
+            expect(projectFile.replaceWithText("flp v1"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+
+            context.session.requestPushVersion("first");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
+                   describe(context.session));
+            const auto firstVersionId = context.state().workingCopy.versionId;
+
+            // Where the dashboard restores by default: next to the project file.
+            context.session.requestRestoreVersion(firstVersionId, folder);
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
+                   describe(context.session));
+            expect(context.openedFiles.getFirst().isAChildOf(folder), context.openedFiles.getFirst().getFullPathName());
+
+            simulateDawSave(projectFile, " edit");
+            context.session.requestPushVersion("second");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 2; }),
+                   describe(context.session));
+
+            const auto manifest = context.api->fetchVersionManifest(context.state().workingCopy.versionId, "token");
+            expect(manifest.ok(), "the second version has a manifest");
+            juce::StringArray trackPaths;
+            if (manifest.ok())
+                if (const auto* tracks = manifest.value->getProperty("tracks", {}).getArray())
+                    for (const auto& track : *tracks)
+                        trackPaths.add(track.getProperty("filename", {}).toString());
+
+            expect(trackPaths.joinIntoString(", ") == "kick.wav", "only the project's own audio: " + trackPaths.joinIntoString(", "));
+        }
+
         beginTest("Only one save runs at a time, and the project stays open meanwhile");
         {
             TestContext context;
@@ -1047,9 +1090,9 @@ public:
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(project.id, gate);
-            context.session.requestPushVersion("first", "FL Studio");
+            context.session.requestPushVersion("first");
             gate->waitUntilEntered();
-            context.session.requestPushVersion("second", "FL Studio");
+            context.session.requestPushVersion("second");
             context.session.requestRefreshVersionHistory();
             context.session.showProjectSelection();
             expect(context.state().operationState == OperationState::committing
@@ -1113,7 +1156,7 @@ public:
             expect(projectFile.replaceWithText("flp v1"));
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
-            context.session.requestPushVersion("first", "FL Studio");
+            context.session.requestPushVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    "the first version should be saved: " + describe(context.session));
 
@@ -1145,7 +1188,7 @@ public:
             expect(projectFile.replaceWithText("flp v1"));
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
-            context.session.requestPushVersion("first", "FL Studio");
+            context.session.requestPushVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    "the first version should be saved: " + describe(context.session));
             const auto firstVersionId = context.state().workingCopy.versionId;
@@ -1224,7 +1267,7 @@ public:
             signIn(context.session);
             openProject(context.session, project.id, restoredFile);
 
-            context.session.requestPushVersion("from the restored copy", "FL Studio");
+            context.session.requestPushVersion("from the restored copy");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.api->getCreatedVersions().size() == 3; }),
                    "the save must not be refused: " + describe(context.session));
             expect(context.api->getCreatedVersions().back().parentVersionId == restoredVersionId,
@@ -1248,14 +1291,14 @@ public:
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
 
-            context.session.requestPushVersion("first", "FL Studio");
+            context.session.requestPushVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.api->getCreatedVersions().size() == 1; }),
                    "first save: " + describe(context.session));
             const auto kickSha = sha256Of(juce::MemoryBlock("kick", 4));
             expect(context.api->getUploadCount(kickSha) == 1, "two identical files are one upload");
 
             simulateDawSave(projectFile, " edit");
-            context.session.requestPushVersion("second", "FL Studio");
+            context.session.requestPushVersion("second");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.api->getCreatedVersions().size() == 2; }),
                    "second save: " + describe(context.session));
             expect(context.api->getUploadCount(kickSha) == 1, "files the server has are not uploaded again");
@@ -1273,7 +1316,7 @@ public:
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
 
-            context.session.requestPushVersion(juce::String::repeatedString("n", 501), "FL Studio");
+            context.session.requestPushVersion(juce::String::repeatedString("n", 501));
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
                    "a long note should fail: " + describe(context.session));
             expect(context.state().sessionStatus.text.contains("500 characters"), describe(context.session));
@@ -1281,7 +1324,7 @@ public:
             for (int index = 0; index < 501; ++index)
                 expect(context.environment.root.getChildFile("stem" + juce::String(index) + ".wav").replaceWithText(juce::String(index)));
 
-            context.session.requestPushVersion("too many files", "FL Studio");
+            context.session.requestPushVersion("too many files");
             expect(waitUntil(context.session, [&context]
             {
                 return context.isIdle() && context.state().sessionStatus.text.contains("can hold 500");
@@ -1405,6 +1448,42 @@ public:
             result = SnapshotBundler::parseManifest(
                 makeManifest("song.flp", "../" + shaA.substring(3), {}), parsed);
             expect(result.failed(), "a hash that is not hex is rejected");
+        }
+
+        beginTest("A save takes the project's audio, and leaves out backups and restored copies");
+        {
+            namespace snapshotfiles = stemhub::snapshotfiles;
+
+            TestEnvironment environment;
+            const auto folder = environment.root.getChildFile("Song");
+            const auto projectFile = folder.getChildFile("song.flp");
+            const auto write = [&folder](const juce::String& path, const juce::String& content)
+            {
+                const auto file = folder.getChildFile(path);
+                return file.create().wasOk() && file.replaceWithText(content);
+            };
+
+            expect(write("song.flp", "flp") && write("Drums/kick.wav", "kick") && write("Loops/loop 01.aif", "loop")
+                   && write("mix-deadbeef/vocal.wav", "vocal") && write("notes.txt", "notes")
+                   && write("Backup/song overwritten.flp", "old") && write("backup/old kick.wav", "old kick")
+                   && write(".hidden.wav", "hidden") && write("song-0123abcd/song.flp", "restored")
+                   && write("song-0123abcd/Drums/kick.wav", "kick") && write("song-0123abcd (2)/song.flp", "restored 2"));
+
+            const auto files = snapshotfiles::collect(projectFile);
+            juce::StringArray paths;
+            for (const auto& file : files)
+                paths.add(file.getRelativePathFrom(folder).replaceCharacter('\\', '/'));
+
+            expect(paths.joinIntoString(", ") == "song.flp, Drums/kick.wav, Loops/loop 01.aif, mix-deadbeef/vocal.wav",
+                   "project file first, then its audio by path: " + paths.joinIntoString(", "));
+
+            const auto summary = snapshotfiles::summarize(projectFile);
+            expect(summary.fileCount == 4 && summary.totalBytes == 3 + 4 + 4 + 5, juce::String(summary.totalBytes));
+            expect(snapshotfiles::collect(folder.getChildFile("missing.flp")).empty(), "no project file, nothing to save");
+
+            expect(snapshotfiles::dawNameFor(projectFile) == "FL Studio");
+            expect(snapshotfiles::dawNameFor(folder.getChildFile("song.als")) == "Ableton Live");
+            expect(snapshotfiles::dawNameFor(folder.getChildFile("song.ptx")).isEmpty());
         }
 
         beginTest("A working-copy baseline only vouches for what it recorded");
@@ -1622,6 +1701,15 @@ SnapshotTests snapshotTests;
 ApiTests apiTests;
 }
 
+// JUCE's default logger writes to the debugger on Windows; CI reads the console.
+class ConsoleLogger final : public juce::Logger
+{
+    void logMessage(const juce::String& message) override
+    {
+        std::cout << message << std::endl;
+    }
+};
+
 int main()
 {
    #if ! JUCE_WINDOWS
@@ -1629,20 +1717,27 @@ int main()
     std::signal(SIGPIPE, SIG_IGN);
    #endif
 
+    ConsoleLogger consoleLogger;
+    juce::Logger::setCurrentLogger(&consoleLogger);
+    const juce::ScopeGuard restoreLogger { [] { juce::Logger::setCurrentLogger(nullptr); } };
+
     juce::ScopedJuceInitialiser_GUI scopedJuce;
     juce::UnitTestRunner runner;
     runner.setAssertOnFailure(false);
     runner.runAllTests();
+    int passCount = 0;
     int failureCount = 0;
     for (int i = 0; i < runner.getNumResults(); ++i)
     {
         if (auto* result = runner.getResult(i); result != nullptr)
         {
+            passCount += result->passes;
             failureCount += result->failures;
             for (const auto& message : result->messages)
                 juce::Logger::writeToLog(message);
         }
     }
 
+    juce::Logger::writeToLog(juce::String(passCount) + " checks passed, " + juce::String(failureCount) + " failed.");
     return failureCount == 0 ? 0 : 1;
 }
