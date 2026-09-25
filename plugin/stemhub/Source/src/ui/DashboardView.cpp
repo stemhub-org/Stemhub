@@ -269,7 +269,7 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        const auto hovered = isMouseOver(true);
+        const auto hovered = isEnabled() && isMouseOver(true);
         const auto bounds = getLocalBounds();
         const auto foreground = selected ? Theme::kInk : Theme::kForeground;
         const auto subtle = selected ? Theme::kInk.withAlpha(0.66f) : Theme::kForegroundSubtle;
@@ -331,9 +331,16 @@ public:
     void mouseEnter(const juce::MouseEvent&) override { repaint(); }
     void mouseExit(const juce::MouseEvent&) override { repaint(); }
 
+    void enablementChanged() override
+    {
+        setMouseCursor(isEnabled() ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+        repaint();
+    }
+
+    // JUCE still delivers mouse events to disabled components.
     void mouseUp(const juce::MouseEvent& event) override
     {
-        if (event.mouseWasClicked())
+        if (isEnabled() && event.mouseWasClicked())
             invokeDetached(onOpen);
     }
 
@@ -626,6 +633,12 @@ void ProjectSelectionView::setAccountName(const juce::String& accountName)
 {
     accountLabel.setText(accountName.toUpperCase(), juce::dontSendNotification);
     resized();
+}
+
+void ProjectSelectionView::setActivity(SessionActivity activity)
+{
+    // The tiles and the new-project controls wait for the project being opened or created.
+    projectGridContent.setEnabled(activity == SessionActivity::idle);
 }
 
 void ProjectSelectionView::paint(juce::Graphics& g)
@@ -1046,6 +1059,28 @@ void DashboardView::setPackagedFiles(const juce::String& rootLabel, const std::v
     packagedFileCount = static_cast<int>(relativeFilePaths.size());
     updateFooterSummary();
     repaint();
+}
+
+void DashboardView::setActivity(SessionActivity activity)
+{
+    const auto isIdle = activity == SessionActivity::idle;
+    const auto isSaving = activity == SessionActivity::saving;
+    const auto isRestoring = activity == SessionActivity::restoring;
+
+    saveChanges.setEnabled(isIdle);
+    theme::setButtonBusy(saveChanges, isSaving);
+    saveChanges.setButtonText(isSaving ? "Saving..." : "Save snapshot");
+
+    restoreButton.setEnabled(isIdle);
+    theme::setButtonBusy(restoreButton, isRestoring);
+    restoreButton.setButtonText(isRestoring ? "Restoring..." : "Restore this version");
+
+    syncButton.setEnabled(isIdle);
+    branchComboBox.setEnabled(isIdle);
+
+    // A save or restore belongs to this project, and a save to the note being typed.
+    backToProjectsButton.setEnabled(!isSaving && !isRestoring);
+    commitMessageInput.setEnabled(!isSaving && !isRestoring);
 }
 
 juce::String DashboardView::getSelectedBranchId() const

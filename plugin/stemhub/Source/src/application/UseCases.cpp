@@ -1,12 +1,12 @@
 #include <algorithm>
 
 #include "application/UseCases.hpp"
-#include "application/PluginProcessorHelpers.hpp"
+#include "application/SessionHelpers.hpp"
 #include "application/ProjectFileService.hpp"
 #include "application/SnapshotBundler.hpp"
 #include "application/SnapshotSync.hpp"
 
-using namespace stemhub::processorhelpers;
+using namespace stemhub::sessionhelpers;
 
 namespace stemhub::usecases
 {
@@ -21,13 +21,13 @@ void loadProjects(const IProjectApi& api, const juce::String& token, AuthRequest
     if (projectsResult.ok())
     {
         result.projects = std::move(*projectsResult.value);
-        result.projectSelectionStatusMessage = result.projects.empty()
-            ? "No projects found."
-            : "Loaded " + juce::String(static_cast<int>(result.projects.size())) + " project(s).";
+        result.projectsStatus = result.projects.empty()
+            ? Status::warning("No projects found.")
+            : Status::info("Loaded " + juce::String(static_cast<int>(result.projects.size())) + " project(s).");
     }
     else
     {
-        result.projectSelectionStatusMessage = projectsResult.errorMessage("Failed to load projects.");
+        result.projectsStatus = Status::error(projectsResult.errorMessage("Failed to load projects."));
     }
 }
 
@@ -138,7 +138,7 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     if (!versionsResult.ok())
     {
         result.sessionExpired = versionsResult.isUnauthorized();
-        result.activeProjectStatusMessage = versionsResult.errorMessage("Project ready, but failed to load version history.");
+        result.status = Status::warning(versionsResult.errorMessage("Project ready, but failed to load version history."));
         return result;
     }
 
@@ -163,17 +163,17 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
 
     if (result.versions.empty())
     {
-        result.activeProjectStatusMessage = (hasLocalCopy ? usingLocalFileMessage : juce::String("Project ready."))
-            + " No versions yet.";
+        result.status = Status::success((hasLocalCopy ? usingLocalFileMessage : juce::String("Project ready."))
+                                        + " No versions yet.");
         return result;
     }
 
     if (!input.restoreLatestIfSafe)
     {
-        result.activeProjectStatusMessage = hasLocalCopy ? usingLocalFileMessage
-                                                         : "Project ready. Loaded "
-                                                               + juce::String(static_cast<int>(result.versions.size()))
-                                                               + " version(s).";
+        result.status = Status::success(hasLocalCopy ? usingLocalFileMessage
+                                                     : "Project ready. Loaded "
+                                                           + juce::String(static_cast<int>(result.versions.size()))
+                                                           + " version(s).");
         return result;
     }
 
@@ -184,20 +184,20 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
         // another session), so it stays as it is.
         if (!localCopy.describes(localFile) || !localCopy.hasRecordedState())
         {
-            result.activeProjectStatusMessage = usingLocalFileMessage;
+            result.status = Status::success(usingLocalFileMessage);
             return result;
         }
 
         if (!localCopy.isUnchanged())
         {
-            result.activeProjectStatusMessage = "Local changes are not saved to StemHub yet, so the latest version "
-                                                "was not restored. Save them, or restore a version into a new folder.";
+            result.status = Status::warning("Local changes are not saved to StemHub yet, so the latest version "
+                                            "was not restored. Save them, or restore a version into a new folder.");
             return result;
         }
 
         if (localCopy.versionId == latestVersion.id)
         {
-            result.activeProjectStatusMessage = "Project ready. Your local copy is the latest version.";
+            result.status = Status::success("Project ready. Your local copy is the latest version.");
             return result;
         }
     }
@@ -213,8 +213,8 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     if (!restored.ok())
     {
         result.sessionExpired = restored.isUnauthorized();
-        result.activeProjectStatusMessage = "Project ready, but the latest version couldn't be restored: "
-            + restored.errorMessage("unknown error");
+        result.status = Status::warning("Project ready, but the latest version couldn't be restored: "
+                                        + restored.errorMessage("unknown error"));
         return result;
     }
 
@@ -223,7 +223,7 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     result.workingCopy = WorkingCopyBaseline::recordedNow(restoredProjectFile, latestVersion.id);
     result.selectedVersionId = latestVersion.id;
     result.didRestoreLatest = true;
-    result.activeProjectStatusMessage = "Project ready. Latest version restored: " + restoredProjectFile.getFileName();
+    result.status = Status::success("Project ready. Latest version restored: " + restoredProjectFile.getFileName());
     return result;
 }
 
@@ -277,15 +277,15 @@ ProjectActivationJobResult createProject(const IProjectApi& api, const CreatePro
     if (!versionsResult.ok())
     {
         result.sessionExpired = versionsResult.isUnauthorized();
-        result.activeProjectStatusMessage = versionsResult.errorMessage("Project created, but failed to load version history.");
+        result.status = Status::warning(versionsResult.errorMessage("Project created, but failed to load version history."));
     }
     else if (result.versions.empty())
     {
-        result.activeProjectStatusMessage = "Project created and main workspace selected. No versions yet.";
+        result.status = Status::success("Project created and main workspace selected. No versions yet.");
     }
     else
     {
-        result.activeProjectStatusMessage = "Project created and main workspace selected.";
+        result.status = Status::success("Project created and main workspace selected.");
     }
 
     return result;
@@ -308,10 +308,10 @@ BranchHistoryJobResult fetchHistory(const IProjectApi& api, const FetchHistoryIn
                                                                             ? input.preferredVersionId
                                                                             : hintedVersionId);
 
-    result.activeProjectStatusMessage = result.versions.empty()
-        ? "Loaded workspace \"" + input.branchName + "\". No versions yet."
-        : "Loaded " + juce::String(static_cast<int>(result.versions.size()))
-              + " version(s) for workspace \"" + input.branchName + "\".";
+    result.status = Status::success(result.versions.empty()
+                                        ? "Loaded workspace \"" + input.branchName + "\". No versions yet."
+                                        : "Loaded " + juce::String(static_cast<int>(result.versions.size()))
+                                              + " version(s) for workspace \"" + input.branchName + "\".");
     return result;
 }
 
@@ -371,12 +371,12 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
     {
         sortVersionHistoryNewestFirst(*versionsResult.value);
         result.refreshedVersions = std::move(*versionsResult.value);
-        result.activeProjectStatusMessage = "Version saved successfully.";
+        result.status = Status::success("Version saved successfully.");
     }
     else
     {
-        result.activeProjectStatusMessage = "Version saved. Sync to see it in the history ("
-            + versionsResult.errorMessage("history unavailable") + ").";
+        result.status = Status::warning("Version saved. Sync to see it in the history ("
+                                        + versionsResult.errorMessage("history unavailable") + ").");
     }
 
     return result;
@@ -405,7 +405,7 @@ RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInpu
     const auto& restoredProjectFile = *restored.value;
     result.restoredProjectFile = restoredProjectFile;
     result.restoredCopy = WorkingCopyBaseline::recordedNow(restoredProjectFile, input.versionId);
-    result.activeProjectStatusMessage = "Version restored successfully: " + restoredProjectFile.getFileName();
+    result.status = Status::success("Version restored successfully: " + restoredProjectFile.getFileName());
     return result;
 }
 }

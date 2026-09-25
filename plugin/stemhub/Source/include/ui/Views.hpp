@@ -5,6 +5,16 @@
 #include <JuceHeader.h>
 #include "ui/PluginTheme.hpp"
 
+// What the session is doing, as far as the views care. While it works, the controls that would
+// start more work are disabled, and the one that started it shows it is busy.
+enum class SessionActivity
+{
+    idle,
+    loading, // projects or history
+    saving,
+    restoring
+};
+
 class LoginView : public juce::Component
 {
 public:
@@ -36,7 +46,7 @@ private:
     juce::TextButton signInButton { "Sign In" };
 };
 
-// Everything a project tile shows; built by the editor from the processor's project list.
+// Everything a project tile shows; built by the editor from the session's project list.
 struct ProjectListItem
 {
     juce::String id;
@@ -57,6 +67,7 @@ public:
     void setProjects(const std::vector<ProjectListItem>& projects, const juce::String& selectedProjectId);
     void setCanCreateProject(bool canCreate);
     void setAccountName(const juce::String& accountName);
+    void setActivity(SessionActivity activity);
     [[nodiscard]] juce::String getSelectedProjectId() const { return selectedProjectId; }
     void resized() override;
     void paint(juce::Graphics& g) override;
@@ -129,6 +140,7 @@ public:
     void setVersions(const std::vector<VersionListItem>& versionItems, const juce::String& selectedVersionId);
     void setPackagedFiles(const juce::String& rootLabel,
                           const std::vector<juce::String>& relativeFilePaths);
+    void setActivity(SessionActivity activity);
     [[nodiscard]] juce::String getSelectedBranchId() const;
     [[nodiscard]] juce::String getSelectedVersionId() const { return selectedVersionId; }
     [[nodiscard]] juce::String getCommitMessage() const noexcept { return commitMessageInput.getText().trim(); }
