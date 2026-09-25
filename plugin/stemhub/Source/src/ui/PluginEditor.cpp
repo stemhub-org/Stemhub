@@ -184,7 +184,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(juce::AudioProcessor& o
     dashboardView.onSignOut = [this] { handleSignOutClick(); };
     dashboardView.onRestore = [this] { handleRestoreClick(); };
 
-    session.requestRestoreCachedSession();
+    session.requestRestoreSavedSession();
     refreshSessionUi();
 }
 
@@ -438,24 +438,26 @@ void StemhubAudioProcessorEditor::handleRestoreClick()
         if (editor == nullptr)
             return;
 
-        juce::AlertWindow::showOkCancelBox(
-            juce::AlertWindow::WarningIcon,
-            "Restore version",
-            "Restoring will replace the currently selected local project file in the plugin context.\n\n"
-            "Do you want to continue?",
-            "Yes",
-            "No",
-            editor,
-            juce::ModalCallbackFunction::create([editorRef, folder, versionToRestore](const int result)
-            {
-                auto* confirmedEditor = editorRef.getComponent();
-                if (confirmedEditor == nullptr || result != 1)
-                    return;
+        juce::AlertWindow::showAsync(juce::MessageBoxOptions()
+                                         .withIconType(juce::MessageBoxIconType::QuestionIcon)
+                                         .withTitle("Restore version")
+                                         .withMessage("The version is downloaded into a new folder in\n"
+                                                      + folder.getFullPathName()
+                                                      + "\n\nIt then opens in your DAW as a project of its own. "
+                                                        "The project you have open stays as it is.")
+                                         .withButton("Restore")
+                                         .withButton("Cancel")
+                                         .withAssociatedComponent(editor),
+                                     [editorRef, folder, versionToRestore](const int result)
+                                     {
+                                         auto* confirmedEditor = editorRef.getComponent();
+                                         if (confirmedEditor == nullptr || result != 1)
+                                             return;
 
-                confirmedEditor->session.setSelectedVersionId(versionToRestore);
-                confirmedEditor->session.requestRestoreVersion(versionToRestore, folder);
-                confirmedEditor->refreshSessionUi();
-            }));
+                                         confirmedEditor->session.setSelectedVersionId(versionToRestore);
+                                         confirmedEditor->session.requestRestoreVersion(versionToRestore, folder);
+                                         confirmedEditor->refreshSessionUi();
+                                     });
     };
 
     auto restoreFolder = session.getEffectiveProjectFile().getParentDirectory();

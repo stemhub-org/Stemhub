@@ -40,14 +40,22 @@ Result& failWith(Result& result, const ApiResult<T>& call, const juce::String& f
     return result;
 }
 
-// "main" when the project has one, otherwise its first branch.
-const Branch& chooseDefaultBranch(const std::vector<Branch>& branches)
+// The preferred branch when it still exists, else "main" when the project has one, else its
+// first branch.
+const Branch& chooseBranch(const std::vector<Branch>& branches, const juce::String& preferredBranchId)
 {
-    const auto branchIt = std::find_if(branches.begin(), branches.end(), [](const Branch& branch)
+    const auto preferredIt = std::find_if(branches.begin(), branches.end(), [&preferredBranchId](const Branch& branch)
+    {
+        return preferredBranchId.isNotEmpty() && branch.id == preferredBranchId;
+    });
+    if (preferredIt != branches.end())
+        return *preferredIt;
+
+    const auto mainIt = std::find_if(branches.begin(), branches.end(), [](const Branch& branch)
     {
         return branch.name == "main";
     });
-    return branchIt != branches.end() ? *branchIt : branches.front();
+    return mainIt != branches.end() ? *mainIt : branches.front();
 }
 
 }
@@ -80,7 +88,7 @@ AuthRequestResult signIn(const IProjectApi& api, const SignInInput& input)
 AuthRequestResult restoreSession(const IProjectApi& api, const RestoreSessionInput& input)
 {
     AuthRequestResult result;
-    result.fromCachedSession = true;
+    result.fromSavedSession = true;
     result.token = input.token;
 
     auto userResult = api.fetchCurrentUser(input.token);
@@ -129,7 +137,7 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     }
 
     result.branches = *branchesResult.value;
-    const auto selectedBranch = chooseDefaultBranch(result.branches);
+    const auto selectedBranch = chooseBranch(result.branches, input.preferredBranchId);
     result.selectedProject = *projectIt;
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
@@ -203,7 +211,7 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     }
 
     // No local copy, or an unchanged copy of an older version: bring in the latest one. It goes
-    // to a new folder, so nothing on disk is replaced.
+    // to a new folder, so nothing on disk is replaced, and opens as a DAW project of its own.
     const auto restoreFolder = stemhub::projectfiles::chooseRestoreFolder(
         stemhub::projectfiles::getManagedWorkingCopyRoot(input.managedWorkingCopyFolder, projectIt->id, selectedBranch.id),
         stemhub::projectfiles::resolveRestoreProjectName(result.versions, latestVersion.id, projectIt->name),
@@ -219,11 +227,10 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     }
 
     const auto& restoredProjectFile = *restored.value;
-    result.projectFile = restoredProjectFile;
-    result.workingCopy = WorkingCopyBaseline::recordedNow(restoredProjectFile, latestVersion.id);
+    result.restoredCopy = WorkingCopyBaseline::recordedNow(restoredProjectFile, latestVersion.id);
     result.selectedVersionId = latestVersion.id;
-    result.didRestoreLatest = true;
-    result.status = Status::success("Project ready. Latest version restored: " + restoredProjectFile.getFileName());
+    result.status = Status::success("Project ready. Latest version restored to "
+                                    + restoredProjectFile.getParentDirectory().getFullPathName() + ".");
     return result;
 }
 
@@ -261,7 +268,7 @@ ProjectActivationJobResult createProject(const IProjectApi& api, const CreatePro
     }
 
     result.branches = *branchesResult.value;
-    const auto selectedBranch = chooseDefaultBranch(result.branches);
+    const auto selectedBranch = chooseBranch(result.branches, {});
     result.selectedProject = *createdProject.value;
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
@@ -405,7 +412,7 @@ RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInpu
     const auto& restoredProjectFile = *restored.value;
     result.restoredProjectFile = restoredProjectFile;
     result.restoredCopy = WorkingCopyBaseline::recordedNow(restoredProjectFile, input.versionId);
-    result.status = Status::success("Version restored successfully: " + restoredProjectFile.getFileName());
+    result.status = Status::success("Version restored to " + restoredProjectFile.getParentDirectory().getFullPathName() + ".");
     return result;
 }
 }

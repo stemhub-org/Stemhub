@@ -35,6 +35,7 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 
 - `SessionState` holds all of it:
 - Auth/session: `authState`, `uiState`, `operationState`, `accessToken`, `currentUser`
+- `link`: the StemHub project, branch and working file of the DAW project this instance lives in
 - Messages: one `Status` (severity + text) per screen: `authStatus`, `projectsStatus`, `sessionStatus`
 - Project selection: `projects`, `selectedProject`, `branches`, `selectedBranchId`
 - Versioning: `versionHistory`, `selectedVersionId`, `openedVersionId` (the version in the DAW)
@@ -43,14 +44,18 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 
 ## 3) End-To-End Lifecycle
 
-1. Plugin editor is created.
-2. User signs in from Login view.
-3. The session fetches user + projects; UI moves to Project Selection.
+1. The DAW loads the project: the processor hands the link saved in it to the session. If the
+   DAW is opening a copy the plugin has just restored, the restore hand-off replaces the link
+   (see section 11).
+2. Plugin editor is created: the saved token signs the user in, or the user signs in from the
+   Login view.
+3. The session fetches user + projects. The linked project opens (its branch and working file);
+   without a link, the UI moves to Project Selection.
 4. User opens an existing project or creates one from a local DAW file.
 5. The session fetches branches and initial version history; UI moves to Dashboard. When the
    project is opened from the grid and this instance has no local copy (or an unchanged copy of
-   an older version), the latest version is restored into a new folder and opened in the DAW.
-   Unsaved local changes are never replaced.
+   an older version), the latest version is restored into a new folder and opened in the DAW as
+   a project of its own. Unsaved local changes are never replaced.
 6. User pushes a version:
    - files are hashed and only the ones the server lacks are uploaded,
    - the version is created from the manifest,
@@ -58,6 +63,8 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 7. User pulls latest history manually (refresh) or by branch switch:
    - plugin calls branch version-history endpoint,
    - updates selected version and dashboard data.
+8. User restores a version: it is downloaded into a new folder and opened in the DAW as a
+   project of its own. The instance that restored it stays with its own file.
 
 ## 4) Runtime Pattern Used By All Requests
 
@@ -233,3 +240,20 @@ sequenceDiagram
 - Network layer (`ApiClient`) is replaceable via `IProjectApi` injection (the tests use a fake).
 - Versioning logic (`SnapshotSync`, `SnapshotBundler`) is isolated from view logic and from JUCE widgets.
 - Background execution is centralized (`BackgroundJobCoordinator`) and shared by all request types.
+
+## 11) What Is Saved Where
+
+- **In the DAW project** (the plugin state, one per instance):
+  `<StemhubState schema="1" projectId=".." branchId=".." workingFile=".."/>`. The processor keeps
+  a copy the host can read from any thread and marks the DAW project as modified when the link
+  changes. The version the file holds is never saved: a restored copy carries the state saved
+  with an older version.
+- **`<app data>/Stemhub/credentials.json`**: the access token, shared by every instance. Its
+  folder is 0700 and the file 0600 on macOS and Linux. Signing out or a refused token deletes it.
+- **`<app data>/Stemhub/pending-restore.json`**: the restore hand-off. The instance that restores
+  a version writes it (project, branch, restored file, its version, size and modification time)
+  just before asking the DAW to open the copy. The instance the DAW loads with that project
+  takes it, once; an instance without a link takes any. Nobody taking it within 10 minutes
+  means the DAW didn't open the copy, and it is dropped.
+- **`<app data>/Stemhub/working-copy/<project>/<branch>/`**: latest versions restored when a
+  project is opened without a local copy.
