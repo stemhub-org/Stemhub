@@ -8,13 +8,14 @@
 #include <vector>
 #include <variant>
 #include "application/BackgroundJobCoordinator.hpp"
+#include "application/UseCases.hpp"
 #include "domain/Branch.hpp"
 #include "domain/User.hpp"
 #include "domain/Project.hpp"
 #include "domain/States.hpp"
+#include "domain/WorkingCopyBaseline.hpp"
 #include "network/ApiUtils.hpp"
 #include "network/ApiClient.hpp"
-#include "application/VersionControlService.hpp"
 
 class StemhubAudioProcessor : public juce::AudioProcessor,
                               public juce::ChangeBroadcaster,
@@ -111,115 +112,21 @@ public:
 private:
     void handleAsyncUpdate() override;
 
-    struct AuthRequestResult
-    {
-        std::optional<User> user;
-        std::vector<Project> projects;
-        juce::String token;
-        juce::String authErrorMessage;
-        juce::String projectSelectionStatusMessage;
-        bool fromCachedSession { false };
-    };
-
-    struct ProjectActivationJobResult
-    {
-        uint64_t selectionRequestId {};
-        std::optional<Project> selectedProject;
-        std::vector<Project> projects;
-        std::vector<Branch> branches;
-        std::vector<VersionSummary> versions;
-        juce::String branchId;
-        juce::String branchName;
-        juce::String selectedVersionId;
-        juce::String workingVersionId;
-        juce::File projectFile;
-        // Set when the latest version was just restored into projectFile: its size and
-        // modification time right after the download become the working-copy baseline.
-        bool didRestoreLatest { false };
-        juce::int64 restoredFileSizeBytes { 0 };
-        juce::int64 restoredFileModTimeMs { 0 };
-        juce::String errorMessage;
-        juce::String activeProjectStatusMessage;
-        bool refreshProjects { false };
-        bool fromCachedProjectRestore { false };
-    };
-
-    struct BranchHistoryJobResult
-    {
-        uint64_t selectionRequestId {};
-        std::vector<VersionSummary> versions;
-        juce::String branchId;
-        juce::String branchName;
-        juce::String selectedVersionId;
-        juce::String workingVersionId;
-        juce::File projectFile;
-        juce::String errorMessage;
-        juce::String activeProjectStatusMessage;
-    };
-
-    struct PushVersionJobResult
-    {
-        juce::String pushedVersionId;
-        // The file that was pushed and its size / modification time when it was hashed:
-        // the next save compares against these to detect "no changes".
-        juce::File pushedProjectFile;
-        juce::int64 pushedFileSizeBytes { 0 };
-        juce::int64 pushedFileModTimeMs { 0 };
-        // Branch history fetched right after the push, so the new version shows up at once.
-        std::optional<std::vector<VersionSummary>> refreshedVersions;
-        juce::String errorMessage;
-        juce::String activeProjectStatusMessage;
-    };
-
-    struct RestoreVersionJobResult
-    {
-        juce::File restoredProjectFile;
-        juce::String restoredVersionId;
-        juce::String errorMessage;
-        juce::String activeProjectStatusMessage;
-    };
+    using AuthRequestResult = stemhub::usecases::AuthRequestResult;
+    using ProjectActivationJobResult = stemhub::usecases::ProjectActivationJobResult;
+    using BranchHistoryJobResult = stemhub::usecases::BranchHistoryJobResult;
+    using PushVersionJobResult = stemhub::usecases::PushVersionJobResult;
+    using RestoreVersionJobResult = stemhub::usecases::RestoreVersionJobResult;
 
     using BackgroundJobPayload = std::variant<AuthRequestResult, ProjectActivationJobResult, BranchHistoryJobResult, PushVersionJobResult, RestoreVersionJobResult>;
 
     using BackgroundJobResult = BackgroundJobCoordinator<BackgroundJobPayload>::JobResult;
 
-    void enqueueBackgroundTask(std::function<BackgroundJobPayload()> job);
+    // Runs `run` with the API on a worker thread. `run` gets everything else by value, built on
+    // the message thread, and must not capture this processor: the result comes back through
+    // handleAsyncUpdate().
+    void enqueueBackgroundTask(std::function<BackgroundJobPayload(const IProjectApi&)> run);
 
-    RestoreVersionJobResult performRestoreVersionRequest(const juce::String& projectId,
-                                                         const juce::String& versionId,
-                                                         const juce::File& destinationFolder,
-                                                         const juce::String& accessToken) const;
-    AuthRequestResult performSignInRequest(const juce::String& email, const juce::String& password) const;
-    AuthRequestResult performRestoreCachedSessionRequest(const juce::String& token) const;
-    // What the open-project job needs to know about the local copy, read on the message thread.
-    struct LocalCopyState
-    {
-        juce::String baseVersionId; // version the local file was saved or restored as
-        bool isUnchanged { false }; // still identical to that version
-    };
-
-    ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,
-                                                         const juce::File& localProjectFile,
-                                                         const std::vector<Project>& availableProjects,
-                                                         const juce::String& accessToken,
-                                                         bool restoreLatestIfSafe,
-                                                         const LocalCopyState& localCopy,
-                                                         const juce::File& managedWorkingCopyBase) const;
-    ProjectActivationJobResult performCreateProjectRequest(const juce::File& localProjectFile,
-                                                           const juce::String& accessToken) const;
-    BranchHistoryJobResult performFetchBranchHistoryRequest(const juce::String& branchId,
-                                                            const juce::String& branchName,
-                                                            const juce::String& preferredVersionId,
-                                                            const juce::String& accessToken,
-                                                            const juce::File& localProjectFile) const;
-    PushVersionJobResult performPushVersionRequest(const juce::File& projectFile,
-                                                   const juce::File& projectRootDirectory,
-                                                   const std::optional<Project>& project,
-                                                   const juce::String& branchId,
-                                                   const juce::String& parentVersionId,
-                                                   const juce::String& commitMessage,
-                                                   const juce::String& dawName,
-                                                   const juce::String& accessToken) const;
     void applyBackgroundResult(BackgroundJobResult result);
     void applyAuthRequestResult(AuthRequestResult result);
     void applyProjectActivationResult(ProjectActivationJobResult result);
@@ -227,20 +134,18 @@ private:
     void applyPushVersionResult(PushVersionJobResult result);
     void applyRestoreVersionResult(RestoreVersionJobResult result);
     void requestRestoreCachedProjectContext();
-    void setWorkingCopyContext(const juce::File& workingFile, const juce::String& versionId);
-    void setWorkingCopyContext(const juce::File& workingFile,
-                               const juce::String& versionId,
-                               juce::int64 fileSizeBytes,
-                               juce::int64 fileModTimeMs);
-    void clearWorkingCopyContext();
+    void clearWorkingCopy();
     uint64_t beginSelectionRequest() noexcept;
     [[nodiscard]] bool isCurrentSelectionRequest(uint64_t requestId) const noexcept;
     [[nodiscard]] bool hasCleanWorkingCopy(const juce::File& workingFile) const;
+    // The version the next save of projectFile builds on: the one it holds, else the branch head.
+    [[nodiscard]] juce::String getParentVersionForNextSave(const juce::File& projectFile) const;
     void setCurrentOpenedVersionId(juce::String versionId);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
 
-    std::unique_ptr<IProjectApi> apiClient;
+    // Shared with the jobs that are running, which may still hold it for a moment after a request.
+    std::shared_ptr<const IProjectApi> apiClient;
     juce::String access_tkn;
     juce::String authErrorMessage;
     juce::String projectSelectionStatusMessage;
@@ -254,19 +159,16 @@ private:
     juce::String selectedBranchName;
     juce::String selectedVersionId;
     SessionState sessionState;
-    VersionControlService versionControlService;
     juce::File pendingProjectFile;
     juce::File selectedProjectFile;
     juce::String currentOpenedVersionId;
-    juce::File workingCopyProjectFile;
-    juce::String workingCopyVersionId;
-    int64 workingCopyFileSize { 0 };
-    int64 workingCopyFileModTime { 0 };
+    // What the local project file holds; set by saves, restores and restore-folder names.
+    WorkingCopyBaseline workingCopy;
     bool didAttemptCachedSessionRestore { false };
     std::atomic<uint64_t> activeSelectionRequestId { 0 };
     std::function<bool(const juce::File&)> openFileHandler;
     juce::File managedWorkingCopyFolder;
 
     // Declared last so it is destroyed first: its workers must stop before anything they use goes away.
-    BackgroundJobCoordinator<BackgroundJobPayload> backgroundJobs { 2 };
+    BackgroundJobCoordinator<BackgroundJobPayload> backgroundJobs { 2, [this] { triggerAsyncUpdate(); } };
 };

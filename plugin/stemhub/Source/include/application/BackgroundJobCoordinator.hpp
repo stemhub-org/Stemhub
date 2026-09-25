@@ -19,8 +19,11 @@ public:
         Payload payload;
     };
 
-    explicit BackgroundJobCoordinator(size_t workerCount)
-        : backgroundJobs(juce::ThreadPoolOptions{}
+    // onResultReady is called on the worker thread each time a result is queued; it should
+    // only schedule a flushResults() on the message thread.
+    BackgroundJobCoordinator(size_t workerCount, std::function<void()> onResultReady)
+        : resultReadyCallback(std::move(onResultReady)),
+          backgroundJobs(juce::ThreadPoolOptions{}
                              .withThreadName("Stemhub jobs")
                              .withNumberOfThreads(static_cast<int>(workerCount)))
     {
@@ -58,7 +61,7 @@ public:
         return requestGeneration.load();
     }
 
-    void enqueue(std::function<Payload()> task, std::function<void()> completionCallback)
+    void enqueue(std::function<Payload()> task)
     {
         if (isClosed)
             return;
@@ -69,8 +72,7 @@ public:
         backgroundJobs.addJob([this,
                               requestId,
                               currentGeneration,
-                              taskFn = std::move(task),
-                              completionFn = std::move(completionCallback)]() mutable
+                              taskFn = std::move(task)]() mutable
         {
             if (currentGeneration != requestGeneration.load())
                 return;
@@ -87,7 +89,7 @@ public:
                 pendingResults.push_back(std::move(result));
             }
 
-            completionFn();
+            resultReadyCallback();
         });
     }
 
@@ -123,6 +125,7 @@ public:
     }
 
 private:
+    std::function<void()> resultReadyCallback;
     std::deque<JobResult> pendingResults;
     mutable std::mutex resultMutex;
     std::atomic<bool> isClosed { false };

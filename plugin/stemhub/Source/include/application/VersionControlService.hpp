@@ -18,13 +18,8 @@ class VersionControlService
 {
     public:
         VersionControlService() noexcept = default;
-        explicit VersionControlService(IProjectApi& apiClientIn) noexcept
+        explicit VersionControlService(const IProjectApi& apiClientIn) noexcept
             : apiClient(&apiClientIn) {}
-
-        void setApiClient(IProjectApi& apiClientIn) noexcept
-        {
-            apiClient = &apiClientIn;
-        }
 
         // Content-addressed push: hash → check-missing → upload novel blobs →
         // create version from manifest. See docs/content-addressed-storage.md.
@@ -58,7 +53,7 @@ class VersionControlService
     private:
         [[nodiscard]] const IProjectApi* getApiClient() const noexcept;
 
-        IProjectApi* apiClient = nullptr;
+        const IProjectApi* apiClient = nullptr;
         ProjectVersionContext context;
         juce::String accessToken;
 };

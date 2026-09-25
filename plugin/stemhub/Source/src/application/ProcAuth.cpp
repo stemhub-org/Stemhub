@@ -14,7 +14,6 @@ void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
             stemhub::sessioncache::clear();
             currentUser.reset();
             access_tkn.clear();
-            versionControlService.clearAccessToken();
             projectSelectionStatusMessage.clear();
             activeProjectStatusMessage.clear();
             projects.clear();
@@ -41,7 +40,6 @@ void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
     projects = std::move(result.projects);
     access_tkn = std::move(result.token);
     stemhub::sessioncache::saveAccessToken(access_tkn);
-    versionControlService.setAccessToken(access_tkn);
     signIn(std::move(*result.user));
 
     if (fromCachedSession)
@@ -61,7 +59,6 @@ void StemhubAudioProcessor::signOut() noexcept
     backgroundJobs.invalidateSession();
     currentUser.reset();
     access_tkn.clear();
-    versionControlService.clearAccessToken();
     stemhub::sessioncache::clear();
     authErrorMessage.clear();
     projectSelectionStatusMessage.clear();
@@ -114,9 +111,10 @@ void StemhubAudioProcessor::requestSignIn(const juce::String& email, const juce:
     selectedVersionId.clear();
     sendChangeMessage();
 
-    enqueueBackgroundTask([this, email, password]() -> BackgroundJobPayload
+    enqueueBackgroundTask([input = stemhub::usecases::SignInInput { email, password }](const IProjectApi& api)
+                              -> BackgroundJobPayload
     {
-        return performSignInRequest(email, password);
+        return stemhub::usecases::signIn(api, input);
     });
 }
 
@@ -139,9 +137,10 @@ void StemhubAudioProcessor::requestRestoreCachedSession()
     activeProjectStatusMessage.clear();
     sendChangeMessage();
 
-    enqueueBackgroundTask([this, token = cachedToken]() -> BackgroundJobPayload
+    enqueueBackgroundTask([input = stemhub::usecases::RestoreSessionInput { cachedToken }](const IProjectApi& api)
+                              -> BackgroundJobPayload
     {
-        return performRestoreCachedSessionRequest(token);
+        return stemhub::usecases::restoreSession(api, input);
     });
 }
 
@@ -186,12 +185,16 @@ void StemhubAudioProcessor::requestRestoreCachedProjectContext()
     projectSelectionStatusMessage = "Restoring last opened project...";
     sendChangeMessage();
 
-    const auto projectsSnapshot = projects;
-    const auto token = access_tkn;
-    const auto selectionRequestId = beginSelectionRequest();
-    enqueueBackgroundTask([this, cachedProjectId, projectsSnapshot, token, localProjectFile, selectionRequestId]() -> BackgroundJobPayload
+    stemhub::usecases::OpenProjectInput input;
+    input.projectId = cachedProjectId;
+    input.localProjectFile = localProjectFile;
+    input.availableProjects = projects;
+    input.token = access_tkn;
+
+    enqueueBackgroundTask([input, selectionRequestId = beginSelectionRequest()](const IProjectApi& api)
+                              -> BackgroundJobPayload
     {
-        auto result = performOpenProjectRequest(cachedProjectId, localProjectFile, projectsSnapshot, token, false, {}, {});
+        auto result = stemhub::usecases::openProject(api, input);
         result.selectionRequestId = selectionRequestId;
         result.fromCachedProjectRestore = true;
         return result;

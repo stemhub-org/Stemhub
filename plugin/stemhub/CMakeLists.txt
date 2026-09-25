@@ -26,12 +26,11 @@ set(STEMHUB_CORE_SOURCES
     Source/src/application/ProcAudio.cpp
     Source/src/application/ProcAuth.cpp
     Source/src/application/ProcProject.cpp
-    Source/src/application/ProcProjJobs.cpp
-    Source/src/application/ProcVerJobs.cpp
     Source/src/application/PluginProcessor.cpp
     Source/src/application/ProjectFileService.cpp
     Source/src/application/SessionCache.cpp
     Source/src/application/SnapshotBundler.cpp
+    Source/src/application/UseCases.cpp
     Source/src/network/ApiClient.cpp
     Source/src/network/ApiConfig.cpp
     Source/src/network/VersionControlService.cpp)
