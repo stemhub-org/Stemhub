@@ -61,6 +61,7 @@ StemhubAudioProcessor::StemhubAudioProcessor(std::unique_ptr<IProjectApi> apiCli
 
     versionControlService.setApiClient(*apiClient);
     openFileHandler = [](const juce::File& file) { return stemhub::projectfiles::openInSystem(file); };
+    managedWorkingCopyFolder = stemhub::projectfiles::getDefaultManagedWorkingCopyFolder();
 }
 
 StemhubAudioProcessor::StemhubAudioProcessor()

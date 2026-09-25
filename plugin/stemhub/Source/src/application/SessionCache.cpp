@@ -121,14 +121,6 @@ void saveLastOpenedProjectFilePath(const juce::String& projectFilePath)
     });
 }
 
-void clearProjectId()
-{
-    updateCachedSession([](juce::DynamicObject& sessionObject)
-    {
-        sessionObject.removeProperty("last_project_id");
-    });
-}
-
 void clearLastOpenedProjectFilePath()
 {
     updateCachedSession([](juce::DynamicObject& sessionObject)
