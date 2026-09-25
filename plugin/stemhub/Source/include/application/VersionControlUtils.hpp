@@ -10,10 +10,8 @@ struct VersionSummary
     juce::String commitMessage;
     juce::String sourceDaw;
     juce::String sourceProjectFilename;
-    juce::String artifactPath;
-    juce::String artifactChecksum;
-    int64 artifactSizeBytes { 0 };
-    bool hasArtifact { false };
+    // Sum of the file sizes listed in the version's manifest; 0 when it has none.
+    juce::int64 totalSizeBytes { 0 };
 
     [[nodiscard]] bool isValid() const noexcept
     {
@@ -31,15 +29,4 @@ struct ProjectVersionContext
     {
         return projectId.isNotEmpty() && branchId.isNotEmpty();
     }
-};
-
-struct PushVersionRequest
-{
-    juce::String branchId;
-    juce::File localProjectFile;
-    juce::String commitMessage;
-    juce::String dawName;
-    juce::String parentVersionId;
-    juce::String sourceProjectFilename;
-    juce::var snapshotManifest;
 };

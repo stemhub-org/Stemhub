@@ -191,9 +191,8 @@ void StemhubAudioProcessor::requestRestoreCachedProjectContext()
     const auto selectionRequestId = beginSelectionRequest();
     enqueueBackgroundTask([this, cachedProjectId, projectsSnapshot, token, localProjectFile, selectionRequestId]() -> BackgroundJobPayload
     {
-        auto result = performOpenProjectRequest(cachedProjectId, localProjectFile, projectsSnapshot, token, false);
+        auto result = performOpenProjectRequest(cachedProjectId, localProjectFile, projectsSnapshot, token, false, {}, {});
         result.selectionRequestId = selectionRequestId;
-        result.shouldAutoOpenLocalFile = false;
         result.fromCachedProjectRestore = true;
         return result;
     });

@@ -19,7 +19,6 @@ ApiResult<LoginResponse> makeLoginResult(const juce::String& accessToken)
 {
     LoginResponse response;
     response.accessToken = accessToken;
-    response.tokenType = "bearer";
     return { response, {} };
 }
 
@@ -52,9 +51,6 @@ juce::var makeVersionJson(const VersionSummary& version)
     object->setProperty("commit_message", version.commitMessage);
     object->setProperty("source_daw", version.sourceDaw);
     object->setProperty("source_project_filename", version.sourceProjectFilename);
-    object->setProperty("artifact_path", version.artifactPath);
-    object->setProperty("artifact_checksum", version.artifactChecksum);
-    object->setProperty("artifact_size_bytes", version.artifactSizeBytes);
     return juce::var(object);
 }
 
@@ -223,23 +219,6 @@ public:
         return makeApiError("Unhandled request in test API.");
     }
 
-    ApiResult<juce::var> uploadFile(const juce::String& path,
-                                    const juce::File& file,
-                                    const juce::String& formFieldName,
-                                    const juce::String& bearerToken) const override
-    {
-        juce::ignoreUnused(path, file, formFieldName, bearerToken);
-        return makeApiError("upload not implemented in tests");
-    }
-
-    juce::Result downloadFile(const juce::String& path,
-                              const juce::File& destinationFile,
-                              const juce::String& bearerToken) const override
-    {
-        juce::ignoreUnused(path, destinationFile, bearerToken);
-        return juce::Result::fail("download not implemented in tests");
-    }
-
     ApiResult<std::vector<juce::String>> checkMissingBlobs(const juce::String& projectId,
                                                             const std::vector<juce::String>& sha256s,
                                                             const juce::String& accessToken) const override
@@ -320,6 +299,55 @@ public:
         return destinationFile.replaceWithData(data.getData(), data.getSize())
             ? juce::Result::ok()
             : juce::Result::fail("Could not write " + destinationFile.getFullPathName());
+    }
+
+    // Stores a version made of (relative path, content) files, the first being the project
+    // file, as if another collaborator had saved it. Returns its id.
+    juce::String addVersion(const juce::String& branchId,
+                            const juce::String& commitMessage,
+                            const std::vector<std::pair<juce::String, juce::String>>& files)
+    {
+        juce::Array<juce::var> tracks;
+        juce::var projectFileRef;
+
+        for (size_t index = 0; index < files.size(); ++index)
+        {
+            const auto& [path, content] = files[index];
+            const juce::MemoryBlock data(content.toRawUTF8(), content.getNumBytesAsUTF8());
+            const auto sha = sha256Of(data);
+            {
+                const std::lock_guard<std::mutex> lock(mutex);
+                blobs[sha] = data;
+            }
+
+            auto* ref = new juce::DynamicObject();
+            ref->setProperty("sha256", sha);
+            ref->setProperty("size_bytes", static_cast<juce::int64>(data.getSize()));
+            ref->setProperty("filename", path);
+
+            if (index == 0)
+            {
+                projectFileRef = juce::var(ref);
+            }
+            else
+            {
+                ref->setProperty("name", path);
+                tracks.add(juce::var(ref));
+            }
+        }
+
+        auto* manifest = new juce::DynamicObject();
+        manifest->setProperty("manifest_version", 1);
+        manifest->setProperty("source_project_filename", files.front().first.fromLastOccurrenceOf("/", false, false));
+        manifest->setProperty("project_file", projectFileRef);
+        manifest->setProperty("tracks", tracks);
+
+        auto* payload = new juce::DynamicObject();
+        payload->setProperty("commit_message", commitMessage);
+        payload->setProperty("manifest", juce::var(manifest));
+
+        const auto created = createVersionFromManifest(branchId, juce::var(payload), "token");
+        return created.value->getProperty("id", {}).toString();
     }
 
     std::vector<CreatedVersion> getCreatedVersions() const
@@ -792,19 +820,19 @@ public:
             const auto shaB = juce::String::repeatedString("b", 64);
 
             ParsedManifest parsed;
-            auto result = SnapshotBundler::parseContentAddressedManifest(makeManifest("../../evil.flp", shaA, {}), parsed);
+            auto result = SnapshotBundler::parseManifest(makeManifest("../../evil.flp", shaA, {}), parsed);
             expect(result.failed() && result.getErrorMessage().contains("unsafe"), "traversal in the project file is rejected");
 
-            result = SnapshotBundler::parseContentAddressedManifest(
+            result = SnapshotBundler::parseManifest(
                 makeManifest("song.flp", shaA, { { "Drums/kick.wav", shaA }, { "drums/KICK.wav", shaB } }), parsed);
             expect(result.failed() && result.getErrorMessage().contains("two different files"),
                    "two different files at the same path are rejected");
 
-            result = SnapshotBundler::parseContentAddressedManifest(
+            result = SnapshotBundler::parseManifest(
                 makeManifest("song.flp", shaA, { { "Drums/kick.wav", shaB }, { "Drums/kick.wav", shaB } }), parsed);
             expect(result.wasOk() && parsed.entries.size() == 2, "an exact duplicate is kept once");
 
-            result = SnapshotBundler::parseContentAddressedManifest(
+            result = SnapshotBundler::parseManifest(
                 makeManifest("song.flp", "../" + shaA.substring(3), {}), parsed);
             expect(result.failed(), "a hash that is not hex is rejected");
         }
@@ -837,7 +865,7 @@ public:
                                                                   && isIdle(context.processor); }),
                    "project should open: " + describeProcessorState(context.processor));
 
-            context.processor.requestPushVersionContentAddressed("first", "FL Studio");
+            context.processor.requestPushVersion("first", "FL Studio");
             expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
                                                                   && context.processor.getVersionHistory().size() == 1; }),
                    "first save should land in the history: " + describeProcessorState(context.processor));
@@ -848,7 +876,7 @@ public:
             // Restore into a folder of its own, keeping subfolders.
             const auto restoresFolder = context.environment.root.getChildFile("restores");
             expect(restoresFolder.createDirectory().wasOk());
-            context.processor.requestRestoreVersionContentAddressed(firstVersionId, restoresFolder);
+            context.processor.requestRestoreVersion(firstVersionId, restoresFolder);
             expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
                                                                   && context.processor.getSelectedProjectFile().existsAsFile()
                                                                   && context.processor.getSelectedProjectFile().isAChildOf(
@@ -863,7 +891,7 @@ public:
 
             // Saving the restored copy chains from the restored version.
             simulateDawSave(restoredFile, " edit 1");
-            context.processor.requestPushVersionContentAddressed("second", "FL Studio");
+            context.processor.requestPushVersion("second", "FL Studio");
             expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
                                                                   && context.processor.getVersionHistory().size() == 2; }),
                    "second save should land in the history: " + describeProcessorState(context.processor));
@@ -877,13 +905,13 @@ public:
             // Nothing changed on disk: no new version, even after a refresh of the same branch.
             context.processor.requestRefreshVersionHistory();
             expect(waitUntil(context.processor, [&context] { return isIdle(context.processor); }), "refresh should finish");
-            context.processor.requestPushVersionContentAddressed("no changes", "FL Studio");
+            context.processor.requestPushVersion("no changes", "FL Studio");
             expect(waitUntil(context.processor, [&context] { return context.processor.getOperationState() == OperationState::error; }),
                    "an unchanged file should not be saved again: " + describeProcessorState(context.processor));
             expect(context.api->getCreatedVersions().size() == 2, "no version is created for an unchanged file");
 
             simulateDawSave(restoredFile, " edit 2");
-            context.processor.requestPushVersionContentAddressed("third", "FL Studio");
+            context.processor.requestPushVersion("third", "FL Studio");
             expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
                                                                   && context.processor.getVersionHistory().size() == 3; }),
                    "third save should land in the history: " + describeProcessorState(context.processor));
@@ -892,7 +920,7 @@ public:
                    "each save's parent is the previous save");
 
             // Restoring the same version again goes to a new folder; the edited copy stays.
-            context.processor.requestRestoreVersionContentAddressed(firstVersionId, restoresFolder);
+            context.processor.requestRestoreVersion(firstVersionId, restoresFolder);
             expect(waitUntil(context.processor, [&context, &restoredFile] { return isIdle(context.processor)
                                                                                  && context.processor.getSelectedProjectFile() != restoredFile
                                                                                  && context.processor.getSelectedProjectFile().existsAsFile(); }),
@@ -923,9 +951,9 @@ public:
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(project.id, gate);
-            context.processor.requestPushVersionContentAddressed("first", "FL Studio");
+            context.processor.requestPushVersion("first", "FL Studio");
             gate->waitUntilEntered();
-            context.processor.requestPushVersionContentAddressed("second", "FL Studio");
+            context.processor.requestPushVersion("second", "FL Studio");
             context.processor.requestRefreshVersionHistory();
             expect(context.processor.getOperationState() == OperationState::committing,
                    "nothing else starts while saving: " + describeProcessorState(context.processor));
@@ -934,6 +962,99 @@ public:
             expect(waitUntil(context.processor, [&context] { return isIdle(context.processor); }), "save should finish");
             const auto created = context.api->getCreatedVersions();
             expect(created.size() == 1 && created.front().commitMessage == "first", "the second save request is ignored");
+        }
+
+        beginTest("Opening a project without a local copy restores its latest version");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+            const auto versionId = context.api->addVersion(branch.id, "from a collaborator",
+                                                           { { "song.flp", "flp" }, { "Samples/kick.wav", "kick" } });
+
+            juce::Array<juce::File> openedFiles;
+            context.processor.setOpenFileHandler([&openedFiles](const juce::File& file) { openedFiles.add(file); return true; });
+            const auto managedFolder = context.environment.root.getChildFile("managed");
+            context.processor.setManagedWorkingCopyFolder(managedFolder);
+
+            signIn(context);
+            context.processor.requestOpenProject(project.id, {}, true);
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.processor.getSelectedProjectFile().existsAsFile(); }),
+                   "the latest version should be restored: " + describeProcessorState(context.processor));
+
+            const auto restoredFile = context.processor.getSelectedProjectFile();
+            expect(restoredFile.isAChildOf(managedFolder), restoredFile.getFullPathName());
+            expect(restoredFile.getParentDirectory().getChildFile("Samples/kick.wav").loadFileAsString() == "kick");
+            expect(openedFiles.contains(restoredFile), "the restored copy is opened in the DAW");
+            expect(context.processor.getCurrentOpenedVersionId() == versionId, "the restored version is the one in the DAW");
+        }
+
+        beginTest("Opening a project never replaces unsaved local changes");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+            context.api->addVersion(branch.id, "first", { { "song.flp", "flp v1" } });
+
+            juce::Array<juce::File> openedFiles;
+            context.processor.setOpenFileHandler([&openedFiles](const juce::File& file) { openedFiles.add(file); return true; });
+            context.processor.setManagedWorkingCopyFolder(context.environment.root.getChildFile("managed"));
+
+            signIn(context);
+            context.processor.requestOpenProject(project.id, {}, true);
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.processor.getSelectedProjectFile().existsAsFile(); }),
+                   "the first version should be restored");
+            const auto localCopy = context.processor.getSelectedProjectFile();
+
+            // Someone saves a newer version while this copy has unsaved edits.
+            simulateDawSave(localCopy, " my edit");
+            const auto newerVersionId = context.api->addVersion(branch.id, "second", { { "song.flp", "flp v2" } });
+
+            context.processor.requestOpenProject(project.id, localCopy, true);
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.processor.getVersionHistory().size() == 2; }),
+                   "the project should reopen: " + describeProcessorState(context.processor));
+            expect(context.processor.getSelectedProjectFile() == localCopy, "the edited copy stays the working file");
+            expect(localCopy.loadFileAsString() == "flp v1 my edit", "the edited copy is untouched");
+            expect(context.processor.getActiveProjectStatusMessage().contains("not saved"),
+                   context.processor.getActiveProjectStatusMessage());
+            expect(openedFiles.size() == 1, "nothing else is opened in the DAW");
+            juce::ignoreUnused(newerVersionId);
+        }
+
+        beginTest("Opening a project updates an unchanged older copy");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+            context.api->addVersion(branch.id, "first", { { "song.flp", "flp v1" } });
+
+            context.processor.setOpenFileHandler([](const juce::File&) { return true; });
+            context.processor.setManagedWorkingCopyFolder(context.environment.root.getChildFile("managed"));
+
+            signIn(context);
+            context.processor.requestOpenProject(project.id, {}, true);
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.processor.getSelectedProjectFile().existsAsFile(); }),
+                   "the first version should be restored");
+            const auto olderCopy = context.processor.getSelectedProjectFile();
+
+            const auto newerVersionId = context.api->addVersion(branch.id, "second", { { "song.flp", "flp v2" } });
+            context.processor.requestOpenProject(project.id, olderCopy, true);
+            expect(waitUntil(context.processor, [&context, &olderCopy] { return isIdle(context.processor)
+                                                                              && context.processor.getSelectedProjectFile() != olderCopy; }),
+                   "the newer version should be restored: " + describeProcessorState(context.processor));
+            expect(context.processor.getSelectedProjectFile().loadFileAsString() == "flp v2");
+            expect(context.processor.getCurrentOpenedVersionId() == newerVersionId);
+            expect(olderCopy.loadFileAsString() == "flp v1", "the older copy is kept");
         }
 
         beginTest("Blob downloads follow the storage redirect without the bearer token");
