@@ -177,6 +177,8 @@ public:
     std::function<void()> onBackToProjects;
     std::function<void()> onSignOut;
     std::function<void()> onRestore;
+    // Stops the save or restore in progress.
+    std::function<void()> onCancel;
 
 private:
     std::vector<juce::String> comboBranchIds;
@@ -204,6 +206,7 @@ private:
     juce::TextButton syncButton { "Sync" };
     juce::TextButton signOutButton { "Sign out" };
     juce::TextButton restoreButton { "Restore this version" };
+    juce::TextButton cancelButton { "Cancel" };
     juce::Viewport versionListViewport;
     juce::Component versionListContent;
     juce::OwnedArray<juce::Component> versionRows;

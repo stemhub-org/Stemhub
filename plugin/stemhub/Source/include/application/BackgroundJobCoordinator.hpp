@@ -15,6 +15,9 @@ template <typename Result>
 class BackgroundJobCoordinator
 {
 public:
+    // Hands the owner an extra result while the job runs, such as a progress report.
+    using Post = std::function<void(Result)>;
+
     // onResultReady is called on the worker thread each time a result is queued; it should
     // only schedule a takeResults() on the message thread.
     BackgroundJobCoordinator(int workerCount, std::function<void()> onResultReady)
@@ -30,37 +33,35 @@ public:
         shutdown();
     }
 
-    // Stops accepting work, waits for the running jobs to return and drops their results.
-    // Owners call this before tearing down anything a job can reach, so no job outlives it.
+    // Stops accepting work, asks the running jobs to stop, waits for them and drops their
+    // results. Owners call this before tearing down anything a job can reach, so no job
+    // outlives it. Jobs stop at their next check of isJobCancelled(), or when a request ends.
     void shutdown()
     {
         isClosed = true;
-
-        // Running jobs are not interruptible yet; they end within their network timeouts.
         pool.removeAllJobs(true, -1);
 
         const std::lock_guard<std::mutex> lock(resultMutex);
         pendingResults.clear();
     }
 
-    void enqueue(std::function<Result()> task)
+    // Asks the running jobs to stop, without waiting; each still hands back a result. Jobs
+    // waiting for a thread are left alone.
+    void stopRunningJobs()
+    {
+        RunningJobs running;
+        pool.removeAllJobs(true, 0, &running);
+    }
+
+    void enqueue(std::function<Result(const Post& post)> task)
     {
         if (isClosed)
             return;
 
         pool.addJob([this, task = std::move(task)]
         {
-            auto result = task();
-
-            {
-                const std::lock_guard<std::mutex> lock(resultMutex);
-                if (isClosed)
-                    return;
-
-                pendingResults.push_back(std::move(result));
-            }
-
-            resultReadyCallback();
+            const Post post = [this](Result result) { queue(std::move(result)); };
+            queue(task(post));
         });
     }
 
@@ -72,6 +73,24 @@ public:
     }
 
 private:
+    struct RunningJobs final : juce::ThreadPool::JobSelector
+    {
+        bool isJobSuitable(juce::ThreadPoolJob* job) override { return job->isRunning(); }
+    };
+
+    void queue(Result result)
+    {
+        {
+            const std::lock_guard<std::mutex> lock(resultMutex);
+            if (isClosed)
+                return;
+
+            pendingResults.push_back(std::move(result));
+        }
+
+        resultReadyCallback();
+    }
+
     std::function<void()> resultReadyCallback;
     std::mutex resultMutex;
     std::vector<Result> pendingResults;

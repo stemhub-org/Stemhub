@@ -65,6 +65,9 @@ public:
     void requestPushVersion(juce::String commitMessage);
     // Downloads the version's files into a new folder inside destinationFolder, verifying SHA-256.
     void requestRestoreVersion(const juce::String& versionId, const juce::File& destinationFolder);
+    // Stops the job in progress at its next step (between two files, or during a transfer). It
+    // still ends with a result: a save that already created its version stays saved.
+    void cancelRequest();
     void setSelectedVersionId(juce::String versionId);
     void setPendingProjectFile(const juce::File& file);
     // Back to the project grid; ignored while a save or restore runs.
@@ -74,8 +77,8 @@ public:
     // Opening a project file hands it to the DAW / OS. Tests replace this so nothing is launched.
     void setOpenFileHandler(std::function<bool(const juce::File&)> handler) { openFileHandler = std::move(handler); }
 
-    // Applies finished jobs now instead of on the next message loop turn. Returns how many
-    // results arrived, stale ones included.
+    // Applies finished jobs now instead of on the next message loop turn. Returns how many jobs
+    // finished, stale ones included; progress reports don't count.
     int flushPendingResultsForTesting();
 
 private:
@@ -84,23 +87,33 @@ private:
     using BranchHistoryJobResult = stemhub::usecases::BranchHistoryJobResult;
     using PushVersionJobResult = stemhub::usecases::PushVersionJobResult;
     using RestoreVersionJobResult = stemhub::usecases::RestoreVersionJobResult;
+    using ProgressReport = stemhub::usecases::ProgressReport;
+    using ReportProgress = stemhub::usecases::ReportProgress;
 
     using JobPayload = std::variant<AuthRequestResult,
                                     ProjectActivationJobResult,
                                     BranchHistoryJobResult,
                                     PushVersionJobResult,
-                                    RestoreVersionJobResult>;
+                                    RestoreVersionJobResult,
+                                    ProgressReport>;
+    using Jobs = BackgroundJobCoordinator<JobPayload>;
 
     void handleAsyncUpdate() override;
     int applyFinishedJobs();
 
     // Every request gets a new epoch; a result is applied only if nothing was requested since.
-    uint64_t beginRequest() noexcept { return ++currentRequestEpoch; }
+    uint64_t beginRequest()
+    {
+        cancelledMessage.clear();
+        return ++currentRequestEpoch;
+    }
+
     [[nodiscard]] bool isCurrent(uint64_t requestEpoch) const noexcept { return requestEpoch == currentRequestEpoch; }
 
-    // Runs `run` with the API on a worker thread. `run` gets everything else by value, built on
-    // the message thread, and must not capture this session.
-    void enqueue(std::function<JobPayload(const IProjectApi&)> run);
+    // Runs `run` with the API and a progress reporter on a worker thread, and tags its result and
+    // reports with epoch. `run` gets everything else by value, built on the message thread, and
+    // must not capture this session.
+    void enqueue(uint64_t epoch, std::function<JobPayload(const IProjectApi&, const ReportProgress&)> run);
 
     // False when the result was stale and dropped.
     bool applyResult(JobPayload payload);
@@ -109,6 +122,10 @@ private:
     void apply(BranchHistoryJobResult result);
     void apply(PushVersionJobResult result);
     void apply(RestoreVersionJobResult result);
+    void apply(ProgressReport report);
+    // Why a job failed, on the screen it belongs to; or that it was cancelled, which is no error.
+    void showFailure(Status& target, const juce::String& action, const juce::String& errorMessage);
+    [[nodiscard]] Status& statusOfCurrentScreen() noexcept;
 
     // Keeps the link: it belongs to the DAW project, not to whoever is signed in.
     void resetState();
@@ -139,9 +156,11 @@ private:
     // What the linked working file holds, when a restore hand-off said so.
     WorkingCopyBaseline linkedCopy;
     uint64_t currentRequestEpoch { 0 };
+    // Set by cancelRequest() until the next request: what the cancelled job's failure shows.
+    juce::String cancelledMessage;
     bool didAttemptSavedSessionRestore { false };
     std::function<bool(const juce::File&)> openFileHandler;
 
     // Declared last so it is destroyed first: its workers must stop before anything they use goes away.
-    BackgroundJobCoordinator<JobPayload> jobs { 2, [this] { triggerAsyncUpdate(); } };
+    Jobs jobs { 2, [this] { triggerAsyncUpdate(); } };
 };
