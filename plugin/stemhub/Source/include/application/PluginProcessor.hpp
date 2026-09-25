@@ -14,7 +14,6 @@
 #include "domain/Project.hpp"
 #include "domain/States.hpp"
 #include "domain/WorkingCopyBaseline.hpp"
-#include "network/ApiUtils.hpp"
 #include "network/ApiClient.hpp"
 
 class StemhubAudioProcessor : public juce::AudioProcessor,
@@ -134,6 +133,8 @@ private:
     void applyPushVersionResult(PushVersionJobResult result);
     void applyRestoreVersionResult(RestoreVersionJobResult result);
     void requestRestoreCachedProjectContext();
+    // Called when the backend refuses the token: signs out and shows message on the login screen.
+    void expireSession(const juce::String& message = "Your session expired. Sign in again.");
     void clearWorkingCopy();
     uint64_t beginSelectionRequest() noexcept;
     [[nodiscard]] bool isCurrentSelectionRequest(uint64_t requestId) const noexcept;

@@ -1,6 +1,8 @@
 #pragma once
+
 #include <JuceHeader.h>
 
+// One saved version of a branch, as the version list returns it.
 struct VersionSummary
 {
     juce::String id;
@@ -16,17 +18,5 @@ struct VersionSummary
     [[nodiscard]] bool isValid() const noexcept
     {
         return id.isNotEmpty() && branchId.isNotEmpty();
-    }
-};
-
-struct ProjectVersionContext
-{
-    juce::String projectId;
-    juce::String branchId;
-    juce::String lastVersionId;
-
-    [[nodiscard]] bool isValid() const noexcept
-    {
-        return projectId.isNotEmpty() && branchId.isNotEmpty();
     }
 };
