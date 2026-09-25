@@ -21,22 +21,21 @@ endif()
 
 add_subdirectory(${JUCE_DIR} JUCE)
 
-# Everything except the editor and its views: built into the plugin and into the headless tests.
+# The session and everything under it. No GUI or audio code, so the tests build it without either.
 set(STEMHUB_CORE_SOURCES
-    Source/src/application/ProcAudio.cpp
-    Source/src/application/ProcAuth.cpp
-    Source/src/application/ProcProject.cpp
-    Source/src/application/PluginProcessor.cpp
     Source/src/application/ProjectFileService.cpp
     Source/src/application/SessionCache.cpp
     Source/src/application/SnapshotBundler.cpp
     Source/src/application/SnapshotSync.cpp
+    Source/src/application/StemhubSession.cpp
     Source/src/application/UseCases.cpp
     Source/src/network/ApiClient.cpp
     Source/src/network/ApiConfig.cpp
     Source/src/network/ApiJson.cpp)
 
-set(STEMHUB_UI_SOURCES
+# The host-facing processor, the editor and its views.
+set(STEMHUB_PLUGIN_SOURCES
+    Source/src/application/PluginProcessor.cpp
     Source/src/ui/PluginEditor.cpp
     Source/src/ui/PluginTheme.cpp
     Source/src/ui/DashboardView.cpp
@@ -49,15 +48,13 @@ function(stemhub_configure_target target)
 
     target_compile_definitions(${target}
         PRIVATE
-            JUCE_WEB_BROWSER=0
             JUCE_STRICT_REFCOUNTEDPOINTER=1
-            JUCE_VST3_CAN_REPLACE_VST2=0
             STEMHUB_DEFAULT_API_BASE_URL="${STEMHUB_API_BASE_URL}")
 
     target_link_libraries(${target}
         PRIVATE
-            juce::juce_audio_utils
             juce::juce_cryptography
+            juce::juce_events
             juce::juce_recommended_config_flags
             juce::juce_recommended_lto_flags
             juce::juce_recommended_warning_flags)
@@ -100,23 +97,14 @@ juce_add_binary_data(stemhub_assets
         Resources/fonts/PlusJakartaSans-SemiBold.ttf
         Resources/fonts/PlusJakartaSans-Bold.ttf)
 
-target_sources(stemhub PRIVATE ${STEMHUB_CORE_SOURCES} ${STEMHUB_UI_SOURCES})
+target_sources(stemhub PRIVATE ${STEMHUB_CORE_SOURCES} ${STEMHUB_PLUGIN_SOURCES})
 stemhub_configure_target(stemhub)
-target_link_libraries(stemhub PRIVATE stemhub_assets)
+target_compile_definitions(stemhub PRIVATE JUCE_WEB_BROWSER=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+target_link_libraries(stemhub PRIVATE stemhub_assets juce::juce_audio_utils)
 
 juce_add_console_app(stemhub_plugin_tests NEEDS_CURL TRUE)
 
 juce_generate_juce_header(stemhub_plugin_tests)
 
-target_sources(stemhub_plugin_tests PRIVATE ${STEMHUB_CORE_SOURCES} tests/ProcessorStabilityTests.cpp)
+target_sources(stemhub_plugin_tests PRIVATE ${STEMHUB_CORE_SOURCES} tests/PluginTests.cpp)
 stemhub_configure_target(stemhub_plugin_tests)
-
-# The processor sources still include the plugin wrapper's settings; the tests supply them.
-target_compile_definitions(stemhub_plugin_tests
-    PRIVATE
-        STEMHUB_PLUGIN_HEADLESS_TESTS=1
-        JucePlugin_Name="Stemhub Session"
-        JucePlugin_WantsMidiInput=0
-        JucePlugin_ProducesMidiOutput=0
-        JucePlugin_IsMidiEffect=0
-        JucePlugin_IsSynth=0)
