@@ -103,22 +103,22 @@ stemhub::plugin::theme::MessageStatus getDashboardStatus(const StemhubAudioProce
     return stemhub::plugin::theme::MessageStatus::neutral;
 }
 
-juce::String formatVersionLabel(const VersionSummary& version)
+VersionListItem toVersionListItem(const VersionSummary& version, const juce::String& openedVersionId)
 {
-    const auto shortId = version.id.substring(0, 8);
-    const auto message = version.commitMessage.isNotEmpty() ? version.commitMessage : "No save note";
-
-    juce::String timestamp = "Unknown time";
+    VersionListItem item;
+    item.id = version.id;
+    item.message = version.commitMessage;
     if (version.createdAt.isNotEmpty())
     {
         const auto parsed = juce::Time::fromISO8601(version.createdAt);
         if (parsed.toMilliseconds() > 0)
-            timestamp = parsed.toString(true, true, true, true);
-        else
-            timestamp = version.createdAt;
+            item.createdAt = parsed;
     }
-
-    return shortId + " - " + message + " (" + timestamp + ")";
+    item.sourceDaw = version.sourceDaw;
+    item.sourceFilename = version.sourceProjectFilename;
+    item.sizeBytes = version.artifactSizeBytes;
+    item.isOpenInDaw = openedVersionId.isNotEmpty() && version.id == openedVersionId;
+    return item;
 }
 
 bool isBackupPath(const juce::File& candidateFile, const juce::File& rootFolder)
@@ -190,14 +190,6 @@ std::vector<juce::String> collectPackagedRelativeFilePaths(const juce::File& bun
     });
     return relativePaths;
 }
-
-juce::String formatProjectFileStatus(const juce::File& file)
-{
-    if (!file.existsAsFile())
-        return "No project file selected.";
-
-    return file.getFileName();
-}
 }
 
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
@@ -262,6 +254,12 @@ bool StemhubAudioProcessorEditor::keyPressed(const juce::KeyPress& key, juce::Co
 
 void StemhubAudioProcessorEditor::refreshSessionUi()
 {
+    // A save that finished cleanly consumes its note; a failed one keeps it for the retry.
+    const auto operationState = audioProcessor.getOperationState();
+    if (lastObservedOperationState == OperationState::committing && operationState == OperationState::idle)
+        dashboardView.clearCommitMessage();
+    lastObservedOperationState = operationState;
+
     const bool isSignedIn = audioProcessor.getAuthState() == AuthState::signedIn;
     const bool showProjectSelection = isSignedIn && audioProcessor.getUIState() == UIState::projectSelection;
     const bool showDashboard = isSignedIn && !showProjectSelection;
@@ -283,31 +281,25 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
 
 void StemhubAudioProcessorEditor::refreshProjectSelectionUi()
 {
-    std::vector<juce::String> projectNames;
-    std::vector<juce::String> projectIds;
+    std::vector<ProjectListItem> projectItems;
     const auto& projects = audioProcessor.getProjects();
-    projectNames.reserve(projects.size());
-    projectIds.reserve(projects.size());
+    projectItems.reserve(projects.size());
 
     for (const auto& project : projects)
-    {
-        projectNames.push_back(project.name);
-        projectIds.push_back(project.id);
-    }
+        projectItems.push_back({ project.id, project.name, project.description, project.category, project.isPublic });
 
     const auto effectiveProjectFile = getEffectiveProjectFile();
     const auto hasSelectedProjectFile = effectiveProjectFile.existsAsFile();
-    projectSelectionView.setHasExistingProjects(!projects.empty());
-    projectSelectionView.setCanCreateProject(hasSelectedProjectFile);
     projectSelectionView.setMessage(getProjectSelectionMessage(audioProcessor),
                                    getProjectSelectionStatus(audioProcessor));
     projectSelectionView.setProjectFileSelectionState(hasSelectedProjectFile,
                                                       hasSelectedProjectFile
                                                           ? effectiveProjectFile.getFullPathName()
                                                           : juce::String());
-    projectSelectionView.setSelectedProjectFileMessage(formatProjectFileStatus(effectiveProjectFile));
-    projectSelectionView.setProjects(projectNames,
-                                     projectIds,
+    projectSelectionView.setCanCreateProject(hasSelectedProjectFile);
+    projectSelectionView.setAccountName(audioProcessor.getCurrentUser() ? audioProcessor.getCurrentUser()->username
+                                                                        : juce::String());
+    projectSelectionView.setProjects(projectItems,
                                      audioProcessor.getSelectedProject() ? audioProcessor.getSelectedProject()->id : juce::String());
 }
 
@@ -325,23 +317,18 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
         branchIds.push_back(branch.id);
     }
 
-    std::vector<juce::String> versionLabels;
-    std::vector<juce::String> versionIds;
+    std::vector<VersionListItem> versionItems;
     const auto& versions = audioProcessor.getVersionHistory();
-    versionLabels.reserve(versions.size());
-    versionIds.reserve(versions.size());
+    versionItems.reserve(versions.size());
 
     for (const auto& version : versions)
-    {
-        versionLabels.push_back(formatVersionLabel(version));
-        versionIds.push_back(version.id);
-    }
+        versionItems.push_back(toVersionListItem(version, audioProcessor.getCurrentOpenedVersionId()));
 
     const auto fileToDisplay = getEffectiveProjectFile();
 
     dashboardView.setProjectStatusMessage(getDashboardMessage(audioProcessor), getDashboardStatus(audioProcessor));
     dashboardView.setBranches(branchNames, branchIds, audioProcessor.getSelectedBranchId());
-    dashboardView.setVersions(versionLabels, versionIds, audioProcessor.getSelectedVersionId());
+    dashboardView.setVersions(versionItems, audioProcessor.getSelectedVersionId());
     juce::Logger::writeToLog("[UI] Dashboard refresh -> selectedVersionId=" + audioProcessor.getSelectedVersionId()
                              + ", openedFile=" + (fileToDisplay.existsAsFile() ? fileToDisplay.getFullPathName() : "not available"));
     dashboardView.setProjectNameMessage(audioProcessor.getSelectedProject()
@@ -353,8 +340,6 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
     dashboardView.setSelectedProjectFilePath(fileToDisplay.existsAsFile()
                                                 ? fileToDisplay.getFullPathName()
                                                 : juce::String());
-
-    dashboardView.setSelectedProjectFileMessage(formatProjectFileStatus(fileToDisplay));
 
     const auto bundleRootDirectory = resolveBundleRootDirectory(fileToDisplay);
     dashboardView.setPackagedFiles({},
