@@ -105,7 +105,7 @@ AuthRequestResult restoreSession(const IProjectApi& api, const RestoreSessionInp
     return result;
 }
 
-ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProjectInput& input)
+ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProjectInput& input, const ReportProgress& report)
 {
     ProjectActivationJobResult result;
     result.projectFile = input.localProjectFile;
@@ -215,7 +215,7 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
         stemhub::projectfiles::resolveRestoreProjectName(result.versions, latestVersion.id, projectIt->name),
         latestVersion.id);
 
-    const auto restored = stemhub::snapshots::restoreSnapshot(api, input.token, { projectIt->id, latestVersion.id, restoreFolder });
+    const auto restored = stemhub::snapshots::restoreSnapshot(api, input.token, { projectIt->id, latestVersion.id, restoreFolder }, report);
     if (!restored.ok())
     {
         result.sessionExpired = restored.isUnauthorized();
@@ -320,7 +320,7 @@ BranchHistoryJobResult fetchHistory(const IProjectApi& api, const FetchHistoryIn
     return result;
 }
 
-PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
+PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input, const ReportProgress& report)
 {
     PushVersionJobResult result;
 
@@ -349,7 +349,11 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
     bundleRequest.sourceDaw = stemhub::snapshotfiles::dawNameFor(input.projectFile);
 
     ContentAddressedManifest manifest;
-    const auto manifestStatus = SnapshotBundler().buildManifest(bundleRequest, manifest);
+    const auto manifestStatus = SnapshotBundler().buildManifest(bundleRequest, manifest, [&report](int done, int total)
+    {
+        if (report != nullptr)
+            report("Preparing " + juce::String(done) + " of " + juce::String(total) + " files...");
+    });
     if (manifestStatus.failed())
     {
         result.errorMessage = manifestStatus.getErrorMessage();
@@ -364,7 +368,7 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
     pushRequest.parentVersionId = input.parentVersionId;
     pushRequest.manifest = std::move(manifest);
 
-    const auto pushed = stemhub::snapshots::pushSnapshot(api, input.token, pushRequest);
+    const auto pushed = stemhub::snapshots::pushSnapshot(api, input.token, pushRequest, report);
     if (!pushed.ok())
         return failWith(result, pushed, "Failed to save the version.");
 
@@ -387,7 +391,7 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
     return result;
 }
 
-RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInput& input)
+RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInput& input, const ReportProgress& report)
 {
     RestoreVersionJobResult result;
     result.restoredVersionId = input.versionId;
@@ -403,7 +407,7 @@ RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInpu
         return result;
     }
 
-    const auto restored = stemhub::snapshots::restoreSnapshot(api, input.token, { input.projectId, input.versionId, input.destinationFolder });
+    const auto restored = stemhub::snapshots::restoreSnapshot(api, input.token, { input.projectId, input.versionId, input.destinationFolder }, report);
     if (!restored.ok())
         return failWith(result, restored, "Failed to restore the version.");
 

@@ -1016,6 +1016,12 @@ DashboardView::DashboardView()
     restoreButton.setColour(juce::TextButton::textColourOnId, Theme::kPaper);
     restoreButton.onClick = [this] { invokeIfBound(onRestore); };
 
+    addChildComponent(cancelButton);
+    theme::styleLinkButton(cancelButton, Theme::kForegroundSubtle, Theme::kForeground);
+    cancelButton.getProperties().set("underlined", true);
+    cancelButton.setTooltip("Stop the save or restore in progress.");
+    cancelButton.onClick = [this] { invokeIfBound(onCancel); };
+
     addAndMakeVisible(versionListViewport);
     versionListViewport.setViewedComponent(&versionListContent, false);
     versionListViewport.setScrollBarsShown(true, false);
@@ -1120,6 +1126,7 @@ void DashboardView::setActivity(SessionActivity activity)
     // A save or restore belongs to this project, and a save to the note being typed.
     backToProjectsButton.setEnabled(!isSaving && !isRestoring);
     commitMessageInput.setEnabled(!isSaving && !isRestoring);
+    cancelButton.setVisible(isSaving || isRestoring);
 }
 
 juce::String DashboardView::getSelectedBranchId() const
@@ -1290,6 +1297,8 @@ void DashboardView::resized()
     statusBar.removeFromRight(12);
     footerCloudLabel.setBounds(statusBar.removeFromRight(170));
     statusBar.removeFromRight(16);
+    cancelButton.setBounds(statusBar.removeFromRight(52));
+    statusBar.removeFromRight(8);
     actionHintLabel.setBounds(statusBar);
 
     detailBounds = area.removeFromRight(juce::jlimit(220, 280, area.getWidth() * 2 / 5));

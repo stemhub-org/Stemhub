@@ -107,6 +107,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(juce::AudioProcessor& o
     dashboardView.onBackToProjects = [this] { handleBackToProjectsClick(); };
     dashboardView.onSignOut = [this] { handleSignOutClick(); };
     dashboardView.onRestore = [this] { handleRestoreClick(); };
+    dashboardView.onCancel = [this] { session.cancelRequest(); };
     dashboardView.setMaxNoteLength(kMaxSaveNoteLength);
 
     session.requestRestoreSavedSession();
@@ -250,7 +251,7 @@ void StemhubAudioProcessorEditor::refreshSnapshotSize()
     countedProjectFile = projectFile;
     dashboardView.setSnapshotSize(-1, 0);
     if (projectFile.existsAsFile())
-        snapshotCounter.enqueue([projectFile] { return stemhub::snapshotfiles::summarize(projectFile); });
+        snapshotCounter.enqueue([projectFile](const auto&) { return stemhub::snapshotfiles::summarize(projectFile); });
 }
 
 void StemhubAudioProcessorEditor::handleAsyncUpdate()
