@@ -655,6 +655,12 @@ void StemhubAudioProcessorEditor::showCommitMessagePopupForSave()
     commitPopup->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
     commitPopup->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
 
+    if (auto* saveButton = dynamic_cast<juce::TextButton*>(commitPopup->getButton("Save")))
+        stemhub::plugin::theme::stylePrimaryButton(*saveButton);
+
+    if (auto* noteInput = commitPopup->getTextEditor("commit_message"))
+        stemhub::plugin::theme::styleTextInput(*noteInput, "Save note");
+
     const auto popupRef = juce::Component::SafePointer<juce::AlertWindow>(commitPopup);
     const auto editorRef = juce::Component::SafePointer<StemhubAudioProcessorEditor>(this);
     commitPopup->enterModalState(true, juce::ModalCallbackFunction::create([editorRef, popupRef](int result)
@@ -678,8 +684,6 @@ void StemhubAudioProcessorEditor::handleBackToProjectsClick()
 void StemhubAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(stemhub::plugin::theme::PluginTheme::kBackground);
-    g.setColour(stemhub::plugin::theme::PluginTheme::kAccentGlow);
-    g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(10.0f), 12.0f);
 }
 
 void StemhubAudioProcessorEditor::resized()
