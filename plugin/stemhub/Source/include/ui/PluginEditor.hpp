@@ -50,6 +50,7 @@ private:
     ProjectSelectionView projectSelectionView;
     DashboardView dashboardView;
     juce::LookAndFeel* previousLookAndFeel { nullptr };
+    OperationState lastObservedOperationState { OperationState::idle };
     StemhubAudioProcessor& audioProcessor;
     std::unique_ptr<juce::FileChooser> projectFileChooser;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessorEditor)

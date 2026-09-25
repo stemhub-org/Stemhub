@@ -27,6 +27,7 @@ constexpr auto kVariantProperty = "stemhubVariant";
 constexpr auto kBusyProperty = "stemhubBusy";
 constexpr auto kStatusProperty = "stemhubStatus";
 constexpr auto kChipProperty = "stemhubChip";
+constexpr auto kInlineStatusProperty = "stemhubInlineStatus";
 
 enum class Face
 {
@@ -145,6 +146,7 @@ juce::Colour statusColour(MessageStatus status)
 juce::String arrowRight() { return juce::String::fromUTF8("\xe2\x86\x92"); }
 juce::String arrowLeft() { return juce::String::fromUTF8("\xe2\x86\x90"); }
 juce::String middleDot() { return juce::String::fromUTF8("\xc2\xb7"); }
+juce::String ellipsis() { return juce::String::fromUTF8("\xe2\x80\xa6"); }
 
 juce::Font displayFont(float size) { return makeFont(Face::syneExtraBold, size, -0.02f); }
 juce::Font headingFont(float size) { return makeFont(Face::jakartaBold, size, -0.01f); }
@@ -255,19 +257,27 @@ void StemhubPluginLookAndFeel::drawButtonBackground(juce::Graphics& g,
                 return;
             }
 
+            const auto isAccent = backgroundColour == PluginTheme::kAccent;
             auto fill = backgroundColour;
             if (shouldDrawButtonAsDown && hot)
-                fill = PluginTheme::kAccentPressed;
+                fill = isAccent ? PluginTheme::kAccentPressed : fill.interpolatedWith(textColour, 0.22f);
             else if (hot)
-                fill = PluginTheme::kAccentHover;
+                fill = isAccent ? PluginTheme::kAccentHover : fill.interpolatedWith(textColour, 0.12f);
 
             g.setColour(fill);
             g.fillRect(bounds);
             return;
         }
 
+        case ButtonVariant::tab:
+            if (button.getToggleState())
+            {
+                g.setColour(PluginTheme::kAccent);
+                g.fillRect(bounds.withTop(bounds.getBottom() - 2.0f));
+            }
+            return;
+
         case ButtonVariant::secondary:
-        case ButtonVariant::segment:
         {
             auto fill = backgroundColour;
             if (hot && !button.getToggleState())
@@ -318,7 +328,7 @@ void StemhubPluginLookAndFeel::drawButtonText(juce::Graphics& g,
 
     auto colour = button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
                                                             : juce::TextButton::textColourOffId);
-    if (hot && (variant == ButtonVariant::ghost || variant == ButtonVariant::link))
+    if (hot && (variant == ButtonVariant::ghost || variant == ButtonVariant::link || variant == ButtonVariant::tab))
         colour = button.findColour(juce::TextButton::textColourOnId);
 
     if (!enabled)
@@ -327,7 +337,7 @@ void StemhubPluginLookAndFeel::drawButtonText(juce::Graphics& g,
 
     const auto isLink = variant == ButtonVariant::link;
     const auto text = isLink ? button.getButtonText() : button.getButtonText().toUpperCase();
-    const auto area = button.getLocalBounds().reduced(isLink ? 0 : 10, 0);
+    const auto area = button.getLocalBounds().reduced(isLink || variant == ButtonVariant::tab ? 0 : 10, 0);
     const auto justification = static_cast<bool>(button.getProperties()["stemhubAlignLeft"])
                                    ? juce::Justification::centredLeft
                                    : juce::Justification::centred;
@@ -350,7 +360,15 @@ void StemhubPluginLookAndFeel::drawButtonText(juce::Graphics& g,
 
 juce::Font StemhubPluginLookAndFeel::getTextButtonFont(juce::TextButton& button, int)
 {
-    return variantOf(button) == ButtonVariant::link ? mediumFont(12.5f) : labelFont(11.0f);
+    switch (variantOf(button))
+    {
+        case ButtonVariant::link: return mediumFont(12.5f);
+        case ButtonVariant::tab: return labelFont(10.5f);
+        case ButtonVariant::primary:
+        case ButtonVariant::secondary:
+        case ButtonVariant::ghost:
+        default: return labelFont(11.0f);
+    }
 }
 
 void StemhubPluginLookAndFeel::drawLabel(juce::Graphics& g, juce::Label& label)
@@ -377,6 +395,19 @@ void StemhubPluginLookAndFeel::drawLabel(juce::Graphics& g, juce::Label& label)
         g.setColour(textColour);
         g.setFont(labelFont(10.0f));
         g.drawText(label.getText().toUpperCase(), content, juce::Justification::centredLeft, true);
+        return;
+    }
+
+    if (static_cast<bool>(properties[kInlineStatusProperty]))
+    {
+        auto content = bounds;
+        g.setColour(accent);
+        g.fillRect(content.removeFromLeft(6).withSizeKeepingCentre(6, 6));
+        content.removeFromLeft(10);
+
+        g.setColour(textColour);
+        g.setFont(getLabelFont(label));
+        g.drawText(label.getText(), content, juce::Justification::centredLeft, true);
         return;
     }
 
@@ -578,7 +609,6 @@ void styleButton(juce::TextButton& button, ButtonVariant variant)
             break;
 
         case ButtonVariant::secondary:
-        case ButtonVariant::segment:
             button.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
             button.setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
             button.setColour(juce::TextButton::textColourOffId, PluginTheme::kForeground);
@@ -587,6 +617,7 @@ void styleButton(juce::TextButton& button, ButtonVariant variant)
             break;
 
         case ButtonVariant::ghost:
+        case ButtonVariant::tab:
             button.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
             button.setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
             button.setColour(juce::TextButton::textColourOffId, PluginTheme::kForegroundSubtle);
@@ -608,13 +639,10 @@ void stylePrimaryButton(juce::TextButton& button) { styleButton(button, ButtonVa
 void styleSecondaryButton(juce::TextButton& button) { styleButton(button, ButtonVariant::secondary); }
 void styleGhostButton(juce::TextButton& button) { styleButton(button, ButtonVariant::ghost); }
 
-void styleSegmentButton(juce::TextButton& button, bool selected)
+void styleTabButton(juce::TextButton& button, bool selected)
 {
-    styleButton(button, ButtonVariant::segment);
-    button.setColour(juce::TextButton::buttonColourId, selected ? PluginTheme::kForeground : juce::Colours::transparentBlack);
-    button.setColour(juce::TextButton::textColourOffId, selected ? PluginTheme::kInk : PluginTheme::kForegroundSubtle);
-    button.setColour(juce::TextButton::textColourOnId, selected ? PluginTheme::kInk : PluginTheme::kForeground);
-    button.setColour(buttonOutlineColourId, PluginTheme::kSurfaceBorder);
+    styleButton(button, ButtonVariant::tab);
+    button.setToggleState(selected, juce::dontSendNotification);
 }
 
 void styleLinkButton(juce::TextButton& button, juce::Colour colour, juce::Colour hoverColour)
@@ -700,6 +728,11 @@ void makeStatusChip(juce::Label& label)
     label.getProperties().set(kChipProperty, true);
 }
 
+void makeInlineStatus(juce::Label& label)
+{
+    label.getProperties().set(kInlineStatusProperty, true);
+}
+
 void styleMetaLabel(juce::Label& label, const juce::String& text, juce::Colour colour, float size)
 {
     label.setText(text.toUpperCase(), juce::dontSendNotification);
@@ -741,6 +774,86 @@ void paintTag(juce::Graphics& g,
     g.setColour(textColour);
     g.setFont(labelFont(9.5f));
     g.drawText(text.toUpperCase(), area.reduced(6.0f, 0.0f), juce::Justification::centred, true);
+}
+
+float tagWidth(const juce::String& text)
+{
+    return std::ceil(juce::GlyphArrangement::getStringWidth(labelFont(9.5f), text.toUpperCase())) + 16.0f;
+}
+
+int paintDisplayText(juce::Graphics& g,
+                     const juce::String& text,
+                     juce::Rectangle<int> area,
+                     float fontSize,
+                     juce::Colour colour,
+                     int maxLines,
+                     bool anchorBottom)
+{
+    if (text.isEmpty() || area.isEmpty() || maxLines <= 0)
+        return 0;
+
+    const auto font = displayFont(fontSize);
+    const auto maxWidth = static_cast<float>(area.getWidth());
+    const auto widthOf = [&font](const juce::String& line) { return juce::GlyphArrangement::getStringWidth(font, line); };
+
+    juce::StringArray words;
+    words.addTokens(text, " ", "");
+    words.removeEmptyStrings();
+
+    juce::StringArray lines;
+    juce::String current;
+    for (const auto& word : words)
+    {
+        const auto candidate = current.isEmpty() ? word : current + " " + word;
+        if (current.isEmpty() || widthOf(candidate) <= maxWidth)
+        {
+            current = candidate;
+        }
+        else
+        {
+            lines.add(current);
+            current = word;
+        }
+    }
+    if (current.isNotEmpty())
+        lines.add(current);
+
+    if (lines.size() > maxLines)
+    {
+        juce::StringArray overflow;
+        for (int i = maxLines - 1; i < lines.size(); ++i)
+            overflow.add(lines[i]);
+
+        lines.removeRange(maxLines - 1, lines.size());
+        lines.add(overflow.joinIntoString(" "));
+    }
+
+    for (auto& line : lines)
+    {
+        if (widthOf(line) <= maxWidth)
+            continue;
+
+        while (line.length() > 1 && widthOf(line + ellipsis()) > maxWidth)
+            line = line.dropLastCharacters(1).trimEnd();
+        line += ellipsis();
+    }
+
+    // Syne's cap height is ~0.54 of the JUCE font height; lines step at ~0.96 em.
+    const auto capHeight = fontSize * 0.545f;
+    const auto lineStep = std::round(fontSize * 0.8f);
+    const auto totalHeight = capHeight + lineStep * static_cast<float>(lines.size() - 1);
+    auto baseline = anchorBottom ? static_cast<float>(area.getBottom()) - lineStep * static_cast<float>(lines.size() - 1)
+                                 : static_cast<float>(area.getY()) + capHeight;
+
+    g.setColour(colour);
+    g.setFont(font);
+    for (const auto& line : lines)
+    {
+        g.drawSingleLineText(line, area.getX(), static_cast<int>(std::round(baseline)));
+        baseline += lineStep;
+    }
+
+    return static_cast<int>(std::ceil(totalHeight));
 }
 
 void paintLogoMark(juce::Graphics& g,
@@ -792,6 +905,33 @@ void paintBlockPattern(juce::Graphics& g,
 
         g.setColour(step == firstAccent || step == secondAccent ? accentColour : blockColour);
         g.fillRect(x, y, juce::jmax(1.0f, nextX - x - gap), height);
+    }
+}
+
+void paintSequencerArt(juce::Graphics& g,
+                       juce::Rectangle<float> bounds,
+                       const juce::String& seed,
+                       int tracks,
+                       int steps,
+                       juce::Colour blockColour,
+                       juce::Colour accentColour)
+{
+    if (tracks <= 0 || bounds.isEmpty())
+        return;
+
+    const auto gap = 4.0f;
+    const auto trackHeight = (bounds.getHeight() - gap * static_cast<float>(tracks - 1)) / static_cast<float>(tracks);
+    juce::Random random(seed.hashCode64());
+    const auto accentTrack = random.nextInt(tracks);
+
+    for (int track = 0; track < tracks; ++track)
+    {
+        const auto row = juce::Rectangle<float>(bounds.getX(),
+                                                bounds.getY() + (trackHeight + gap) * static_cast<float>(track),
+                                                bounds.getWidth(),
+                                                trackHeight);
+        paintBlockPattern(g, row, seed + ":" + juce::String(track), steps, blockColour,
+                          track == accentTrack ? accentColour : blockColour);
     }
 }
 }

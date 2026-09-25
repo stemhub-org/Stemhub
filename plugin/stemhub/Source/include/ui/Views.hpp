@@ -36,6 +36,16 @@ private:
     juce::TextButton signInButton { "Sign In" };
 };
 
+// Everything a project tile shows; built by the editor from the processor's project list.
+struct ProjectListItem
+{
+    juce::String id;
+    juce::String name;
+    juce::String description;
+    juce::String category;
+    bool isPublic { false };
+};
+
 class ProjectSelectionView : public juce::Component
 {
 public:
@@ -43,14 +53,11 @@ public:
 
     void setMessage(const juce::String& message,
                     stemhub::plugin::theme::MessageStatus status = stemhub::plugin::theme::MessageStatus::neutral);
-    void setSelectedProjectFileMessage(const juce::String& message);
     void setProjectFileSelectionState(bool hasProjectFile, const juce::String& selectedProjectFilePath);
-    void setProjects(const std::vector<juce::String>& projectNames,
-                     const std::vector<juce::String>& projectIds,
-                     const juce::String& selectedProjectId);
-    void setHasExistingProjects(bool hasProjects);
+    void setProjects(const std::vector<ProjectListItem>& projects, const juce::String& selectedProjectId);
     void setCanCreateProject(bool canCreate);
-    [[nodiscard]] juce::String getSelectedProjectId() const;
+    void setAccountName(const juce::String& accountName);
+    [[nodiscard]] juce::String getSelectedProjectId() const { return selectedProjectId; }
     void resized() override;
     void paint(juce::Graphics& g) override;
 
@@ -59,41 +66,51 @@ public:
     std::function<void()> onCreateProject;
     std::function<void()> onSignOut;
 
-    enum class ProjectFilter { All, Local, Cloud };
+    enum class ProjectFilter { All, Private, Public };
 
 private:
-    std::vector<juce::String> comboProjectIds;
-    std::vector<std::pair<juce::String, juce::String>> allProjects;
-    bool hasExistingProjects { false };
+    std::vector<ProjectListItem> allProjects;
+    juce::String selectedProjectId;
+    juce::String selectedProjectFilePath;
     bool canCreateProject { false };
     bool hasProjectFile { false };
+    bool isLoadingProjects { false };
     ProjectFilter activeProjectFilter { ProjectFilter::All };
     juce::Label titleLabel;
-    juce::Label subtitleLabel;
-    juce::Label emptyStateTitle;
-    juce::Label emptyStateSubtle;
+    juce::Label accountLabel;
     juce::Label statusLabel;
-    juce::Label projectFileLabel;
     juce::TextEditor searchInput;
     juce::TextButton filterAllButton { "All" };
-    juce::TextButton filterLocalButton { "Local" };
-    juce::TextButton filterCloudButton { "Cloud" };
-    juce::ComboBox projectComboBox;
-    juce::Viewport projectListViewport;
-    juce::Component projectListContent;
-    juce::OwnedArray<juce::Component> projectCards;
-    juce::TextButton chooseProjectFileButton { "Choose Project File" };
-    juce::TextButton openProjectButton { "Open Project" };
-    juce::TextButton createProjectButton { "Create Project" };
-    juce::TextButton signOutButton { "Sign Out" };
+    juce::TextButton filterPrivateButton { "Private" };
+    juce::TextButton filterPublicButton { "Public" };
+    juce::Viewport projectGridViewport;
+    juce::Component projectGridContent;
+    juce::OwnedArray<juce::Component> projectTiles;
+    juce::TextButton chooseProjectFileButton { "Choose file" };
+    juce::TextButton createProjectButton { "Create project" };
+    juce::TextButton signOutButton { "Sign out" };
 
-    juce::Rectangle<int> metaRowBounds;
-    juce::Rectangle<int> fileStripBounds;
-    juce::Rectangle<int> emptyStateBounds;
+    juce::Rectangle<int> headerLogoBounds;
+    juce::Rectangle<int> projectCountBounds;
+    int headerDividerY { 0 };
 
-    void rebuildProjectCards();
+    void rebuildProjectTiles();
+    void layoutProjectGrid();
     void updateProjectFilterButtons();
+    void updateNewProjectControls();
     void selectProjectById(const juce::String& projectId, bool triggerOpen);
+};
+
+// One saved version as the history timeline and detail card show it.
+struct VersionListItem
+{
+    juce::String id;
+    juce::String message;
+    juce::Time createdAt;
+    juce::String sourceDaw;
+    juce::String sourceFilename;
+    juce::int64 sizeBytes { 0 };
+    bool isOpenInDaw { false };
 };
 
 class DashboardView : public juce::Component
@@ -103,25 +120,17 @@ public:
 
     void setProjectStatusMessage(const juce::String& message,
                                 stemhub::plugin::theme::MessageStatus status = stemhub::plugin::theme::MessageStatus::neutral);
-    void setSelectedProjectFileMessage(const juce::String& message);
-    void setSelectedProjectFilePath(const juce::String& projectFilePath)
-    {
-        selectedProjectFilePath = projectFilePath;
-        updateFooterSummary();
-        updateSnapshotSummary();
-    }
+    void setSelectedProjectFilePath(const juce::String& projectFilePath);
     void setProjectNameMessage(const juce::String& message);
     void setBranchNameMessage(const juce::String& message);
     void setBranches(const std::vector<juce::String>& branchNames,
                      const std::vector<juce::String>& branchIds,
                      const juce::String& selectedBranchId);
-    void setVersions(const std::vector<juce::String>& versionLabels,
-                     const std::vector<juce::String>& versionIds,
-                     const juce::String& selectedVersionId);
+    void setVersions(const std::vector<VersionListItem>& versionItems, const juce::String& selectedVersionId);
     void setPackagedFiles(const juce::String& rootLabel,
                           const std::vector<juce::String>& relativeFilePaths);
     [[nodiscard]] juce::String getSelectedBranchId() const;
-    [[nodiscard]] juce::String getSelectedVersionId() const;
+    [[nodiscard]] juce::String getSelectedVersionId() const { return selectedVersionId; }
     [[nodiscard]] juce::String getCommitMessage() const noexcept { return commitMessageInput.getText().trim(); }
     void setCommitMessage(const juce::String& message) { commitMessageInput.setText(message, juce::dontSendNotification); }
     void clearCommitMessage() { commitMessageInput.clear(); }
@@ -138,41 +147,38 @@ public:
 
 private:
     std::vector<juce::String> comboBranchIds;
-    std::vector<juce::String> comboVersionIds;
-    std::vector<juce::String> versionDisplayLabels;
+    std::vector<VersionListItem> versions;
+    juce::String selectedVersionId;
     juce::String selectedProjectFilePath;
     int packagedFileCount { 0 };
     juce::Rectangle<int> headerLogoBounds;
-    juce::Rectangle<int> heroPatternBounds;
-    juce::Rectangle<int> historyCountBounds;
+    juce::Rectangle<int> branchCaptionBounds;
+    juce::Rectangle<int> workingCopyBounds;
+    juce::Rectangle<int> detailBounds;
     int headerDividerY { 0 };
-    int historyDividerY { 0 };
-    int footerDividerY { 0 };
+    int statusBarDividerY { 0 };
     juce::Label headerProjectLabel;
     juce::Label projectStatusLabel;
-    juce::Label snapshotSectionLabel;
-    juce::Label snapshotTitleLabel;
-    juce::Label snapshotMetaLabel;
     juce::Label actionHintLabel;
-    juce::Label historyLabel;
-    juce::Label footerPathLabel;
     juce::Label footerCloudLabel;
     juce::Label footerStorageLabel;
+    juce::Label restoreHintLabel;
     juce::ComboBox branchComboBox;
-    juce::ComboBox versionComboBox;
-    juce::TextButton backToProjectsButton { "< Projects" };
+    juce::TextButton backToProjectsButton { "Projects" };
     juce::TextEditor commitMessageInput;
-    juce::TextButton saveChanges { "Save" };
-    juce::TextButton syncButton { "Sync latest" };
-    juce::TextButton signOutButton { "Sign Out" };
-    juce::TextButton restoreButton { "Restore" };
+    juce::TextButton saveChanges { "Save snapshot" };
+    juce::TextButton syncButton { "Sync" };
+    juce::TextButton signOutButton { "Sign out" };
+    juce::TextButton restoreButton { "Restore this version" };
     juce::Viewport versionListViewport;
     juce::Component versionListContent;
-    juce::OwnedArray<juce::Component> versionCards;
+    juce::OwnedArray<juce::Component> versionRows;
 
-    void rebuildVersionCards();
-    void updateSnapshotSummary();
-    void updateSnapshotTitleFont();
+    [[nodiscard]] const VersionListItem* findSelectedVersion() const;
+    [[nodiscard]] int indexOfSelectedVersion() const;
+    void rebuildVersionRows();
+    void layoutVersionRows();
+    void updateDetailControls();
     void updateFooterSummary();
     void selectVersionById(const juce::String& versionId, bool triggerChange);
 };
