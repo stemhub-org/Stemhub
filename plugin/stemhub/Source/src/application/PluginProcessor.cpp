@@ -2,46 +2,19 @@
 #include "application/PluginState.hpp"
 #include "ui/PluginEditor.hpp"
 
-namespace
-{
-std::unique_ptr<juce::FileLogger> sharedFileLogger;
-juce::Logger* previousLogger = nullptr;
-int fileLoggerUsers = 0;
-}
-
-StemhubAudioProcessor::FileLoggerScope::FileLoggerScope()
-{
-    if (++fileLoggerUsers > 1)
-        return;
-
-    previousLogger = juce::Logger::getCurrentLogger();
-    sharedFileLogger.reset(juce::FileLogger::createDefaultAppLogger("Stemhub", "plugin.log", "Stemhub plugin log", 1024 * 1024));
-    juce::Logger::setCurrentLogger(sharedFileLogger != nullptr ? sharedFileLogger.get() : previousLogger);
-}
-
-StemhubAudioProcessor::FileLoggerScope::~FileLoggerScope()
-{
-    if (--fileLoggerUsers > 0)
-        return;
-
-    juce::Logger::setCurrentLogger(previousLogger);
-    previousLogger = nullptr;
-    sharedFileLogger.reset();
-}
-
 StemhubAudioProcessor::StemhubAudioProcessor()
     : AudioProcessor(BusesProperties()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       session(std::make_shared<ApiClient>(), SessionStorage::forCurrentUser())
 {
-    juce::Logger::writeToLog("StemhubAudioProcessor constructor");
+    stemhub::log::info("Plugin instance created");
     session.addChangeListener(this);
 }
 
 StemhubAudioProcessor::~StemhubAudioProcessor()
 {
-    juce::Logger::writeToLog("StemhubAudioProcessor destructor");
+    stemhub::log::info("Plugin instance closing");
     cancelPendingUpdate();
     session.removeChangeListener(this);
 }

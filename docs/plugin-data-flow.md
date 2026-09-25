@@ -27,9 +27,14 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 - `UseCases` (`plugin/stemhub/Source/src/application/UseCases.cpp`)
   - The background work of each action, as functions from an input built on the message
     thread to a result the session applies.
+- `SnapshotFiles` (`plugin/stemhub/Source/src/application/SnapshotFiles.cpp`)
+  - The one rule for which files a save takes: the project file, then the audio and MIDI files
+    in its folder and subfolders, without hidden files, `Backup` folders, and copies the plugin
+    restored there. The push and the dashboard's "12 files · 340 MB" count both use it; the
+    editor counts in the background.
 - `SnapshotBundler` (`plugin/stemhub/Source/src/application/SnapshotBundler.cpp`)
-  - Hashes the project file and its audio files and builds the version manifest; validates
-    manifests before a restore (see `docs/content-addressed-storage.md`).
+  - Hashes those files and builds the version manifest; validates manifests before a restore
+    (see `docs/content-addressed-storage.md`).
 
 ## 2) Data Objects Moving Through The Flow
 
@@ -147,11 +152,13 @@ sequenceDiagram
 
 ### Data path
 
-1. UI triggers `requestPushVersion(commitMessage, dawName)`.
+1. UI triggers `requestPushVersion(commitMessage)`. An empty note is saved as
+   "Save from plugin" and shown as "Untitled snapshot"; the DAW name comes from the file's
+   extension.
 2. The session picks the parent version (the working copy's version, else the branch head) and
    enqueues the job with everything it needs.
-3. `SnapshotBundler::buildManifest(...)` hashes the project file and the audio files in its
-   folder; paths are stored relative to that folder.
+3. `SnapshotBundler::buildManifest(...)` hashes the files `SnapshotFiles::collect` lists; paths
+   are stored relative to the project file's folder.
 4. `stemhub::snapshots::pushSnapshot(...)` calls the backend:
    - `POST /projects/{projectId}/blobs/check-missing`
    - `PUT /projects/{projectId}/blobs/{sha256}` for each missing file
