@@ -12,6 +12,7 @@
 #include "application/PluginProcessor.hpp"
 #include "application/SessionCache.hpp"
 #include "application/SnapshotBundler.hpp"
+#include "network/ApiConfig.hpp"
 
 namespace
 {
@@ -1055,6 +1056,31 @@ public:
             expect(context.processor.getSelectedProjectFile().loadFileAsString() == "flp v2");
             expect(context.processor.getCurrentOpenedVersionId() == newerVersionId);
             expect(olderCopy.loadFileAsString() == "flp v1", "the older copy is kept");
+        }
+
+        beginTest("The API base URL is https, or http to this machine");
+        {
+            using stemhub::api::chooseBaseUrl;
+            using stemhub::api::normaliseBaseUrl;
+
+            expect(normaliseBaseUrl("https://api.stemhub.app/") == "https://api.stemhub.app");
+            expect(normaliseBaseUrl(" http://localhost:8000 ") == "http://localhost:8000");
+            expect(normaliseBaseUrl("http://127.0.0.1:8000/") == "http://127.0.0.1:8000");
+            expect(normaliseBaseUrl("http://[::1]:8000") == "http://[::1]:8000");
+            expect(normaliseBaseUrl("http://api.stemhub.app").isEmpty(), "plain http to another host would leak the token");
+            expect(normaliseBaseUrl("http://localhost.evil.example").isEmpty());
+            expect(normaliseBaseUrl("http://localhost@evil.example").isEmpty());
+            expect(normaliseBaseUrl("ftp://api.stemhub.app").isEmpty());
+            expect(normaliseBaseUrl("https://").isEmpty());
+
+            const juce::String builtIn = "http://localhost:8000/";
+            const juce::String configFile = R"({ "api_base_url": "https://staging.stemhub.app" })";
+            expect(chooseBaseUrl({}, {}, builtIn) == "http://localhost:8000", "the built-in URL is the fallback");
+            expect(chooseBaseUrl({}, configFile, builtIn) == "https://staging.stemhub.app", "the config file overrides it");
+            expect(chooseBaseUrl("https://dev.stemhub.app", configFile, builtIn) == "https://dev.stemhub.app",
+                   "the environment wins");
+            expect(chooseBaseUrl("http://evil.example", "not json", builtIn) == "http://localhost:8000",
+                   "unusable overrides are ignored");
         }
 
         beginTest("Blob downloads follow the storage redirect without the bearer token");

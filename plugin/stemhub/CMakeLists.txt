@@ -6,9 +6,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(COPY_PLUGIN "Copy plugin bundles to local plugin folders after build" ON)
 
-set(JUCE_WEB_BROWSER 0 CACHE STRING "Disable JUCE web browser support" FORCE)
-
 set(JUCE_DIR "" CACHE PATH "Path to JUCE repository root")
+set(STEMHUB_API_BASE_URL "http://localhost:8000" CACHE STRING
+    "StemHub API the plugin uses unless overridden at runtime (see Source/include/network/ApiConfig.hpp)")
 
 if(JUCE_DIR STREQUAL "")
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
@@ -20,8 +20,56 @@ if(JUCE_DIR STREQUAL "")
 endif()
 
 add_subdirectory(${JUCE_DIR} JUCE)
-find_package(CURL REQUIRED)
 
+# Everything except the editor and its views: built into the plugin and into the headless tests.
+set(STEMHUB_CORE_SOURCES
+    Source/src/application/ProcAudio.cpp
+    Source/src/application/ProcAuth.cpp
+    Source/src/application/ProcProject.cpp
+    Source/src/application/ProcProjJobs.cpp
+    Source/src/application/ProcVerJobs.cpp
+    Source/src/application/PluginProcessor.cpp
+    Source/src/application/ProjectFileService.cpp
+    Source/src/application/SessionCache.cpp
+    Source/src/application/SnapshotBundler.cpp
+    Source/src/network/ApiClient.cpp
+    Source/src/network/ApiConfig.cpp
+    Source/src/network/VersionControlService.cpp)
+
+set(STEMHUB_UI_SOURCES
+    Source/src/ui/PluginEditor.cpp
+    Source/src/ui/PluginTheme.cpp
+    Source/src/ui/DashboardView.cpp
+    Source/src/ui/LoginView.cpp)
+
+# Settings every StemHub target shares. JUCE compiles its modules into each target that links
+# them, so the core is shared as a source list: a static library would build JUCE twice.
+function(stemhub_configure_target target)
+    target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source/include")
+
+    target_compile_definitions(${target}
+        PRIVATE
+            JUCE_WEB_BROWSER=0
+            JUCE_STRICT_REFCOUNTEDPOINTER=1
+            JUCE_VST3_CAN_REPLACE_VST2=0
+            STEMHUB_DEFAULT_API_BASE_URL="${STEMHUB_API_BASE_URL}")
+
+    target_link_libraries(${target}
+        PRIVATE
+            juce::juce_audio_utils
+            juce::juce_cryptography
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_lto_flags
+            juce::juce_recommended_warning_flags)
+endfunction()
+
+set(STEMHUB_PLUGIN_FORMATS VST3 Standalone)
+if(APPLE)
+    list(APPEND STEMHUB_PLUGIN_FORMATS AU)
+endif()
+
+# NEEDS_CURL only matters on Linux, where JUCE links libcurl for HTTP; macOS and Windows use
+# the system networking stack.
 juce_add_plugin(stemhub
     COMPANY_NAME "Stemhub"
     BUNDLE_ID "com.stemhub.session"
@@ -36,7 +84,7 @@ juce_add_plugin(stemhub
     PLUGIN_MANUFACTURER_CODE Manu
     PLUGIN_CODE Wbcr
     VST3_CATEGORIES Fx Tools
-    FORMATS VST3 Standalone
+    FORMATS ${STEMHUB_PLUGIN_FORMATS}
     PRODUCT_NAME "Stemhub Session")
 
 juce_generate_juce_header(stemhub)
@@ -52,87 +100,23 @@ juce_add_binary_data(stemhub_assets
         Resources/fonts/PlusJakartaSans-SemiBold.ttf
         Resources/fonts/PlusJakartaSans-Bold.ttf)
 
-target_sources(stemhub
-    PRIVATE
-        Source/src/ui/PluginEditor.cpp
-        Source/src/ui/PluginTheme.cpp
-        Source/src/ui/DashboardView.cpp
-        Source/src/ui/LoginView.cpp
-        Source/src/application/ProcAudio.cpp
-        Source/src/application/ProcAuth.cpp
-        Source/src/application/ProcProject.cpp
-        Source/src/application/ProcProjJobs.cpp
-        Source/src/application/ProcVerJobs.cpp
-        Source/src/application/PluginProcessor.cpp
-        Source/src/application/ProjectFileService.cpp
-        Source/src/application/SessionCache.cpp
-        Source/src/application/SnapshotBundler.cpp
-        Source/src/network/ApiClient.cpp
-        Source/src/network/VersionControlService.cpp)
+target_sources(stemhub PRIVATE ${STEMHUB_CORE_SOURCES} ${STEMHUB_UI_SOURCES})
+stemhub_configure_target(stemhub)
+target_link_libraries(stemhub PRIVATE stemhub_assets)
 
-target_include_directories(stemhub
-    PRIVATE
-        Source/include)
-
-target_compile_definitions(stemhub
-    PRIVATE
-        JUCE_USE_CURL=1
-        JUCE_WEB_BROWSER=0
-        JUCE_STRICT_REFCOUNTEDPOINTER=1
-        JUCE_VST3_CAN_REPLACE_VST2=0)
-
-target_link_libraries(stemhub
-    PRIVATE
-        stemhub_assets
-        juce::juce_audio_utils
-        juce::juce_cryptography
-        juce::juce_recommended_config_flags
-        juce::juce_recommended_lto_flags
-        juce::juce_recommended_warning_flags)
-
-juce_add_console_app(stemhub_plugin_tests
-    PRODUCT_NAME "stemhub-plugin-tests")
+juce_add_console_app(stemhub_plugin_tests NEEDS_CURL TRUE)
 
 juce_generate_juce_header(stemhub_plugin_tests)
 
-target_sources(stemhub_plugin_tests
-    PRIVATE
-        Source/src/application/ProcAudio.cpp
-        Source/src/application/ProcAuth.cpp
-        Source/src/application/ProcProject.cpp
-        Source/src/application/ProcProjJobs.cpp
-        Source/src/application/ProcVerJobs.cpp
-        Source/src/application/PluginProcessor.cpp
-        Source/src/application/ProjectFileService.cpp
-        Source/src/application/SessionCache.cpp
-        Source/src/application/SnapshotBundler.cpp
-        Source/src/network/ApiClient.cpp
-        Source/src/network/VersionControlService.cpp
-        tests/ProcessorStabilityTests.cpp)
+target_sources(stemhub_plugin_tests PRIVATE ${STEMHUB_CORE_SOURCES} tests/ProcessorStabilityTests.cpp)
+stemhub_configure_target(stemhub_plugin_tests)
 
-target_include_directories(stemhub_plugin_tests
-    PRIVATE
-        Source/include)
-
+# The processor sources still include the plugin wrapper's settings; the tests supply them.
 target_compile_definitions(stemhub_plugin_tests
     PRIVATE
         STEMHUB_PLUGIN_HEADLESS_TESTS=1
-        JUCE_USE_CURL=1
-        JUCE_WEB_BROWSER=0
-        JUCE_MODAL_LOOPS_PERMITTED=1
-        JUCE_STRICT_REFCOUNTEDPOINTER=1
-        JUCE_VST3_CAN_REPLACE_VST2=0
         JucePlugin_Name="Stemhub Session"
         JucePlugin_WantsMidiInput=0
         JucePlugin_ProducesMidiOutput=0
         JucePlugin_IsMidiEffect=0
         JucePlugin_IsSynth=0)
-
-target_link_libraries(stemhub_plugin_tests
-    PRIVATE
-        CURL::libcurl
-        juce::juce_audio_utils
-        juce::juce_cryptography
-        juce::juce_recommended_config_flags
-        juce::juce_recommended_lto_flags
-        juce::juce_recommended_warning_flags)
