@@ -76,6 +76,8 @@ public:
     [[nodiscard]] const juce::String& getActiveProjectStatusMessage() const noexcept { return activeProjectStatusMessage; }
     [[nodiscard]] const juce::File& getPendingProjectFile() const noexcept { return pendingProjectFile; }
     [[nodiscard]] const juce::File& getSelectedProjectFile() const noexcept { return selectedProjectFile; }
+    // Save and restore write files and versions; nothing else may start while one runs.
+    [[nodiscard]] bool isWriteOperationInProgress() const noexcept;
 
     void signIn(User newUser) noexcept;
     void signOut() noexcept;
@@ -106,6 +108,8 @@ public:
     void requestRestoreVersionContentAddressed(const juce::String& versionId, const juce::File& destinationFolder);
 
     void setSelectedVersionId(juce::String versionId);
+    // Opening a project file hands it to the DAW / OS. Tests replace this so nothing is launched.
+    void setOpenFileHandler(std::function<bool(const juce::File&)> handler) { openFileHandler = std::move(handler); }
     VersionControlService& getVersionControlService() noexcept { return versionControlService; }
     IProjectApi& getApiClient() noexcept { return *apiClient; }
     void flushPendingBackgroundResultsForTesting();
@@ -158,6 +162,13 @@ private:
     struct PushVersionJobResult
     {
         juce::String pushedVersionId;
+        // The file that was pushed and its size / modification time when it was hashed:
+        // the next save compares against these to detect "no changes".
+        juce::File pushedProjectFile;
+        juce::int64 pushedFileSizeBytes { 0 };
+        juce::int64 pushedFileModTimeMs { 0 };
+        // Branch history fetched right after the push, so the new version shows up at once.
+        std::optional<std::vector<VersionSummary>> refreshedVersions;
         juce::String errorMessage;
         juce::String activeProjectStatusMessage;
     };
@@ -177,7 +188,10 @@ private:
     void enqueueBackgroundTask(std::function<BackgroundJobPayload()> job);
 
     RestoreVersionJobResult performRestoreVersionRequest(const juce::String& versionId, const juce::File& destinationFile) const;
-    RestoreVersionJobResult performRestoreVersionContentAddressedRequest(const juce::String& versionId, const juce::File& destinationFolder);
+    RestoreVersionJobResult performRestoreVersionContentAddressedRequest(const juce::String& projectId,
+                                                                         const juce::String& versionId,
+                                                                         const juce::File& destinationFolder,
+                                                                         const juce::String& accessToken) const;
     AuthRequestResult performSignInRequest(const juce::String& email, const juce::String& password) const;
     AuthRequestResult performRestoreCachedSessionRequest(const juce::String& token) const;
     ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,
@@ -201,8 +215,10 @@ private:
                                                                     const juce::File& projectRootDirectory,
                                                                     const std::optional<Project>& project,
                                                                     const juce::String& branchId,
+                                                                    const juce::String& parentVersionId,
                                                                     const juce::String& commitMessage,
-                                                                    const juce::String& dawName);
+                                                                    const juce::String& dawName,
+                                                                    const juce::String& accessToken) const;
     void applyBackgroundResult(BackgroundJobResult result);
     void applyAuthRequestResult(AuthRequestResult result);
     void applyProjectActivationResult(ProjectActivationJobResult result);
@@ -211,6 +227,10 @@ private:
     void applyRestoreVersionResult(RestoreVersionJobResult result);
     void requestRestoreCachedProjectContext();
     void setWorkingCopyContext(const juce::File& workingFile, const juce::String& versionId);
+    void setWorkingCopyContext(const juce::File& workingFile,
+                               const juce::String& versionId,
+                               juce::int64 fileSizeBytes,
+                               juce::int64 fileModTimeMs);
     void clearWorkingCopyContext();
     uint64_t beginSelectionRequest() noexcept;
     [[nodiscard]] bool isCurrentSelectionRequest(uint64_t requestId) const noexcept;
@@ -234,7 +254,6 @@ private:
     juce::String selectedBranchName;
     juce::String selectedVersionId;
     SessionState sessionState;
-    BackgroundJobCoordinator<BackgroundJobPayload> backgroundJobs { 2 };
     VersionControlService versionControlService;
     juce::File pendingProjectFile;
     juce::File selectedProjectFile;
@@ -245,4 +264,8 @@ private:
     int64 workingCopyFileModTime { 0 };
     bool didAttemptCachedSessionRestore { false };
     std::atomic<uint64_t> activeSelectionRequestId { 0 };
+    std::function<bool(const juce::File&)> openFileHandler;
+
+    // Declared last so it is destroyed first: its workers must stop before anything they use goes away.
+    BackgroundJobCoordinator<BackgroundJobPayload> backgroundJobs { 2 };
 };

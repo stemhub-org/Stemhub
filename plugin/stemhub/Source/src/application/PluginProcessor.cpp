@@ -1,4 +1,5 @@
 #include "application/PluginProcessor.hpp"
+#include "application/ProjectFileService.hpp"
 
 namespace
 {
@@ -59,6 +60,7 @@ StemhubAudioProcessor::StemhubAudioProcessor(std::unique_ptr<IProjectApi> apiCli
         apiClient = std::make_unique<ApiClient>();
 
     versionControlService.setApiClient(*apiClient);
+    openFileHandler = [](const juce::File& file) { return stemhub::projectfiles::openInSystem(file); };
 }
 
 StemhubAudioProcessor::StemhubAudioProcessor()
@@ -69,7 +71,8 @@ StemhubAudioProcessor::StemhubAudioProcessor()
 StemhubAudioProcessor::~StemhubAudioProcessor()
 {
     juce::Logger::writeToLog("StemhubAudioProcessor destructor");
-    backgroundJobs.invalidateSession();
+    // Join the workers before anything they use (members, the shared file logger) is torn down.
+    backgroundJobs.shutdown();
     cancelPendingUpdate();
     uninstallStemhubFileLogger();
 }

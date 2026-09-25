@@ -20,13 +20,29 @@ public:
     };
 
     explicit BackgroundJobCoordinator(size_t workerCount)
-        : backgroundJobs(static_cast<int>(workerCount))
+        : backgroundJobs(juce::ThreadPoolOptions{}
+                             .withThreadName("Stemhub jobs")
+                             .withNumberOfThreads(static_cast<int>(workerCount)))
     {
     }
 
     ~BackgroundJobCoordinator()
     {
-        backgroundJobs.removeAllJobs(true, 2000);
+        shutdown();
+    }
+
+    // Stops accepting work, drops pending results and waits for the running jobs to return.
+    // Owners call this before tearing down anything a job can reach, so no job outlives it.
+    void shutdown()
+    {
+        isClosed = true;
+        ++requestGeneration;
+
+        // Running jobs are not interruptible yet; they end within their network timeouts.
+        backgroundJobs.removeAllJobs(true, -1);
+
+        const std::lock_guard<std::mutex> lock(resultMutex);
+        pendingResults.clear();
     }
 
     void invalidateSession()
@@ -44,6 +60,9 @@ public:
 
     void enqueue(std::function<Payload()> task, std::function<void()> completionCallback)
     {
+        if (isClosed)
+            return;
+
         const auto requestId = ++requestCounter;
         const auto currentGeneration = requestGeneration.load();
 
@@ -106,6 +125,7 @@ public:
 private:
     std::deque<JobResult> pendingResults;
     mutable std::mutex resultMutex;
+    std::atomic<bool> isClosed { false };
     std::atomic<uint64_t> requestGeneration { 0 };
     std::atomic<uint64_t> requestCounter { 0 };
     juce::ThreadPool backgroundJobs;

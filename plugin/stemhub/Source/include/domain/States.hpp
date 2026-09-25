@@ -21,6 +21,7 @@ enum class OperationState
     loadingProjects,
     committing,
     pulling,
+    restoring,
     error
 };
 

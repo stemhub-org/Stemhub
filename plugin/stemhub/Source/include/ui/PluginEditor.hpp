@@ -49,7 +49,7 @@ private:
     LoginView loginView;
     ProjectSelectionView projectSelectionView;
     DashboardView dashboardView;
-    juce::LookAndFeel* previousLookAndFeel { nullptr };
+    std::unique_ptr<juce::AlertWindow> commitPopup;
     OperationState lastObservedOperationState { OperationState::idle };
     StemhubAudioProcessor& audioProcessor;
     std::unique_ptr<juce::FileChooser> projectFileChooser;

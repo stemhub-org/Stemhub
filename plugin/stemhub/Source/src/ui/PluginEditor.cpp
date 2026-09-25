@@ -78,6 +78,9 @@ juce::String getDashboardMessage(const StemhubAudioProcessor& processor)
     if (processor.getOperationState() == OperationState::pulling)
         return "Syncing version history...";
 
+    if (processor.getOperationState() == OperationState::restoring)
+        return "Restoring version...";
+
     if (processor.getActiveProjectStatusMessage().isNotEmpty())
         return processor.getActiveProjectStatusMessage();
 
@@ -87,7 +90,8 @@ juce::String getDashboardMessage(const StemhubAudioProcessor& processor)
 stemhub::plugin::theme::MessageStatus getDashboardStatus(const StemhubAudioProcessor& processor)
 {
     if (processor.getOperationState() == OperationState::committing
-        || processor.getOperationState() == OperationState::pulling)
+        || processor.getOperationState() == OperationState::pulling
+        || processor.getOperationState() == OperationState::restoring)
         return stemhub::plugin::theme::MessageStatus::loading;
 
     if (processor.getOperationState() == OperationState::error)
@@ -101,6 +105,18 @@ stemhub::plugin::theme::MessageStatus getDashboardStatus(const StemhubAudioProce
         return stemhub::plugin::theme::MessageStatus::success;
 
     return stemhub::plugin::theme::MessageStatus::neutral;
+}
+
+// Alerts are attached to the editor so they use its LookAndFeel and close with it.
+void showWarning(juce::Component& owner, const juce::String& title, const juce::String& message)
+{
+    juce::AlertWindow::showAsync(juce::MessageBoxOptions()
+                                     .withIconType(juce::MessageBoxIconType::WarningIcon)
+                                     .withTitle(title)
+                                     .withMessage(message)
+                                     .withButton("OK")
+                                     .withAssociatedComponent(&owner),
+                                 nullptr);
 }
 
 VersionListItem toVersionListItem(const VersionSummary& version, const juce::String& openedVersionId)
@@ -195,8 +211,8 @@ std::vector<juce::String> collectPackagedRelativeFilePaths(const juce::File& bun
 StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit)
     : AudioProcessorEditor(&processorToEdit), audioProcessor(processorToEdit)
 {
-    previousLookAndFeel = &juce::LookAndFeel::getDefaultLookAndFeel();
-    juce::LookAndFeel::setDefaultLookAndFeel(&pluginLookAndFeel);
+    // Scoped to this editor: the process-wide default is shared by every plugin instance.
+    setLookAndFeel(&pluginLookAndFeel);
     setSize(720, 560);
     setWantsKeyboardFocus(true);
     setOpaque(true);
@@ -229,7 +245,8 @@ StemhubAudioProcessorEditor::~StemhubAudioProcessorEditor()
 {
     removeKeyListener(this);
     audioProcessor.removeChangeListener(this);
-    juce::LookAndFeel::setDefaultLookAndFeel(previousLookAndFeel);
+    commitPopup.reset();
+    setLookAndFeel(nullptr);
 }
 
 void StemhubAudioProcessorEditor::changeListenerCallback(juce::ChangeBroadcaster* source)
@@ -406,10 +423,7 @@ void StemhubAudioProcessorEditor::handleOpenProjectClick()
     const auto projectId = projectSelectionView.getSelectedProjectId();
     if (projectId.isEmpty())
     {
-        juce::AlertWindow::showMessageBoxAsync(
-            juce::AlertWindow::WarningIcon,
-            "Open project",
-            "Choose an existing project before continuing.");
+        showWarning(*this, "Open project", "Choose an existing project before continuing.");
         return;
     }
 
@@ -426,10 +440,7 @@ void StemhubAudioProcessorEditor::handleCreateProjectClick()
     const auto selectedFile = getEffectiveProjectFile();
     if (!selectedFile.existsAsFile())
     {
-        juce::AlertWindow::showMessageBoxAsync(
-            juce::AlertWindow::WarningIcon,
-            "Create project",
-            "Choose a project file first.");
+        showWarning(*this, "Create project", "Choose a project file first.");
         return;
     }
 
@@ -475,10 +486,7 @@ void StemhubAudioProcessorEditor::handleRestoreClick()
 
     if (selectedVersionId.isEmpty())
     {
-        juce::AlertWindow::showMessageBoxAsync(
-            juce::AlertWindow::WarningIcon,
-            "Restore version",
-            "Select a version to restore before continuing.");
+        showWarning(*this, "Restore version", "Select a version to restore before continuing.");
         return;
     }
 
@@ -557,10 +565,7 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
 
     if (!hasActiveProjectSelection())
     {
-        juce::AlertWindow::showMessageBoxAsync(
-            juce::AlertWindow::WarningIcon,
-            "Save failed",
-            "Choose or create a project before saving.");
+        showWarning(*this, "Save failed", "Choose or create a project before saving.");
         refreshSessionUi();
         return;
     }
@@ -632,10 +637,15 @@ void StemhubAudioProcessorEditor::handleVersionSelectionChanged()
 
 void StemhubAudioProcessorEditor::showCommitMessagePopupForSave()
 {
-    auto* commitPopup = new juce::AlertWindow("Save version",
-                                              "Enter a save note before saving.",
-                                              juce::AlertWindow::NoIcon);
+    if (commitPopup != nullptr)
+        return;
 
+    // Owned by the editor (and declared after its LookAndFeel) so it can never outlive either.
+    commitPopup = std::make_unique<juce::AlertWindow>("Save version",
+                                                      "Enter a save note before saving.",
+                                                      juce::MessageBoxIconType::NoIcon,
+                                                      this);
+    commitPopup->setLookAndFeel(&pluginLookAndFeel);
     commitPopup->addTextEditor("commit_message", dashboardView.getCommitMessage(), "Save note");
     commitPopup->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
     commitPopup->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
@@ -646,21 +656,35 @@ void StemhubAudioProcessorEditor::showCommitMessagePopupForSave()
     if (auto* noteInput = commitPopup->getTextEditor("commit_message"))
         stemhub::plugin::theme::styleTextInput(*noteInput, "Save note");
 
-    const auto popupRef = juce::Component::SafePointer<juce::AlertWindow>(commitPopup);
     const auto editorRef = juce::Component::SafePointer<StemhubAudioProcessorEditor>(this);
-    commitPopup->enterModalState(true, juce::ModalCallbackFunction::create([editorRef, popupRef](int result)
+    commitPopup->enterModalState(true, juce::ModalCallbackFunction::create([editorRef](int result)
     {
-        if (result != 1 || popupRef == nullptr || editorRef == nullptr)
+        if (editorRef == nullptr || editorRef->commitPopup == nullptr)
             return;
 
-        const auto commitMessage = popupRef->getTextEditorContents("commit_message").trim();
+        const auto commitMessage = editorRef->commitPopup->getTextEditorContents("commit_message").trim();
+
+        // Destroyed once the modal manager is done with it.
+        juce::MessageManager::callAsync([editorRef]
+        {
+            if (editorRef != nullptr)
+                editorRef->commitPopup.reset();
+        });
+
+        if (result != 1)
+            return;
+
         editorRef->dashboardView.setCommitMessage(commitMessage);
         editorRef->requestSaveWithCommitMessage(commitMessage);
-    }), true);
+    }), false);
 }
 
 void StemhubAudioProcessorEditor::handleBackToProjectsClick()
 {
+    // A save or restore in flight belongs to this project; leaving would mix its result into another.
+    if (audioProcessor.isWriteOperationInProgress())
+        return;
+
     audioProcessor.setOperationState(OperationState::idle);
     audioProcessor.setUIState(UIState::projectSelection);
     refreshSessionUi();

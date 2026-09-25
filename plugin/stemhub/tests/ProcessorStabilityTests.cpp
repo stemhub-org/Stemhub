@@ -1,11 +1,17 @@
+#include <atomic>
+#include <csignal>
+#include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <utility>
+#include <vector>
 
 #include <JuceHeader.h>
 
 #include "application/PluginProcessor.hpp"
 #include "application/SessionCache.hpp"
+#include "application/SnapshotBundler.hpp"
 
 namespace
 {
@@ -36,24 +42,27 @@ ApiResult<std::vector<Branch>> makeBranchesResult(std::vector<Branch> branches)
     return { std::move(branches), {} };
 }
 
+juce::var makeVersionJson(const VersionSummary& version)
+{
+    auto* object = new juce::DynamicObject();
+    object->setProperty("id", version.id);
+    object->setProperty("branch_id", version.branchId);
+    object->setProperty("parent_version_id", version.parentVersionId);
+    object->setProperty("created_at", version.createdAt);
+    object->setProperty("commit_message", version.commitMessage);
+    object->setProperty("source_daw", version.sourceDaw);
+    object->setProperty("source_project_filename", version.sourceProjectFilename);
+    object->setProperty("artifact_path", version.artifactPath);
+    object->setProperty("artifact_checksum", version.artifactChecksum);
+    object->setProperty("artifact_size_bytes", version.artifactSizeBytes);
+    return juce::var(object);
+}
+
 ApiResult<juce::var> makeVersionsResult(const std::vector<VersionSummary>& versions)
 {
     juce::Array<juce::var> versionArray;
     for (const auto& version : versions)
-    {
-        auto* object = new juce::DynamicObject();
-        object->setProperty("id", version.id);
-        object->setProperty("branch_id", version.branchId);
-        object->setProperty("parent_version_id", version.parentVersionId);
-        object->setProperty("created_at", version.createdAt);
-        object->setProperty("commit_message", version.commitMessage);
-        object->setProperty("source_daw", version.sourceDaw);
-        object->setProperty("source_project_filename", version.sourceProjectFilename);
-        object->setProperty("artifact_path", version.artifactPath);
-        object->setProperty("artifact_checksum", version.artifactChecksum);
-        object->setProperty("artifact_size_bytes", version.artifactSizeBytes);
-        versionArray.add(juce::var(object));
-    }
+        versionArray.add(makeVersionJson(version));
 
     return { juce::var(versionArray), {} };
 }
@@ -71,6 +80,11 @@ ApiResult<std::vector<Branch>> makeBranchError(const juce::String& message, int 
 ApiResult<User> makeUserError(const juce::String& message, int statusCode = 401)
 {
     return { {}, ApiError { statusCode, message } };
+}
+
+juce::String sha256Of(const juce::MemoryBlock& data)
+{
+    return juce::SHA256(data.getData(), data.getSize()).toHexString();
 }
 
 class BlockingGate
@@ -104,9 +118,19 @@ private:
     juce::WaitableEvent finished;
 };
 
+// In-memory StemHub backend. Worker threads call it while the test thread inspects it,
+// so all state is behind one mutex; gates are always waited on outside of it.
 class FakeProjectApi final : public IProjectApi
 {
 public:
+    struct CreatedVersion
+    {
+        juce::String id;
+        juce::String branchId;
+        juce::String parentVersionId;
+        juce::String commitMessage;
+    };
+
     ApiResult<LoginResponse> login(const juce::String& email, const juce::String& password) const override
     {
         juce::ignoreUnused(email, password);
@@ -116,6 +140,7 @@ public:
     ApiResult<User> fetchCurrentUser(const juce::String& accessToken) const override
     {
         juce::ignoreUnused(accessToken);
+        const std::lock_guard<std::mutex> lock(mutex);
         if (!cachedSessionIsValid)
             return makeUserError("expired");
 
@@ -125,6 +150,7 @@ public:
     ApiResult<std::vector<Project>> fetchProjects(const juce::String& accessToken) const override
     {
         juce::ignoreUnused(accessToken);
+        const std::lock_guard<std::mutex> lock(mutex);
         return makeProjectsResult(projects);
     }
 
@@ -138,9 +164,14 @@ public:
     {
         juce::ignoreUnused(accessToken);
 
-        if (auto it = branchFetchGates.find(projectId); it != branchFetchGates.end() && it->second != nullptr)
-            it->second->block();
+        if (auto gate = findGate(branchFetchGates, projectId))
+        {
+            gate->block();
+            if (branchFetchReturned != nullptr)
+                *branchFetchReturned = true;
+        }
 
+        const std::lock_guard<std::mutex> lock(mutex);
         if (auto it = branchErrors.find(projectId); it != branchErrors.end())
             return makeBranchError(it->second);
 
@@ -162,9 +193,10 @@ public:
             auto branchId = path.fromFirstOccurrenceOf("/branches/", false, false)
                 .upToLastOccurrenceOf("/versions/", false, false);
 
-            if (auto it = versionFetchGates.find(branchId); it != versionFetchGates.end() && it->second != nullptr)
-                it->second->block();
+            if (auto gate = findGate(versionFetchGates, branchId))
+                gate->block();
 
+            const std::lock_guard<std::mutex> lock(mutex);
             if (auto it = versionErrors.find(branchId); it != versionErrors.end())
                 return makeApiError(it->second);
 
@@ -172,6 +204,20 @@ public:
                 return makeVersionsResult(it->second);
 
             return makeVersionsResult({});
+        }
+
+        if (httpMethod == "GET" && path.startsWith("/versions/"))
+        {
+            const auto versionId = path.fromFirstOccurrenceOf("/versions/", false, false);
+            const std::lock_guard<std::mutex> lock(mutex);
+            const auto manifest = manifestsByVersion.find(versionId);
+            if (manifest == manifestsByVersion.end())
+                return makeApiError("Version not found.", 404);
+
+            auto* object = new juce::DynamicObject();
+            object->setProperty("id", versionId);
+            object->setProperty("manifest_json", juce::JSON::parse(manifest->second));
+            return { juce::var(object), {} };
         }
 
         return makeApiError("Unhandled request in test API.");
@@ -198,8 +244,18 @@ public:
                                                             const std::vector<juce::String>& sha256s,
                                                             const juce::String& accessToken) const override
     {
-        juce::ignoreUnused(projectId, sha256s, accessToken);
-        return { std::vector<juce::String>{}, {} };
+        juce::ignoreUnused(projectId, accessToken);
+
+        if (auto gate = findGate(checkMissingGates, projectId))
+            gate->block();
+
+        const std::lock_guard<std::mutex> lock(mutex);
+        std::vector<juce::String> missing;
+        for (const auto& sha : sha256s)
+            if (blobs.find(sha) == blobs.end())
+                missing.push_back(sha);
+
+        return { missing, {} };
     }
 
     ApiResult<juce::var> uploadBlob(const juce::String& projectId,
@@ -207,16 +263,41 @@ public:
                                      const juce::File& file,
                                      const juce::String& accessToken) const override
     {
-        juce::ignoreUnused(projectId, sha256, file, accessToken);
-        return makeApiError("uploadBlob not implemented in tests");
+        juce::ignoreUnused(projectId, accessToken);
+
+        juce::MemoryBlock data;
+        if (!file.loadFileAsData(data))
+            return makeApiError("Blob source file does not exist.", 0);
+
+        if (sha256Of(data) != sha256)
+            return makeApiError("SHA-256 mismatch.", 400);
+
+        const std::lock_guard<std::mutex> lock(mutex);
+        blobs[sha256] = data;
+        return { juce::var(new juce::DynamicObject()), {} };
     }
 
     ApiResult<juce::var> createVersionFromManifest(const juce::String& branchId,
                                                     const juce::var& payload,
                                                     const juce::String& accessToken) const override
     {
-        juce::ignoreUnused(branchId, payload, accessToken);
-        return makeApiError("createVersionFromManifest not implemented in tests");
+        juce::ignoreUnused(accessToken);
+
+        const std::lock_guard<std::mutex> lock(mutex);
+        const auto number = static_cast<int>(createdVersions.size()) + 1;
+
+        VersionSummary version;
+        version.id = juce::String::toHexString(number).paddedLeft('0', 8) + "-0000-4000-8000-000000000000";
+        version.branchId = branchId;
+        version.parentVersionId = payload.getProperty("parent_version_id", {}).toString();
+        version.commitMessage = payload.getProperty("commit_message", {}).toString();
+        version.createdAt = "2026-03-19T10:00:" + juce::String(number).paddedLeft('0', 2) + "Z";
+        version.sourceProjectFilename = payload["manifest"].getProperty("source_project_filename", {}).toString();
+
+        createdVersions.push_back({ version.id, branchId, version.parentVersionId, version.commitMessage });
+        manifestsByVersion[version.id] = juce::JSON::toString(payload["manifest"]);
+        branchVersions[branchId].push_back(version);
+        return { makeVersionJson(version), {} };
     }
 
     juce::Result downloadBlob(const juce::String& projectId,
@@ -224,18 +305,140 @@ public:
                                const juce::File& destinationFile,
                                const juce::String& accessToken) const override
     {
-        juce::ignoreUnused(projectId, sha256, destinationFile, accessToken);
-        return juce::Result::fail("downloadBlob not implemented in tests");
+        juce::ignoreUnused(projectId, accessToken);
+
+        juce::MemoryBlock data;
+        {
+            const std::lock_guard<std::mutex> lock(mutex);
+            const auto blob = blobs.find(sha256);
+            if (blob == blobs.end())
+                return juce::Result::fail("Blob not found");
+
+            data = blob->second;
+        }
+
+        return destinationFile.replaceWithData(data.getData(), data.getSize())
+            ? juce::Result::ok()
+            : juce::Result::fail("Could not write " + destinationFile.getFullPathName());
     }
 
+    std::vector<CreatedVersion> getCreatedVersions() const
+    {
+        const std::lock_guard<std::mutex> lock(mutex);
+        return createdVersions;
+    }
+
+    void setCheckMissingGate(const juce::String& projectId, std::shared_ptr<BlockingGate> gate)
+    {
+        const std::lock_guard<std::mutex> lock(mutex);
+        checkMissingGates[projectId] = std::move(gate);
+    }
+
+    // Configuration: written by the test thread while no job is running.
     bool cachedSessionIsValid { true };
     std::vector<Project> projects;
     std::map<juce::String, std::vector<Branch>> projectBranches;
-    std::map<juce::String, std::vector<VersionSummary>> branchVersions;
+    // Also appended to by createVersionFromManifest, under the mutex.
+    mutable std::map<juce::String, std::vector<VersionSummary>> branchVersions;
     std::map<juce::String, juce::String> branchErrors;
     std::map<juce::String, juce::String> versionErrors;
     std::map<juce::String, std::shared_ptr<BlockingGate>> branchFetchGates;
     std::map<juce::String, std::shared_ptr<BlockingGate>> versionFetchGates;
+    std::shared_ptr<std::atomic<bool>> branchFetchReturned;
+
+private:
+    std::shared_ptr<BlockingGate> findGate(const std::map<juce::String, std::shared_ptr<BlockingGate>>& gates,
+                                           const juce::String& key) const
+    {
+        const std::lock_guard<std::mutex> lock(mutex);
+        const auto it = gates.find(key);
+        return it != gates.end() ? it->second : nullptr;
+    }
+
+    mutable std::mutex mutex;
+    mutable std::map<juce::String, juce::MemoryBlock> blobs;
+    mutable std::map<juce::String, juce::String> manifestsByVersion;
+    mutable std::vector<CreatedVersion> createdVersions;
+    std::map<juce::String, std::shared_ptr<BlockingGate>> checkMissingGates;
+};
+
+// Serves one canned response per request on 127.0.0.1 and records what it received.
+class LocalHttpServer final : private juce::Thread
+{
+public:
+    struct Request
+    {
+        juce::String requestLine;
+        juce::String headers;
+    };
+
+    using Handler = std::function<juce::String(const Request&)>;
+
+    explicit LocalHttpServer(Handler handlerToUse)
+        : juce::Thread("Test HTTP server"), handler(std::move(handlerToUse))
+    {
+        if (listener.createListener(0, "127.0.0.1"))
+            startThread();
+    }
+
+    ~LocalHttpServer() override
+    {
+        signalThreadShouldExit();
+        listener.close();
+        stopThread(2000);
+    }
+
+    juce::String getBaseUrl() const
+    {
+        return "http://127.0.0.1:" + juce::String(listener.getBoundPort());
+    }
+
+    std::vector<Request> getRequests() const
+    {
+        const std::lock_guard<std::mutex> lock(requestsMutex);
+        return requests;
+    }
+
+private:
+    void run() override
+    {
+        while (!threadShouldExit())
+        {
+            std::unique_ptr<juce::StreamingSocket> connection(listener.waitForNextConnection());
+            // Closing the listener connects to it once to wake this thread up.
+            if (connection == nullptr || threadShouldExit())
+                return;
+
+            juce::MemoryOutputStream received;
+            char buffer[1024];
+            while (!received.toString().contains("\r\n\r\n") && connection->waitUntilReady(true, 2000) == 1)
+            {
+                const auto bytesRead = connection->read(buffer, sizeof(buffer), false);
+                if (bytesRead <= 0)
+                    break;
+                received.write(buffer, static_cast<size_t>(bytesRead));
+            }
+
+            const auto text = received.toString();
+            if (text.isEmpty())
+                continue;
+
+            Request request { text.upToFirstOccurrenceOf("\r\n", false, false),
+                              text.fromFirstOccurrenceOf("\r\n", false, false) };
+            {
+                const std::lock_guard<std::mutex> lock(requestsMutex);
+                requests.push_back(request);
+            }
+
+            const auto response = handler(request);
+            connection->write(response.toRawUTF8(), static_cast<int>(response.getNumBytesAsUTF8()));
+        }
+    }
+
+    Handler handler;
+    juce::StreamingSocket listener;
+    mutable std::mutex requestsMutex;
+    std::vector<Request> requests;
 };
 
 Project makeProject(const juce::String& id, const juce::String& name)
@@ -299,6 +502,7 @@ const char* toString(OperationState state)
         case OperationState::loadingProjects: return "loadingProjects";
         case OperationState::committing: return "committing";
         case OperationState::pulling: return "pulling";
+        case OperationState::restoring: return "restoring";
         case OperationState::error: return "error";
     }
 
@@ -314,7 +518,8 @@ juce::String describeProcessorState(const StemhubAudioProcessor& processor)
         + ", projectMessage=" + processor.getProjectSelectionStatusMessage()
         + ", activeMessage=" + processor.getActiveProjectStatusMessage()
         + ", selectedProject=" + (processor.getSelectedProject().has_value() ? processor.getSelectedProject()->id : "<none>")
-        + ", selectedBranch=" + processor.getSelectedBranchId();
+        + ", selectedBranch=" + processor.getSelectedBranchId()
+        + ", selectedVersion=" + processor.getSelectedVersionId();
 }
 
 bool waitUntil(StemhubAudioProcessor& processor, const std::function<bool()>& predicate, int timeoutMs = 3000)
@@ -330,6 +535,19 @@ bool waitUntil(StemhubAudioProcessor& processor, const std::function<bool()>& pr
 
     processor.flushPendingBackgroundResultsForTesting();
     return predicate();
+}
+
+bool isIdle(const StemhubAudioProcessor& processor)
+{
+    return processor.getOperationState() == OperationState::idle;
+}
+
+// Appends to a file and moves its modification time forward, like a DAW saving the project.
+void simulateDawSave(const juce::File& projectFile, const juce::String& extraContent)
+{
+    const auto previousModTime = projectFile.getLastModificationTime();
+    projectFile.appendText(extraContent);
+    projectFile.setLastModificationTime(previousModTime + juce::RelativeTime::seconds(2));
 }
 
 class ProcessorChangeWatcher : private juce::ChangeListener
@@ -525,41 +743,306 @@ public:
             expect(context.processor.getProjectSelectionStatusMessage().containsIgnoreCase("Failed to load workspaces"),
                    "cached project restore failure should surface workspace-load error: " + describeProcessorState(context.processor));
         }
+
+        beginTest("Destroying the processor waits for running jobs");
+        {
+            auto jobReturned = std::make_shared<std::atomic<bool>>(false);
+            auto gate = std::make_shared<BlockingGate>();
+            {
+                TestContext context;
+                auto project = makeProject("project-1", "Project");
+                context.api->projects = { project };
+                context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+                context.api->branchFetchGates[project.id] = gate;
+                context.api->branchFetchReturned = jobReturned;
+                signIn(context);
+
+                context.processor.requestOpenProject(project.id, {}, false);
+                gate->waitUntilEntered();
+
+                // Released while the processor is being destroyed.
+                juce::Thread::launch([gate]
+                {
+                    juce::Thread::sleep(100);
+                    gate->release();
+                });
+            }
+
+            expect(jobReturned->load(), "the processor must not be destroyed while its job still runs");
+        }
+
+        beginTest("Manifest paths must stay inside the restore folder");
+        {
+            for (const auto* path : { "song.flp", "Drums/kick.wav", "Samples/Imported/Kick 01.wav", "a.b/c.wav" })
+                expect(SnapshotBundler::isSafeManifestPath(path), juce::String("should accept ") + path);
+
+            for (const auto* path : { "", "/etc/passwd", "../evil.wav", "Drums/../../evil.wav", "./song.flp",
+                                      "a//b.wav", "a/b/", "C:\\evil.wav", "C:evil.wav", "..\\evil.wav",
+                                      "Drums\\kick.wav", "trailing.", "trailing ", "NUL.wav", "Samples/con",
+                                      "bad\nname.wav" })
+                expect(!SnapshotBundler::isSafeManifestPath(path), juce::String("should reject ") + juce::String(path).quoted());
+
+            expect(SnapshotBundler::isSafeManifestPath(juce::String::repeatedString("a", 255)), "255 characters fit the backend limit");
+            expect(!SnapshotBundler::isSafeManifestPath(juce::String::repeatedString("a", 256)), "256 characters exceed the backend limit");
+        }
+
+        beginTest("Manifests with unsafe or conflicting entries are rejected");
+        {
+            const auto shaA = juce::String::repeatedString("a", 64);
+            const auto shaB = juce::String::repeatedString("b", 64);
+
+            ParsedManifest parsed;
+            auto result = SnapshotBundler::parseContentAddressedManifest(makeManifest("../../evil.flp", shaA, {}), parsed);
+            expect(result.failed() && result.getErrorMessage().contains("unsafe"), "traversal in the project file is rejected");
+
+            result = SnapshotBundler::parseContentAddressedManifest(
+                makeManifest("song.flp", shaA, { { "Drums/kick.wav", shaA }, { "drums/KICK.wav", shaB } }), parsed);
+            expect(result.failed() && result.getErrorMessage().contains("two different files"),
+                   "two different files at the same path are rejected");
+
+            result = SnapshotBundler::parseContentAddressedManifest(
+                makeManifest("song.flp", shaA, { { "Drums/kick.wav", shaB }, { "Drums/kick.wav", shaB } }), parsed);
+            expect(result.wasOk() && parsed.entries.size() == 2, "an exact duplicate is kept once");
+
+            result = SnapshotBundler::parseContentAddressedManifest(
+                makeManifest("song.flp", "../" + shaA.substring(3), {}), parsed);
+            expect(result.failed(), "a hash that is not hex is rejected");
+        }
+
+        beginTest("Saves chain their parent versions and restores never delete earlier ones");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+
+            juce::Array<juce::File> openedFiles;
+            context.processor.setOpenFileHandler([&openedFiles](const juce::File& file)
+            {
+                openedFiles.add(file);
+                return true;
+            });
+
+            const auto sourceFolder = context.environment.root.getChildFile("source");
+            const auto projectFile = sourceFolder.getChildFile("song.flp");
+            expect(sourceFolder.getChildFile("Drums").createDirectory().wasOk());
+            expect(projectFile.replaceWithText("flp v1"));
+            expect(sourceFolder.getChildFile("Drums/kick.wav").replaceWithText("kick"));
+            expect(sourceFolder.getChildFile("kick.wav").replaceWithText("a different kick"));
+
+            signIn(context);
+            context.processor.requestOpenProject(project.id, projectFile, false);
+            expect(waitUntil(context.processor, [&context] { return context.processor.getSelectedProject().has_value()
+                                                                  && isIdle(context.processor); }),
+                   "project should open: " + describeProcessorState(context.processor));
+
+            context.processor.requestPushVersionContentAddressed("first", "FL Studio");
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.processor.getVersionHistory().size() == 1; }),
+                   "first save should land in the history: " + describeProcessorState(context.processor));
+            const auto firstVersionId = context.api->getCreatedVersions().at(0).id;
+            expect(context.processor.getSelectedVersionId() == firstVersionId, "the saved version should be selected");
+            expect(context.processor.getCurrentOpenedVersionId() == firstVersionId, "the saved version is the one in the DAW");
+
+            // Restore into a folder of its own, keeping subfolders.
+            const auto restoresFolder = context.environment.root.getChildFile("restores");
+            expect(restoresFolder.createDirectory().wasOk());
+            context.processor.requestRestoreVersionContentAddressed(firstVersionId, restoresFolder);
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.processor.getSelectedProjectFile().existsAsFile()
+                                                                  && context.processor.getSelectedProjectFile().isAChildOf(
+                                                                         context.environment.root.getChildFile("restores")); }),
+                   "restore should finish: " + describeProcessorState(context.processor));
+            const auto restoredFile = context.processor.getSelectedProjectFile();
+            const auto restoredFolder = restoredFile.getParentDirectory();
+            expect(restoredFolder.getFileName() == "song-" + firstVersionId.substring(0, 8), restoredFolder.getFullPathName());
+            expect(restoredFolder.getChildFile("Drums/kick.wav").loadFileAsString() == "kick", "nested files keep their folder");
+            expect(restoredFolder.getChildFile("kick.wav").loadFileAsString() == "a different kick", "same-name files don't collide");
+            expect(openedFiles.contains(restoredFile), "the restored project is opened in the DAW");
+
+            // Saving the restored copy chains from the restored version.
+            simulateDawSave(restoredFile, " edit 1");
+            context.processor.requestPushVersionContentAddressed("second", "FL Studio");
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.processor.getVersionHistory().size() == 2; }),
+                   "second save should land in the history: " + describeProcessorState(context.processor));
+            auto created = context.api->getCreatedVersions();
+            expect(created.size() == 2 && created[1].parentVersionId == firstVersionId,
+                   "the second version's parent is the restored one");
+            const auto secondVersionId = created[1].id;
+            expect(context.processor.getVersionHistory().front().id == secondVersionId, "history is refreshed after a save");
+            expect(context.processor.getSelectedVersionId() == secondVersionId, "the new version is selected");
+
+            // Nothing changed on disk: no new version, even after a refresh of the same branch.
+            context.processor.requestRefreshVersionHistory();
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor); }), "refresh should finish");
+            context.processor.requestPushVersionContentAddressed("no changes", "FL Studio");
+            expect(waitUntil(context.processor, [&context] { return context.processor.getOperationState() == OperationState::error; }),
+                   "an unchanged file should not be saved again: " + describeProcessorState(context.processor));
+            expect(context.api->getCreatedVersions().size() == 2, "no version is created for an unchanged file");
+
+            simulateDawSave(restoredFile, " edit 2");
+            context.processor.requestPushVersionContentAddressed("third", "FL Studio");
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.processor.getVersionHistory().size() == 3; }),
+                   "third save should land in the history: " + describeProcessorState(context.processor));
+            created = context.api->getCreatedVersions();
+            expect(created.size() == 3 && created[2].parentVersionId == secondVersionId,
+                   "each save's parent is the previous save");
+
+            // Restoring the same version again goes to a new folder; the edited copy stays.
+            context.processor.requestRestoreVersionContentAddressed(firstVersionId, restoresFolder);
+            expect(waitUntil(context.processor, [&context, &restoredFile] { return isIdle(context.processor)
+                                                                                 && context.processor.getSelectedProjectFile() != restoredFile
+                                                                                 && context.processor.getSelectedProjectFile().existsAsFile(); }),
+                   "second restore should finish: " + describeProcessorState(context.processor));
+            expect(restoredFile.loadFileAsString() == "flp v1 edit 1 edit 2", "an earlier restore is never deleted");
+            expect(context.processor.getSelectedProjectFile().getParentDirectory().getFileName()
+                       == restoredFolder.getFileName() + " (2)",
+                   "the new folder is numbered: " + context.processor.getSelectedProjectFile().getFullPathName());
+            expect(context.processor.getSelectedVersionId() == firstVersionId, "the numbered folder still maps to its version");
+        }
+
+        beginTest("Only one save runs at a time");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+            context.processor.setOpenFileHandler([](const juce::File&) { return true; });
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+
+            signIn(context);
+            context.processor.requestOpenProject(project.id, projectFile, false);
+            expect(waitUntil(context.processor, [&context] { return context.processor.getSelectedProject().has_value()
+                                                                  && isIdle(context.processor); }),
+                   "project should open");
+
+            auto gate = std::make_shared<BlockingGate>();
+            context.api->setCheckMissingGate(project.id, gate);
+            context.processor.requestPushVersionContentAddressed("first", "FL Studio");
+            gate->waitUntilEntered();
+            context.processor.requestPushVersionContentAddressed("second", "FL Studio");
+            context.processor.requestRefreshVersionHistory();
+            expect(context.processor.getOperationState() == OperationState::committing,
+                   "nothing else starts while saving: " + describeProcessorState(context.processor));
+
+            gate->release();
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor); }), "save should finish");
+            const auto created = context.api->getCreatedVersions();
+            expect(created.size() == 1 && created.front().commitMessage == "first", "the second save request is ignored");
+        }
+
+        beginTest("Blob downloads follow the storage redirect without the bearer token");
+        {
+            const juce::String storagePath = "/storage/blob?X-Goog-Signature=ab%2Fcd&X-Goog-Credential=a%40b";
+            std::unique_ptr<LocalHttpServer> server;
+            server = std::make_unique<LocalHttpServer>([&server, storagePath](const LocalHttpServer::Request& request)
+            {
+                if (request.requestLine.startsWith("GET /projects/"))
+                    return "HTTP/1.1 307 Temporary Redirect\r\nLocation: " + server->getBaseUrl() + storagePath
+                         + "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
+                return juce::String("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nbytes");
+            });
+
+            TestEnvironment environment;
+            const auto destination = environment.root.getChildFile("blob.bin");
+            ApiClient client(server->getBaseUrl());
+            const auto result = client.downloadBlob("project-1", juce::String::repeatedString("c", 64), destination, "secret-token");
+
+            expect(result.wasOk(), result.getErrorMessage());
+            expect(destination.loadFileAsString() == "bytes", "the storage response is written to disk");
+
+            const auto requests = server->getRequests();
+            expect(requests.size() == 2, "one request to the API, one to storage");
+            if (requests.size() == 2)
+            {
+                expect(requests[0].headers.contains("Bearer secret-token"), "the API request is authorized");
+                expect(requests[1].requestLine == "GET " + storagePath + " HTTP/1.1",
+                       "the presigned URL is requested as-is: " + requests[1].requestLine);
+                expect(!requests[1].headers.containsIgnoreCase("authorization"), "the token never reaches storage");
+            }
+        }
     }
 
 private:
+    // Everything on disk a test touches. Declared first in TestContext so it is cleaned up
+    // after the processor, whose jobs may still be using these files until it is destroyed.
+    struct TestEnvironment
+    {
+        TestEnvironment()
+            : root(juce::File::getSpecialLocation(juce::File::tempDirectory)
+                       .getChildFile("stemhub-plugin-tests")
+                       .getChildFile(juce::Uuid().toString()))
+        {
+            root.createDirectory();
+            stemhub::sessioncache::setCacheFileOverrideForTesting(root.getChildFile("session.json"));
+            stemhub::sessioncache::clear();
+        }
+
+        ~TestEnvironment()
+        {
+            stemhub::sessioncache::clear();
+            stemhub::sessioncache::clearCacheFileOverrideForTesting();
+            root.deleteRecursively();
+        }
+
+        juce::File root;
+    };
+
     struct TestContext
     {
         TestContext()
-            : tempRoot(juce::File::getSpecialLocation(juce::File::tempDirectory)
-                           .getChildFile("stemhub-plugin-tests")
-                           .getChildFile(juce::Uuid().toString())),
-              cacheFile(tempRoot.getChildFile("session.json")),
-              apiOwned(std::make_unique<FakeProjectApi>()),
+            : apiOwned(std::make_unique<FakeProjectApi>()),
               api(apiOwned.get()),
               processor(std::move(apiOwned)),
               watcher(processor)
         {
-            tempRoot.getParentDirectory().createDirectory();
-            tempRoot.createDirectory();
-            stemhub::sessioncache::setCacheFileOverrideForTesting(cacheFile);
-            stemhub::sessioncache::clear();
         }
 
-        ~TestContext()
-        {
-            stemhub::sessioncache::clear();
-            stemhub::sessioncache::clearCacheFileOverrideForTesting();
-            tempRoot.deleteRecursively();
-        }
-
-        juce::File tempRoot;
-        juce::File cacheFile;
+        TestEnvironment environment;
         std::unique_ptr<FakeProjectApi> apiOwned;
         FakeProjectApi* api;
         StemhubAudioProcessor processor;
         ProcessorChangeWatcher watcher;
     };
+
+    void signIn(TestContext& context)
+    {
+        stemhub::sessioncache::saveAccessToken("valid-token");
+        context.processor.requestRestoreCachedSession();
+        expect(waitUntil(context.processor, [&context] { return context.processor.getAuthState() == AuthState::signedIn; }),
+               "cached session should restore: " + describeProcessorState(context.processor));
+    }
+
+    static juce::var makeBlobRef(const juce::String& filename, const juce::String& sha)
+    {
+        auto* object = new juce::DynamicObject();
+        object->setProperty("sha256", sha);
+        object->setProperty("size_bytes", 1);
+        object->setProperty("filename", filename);
+        object->setProperty("name", filename);
+        return juce::var(object);
+    }
+
+    static juce::var makeManifest(const juce::String& projectPath,
+                                  const juce::String& projectSha,
+                                  const std::vector<std::pair<juce::String, juce::String>>& tracks)
+    {
+        juce::Array<juce::var> trackArray;
+        for (const auto& [path, sha] : tracks)
+            trackArray.add(makeBlobRef(path, sha));
+
+        auto* manifest = new juce::DynamicObject();
+        manifest->setProperty("manifest_version", 1);
+        manifest->setProperty("project_file", makeBlobRef(projectPath, projectSha));
+        manifest->setProperty("tracks", trackArray);
+        return juce::var(manifest);
+    }
 };
 
 ProcessorStabilityTests processorStabilityTests;
@@ -567,6 +1050,11 @@ ProcessorStabilityTests processorStabilityTests;
 
 int main()
 {
+   #if ! JUCE_WINDOWS
+    // The local test server writes with send(); a client hanging up must not kill the run.
+    std::signal(SIGPIPE, SIG_IGN);
+   #endif
+
     juce::ScopedJuceInitialiser_GUI scopedJuce;
     juce::UnitTestRunner runner;
     runner.setAssertOnFailure(false);
