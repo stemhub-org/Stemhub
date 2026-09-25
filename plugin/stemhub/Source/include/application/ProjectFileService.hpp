@@ -3,7 +3,7 @@
 #include <JuceHeader.h>
 #include <vector>
 
-#include "application/VersionControlUtils.hpp"
+#include "domain/Version.hpp"
 
 namespace stemhub::projectfiles
 {

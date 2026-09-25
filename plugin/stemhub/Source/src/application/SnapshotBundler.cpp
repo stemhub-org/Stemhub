@@ -6,17 +6,9 @@
 
 namespace
 {
-    juce::String sha256HexOfFile(const juce::File& file)
-    {
-        juce::FileInputStream stream(file);
-        if (!stream.openedOk())
-            return {};
-        return juce::SHA256(stream).toHexString();
-    }
-}
+    // Backend limit on the files of one version besides the project file (VersionManifestV1.tracks).
+    constexpr size_t kMaxManifestTracks = 500;
 
-namespace
-{
     constexpr std::array<const char*, 9> kBundledAssetExtensions = {
         "wav", "mp3", "flac", "ogg", "aiff", "aif", "m4a", "mid", "midi"
     };
@@ -97,11 +89,8 @@ juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request
         return lhs.getFullPathName() < rhs.getFullPathName();
     });
 
-    std::vector<ContentAddressedFileEntry> entries;
-    entries.reserve(static_cast<size_t>(discoveredFiles.size()));
-    ContentAddressedFileEntry projectEntry;
-    bool haveProjectEntry = false;
-
+    // Check names and the file count before hashing anything: hashing a large session takes time.
+    juce::Array<juce::File> includedFiles;
     for (const auto& file : discoveredFiles)
     {
         if (!shouldIncludeInSnapshot(file, request.projectRootDirectory, request.sourceProjectFile))
@@ -112,7 +101,23 @@ juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request
         if (!isSafeManifestPath(relativePath))
             return juce::Result::fail("Can't save \"" + relativePath + "\": rename this file and try again.");
 
-        const auto sha = sha256HexOfFile(file);
+        includedFiles.add(file);
+    }
+
+    const auto trackCount = static_cast<size_t>(juce::jmax(0, includedFiles.size() - 1));
+    if (trackCount > kMaxManifestTracks)
+        return juce::Result::fail("This project folder has " + juce::String(static_cast<int>(trackCount))
+                                  + " audio files; a version can hold " + juce::String(static_cast<int>(kMaxManifestTracks))
+                                  + ". Move the ones this project doesn't use out of its folder.");
+
+    std::vector<ContentAddressedFileEntry> entries;
+    entries.reserve(static_cast<size_t>(includedFiles.size()));
+    ContentAddressedFileEntry projectEntry;
+    bool haveProjectEntry = false;
+
+    for (const auto& file : includedFiles)
+    {
+        const auto sha = sha256OfFile(file);
         if (sha.isEmpty())
             return juce::Result::fail("Failed to hash file: " + file.getFullPathName());
 
@@ -120,7 +125,7 @@ juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request
         entry.file = file;
         entry.sha256 = sha;
         entry.sizeBytes = file.getSize();
-        entry.filename = relativePath;
+        entry.filename = toArchivePath(file, request.projectRootDirectory);
         entry.isProjectFile = (file == request.sourceProjectFile);
 
         if (entry.isProjectFile)
@@ -210,6 +215,15 @@ namespace
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._-/()");
         return "\"" + (printable.length() > 80 ? printable.substring(0, 80) + "..." : printable) + "\"";
     }
+}
+
+juce::String SnapshotBundler::sha256OfFile(const juce::File& file)
+{
+    juce::FileInputStream stream(file);
+    if (!stream.openedOk())
+        return {};
+
+    return juce::SHA256(stream).toHexString();
 }
 
 bool SnapshotBundler::isSafeManifestPath(const juce::String& path)

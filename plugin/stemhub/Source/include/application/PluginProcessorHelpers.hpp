@@ -6,7 +6,7 @@
 
 #include <JuceHeader.h>
 
-#include "application/VersionControlUtils.hpp"
+#include "domain/Version.hpp"
 #include "domain/Project.hpp"
 
 namespace stemhub::processorhelpers

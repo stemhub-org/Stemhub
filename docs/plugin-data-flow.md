@@ -12,11 +12,17 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
   - Enqueues background jobs, applies results on JUCE message thread, broadcasts UI updates.
 - `BackgroundJobCoordinator` (`plugin/stemhub/Source/include/application/BackgroundJobCoordinator.hpp`)
   - Runs worker tasks (`juce::ThreadPool`), stores typed results, drops stale session generations.
-- `ApiClient` / `IProjectApi` (`plugin/stemhub/Source/src/network/ApiClient.cpp`)
-  - Raw HTTP transport + JSON parsing.
-  - Auth, user, projects, branches, blob check/upload/download, version creation from a manifest.
-- `VersionControlService` (`plugin/stemhub/Source/src/network/VersionControlService.cpp`)
-  - Version-domain operations: content-addressed push, history fetch, restore from a manifest.
+- `IProjectApi` / `ApiClient` (`plugin/stemhub/Source/src/network/ApiClient.cpp`)
+  - One typed call per endpoint: auth, user, projects, branches, versions, version manifest,
+    blob check/upload/download, version creation from a manifest. The HTTP plumbing is private;
+    JSON parsing lives in `ApiJson.cpp`. Every failure is an `ApiError` with a kind (network,
+    unauthorized, not found, server, ...).
+- `SnapshotSync` (`plugin/stemhub/Source/src/application/SnapshotSync.cpp`)
+  - Stateless content-addressed push (upload what the server lacks, then create the version)
+    and restore (download into a new folder, verify every SHA-256).
+- `UseCases` (`plugin/stemhub/Source/src/application/UseCases.cpp`)
+  - The background work of each action, as functions from an input built on the message
+    thread to a result the processor applies.
 - `SnapshotBundler` (`plugin/stemhub/Source/src/application/SnapshotBundler.cpp`)
   - Hashes the project file and its audio files and builds the version manifest; validates
     manifests before a restore (see `docs/content-addressed-storage.md`).
@@ -132,7 +138,7 @@ sequenceDiagram
    enqueues the job with everything it needs.
 3. `SnapshotBundler::buildManifest(...)` hashes the project file and the audio files in its
    folder; paths are stored relative to that folder.
-4. `VersionControlService::pushVersion(...)` calls the backend:
+4. `stemhub::snapshots::pushSnapshot(...)` calls the backend:
    - `POST /projects/{projectId}/blobs/check-missing`
    - `PUT /projects/{projectId}/blobs/{sha256}` for each missing file
    - `POST /branches/{branchId}/versions/from-manifest`
@@ -147,7 +153,7 @@ sequenceDiagram
     participant E as PluginEditor
     participant P as PluginProcessor
     participant S as SnapshotBundler
-    participant V as VersionControlService
+    participant V as SnapshotSync
     participant A as ApiClient
 
     U->>E: Save action
@@ -183,7 +189,7 @@ sequenceDiagram
     participant E as PluginEditor
     participant P as PluginProcessor
     participant J as BackgroundJobCoordinator
-    participant V as VersionControlService
+    participant V as UseCases
     participant A as ApiClient
 
     E->>P: Request history refresh or branch switch
@@ -200,7 +206,8 @@ sequenceDiagram
 
 ## 9) Error Propagation Model
 
-- HTTP/network/parsing errors are converted to `ApiError` in `ApiClient`.
+- HTTP/network/parsing errors are converted to `ApiError` in `ApiClient`; a 401 anywhere ends the
+  session and returns to the login screen. Offline at startup, the saved session is kept.
 - `perform*Request` converts errors into typed job result `errorMessage`.
 - `apply*Result` moves processor to `OperationState::error` (or `AuthState::authError`) and updates status messages.
 - Editor reads those messages through getters and displays them in active view.
@@ -208,7 +215,7 @@ sequenceDiagram
 ## 10) Independence Boundaries In The Plugin
 
 - UI layer does not call backend directly; it only talks to processor.
-- Processor does not perform HTTP directly; it uses `IProjectApi` + `VersionControlService`.
-- Network layer (`ApiClient`) is transport-focused and replaceable via `IProjectApi` injection.
-- Versioning logic (`VersionControlService`) is isolated from view logic and from JUCE widgets.
+- Processor does not perform HTTP directly; its jobs call the use cases, which use `IProjectApi`.
+- Network layer (`ApiClient`) is replaceable via `IProjectApi` injection (the tests use a fake).
+- Versioning logic (`SnapshotSync`, `SnapshotBundler`) is isolated from view logic and from JUCE widgets.
 - Background execution is centralized (`BackgroundJobCoordinator`) and shared by all request types.
