@@ -941,7 +941,7 @@ DashboardView::DashboardView()
     footerStorageLabel.setBorderSize({});
 
     addAndMakeVisible(restoreHintLabel);
-    restoreHintLabel.setText("Replaces your local project file with this version. You confirm first.",
+    restoreHintLabel.setText("Opens in your DAW as a new copy. Your project stays as it is.",
                              juce::dontSendNotification);
     restoreHintLabel.setFont(theme::bodyFont(11.5f));
     restoreHintLabel.setColour(juce::Label::textColourId, Theme::kInkSubtle);

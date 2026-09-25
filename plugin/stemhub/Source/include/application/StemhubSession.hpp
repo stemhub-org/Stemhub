@@ -7,6 +7,7 @@
 #include <JuceHeader.h>
 
 #include "application/BackgroundJobCoordinator.hpp"
+#include "application/SessionStorage.hpp"
 #include "application/UseCases.hpp"
 #include "domain/SessionState.hpp"
 #include "network/ApiClient.hpp"
@@ -19,12 +20,15 @@
 // One job at a time: an intent that would start a job is ignored while the session is busy, and
 // only the latest request's result is applied, so signing out drops whatever was still running.
 //
+// Each plugin instance has its own session, linked to the StemHub project of the DAW project it
+// lives in (SessionState::link). The processor saves that link in the DAW project.
+//
 // Everything public runs on the message thread.
 class StemhubSession : public juce::ChangeBroadcaster,
                        private juce::AsyncUpdater
 {
 public:
-    explicit StemhubSession(std::shared_ptr<const IProjectApi> api);
+    StemhubSession(std::shared_ptr<const IProjectApi> api, SessionStorage storage);
     ~StemhubSession() override;
 
     // Stops accepting work and waits for running jobs. Call it before tearing down anything a job
@@ -42,8 +46,14 @@ public:
     // ── Intents ──
     void requestSignIn(const juce::String& email, const juce::String& password);
     // Signs in with the saved token, once per session unless the server couldn't be reached.
-    void requestRestoreCachedSession();
+    // Once signed in, the linked project opens.
+    void requestRestoreSavedSession();
+    // Keeps the link, so signing in again reopens this DAW project's StemHub project.
     void signOut();
+    // The link saved in the DAW project, as the host hands it back, ignored once a project is
+    // open here. A restore hand-off waiting for that project (for any project, when there is no
+    // link) is taken now: the DAW is opening that restored copy.
+    void restoreLink(ProjectLink savedLink);
     // restoreLatestIfSafe: an explicit open from the project grid. When this instance has no
     // local copy of the project, or an unchanged one behind the branch head, the latest version
     // is restored into a new folder and opened in the DAW. Unsaved local changes are never replaced.
@@ -63,8 +73,6 @@ public:
     // ── Configuration ──
     // Opening a project file hands it to the DAW / OS. Tests replace this so nothing is launched.
     void setOpenFileHandler(std::function<bool(const juce::File&)> handler) { openFileHandler = std::move(handler); }
-    // Where opening a project restores its latest version (default: the app data folder).
-    void setManagedWorkingCopyFolder(const juce::File& folder) { managedWorkingCopyFolder = folder; }
 
     // Applies finished jobs now instead of on the next message loop turn. Returns how many
     // results arrived, stale ones included.
@@ -102,7 +110,12 @@ private:
     void apply(PushVersionJobResult result);
     void apply(RestoreVersionJobResult result);
 
-    void requestRestoreCachedProjectContext();
+    // Keeps the link: it belongs to the DAW project, not to whoever is signed in.
+    void resetState();
+    void openLinkedProject();
+    void takeRestoreHandoff(const juce::String& projectId);
+    // Leaves a restored copy for the instance the DAW opens it in, then asks the DAW to open it.
+    void handOverRestoredCopy(const WorkingCopyBaseline& restoredCopy);
     // The backend refused the token: sign out and say why on the login screen.
     void expireSession(const juce::String& message = "Your session expired. Sign in again.");
     void enterProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile);
@@ -110,16 +123,24 @@ private:
     [[nodiscard]] bool hasCleanWorkingCopy(const juce::File& workingFile) const;
     // The version the next save of projectFile builds on: the one it holds, else the branch head.
     [[nodiscard]] juce::String getParentVersionForNextSave(const juce::File& projectFile) const;
-    void changed() { sendChangeMessage(); }
+    // Once a project is open here, it is what the DAW project is linked to.
+    void refreshLink();
+    void changed()
+    {
+        refreshLink();
+        sendChangeMessage();
+    }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubSession)
 
     SessionState state;
     std::shared_ptr<const IProjectApi> api;
+    SessionStorage storage;
+    // What the linked working file holds, when a restore hand-off said so.
+    WorkingCopyBaseline linkedCopy;
     uint64_t currentRequestEpoch { 0 };
-    bool didAttemptCachedSessionRestore { false };
+    bool didAttemptSavedSessionRestore { false };
     std::function<bool(const juce::File&)> openFileHandler;
-    juce::File managedWorkingCopyFolder;
 
     // Declared last so it is destroyed first: its workers must stop before anything they use goes away.
     BackgroundJobCoordinator<JobPayload> jobs { 2, [this] { triggerAsyncUpdate(); } };

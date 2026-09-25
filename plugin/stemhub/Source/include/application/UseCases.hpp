@@ -30,7 +30,7 @@ struct AuthRequestResult
     juce::String token;
     juce::String authErrorMessage;
     Status projectsStatus;
-    bool fromCachedSession { false };
+    bool fromSavedSession { false };
     bool sessionExpired { false };
 };
 
@@ -62,18 +62,20 @@ struct ProjectActivationJobResult
     juce::File projectFile;
     // What projectFile holds, when known.
     WorkingCopyBaseline workingCopy;
-    // The latest version was just restored into projectFile; it should be opened in the DAW.
-    bool didRestoreLatest { false };
+    // The latest version, restored into a new folder for the DAW to open as its own project.
+    // Unset when nothing was restored.
+    WorkingCopyBaseline restoredCopy;
     juce::String errorMessage;
     Status status;
     bool refreshProjects { false };
-    bool fromCachedProjectRestore { false };
     bool sessionExpired { false };
 };
 
 struct OpenProjectInput
 {
     juce::String projectId;
+    // Opened when the project still has it; otherwise "main", or the first branch.
+    juce::String preferredBranchId;
     juce::File localProjectFile;
     std::vector<Project> availableProjects;
     juce::String token;
