@@ -10,6 +10,24 @@ juce::String buildApiErrorMessage(const std::optional<ApiError>& error,
     return error ? error->message : fallback;
 }
 
+juce::int64 sizeOf(const juce::var& blobRef)
+{
+    return juce::jmax<juce::int64>(0, static_cast<juce::int64>(blobRef.getProperty("size_bytes", 0)));
+}
+
+juce::int64 sumManifestSizes(const juce::var& manifest)
+{
+    if (!manifest.isObject())
+        return 0;
+
+    auto total = sizeOf(manifest.getProperty("project_file", {}));
+    if (const auto* tracks = manifest.getProperty("tracks", {}).getArray())
+        for (const auto& track : *tracks)
+            total += sizeOf(track);
+
+    return total;
+}
+
 ApiResult<VersionSummary> parseVersionSummary(const juce::var& value)
 {
     auto* object = value.getDynamicObject();
@@ -24,10 +42,7 @@ ApiResult<VersionSummary> parseVersionSummary(const juce::var& value)
     summary.commitMessage = object->getProperty("commit_message").toString();
     summary.sourceDaw = object->getProperty("source_daw").toString();
     summary.sourceProjectFilename = object->getProperty("source_project_filename").toString();
-    summary.artifactPath = object->getProperty("artifact_path").toString();
-    summary.artifactChecksum = object->getProperty("artifact_checksum").toString();
-    summary.artifactSizeBytes = static_cast<int64>(object->getProperty("artifact_size_bytes"));
-    summary.hasArtifact = summary.artifactPath.isNotEmpty();
+    summary.totalSizeBytes = sumManifestSizes(object->getProperty("manifest_json"));
 
     if (!summary.isValid())
         return { {}, ApiError { 200, "Version response is missing required fields." } };
@@ -43,67 +58,6 @@ const IProjectApi* VersionControlService::getApiClient() const noexcept
 }
 
 juce::Result VersionControlService::pushVersion(const PushVersionRequest& request)
-{
-    if (accessToken.isEmpty())
-        return juce::Result::fail("No access token is configured for version control.");
-
-    const auto* api = getApiClient();
-    if (api == nullptr)
-        return juce::Result::fail("VersionControlService API client is not configured.");
-
-    const auto branchId = request.branchId.isNotEmpty() ? request.branchId : context.branchId;
-    if (branchId.isEmpty())
-        return juce::Result::fail("A branch ID is required to push a version.");
-
-    if (!request.localProjectFile.existsAsFile())
-        return juce::Result::fail("Local project file does not exist.");
-
-    juce::DynamicObject::Ptr bodyObject = new juce::DynamicObject();
-
-    if (request.commitMessage.isNotEmpty())
-        bodyObject->setProperty("commit_message", request.commitMessage);
-
-    const auto parentVersionId = resolveParentVersionId(request);
-    if (parentVersionId.isNotEmpty())
-        bodyObject->setProperty("parent_version_id", parentVersionId);
-
-    if (request.dawName.isNotEmpty())
-        bodyObject->setProperty("source_daw", request.dawName);
-
-    const auto sourceProjectFilename = request.sourceProjectFilename.isNotEmpty()
-        ? request.sourceProjectFilename
-        : request.localProjectFile.getFileName();
-    bodyObject->setProperty("source_project_filename", sourceProjectFilename);
-
-    if (!request.snapshotManifest.isVoid())
-        bodyObject->setProperty("snapshot_manifest", request.snapshotManifest);
-
-    const auto body = juce::JSON::toString(juce::var(bodyObject.get()));
-    const auto createResult = api->requestJson("/branches/" + branchId + "/versions/", "POST", body, accessToken);
-    if (!createResult.ok())
-        return juce::Result::fail(buildApiErrorMessage(createResult.error, "Failed to create version."));
-
-    const auto createdVersion = parseVersionSummary(*createResult.value);
-    if (!createdVersion.ok())
-        return juce::Result::fail(buildApiErrorMessage(createdVersion.error, "Failed to parse created version."));
-
-    const auto uploadResult = api->uploadFile("/versions/" + createdVersion.value->id + "/artifact",
-                                                   request.localProjectFile,
-                                                   "artifact",
-                                                   accessToken);
-    if (!uploadResult.ok())
-        return juce::Result::fail(buildApiErrorMessage(uploadResult.error, "Failed to upload snapshot artifact."));
-
-    const auto uploadedVersion = parseVersionSummary(*uploadResult.value);
-    if (!uploadedVersion.ok())
-        return juce::Result::fail(buildApiErrorMessage(uploadedVersion.error, "Failed to parse uploaded version."));
-
-    context.branchId = uploadedVersion.value->branchId;
-    context.lastVersionId = uploadedVersion.value->id;
-    return juce::Result::ok();
-}
-
-juce::Result VersionControlService::pushVersionContentAddressed(const PushVersionCasRequest& request)
 {
     if (accessToken.isEmpty())
         return juce::Result::fail("No access token is configured for version control.");
@@ -206,73 +160,6 @@ ApiResult<std::vector<VersionSummary>> VersionControlService::fetchVersionHistor
     return { versions, {} };
 }
 
-ApiResult<VersionSummary> VersionControlService::fetchVersion(
-    const juce::String& versionId,
-    const juce::String& bearerToken) const
-{
-    if (versionId.isEmpty())
-        return { {}, ApiError { 0, "A version ID is required to fetch version details." } };
-
-    if (bearerToken.isEmpty())
-        return { {}, ApiError { 0, "An access token is required to fetch version details." } };
-
-    const auto* api = getApiClient();
-    if (api == nullptr)
-        return { {}, ApiError { 0, "VersionControlService API client is not configured." } };
-
-    const auto jsonResult = api->requestJson("/versions/" + versionId, "GET", {}, bearerToken);
-    if (!jsonResult.ok())
-        return { {}, jsonResult.error };
-
-    return parseVersionSummary(*jsonResult.value);
-}
-
-juce::Result VersionControlService::downloadVersion(
-    const juce::String& versionId,
-    const juce::File& destinationFile,
-    const juce::String& bearerToken) const
-{
-    juce::Logger::writeToLog("[Restore] VersionControlService -> downloadVersion versionId=" + versionId
-                             + ", destination=" + destinationFile.getFullPathName());
-    if (versionId.isEmpty())
-        return juce::Result::fail("A version ID is required to download a snapshot.");
-
-    if (bearerToken.isEmpty())
-        return juce::Result::fail("An access token is required to download a snapshot.");
-
-    if (destinationFile.isDirectory())
-        return juce::Result::fail("Destination path must be a file, not a directory.");
-
-    const auto* api = getApiClient();
-    if (api == nullptr)
-        return juce::Result::fail("VersionControlService API client is not configured.");
-
-    return api->downloadFile("/versions/" + versionId + "/artifact", destinationFile, bearerToken);
-}
-
-juce::Result VersionControlService::restoreVersion(
-    const juce::String& versionId,
-    const juce::File& destinationFile,
-    const juce::String& bearerToken) const
-{
-    juce::Logger::writeToLog("[Restore] VersionControlService -> restoreVersion delegates to downloadVersion for "
-                             + versionId);
-    const auto result = downloadVersion(versionId, destinationFile, bearerToken);
-    if (result.failed())
-        juce::Logger::writeToLog("[Restore] VersionControlService -> restoreVersion failed: " + result.getErrorMessage());
-    else
-        juce::Logger::writeToLog("[Restore] VersionControlService -> restoreVersion ok");
-    return result;
-}
-
-juce::String VersionControlService::resolveParentVersionId(const PushVersionRequest& request) const
-{
-    if (request.parentVersionId.isNotEmpty())
-        return request.parentVersionId;
-
-    return context.lastVersionId;
-}
-
 namespace
 {
 juce::String sha256HexOfLocalFile(const juce::File& file)
@@ -317,7 +204,7 @@ juce::Result VersionControlService::restoreVersionFromManifest(const juce::Strin
         return juce::Result::fail("Version has no content-addressed manifest.");
 
     ParsedManifest parsed;
-    const auto parseStatus = SnapshotBundler::parseContentAddressedManifest(manifestJson, parsed);
+    const auto parseStatus = SnapshotBundler::parseManifest(manifestJson, parsed);
     if (parseStatus.failed())
         return parseStatus;
 

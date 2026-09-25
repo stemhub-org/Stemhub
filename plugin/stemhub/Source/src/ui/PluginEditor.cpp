@@ -132,7 +132,7 @@ VersionListItem toVersionListItem(const VersionSummary& version, const juce::Str
     }
     item.sourceDaw = version.sourceDaw;
     item.sourceFilename = version.sourceProjectFilename;
-    item.sizeBytes = version.artifactSizeBytes;
+    item.sizeBytes = version.totalSizeBytes;
     item.isOpenInDaw = openedVersionId.isNotEmpty() && version.id == openedVersionId;
     return item;
 }
@@ -154,7 +154,7 @@ bool isBackupPath(const juce::File& candidateFile, const juce::File& rootFolder)
     return false;
 }
 
-// Mirror the same root folder choice used by snapshot bundling so the UI preview matches saved artifacts.
+// Mirror the same root folder choice used by snapshot bundling so the UI preview matches what a save uploads.
 juce::File resolveBundleRootDirectory(const juce::File& effectiveProjectFile)
 {
     if (effectiveProjectFile.existsAsFile())
@@ -531,10 +531,7 @@ void StemhubAudioProcessorEditor::handleRestoreClick()
                 juce::Logger::writeToLog("[Restore] UI -> requesting restore from confirmation callback: "
                                          + folder.getFullPathName() + ", version="
                                          + versionToRestore);
-                // Content-addressed restore: pulls only referenced blobs (verified by SHA-256).
-                // See docs/content-addressed-storage.md. The legacy zip-download path remains
-                // available via audioProcessor.requestRestoreVersion() if a rollback is needed.
-                mutableEditor->audioProcessor.requestRestoreVersionContentAddressed(versionToRestore, folder);
+                mutableEditor->audioProcessor.requestRestoreVersion(versionToRestore, folder);
                 mutableEditor->refreshSessionUi();
             }));
     };
@@ -593,11 +590,7 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
 
 void StemhubAudioProcessorEditor::triggerPushVersion(const juce::String& commitMessage)
 {
-    // Content-addressed push: uploads only novel blobs (SHA-256 dedup within
-    // the project). See docs/content-addressed-storage.md. The legacy
-    // whole-bundle path remains available via
-    // audioProcessor.requestPushVersion() if a rollback is needed.
-    audioProcessor.requestPushVersionContentAddressed(commitMessage, kDawName);
+    audioProcessor.requestPushVersion(commitMessage, kDawName);
     refreshSessionUi();
 }
 

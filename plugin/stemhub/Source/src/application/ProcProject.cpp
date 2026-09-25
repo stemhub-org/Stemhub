@@ -60,23 +60,31 @@ void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobRes
     selectedVersionId = chooseSelectedVersionId(versionHistory, result.selectedVersionId);
     selectProject(*result.selectedProject, result.branchId, result.branchName,
             std::move(result.projectFile));
-    if (result.workingVersionId.isNotEmpty())
+    if (result.didRestoreLatest)
+        setWorkingCopyContext(selectedProjectFile,
+                              result.workingVersionId,
+                              result.restoredFileSizeBytes,
+                              result.restoredFileModTimeMs);
+    else if (result.workingVersionId.isNotEmpty())
         setWorkingCopyContext(selectedProjectFile, result.workingVersionId);
     else
         clearWorkingCopyContext();
     setCurrentOpenedVersionId({});
 
-    if (result.shouldAutoOpenLocalFile
-        && selectedProjectFile.existsAsFile()
-        && !openFileHandler(selectedProjectFile))
+    // Only a copy that was just restored is opened in the DAW. A file the user linked is usually
+    // the project the DAW already has open, and reopening it would reload the session.
+    if (result.didRestoreLatest)
     {
-        setOperationState(OperationState::error);
-        activeProjectStatusMessage = "Project loaded, but failed to open local project file: "
-            + selectedProjectFile.getFullPathName();
-        return;
-    }
-    if (selectedProjectFile.existsAsFile() && result.shouldAutoOpenLocalFile && result.workingVersionId.isNotEmpty())
+        if (!openFileHandler(selectedProjectFile))
+        {
+            setOperationState(OperationState::error);
+            activeProjectStatusMessage = "Latest version restored, but failed to open it: "
+                + selectedProjectFile.getFullPathName();
+            return;
+        }
+
         setCurrentOpenedVersionId(result.workingVersionId);
+    }
     if (selectedProjectFile.existsAsFile() && !selectedProjectFile.isDirectory())
         stemhub::sessioncache::saveLastOpenedProjectFilePath(selectedProjectFile.getFullPathName());
 
@@ -258,12 +266,6 @@ void StemhubAudioProcessor::applyBackgroundResult(BackgroundJobResult result)
     }, std::move(result.payload));
 }
 
-void StemhubAudioProcessor::setProjectSelectionStatusMessage(juce::String message)
-{
-    projectSelectionStatusMessage = std::move(message);
-    sendChangeMessage();
-}
-
 void StemhubAudioProcessor::setActiveProjectStatusMessage(juce::String message)
 {
     activeProjectStatusMessage = std::move(message);
@@ -384,75 +386,21 @@ bool StemhubAudioProcessor::hasCleanWorkingCopy(const juce::File& workingFile) c
         && workingCopyFileModTime == workingFile.getLastModificationTime().toMilliseconds();
 }
 
-juce::String StemhubAudioProcessor::getCurrentOpenedVersionIdFromPath() const
-{
-    const auto fileToInspect = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile,
-                                                                              pendingProjectFile);
-    if (!fileToInspect.existsAsFile())
-        return {};
-
-    return resolveOpenedVersionFromPath(fileToInspect, versionHistory, {});
-}
-
-juce::String StemhubAudioProcessor::getCurrentOpenedVersionLabel() const
-{
-    const auto fileToInspect = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile,
-                                                                              pendingProjectFile);
-    if (!fileToInspect.existsAsFile())
-        return "Current version: not available";
-
-    const auto resolvedVersionFromPath = getCurrentOpenedVersionIdFromPath();
-    const auto activeVersionId = resolvedVersionFromPath.isNotEmpty()
-        ? resolvedVersionFromPath
-        : currentOpenedVersionId;
-
-    if (activeVersionId.isEmpty())
-    {
-        if (workingCopyProjectFile != fileToInspect || workingCopyVersionId.isEmpty())
-            return "Current version: unknown";
-
-        if (hasCleanWorkingCopy(fileToInspect))
-            return "Current version: " + workingCopyVersionId;
-
-        return "Current version: " + workingCopyVersionId + " (modified locally)";
-    }
-
-    if (currentOpenedVersionId.isNotEmpty() && currentOpenedVersionId == workingCopyVersionId
-        && workingCopyProjectFile == fileToInspect)
-    {
-        if (hasCleanWorkingCopy(fileToInspect))
-            return "Current version: " + activeVersionId;
-
-        return "Current version: " + activeVersionId + " (modified locally)";
-    }
-
-    if (activeVersionId.isNotEmpty())
-    {
-        if (workingCopyProjectFile != fileToInspect || workingCopyVersionId != activeVersionId)
-            return "Current version: " + activeVersionId + " (working copy out of sync)";
-
-        if (hasCleanWorkingCopy(fileToInspect))
-            return "Current version: " + activeVersionId;
-
-        return "Current version: " + activeVersionId + " (modified locally)";
-    }
-
-    if (workingCopyProjectFile != fileToInspect)
-        return "Current version: unknown";
-
-    if (workingCopyVersionId.isEmpty())
-        return "Current version: unknown";
-
-    if (hasCleanWorkingCopy(fileToInspect))
-        return "Current version: " + workingCopyVersionId;
-
-    return "Current version: " + workingCopyVersionId + " (modified locally)";
-}
-
-void StemhubAudioProcessor::requestOpenProject(juce::String projectId, juce::File localProjectFile, const bool preferRemoteLatest)
+void StemhubAudioProcessor::requestOpenProject(juce::String projectId, juce::File localProjectFile, const bool restoreLatestIfSafe)
 {
     if (isWriteOperationInProgress())
         return;
+
+    // The working file of the project open until now is not a copy of another project.
+    if (selectedProject.has_value() && selectedProject->id != projectId && localProjectFile == selectedProjectFile)
+        localProjectFile = juce::File();
+
+    LocalCopyState localCopy;
+    if (localProjectFile.existsAsFile() && localProjectFile == workingCopyProjectFile)
+    {
+        localCopy.baseVersionId = workingCopyVersionId;
+        localCopy.isUnchanged = hasCleanWorkingCopy(localProjectFile);
+    }
 
     setOperationState(OperationState::loadingProjects);
     sendChangeMessage();
@@ -463,7 +411,9 @@ void StemhubAudioProcessor::requestOpenProject(juce::String projectId, juce::Fil
     enqueueBackgroundTask([this,
                            requestedProjectId = std::move(projectId),
                            requestedProjectFile = std::move(localProjectFile),
-                           requestedPreferRemoteLatest = preferRemoteLatest,
+                           restoreLatestIfSafe,
+                           localCopy,
+                           workingCopyBase = managedWorkingCopyFolder,
                            projectsSnapshot,
                            selectionRequestId,
                            token]() -> BackgroundJobPayload
@@ -472,7 +422,9 @@ void StemhubAudioProcessor::requestOpenProject(juce::String projectId, juce::Fil
                                                 requestedProjectFile,
                                                 projectsSnapshot,
                                                 token,
-                                                requestedPreferRemoteLatest);
+                                                restoreLatestIfSafe,
+                                                localCopy,
+                                                workingCopyBase);
         result.selectionRequestId = selectionRequestId;
         return result;
     });
@@ -528,14 +480,16 @@ void StemhubAudioProcessor::requestSelectBranch(juce::String branchId)
 
     const auto token = access_tkn;
     const auto branchName = branchIt->name;
+    const auto localProjectFile = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile, pendingProjectFile);
     const auto selectionRequestId = beginSelectionRequest();
     enqueueBackgroundTask([this,
                            requestedBranchId = std::move(branchId),
                            requestedBranchName = std::move(branchName),
+                           localProjectFile,
                            selectionRequestId,
                            token]() -> BackgroundJobPayload
     {
-        auto result = performFetchBranchHistoryRequest(requestedBranchId, requestedBranchName, {}, token);
+        auto result = performFetchBranchHistoryRequest(requestedBranchId, requestedBranchName, {}, token, localProjectFile);
         result.selectionRequestId = selectionRequestId;
         return result;
     });
@@ -565,47 +519,23 @@ void StemhubAudioProcessor::requestRefreshVersionHistory()
     const auto token = access_tkn;
     const auto branchId = selectedBranchId;
     const auto preferredVersionId = selectedVersionId;
+    const auto localProjectFile = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile, pendingProjectFile);
     const auto selectionRequestId = beginSelectionRequest();
     enqueueBackgroundTask([this,
                            branchId,
                            branchName,
                            preferredVersionId,
+                           localProjectFile,
                            selectionRequestId,
                            token]() -> BackgroundJobPayload
     {
-        auto result = performFetchBranchHistoryRequest(branchId, branchName, preferredVersionId, token);
+        auto result = performFetchBranchHistoryRequest(branchId, branchName, preferredVersionId, token, localProjectFile);
         result.selectionRequestId = selectionRequestId;
         return result;
     });
 }
 
 void StemhubAudioProcessor::requestPushVersion(juce::String commitMessage, juce::String dawName)
-{
-    setOperationState(OperationState::committing);
-    sendChangeMessage();
-
-    const auto projectFile = stemhub::projectfiles::resolveEffectiveProjectFile(selectedProjectFile, pendingProjectFile);
-    const auto projectRootDirectory = projectFile.existsAsFile() ? projectFile.getParentDirectory() : juce::File();
-    const auto project = selectedProject;
-    const auto branchId = selectedBranchId;
-    enqueueBackgroundTask([this,
-                           selectedFile = std::move(projectFile),
-                           selectedProjectRoot = std::move(projectRootDirectory),
-                           project,
-                           selectedBranch = std::move(branchId),
-                           requestedCommitMessage = std::move(commitMessage),
-                           requestedDawName = std::move(dawName)]() mutable -> BackgroundJobPayload
-    {
-        return performPushVersionRequest(selectedFile,
-                                         selectedProjectRoot,
-                                         project,
-                                         selectedBranch,
-                                         requestedCommitMessage,
-                                         requestedDawName);
-    });
-}
-
-void StemhubAudioProcessor::requestPushVersionContentAddressed(juce::String commitMessage, juce::String dawName)
 {
     // One save at a time, and never while history or a project is loading: their results
     // would land on top of the pushed version.
@@ -638,7 +568,7 @@ void StemhubAudioProcessor::requestPushVersionContentAddressed(juce::String comm
                            requestedDawName = std::move(dawName),
                            token = access_tkn]() -> BackgroundJobPayload
     {
-        return performPushVersionContentAddressedRequest(selectedFile,
+        return performPushVersionRequest(selectedFile,
                                                           selectedProjectRoot,
                                                           project,
                                                           selectedBranch,
@@ -650,54 +580,6 @@ void StemhubAudioProcessor::requestPushVersionContentAddressed(juce::String comm
 }
 
 void StemhubAudioProcessor::requestRestoreVersion(const juce::String& versionId, const juce::File& projectFolder)
-{
-    juce::Logger::writeToLog("[Restore] Processor -> requestRestoreVersion called. versionId=" + versionId
-                             + ", projectFolder=" + projectFolder.getFullPathName()
-                             + ", hasProjectAndBranch=" + (hasProjectAndBranchSelected(selectedProject, selectedBranchId) ? "true" : "false"));
-
-    if (!hasProjectAndBranchSelected(selectedProject, selectedBranchId))
-    {
-        setOperationState(OperationState::error);
-        setActiveProjectStatusMessage("Choose a project before restoring.");
-        return;
-    }
-
-    if (!projectFolder.isDirectory())
-    {
-        setOperationState(OperationState::error);
-        setActiveProjectStatusMessage("Choose a valid restore destination folder.");
-        return;
-    }
-
-    if (versionId.isEmpty())
-    {
-        setOperationState(OperationState::error);
-        setActiveProjectStatusMessage("Select a version before restoring.");
-        return;
-    }
-
-    const auto projectName = selectedProject ? selectedProject->name : juce::String();
-    const auto restoredProjectBase = stemhub::projectfiles::resolveRestoreProjectName(versionHistory, versionId, projectName);
-    const auto fileName = restoredProjectBase + "-" + versionId.substring(0, juce::jmin(8, versionId.length())) + ".zip";
-    const auto restoreFile = projectFolder.getChildFile(fileName);
-    juce::Logger::writeToLog("[Restore] Processor -> resolved restore file path=" + restoreFile.getFullPathName()
-                             + " (base=" + restoredProjectBase + ")");
-
-    setOperationState(OperationState::pulling);
-    setActiveProjectStatusMessage("Restoring selected version...");
-    sendChangeMessage();
-
-    const auto requestedVersionId = versionId;
-    const auto requestedRestoreFile = restoreFile;
-    enqueueBackgroundTask([this,
-                           requestedVersionId,
-                           requestedRestoreFile]() -> BackgroundJobPayload
-    {
-        return performRestoreVersionRequest(requestedVersionId, requestedRestoreFile);
-    });
-}
-
-void StemhubAudioProcessor::requestRestoreVersionContentAddressed(const juce::String& versionId, const juce::File& projectFolder)
 {
     const auto operationState = sessionState.operationState;
     if (operationState != OperationState::idle && operationState != OperationState::error)
@@ -722,16 +604,10 @@ void StemhubAudioProcessor::requestRestoreVersionContentAddressed(const juce::St
         return;
     }
 
-    const auto projectName = selectedProject ? selectedProject->name : juce::String();
-    const auto restoredProjectBase = stemhub::projectfiles::resolveRestoreProjectName(versionHistory, versionId, projectName);
-    // Each restore gets a new folder next to the project. An earlier restore of the same version
-    // may hold the user's edits, so it is never reused: "<name>-<id8> (2)" keeps the version
-    // prefix after the last dash, which resolveVersionIdFromProjectPath reads back.
-    const auto folderName = juce::File::createLegalFileName(
-        restoredProjectBase + "-" + versionId.substring(0, juce::jmin(8, versionId.length())));
-    auto restoreDir = projectFolder.getChildFile(folderName);
-    for (int copyNumber = 2; restoreDir.exists(); ++copyNumber)
-        restoreDir = projectFolder.getChildFile(folderName + " (" + juce::String(copyNumber) + ")");
+    const auto restoreDir = stemhub::projectfiles::chooseRestoreFolder(
+        projectFolder,
+        stemhub::projectfiles::resolveRestoreProjectName(versionHistory, versionId, selectedProject->name),
+        versionId);
 
     setOperationState(OperationState::restoring);
     setActiveProjectStatusMessage("Restoring selected version...");
@@ -743,7 +619,7 @@ void StemhubAudioProcessor::requestRestoreVersionContentAddressed(const juce::St
                            requestedRestoreDir = restoreDir,
                            token = access_tkn]() -> BackgroundJobPayload
     {
-        return performRestoreVersionContentAddressedRequest(projectId, requestedVersionId, requestedRestoreDir, token);
+        return performRestoreVersionRequest(projectId, requestedVersionId, requestedRestoreDir, token);
     });
 }
 

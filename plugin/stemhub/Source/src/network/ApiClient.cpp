@@ -174,109 +174,6 @@ ApiResult<juce::var> ApiClient::requestJson(const juce::String& path, const juce
     return { parsedJson, {} };
 }
 
-ApiResult<juce::var> ApiClient::uploadFile(const juce::String& path,
-                                           const juce::File& file,
-                                           const juce::String& formFieldName,
-                                           const juce::String& bearerToken) const
-{
-    if (!file.existsAsFile())
-        return { {}, ApiError { 0, "Snapshot file does not exist." } };
-
-    auto url = juce::URL(baseUrl + path).withFileToUpload(formFieldName, file, "application/octet-stream");
-
-    juce::StringPairArray responseHeaders;
-    int statusCode = 0;
-
-    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-        .withHttpRequestCmd("POST")
-        .withExtraHeaders("Accept: application/json\r\nAuthorization: Bearer " + bearerToken + "\r\n")
-        .withResponseHeaders(&responseHeaders)
-        .withStatusCode(&statusCode)
-        .withConnectionTimeoutMs(30000);
-
-    auto stream = url.createInputStream(options);
-    if (stream == nullptr)
-        return { {}, ApiError { statusCode, "Failed to connect to backend." } };
-
-    const auto responseText = stream->readEntireStreamAsString();
-    const auto parsedJson = juce::JSON::parse(responseText);
-
-    if (statusCode < 200 || statusCode >= 300)
-    {
-        return { {}, ApiError { statusCode, extractErrorMessage(parsedJson,
-                                                                responseText,
-                                                                "File upload failed.") } };
-    }
-
-    if (parsedJson.isVoid())
-        return { {}, ApiError { statusCode, "Backend returned invalid JSON." } };
-
-    return { parsedJson, {} };
-}
-
-juce::Result ApiClient::downloadFile(const juce::String& path,
-                                     const juce::File& destinationFile,
-                                     const juce::String& bearerToken) const
-{
-    juce::Logger::writeToLog("[Restore] ApiClient -> downloadFile path=" + path
-                             + ", destination=" + destinationFile.getFullPathName()
-                             + ", baseUrl=" + baseUrl);
-
-    auto url = juce::URL(baseUrl + path);
-
-    juce::StringPairArray responseHeaders;
-    int statusCode = 0;
-
-    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-        .withHttpRequestCmd("GET")
-        .withExtraHeaders(buildBinaryHeaders(bearerToken))
-        .withResponseHeaders(&responseHeaders)
-        .withStatusCode(&statusCode)
-        .withConnectionTimeoutMs(30000);
-
-    auto stream = url.createInputStream(options);
-    if (stream == nullptr)
-    {
-        juce::Logger::writeToLog("[Restore] ApiClient -> connect failed, statusCode=" + juce::String(statusCode));
-        return juce::Result::fail("Failed to connect to backend.");
-    }
-
-    if (statusCode < 200 || statusCode >= 300)
-    {
-        const auto responseText = stream->readEntireStreamAsString();
-        const auto parsedJson = juce::JSON::parse(responseText);
-        juce::Logger::writeToLog("[Restore] ApiClient -> download error status="
-                                 + juce::String(statusCode)
-                                 + ", body="
-                                 + extractErrorMessage(parsedJson, responseText, "File download failed."));
-        return juce::Result::fail(extractErrorMessage(parsedJson, responseText, "File download failed."));
-    }
-    juce::Logger::writeToLog("[Restore] ApiClient -> HTTP status=" + juce::String(statusCode));
-
-    destinationFile.getParentDirectory().createDirectory();
-
-    juce::FileOutputStream output(destinationFile);
-    if (!output.openedOk())
-    {
-        juce::Logger::writeToLog("[Restore] ApiClient -> cannot open destination file");
-        return juce::Result::fail("Failed to open destination file for writing.");
-    }
-
-    const auto bytes = output.writeFromInputStream(*stream, -1);
-    if (bytes < 0)
-    {
-        juce::Logger::writeToLog("[Restore] ApiClient -> write failed");
-        return juce::Result::fail("Failed to write downloaded snapshot to disk.");
-    }
-
-    juce::Logger::writeToLog("[Restore] ApiClient -> wrote bytes=" + juce::String(bytes)
-                             + ", destinationSize=" + juce::String(destinationFile.getSize()));
-
-    output.flush();
-    juce::Logger::writeToLog("[Restore] ApiClient -> download complete");
-    return juce::Result::ok();
-}
-
 ApiResult<LoginResponse> ApiClient::login(const juce::String& email,
                                           const juce::String& password) const
 {
@@ -296,7 +193,6 @@ ApiResult<LoginResponse> ApiClient::login(const juce::String& email,
 
     LoginResponse response;
     response.accessToken = object->getProperty("access_token").toString();
-    response.tokenType = object->getProperty("token_type").toString();
 
     if (response.accessToken.isEmpty())
         return { {}, ApiError { 200, "Login response did not contain an access token." } };

@@ -56,7 +56,6 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     // CUSTOM METHODS
-    [[nodiscard]] const SessionState& getSessionState() const noexcept { return sessionState; }
     [[nodiscard]] AuthState getAuthState() const noexcept { return sessionState.authState; }
     [[nodiscard]] UIState getUIState() const noexcept { return sessionState.uiState; }
     [[nodiscard]] OperationState getOperationState() const noexcept { return sessionState.operationState; }
@@ -69,8 +68,6 @@ public:
     [[nodiscard]] const juce::String& getSelectedBranchName() const noexcept { return selectedBranchName; }
     [[nodiscard]] const juce::String& getSelectedVersionId() const noexcept { return selectedVersionId; }
     [[nodiscard]] const juce::String& getCurrentOpenedVersionId() const noexcept { return currentOpenedVersionId; }
-    [[nodiscard]] juce::String getCurrentOpenedVersionLabel() const;
-    [[nodiscard]] const juce::String& getAccessToken() const noexcept { return access_tkn; }
     [[nodiscard]] const juce::String& getAuthErrorMessage() const noexcept { return authErrorMessage; }
     [[nodiscard]] const juce::String& getProjectSelectionStatusMessage() const noexcept { return projectSelectionStatusMessage; }
     [[nodiscard]] const juce::String& getActiveProjectStatusMessage() const noexcept { return activeProjectStatusMessage; }
@@ -85,7 +82,6 @@ public:
     void setAuthState(AuthState newAuthState) noexcept;
     void setUIState(UIState newUIState) noexcept;
     void setOperationState(OperationState newOperationState) noexcept;
-    void setProjectSelectionStatusMessage(juce::String message);
     void setActiveProjectStatusMessage(juce::String message);
     void setPendingProjectFile(const juce::File& file);
     void selectProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile);
@@ -93,25 +89,23 @@ public:
     
     void requestSignIn(const juce::String& email, const juce::String& password);
     void requestRestoreCachedSession();
-    void requestOpenProject(juce::String projectId, juce::File localProjectFile, bool preferRemoteLatest = false);
+    // restoreLatestIfSafe: an explicit open from the project grid. When this instance has no
+    // local copy of the project, or a clean one behind the branch head, the latest version is
+    // restored into a new folder and opened in the DAW. Unsaved local changes are never replaced.
+    void requestOpenProject(juce::String projectId, juce::File localProjectFile, bool restoreLatestIfSafe = false);
     void requestCreateProject(juce::File localProjectFile);
     void requestSelectBranch(juce::String branchId);
     void requestRefreshVersionHistory();
+    // Uploads only the files the server doesn't have yet. See docs/content-addressed-storage.md.
     void requestPushVersion(juce::String commitMessage, juce::String dawName);
-    // Content-addressed variant: uploads only novel blobs instead of the full
-    // whole-project bundle. See docs/content-addressed-storage.md.
-    void requestPushVersionContentAddressed(juce::String commitMessage, juce::String dawName);
+    // Downloads the version's files into a new folder inside destinationFolder, verifying SHA-256.
     void requestRestoreVersion(const juce::String& versionId, const juce::File& destinationFolder);
-    // Content-addressed restore: fetches the version's manifest and downloads
-    // only the referenced blobs into destinationFolder, verifying SHA-256.
-    // See docs/content-addressed-storage.md.
-    void requestRestoreVersionContentAddressed(const juce::String& versionId, const juce::File& destinationFolder);
 
     void setSelectedVersionId(juce::String versionId);
     // Opening a project file hands it to the DAW / OS. Tests replace this so nothing is launched.
     void setOpenFileHandler(std::function<bool(const juce::File&)> handler) { openFileHandler = std::move(handler); }
-    VersionControlService& getVersionControlService() noexcept { return versionControlService; }
-    IProjectApi& getApiClient() noexcept { return *apiClient; }
+    // Where opening a project restores its latest version (default: the app data folder).
+    void setManagedWorkingCopyFolder(const juce::File& folder) { managedWorkingCopyFolder = folder; }
     void flushPendingBackgroundResultsForTesting();
 
 private:
@@ -139,10 +133,14 @@ private:
         juce::String selectedVersionId;
         juce::String workingVersionId;
         juce::File projectFile;
+        // Set when the latest version was just restored into projectFile: its size and
+        // modification time right after the download become the working-copy baseline.
+        bool didRestoreLatest { false };
+        juce::int64 restoredFileSizeBytes { 0 };
+        juce::int64 restoredFileModTimeMs { 0 };
         juce::String errorMessage;
         juce::String activeProjectStatusMessage;
         bool refreshProjects { false };
-        bool shouldAutoOpenLocalFile { true };
         bool fromCachedProjectRestore { false };
     };
 
@@ -187,38 +185,41 @@ private:
 
     void enqueueBackgroundTask(std::function<BackgroundJobPayload()> job);
 
-    RestoreVersionJobResult performRestoreVersionRequest(const juce::String& versionId, const juce::File& destinationFile) const;
-    RestoreVersionJobResult performRestoreVersionContentAddressedRequest(const juce::String& projectId,
-                                                                         const juce::String& versionId,
-                                                                         const juce::File& destinationFolder,
-                                                                         const juce::String& accessToken) const;
+    RestoreVersionJobResult performRestoreVersionRequest(const juce::String& projectId,
+                                                         const juce::String& versionId,
+                                                         const juce::File& destinationFolder,
+                                                         const juce::String& accessToken) const;
     AuthRequestResult performSignInRequest(const juce::String& email, const juce::String& password) const;
     AuthRequestResult performRestoreCachedSessionRequest(const juce::String& token) const;
+    // What the open-project job needs to know about the local copy, read on the message thread.
+    struct LocalCopyState
+    {
+        juce::String baseVersionId; // version the local file was saved or restored as
+        bool isUnchanged { false }; // still identical to that version
+    };
+
     ProjectActivationJobResult performOpenProjectRequest(const juce::String& projectId,
                                                          const juce::File& localProjectFile,
                                                          const std::vector<Project>& availableProjects,
                                                          const juce::String& accessToken,
-                                                         bool preferRemoteLatest) const;
+                                                         bool restoreLatestIfSafe,
+                                                         const LocalCopyState& localCopy,
+                                                         const juce::File& managedWorkingCopyBase) const;
     ProjectActivationJobResult performCreateProjectRequest(const juce::File& localProjectFile,
                                                            const juce::String& accessToken) const;
     BranchHistoryJobResult performFetchBranchHistoryRequest(const juce::String& branchId,
                                                             const juce::String& branchName,
                                                             const juce::String& preferredVersionId,
-                                                            const juce::String& accessToken) const;
+                                                            const juce::String& accessToken,
+                                                            const juce::File& localProjectFile) const;
     PushVersionJobResult performPushVersionRequest(const juce::File& projectFile,
                                                    const juce::File& projectRootDirectory,
                                                    const std::optional<Project>& project,
                                                    const juce::String& branchId,
+                                                   const juce::String& parentVersionId,
                                                    const juce::String& commitMessage,
-                                                   const juce::String& dawName);
-    PushVersionJobResult performPushVersionContentAddressedRequest(const juce::File& projectFile,
-                                                                    const juce::File& projectRootDirectory,
-                                                                    const std::optional<Project>& project,
-                                                                    const juce::String& branchId,
-                                                                    const juce::String& parentVersionId,
-                                                                    const juce::String& commitMessage,
-                                                                    const juce::String& dawName,
-                                                                    const juce::String& accessToken) const;
+                                                   const juce::String& dawName,
+                                                   const juce::String& accessToken) const;
     void applyBackgroundResult(BackgroundJobResult result);
     void applyAuthRequestResult(AuthRequestResult result);
     void applyProjectActivationResult(ProjectActivationJobResult result);
@@ -235,7 +236,6 @@ private:
     uint64_t beginSelectionRequest() noexcept;
     [[nodiscard]] bool isCurrentSelectionRequest(uint64_t requestId) const noexcept;
     [[nodiscard]] bool hasCleanWorkingCopy(const juce::File& workingFile) const;
-    [[nodiscard]] juce::String getCurrentOpenedVersionIdFromPath() const;
     void setCurrentOpenedVersionId(juce::String versionId);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessor)
@@ -265,6 +265,7 @@ private:
     bool didAttemptCachedSessionRestore { false };
     std::atomic<uint64_t> activeSelectionRequestId { 0 };
     std::function<bool(const juce::File&)> openFileHandler;
+    juce::File managedWorkingCopyFolder;
 
     // Declared last so it is destroyed first: its workers must stop before anything they use goes away.
     BackgroundJobCoordinator<BackgroundJobPayload> backgroundJobs { 2 };

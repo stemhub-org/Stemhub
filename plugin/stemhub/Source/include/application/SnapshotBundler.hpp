@@ -7,13 +7,6 @@ struct SnapshotBundleRequest
     juce::File sourceProjectFile;
     juce::File projectRootDirectory;
     juce::String sourceDaw;
-    juce::File previewTrackFile;
-};
-
-struct SnapshotBundleResult
-{
-    juce::File bundleFile;
-    juce::var manifest;
 };
 
 struct ContentAddressedFileEntry
@@ -52,22 +45,18 @@ struct ParsedManifest
 class SnapshotBundler
 {
     public:
-        [[nodiscard]] juce::Result bundleProject(const SnapshotBundleRequest& request,
-                                                    SnapshotBundleResult& outResult) const;
-
-        // Content-addressed variant: hash every included file (project + assets),
-        // build a VersionManifestV1-shaped juce::var, and return both the manifest
-        // and the entries so the caller can call check-missing + uploadBlob.
-        // Does NOT write a zip.
-        [[nodiscard]] juce::Result buildContentAddressedManifest(const SnapshotBundleRequest& request,
-                                                                    ContentAddressedManifest& outResult) const;
+        // Hash every included file (project + assets), build a VersionManifestV1-shaped
+        // juce::var, and return both the manifest and the entries so the caller can call
+        // check-missing + uploadBlob.
+        [[nodiscard]] juce::Result buildManifest(const SnapshotBundleRequest& request,
+                                                 ContentAddressedManifest& outResult) const;
 
         // Parse a v1 manifest_json blob (as returned by GET /versions/{vid})
         // into a flat list of entries the caller can iterate to download blobs.
         // Only accepts manifest_version == 1. Paths and hashes are validated here because a
         // manifest can be written by any collaborator of the project.
-        [[nodiscard]] static juce::Result parseContentAddressedManifest(const juce::var& manifestJson,
-                                                                         ParsedManifest& outResult);
+        [[nodiscard]] static juce::Result parseManifest(const juce::var& manifestJson,
+                                                        ParsedManifest& outResult);
 
         // True for a relative, '/'-separated path whose segments are all plain names, so that
         // restoreDirectory.getChildFile(path) always stays inside restoreDirectory on every OS.

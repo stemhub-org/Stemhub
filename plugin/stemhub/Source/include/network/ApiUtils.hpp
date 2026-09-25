@@ -23,5 +23,4 @@ struct ApiResult
 struct LoginResponse
 {
     juce::String accessToken;
-    juce::String tokenType;
 };

@@ -14,18 +14,19 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
   - Runs worker tasks (`juce::ThreadPool`), stores typed results, drops stale session generations.
 - `ApiClient` / `IProjectApi` (`plugin/stemhub/Source/src/network/ApiClient.cpp`)
   - Raw HTTP transport + JSON parsing.
-  - Auth, user, projects, branches, file upload/download.
+  - Auth, user, projects, branches, blob check/upload/download, version creation from a manifest.
 - `VersionControlService` (`plugin/stemhub/Source/src/network/VersionControlService.cpp`)
-  - Version-domain operations: create version, upload artifact, fetch history, restore/download.
+  - Version-domain operations: content-addressed push, history fetch, restore from a manifest.
 - `SnapshotBundler` (`plugin/stemhub/Source/src/application/SnapshotBundler.cpp`)
-  - Builds local snapshot artifact + manifest before push.
+  - Hashes the project file and its audio files and builds the version manifest; validates
+    manifests before a restore (see `docs/content-addressed-storage.md`).
 
 ## 2) Data Objects Moving Through The Flow
 
 - Auth/session: `access_tkn`, `SessionState`, `User`
 - Project selection: `projects`, `selectedProject`, `branches`, `selectedBranchId`
 - Versioning: `versionHistory`, `selectedVersionId`, `ProjectVersionContext`
-- Filesystem: `pendingProjectFile`, `selectedProjectFile`, `pendingProjectFolder`, `selectedProjectFolder`
+- Filesystem: `pendingProjectFile`, `selectedProjectFile`, working-copy baseline (file, version id, size and modification time recorded by the last save or restore)
 - Background payloads: `AuthRequestResult`, `ProjectActivationJobResult`, `BranchHistoryJobResult`, `PushVersionJobResult`, `RestoreVersionJobResult`
 
 ## 3) End-To-End Lifecycle
@@ -34,12 +35,14 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 2. User signs in from Login view.
 3. Processor fetches user + projects; UI moves to Project Selection.
 4. User opens an existing project or creates one from a local DAW file.
-5. Processor fetches branches and initial version history; UI moves to Dashboard.
+5. Processor fetches branches and initial version history; UI moves to Dashboard. When the
+   project is opened from the grid and this instance has no local copy (or an unchanged copy of
+   an older version), the latest version is restored into a new folder and opened in the DAW.
+   Unsaved local changes are never replaced.
 6. User pushes a version:
-   - local file is bundled,
-   - version metadata is created server-side,
-   - artifact is uploaded,
-   - history refresh is triggered automatically.
+   - files are hashed and only the ones the server lacks are uploaded,
+   - the version is created from the manifest,
+   - the history is fetched in the same job and the new version is selected.
 7. User pulls latest history manually (refresh) or by branch switch:
    - plugin calls branch version-history endpoint,
    - updates selected version and dashboard data.
@@ -117,20 +120,24 @@ sequenceDiagram
 
 ### Preconditions enforced by processor
 
+- No other save, restore or project load is running.
 - Selected project exists.
 - Selected branch exists.
-- Effective project file exists on disk.
+- Effective project file exists on disk and changed since the last save or restore.
 
 ### Data path
 
 1. UI triggers `requestPushVersion(commitMessage, dawName)`.
-2. Processor builds `PushVersionRequest` and snapshot bundle:
-   - `SnapshotBundler::bundleProject(...)` produces zip + manifest.
-3. Processor calls `VersionControlService::pushVersion(...)`.
-4. Service calls backend:
-   - `POST /branches/{branchId}/versions/` (metadata)
-   - `POST /versions/{versionId}/artifact` (binary upload)
-5. On success, processor sets last version id and auto-calls `requestRefreshVersionHistory()`.
+2. Processor picks the parent version (the working copy's version, else the branch head) and
+   enqueues the job with everything it needs.
+3. `SnapshotBundler::buildManifest(...)` hashes the project file and the audio files in its
+   folder; paths are stored relative to that folder.
+4. `VersionControlService::pushVersion(...)` calls the backend:
+   - `POST /projects/{projectId}/blobs/check-missing`
+   - `PUT /projects/{projectId}/blobs/{sha256}` for each missing file
+   - `POST /branches/{branchId}/versions/from-manifest`
+5. The job fetches `GET /branches/{branchId}/versions/`; the processor selects the new version
+   and makes it the parent of the next save.
 
 ### Sequence
 
@@ -146,13 +153,15 @@ sequenceDiagram
     U->>E: Save action
     E->>P: requestPushVersion
     P->>P: Validate selection and set committing state
-    P->>S: Build snapshot bundle from project file
-    S-->>P: Return zip bundle and manifest
+    P->>S: Hash files and build manifest
+    S-->>P: Return manifest and file entries
     P->>V: Push version request
-    V->>A: Create version metadata POST branch versions
-    V->>A: Upload artifact POST version artifact
-    V-->>P: Return success and new version id
-    P->>P: Apply push result and trigger history refresh
+    V->>A: POST blobs check-missing
+    V->>A: PUT each missing blob
+    V->>A: POST branch versions from-manifest
+    V-->>P: Return new version id
+    P->>A: GET branch versions
+    P->>P: Apply push result and select the new version
 ```
 
 ## 8) Pull / Refresh Version History Flow
@@ -161,7 +170,7 @@ This is triggered by:
 
 - user presses refresh in dashboard,
 - user selects another branch,
-- successful push (automatic follow-up refresh).
+- a successful push (fetched inside the push job).
 
 ### API call
 
