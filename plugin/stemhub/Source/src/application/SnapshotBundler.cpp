@@ -1,66 +1,16 @@
-#include <algorithm>
-#include <array>
 #include <map>
 
 #include "application/SnapshotBundler.hpp"
+#include "application/SnapshotFiles.hpp"
 
 namespace
 {
     // Backend limit on the files of one version besides the project file (VersionManifestV1.tracks).
     constexpr size_t kMaxManifestTracks = 500;
 
-    constexpr std::array<const char*, 9> kBundledAssetExtensions = {
-        "wav", "mp3", "flac", "ogg", "aiff", "aif", "m4a", "mid", "midi"
-    };
-
     juce::String toArchivePath(const juce::File& file, const juce::File& rootDirectory)
     {
         return file.getRelativePathFrom(rootDirectory).replaceCharacter('\\', '/');
-    }
-
-    bool isBackupPath(const juce::File& candidateFile, const juce::File& rootFolder)
-    {
-        const auto relativePath = candidateFile.getRelativePathFrom(rootFolder).replaceCharacter('\\', '/');
-        if (relativePath.isEmpty())
-            return false;
-
-        juce::StringArray parts;
-        parts.addTokens(relativePath, "/", "");
-        for (int i = 0; i < parts.size() - 1; ++i)
-        {
-            if (parts[i].equalsIgnoreCase("backup"))
-                return true;
-        }
-
-        return false;
-    }
-
-    bool shouldIncludeInSnapshot(const juce::File& candidateFile,
-                                 const juce::File& rootDirectory,
-                                 const juce::File& sourceProjectFile)
-    {
-        if (!candidateFile.existsAsFile())
-            return false;
-
-        if (candidateFile == sourceProjectFile)
-            return true;
-
-        for (const auto* ext : kBundledAssetExtensions)
-        {
-            if (candidateFile.hasFileExtension(ext))
-                return !isBackupPath(candidateFile, rootDirectory);
-        }
-
-        return false;
-    }
-
-    bool isSourceFileWithinRoot(const juce::File& sourceFile, const juce::File& rootDirectory)
-    {
-        if (!sourceFile.existsAsFile() || !rootDirectory.isDirectory())
-            return false;
-
-        const auto sourceParent = sourceFile.getParentDirectory();
-        return sourceParent == rootDirectory || sourceFile.isAChildOf(rootDirectory);
     }
 }
 
@@ -72,39 +22,19 @@ juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request
     if (!request.sourceProjectFile.existsAsFile())
         return juce::Result::fail("Source project file does not exist.");
 
-    if (!request.projectRootDirectory.isDirectory())
-        return juce::Result::fail("Project root directory does not exist.");
-
-    if (!isSourceFileWithinRoot(request.sourceProjectFile, request.projectRootDirectory))
-        return juce::Result::fail("Project file must be inside the selected project root directory.");
-
-    juce::Array<juce::File> discoveredFiles;
-    request.projectRootDirectory.findChildFiles(discoveredFiles, juce::File::findFiles, true);
-
-    if (discoveredFiles.isEmpty())
-        return juce::Result::fail("Project root directory does not contain files to bundle.");
-
-    std::sort(discoveredFiles.begin(), discoveredFiles.end(), [](const juce::File& lhs, const juce::File& rhs)
-    {
-        return lhs.getFullPathName() < rhs.getFullPathName();
-    });
+    const auto rootDirectory = request.sourceProjectFile.getParentDirectory();
+    const auto includedFiles = stemhub::snapshotfiles::collect(request.sourceProjectFile);
 
     // Check names and the file count before hashing anything: hashing a large session takes time.
-    juce::Array<juce::File> includedFiles;
-    for (const auto& file : discoveredFiles)
+    for (const auto& file : includedFiles)
     {
-        if (!shouldIncludeInSnapshot(file, request.projectRootDirectory, request.sourceProjectFile))
-            continue;
-
         // Keep the folder structure: basenames alone made files from different folders collide.
-        const auto relativePath = toArchivePath(file, request.projectRootDirectory);
+        const auto relativePath = toArchivePath(file, rootDirectory);
         if (!isSafeManifestPath(relativePath))
             return juce::Result::fail("Can't save \"" + relativePath + "\": rename this file and try again.");
-
-        includedFiles.add(file);
     }
 
-    const auto trackCount = static_cast<size_t>(juce::jmax(0, includedFiles.size() - 1));
+    const auto trackCount = includedFiles.size() - 1;
     if (trackCount > kMaxManifestTracks)
         return juce::Result::fail("This project folder has " + juce::String(static_cast<int>(trackCount))
                                   + " audio files; a version can hold " + juce::String(static_cast<int>(kMaxManifestTracks))
@@ -125,7 +55,7 @@ juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request
         entry.file = file;
         entry.sha256 = sha;
         entry.sizeBytes = file.getSize();
-        entry.filename = toArchivePath(file, request.projectRootDirectory);
+        entry.filename = toArchivePath(file, rootDirectory);
         entry.isProjectFile = (file == request.sourceProjectFile);
 
         if (entry.isProjectFile)

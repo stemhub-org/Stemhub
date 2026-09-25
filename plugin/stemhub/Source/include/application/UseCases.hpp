@@ -141,8 +141,8 @@ struct PushInput
     juce::String projectId;
     juce::String branchId;
     juce::String parentVersionId;
+    // Empty gets kDefaultSaveNote.
     juce::String commitMessage;
-    juce::String dawName;
     juce::String token;
 };
 
