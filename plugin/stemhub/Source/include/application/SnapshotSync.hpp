@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <JuceHeader.h>
 
 #include "application/SnapshotBundler.hpp"
@@ -11,6 +13,10 @@
 // any thread can run it.
 namespace stemhub::snapshots
 {
+// A line for the user about how far a job got ("Uploading 3 of 12 files..."), sent from the
+// job's thread. May be empty.
+using ReportProgress = std::function<void(const juce::String&)>;
+
 struct PushRequest
 {
     juce::String projectId;
@@ -21,7 +27,11 @@ struct PushRequest
 };
 
 // Uploads the blobs the server doesn't have (identical files once), then creates the version.
-ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api, const juce::String& token, const PushRequest& request);
+// A cancelled job stops between two uploads, or during one.
+ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api,
+                                       const juce::String& token,
+                                       const PushRequest& request,
+                                       const ReportProgress& report = {});
 
 struct RestoreRequest
 {
@@ -32,6 +42,10 @@ struct RestoreRequest
 };
 
 // Downloads the version's files into destinationFolder, checking each one's SHA-256, and
-// returns the restored project file.
-ApiResult<juce::File> restoreSnapshot(const IProjectApi& api, const juce::String& token, const RestoreRequest& request);
+// returns the restored project file. A cancelled job stops between two downloads, or during
+// one, and the folder goes.
+ApiResult<juce::File> restoreSnapshot(const IProjectApi& api,
+                                      const juce::String& token,
+                                      const RestoreRequest& request,
+                                      const ReportProgress& report = {});
 }

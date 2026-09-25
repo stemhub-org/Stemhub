@@ -12,6 +12,9 @@ constexpr int kRequestTimeoutMs = 10000;
 constexpr int kDownloadTimeoutMs = 30000;
 constexpr int kUploadTimeoutMs = 120000;
 
+// Downloads are read in blocks this size, so a cancel stops them between two blocks.
+constexpr int kDownloadBlockBytes = 256 * 1024;
+
 juce::String authorizationHeader(const juce::String& accessToken)
 {
     return accessToken.isNotEmpty() ? "Authorization: Bearer " + accessToken + "\r\n" : juce::String();
@@ -37,7 +40,9 @@ HttpResponse send(const juce::URL& url,
                                               .withResponseHeaders(&response.headers)
                                               .withStatusCode(&response.statusCode)
                                               .withNumRedirectsToFollow(maxRedirects)
-                                              .withConnectionTimeoutMs(timeoutMs));
+                                              .withConnectionTimeoutMs(timeoutMs)
+                                              // Called as the request body goes out: a cancel stops an upload midway.
+                                              .withProgressCallback([](int, int) { return !isJobCancelled(); }));
     return response;
 }
 
@@ -124,12 +129,22 @@ ApiResult<juce::var> ApiClient::requestJson(const juce::String& method,
                                             const juce::String& accessToken,
                                             const juce::String& failureMessage) const
 {
+    if (isJobCancelled())
+        return ApiResult<juce::var>::failure(ApiError::cancelled());
+
     auto url = juce::URL(baseUrl + path);
     if (!body.isVoid())
         url = url.withPOSTData(juce::JSON::toString(body));
 
     const auto headers = "Content-Type: application/json\r\nAccept: application/json\r\n" + authorizationHeader(accessToken);
-    return readJson(send(url, method, headers, kRequestTimeoutMs), failureMessage);
+    auto response = send(url, method, headers, kRequestTimeoutMs);
+
+    // Stopped while sending. A request that went through reports its real result, even if a
+    // cancel came meanwhile: the server has acted on it.
+    if (response.body == nullptr && isJobCancelled())
+        return ApiResult<juce::var>::failure(ApiError::cancelled());
+
+    return readJson(std::move(response), failureMessage);
 }
 
 ApiResult<LoginResponse> ApiClient::login(const juce::String& email, const juce::String& password) const
@@ -210,11 +225,17 @@ ApiResult<Unit> ApiClient::uploadBlob(const juce::String& projectId,
     if (!file.existsAsFile())
         return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, file.getFileName() + " no longer exists." });
 
+    if (isJobCancelled())
+        return ApiResult<Unit>::failure(ApiError::cancelled());
+
     // Multipart/form-data with a "file" field, as routers/blobs.py::upload_blob expects.
     const auto url = juce::URL(baseUrl + "/projects/" + projectId + "/blobs/" + sha256)
                          .withFileToUpload("file", file, "application/octet-stream");
-    const auto response = readJson(send(url, "PUT", "Accept: application/json\r\n" + authorizationHeader(accessToken), kUploadTimeoutMs),
-                                   "Failed to upload " + file.getFileName() + ".");
+    auto sent = send(url, "PUT", "Accept: application/json\r\n" + authorizationHeader(accessToken), kUploadTimeoutMs);
+    if (sent.body == nullptr && isJobCancelled())
+        return ApiResult<Unit>::failure(ApiError::cancelled());
+
+    const auto response = readJson(std::move(sent), "Failed to upload " + file.getFileName() + ".");
     if (!response.ok())
         return ApiResult<Unit>::failure(*response.error);
 
@@ -245,6 +266,9 @@ ApiResult<Unit> ApiClient::downloadBlob(const juce::String& projectId,
                                         const juce::File& destinationFile,
                                         const juce::String& accessToken) const
 {
+    if (isJobCancelled())
+        return ApiResult<Unit>::failure(ApiError::cancelled());
+
     // The API answers with the bytes, or with a 307 to a presigned storage URL. That redirect
     // is followed here rather than by JUCE, which would send our bearer token to the storage
     // host as well (the Windows implementation re-sends every extra header).
@@ -283,9 +307,24 @@ ApiResult<Unit> ApiClient::downloadBlob(const juce::String& projectId,
 
     output.setPosition(0);
     output.truncate();
-    if (output.writeFromInputStream(*response.body, -1) < 0 || !output.getStatus().wasOk())
-        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+
+    juce::HeapBlock<char> block(kDownloadBlockBytes);
+    for (;;)
+    {
+        if (isJobCancelled())
+            return ApiResult<Unit>::failure(ApiError::cancelled());
+
+        const auto bytesRead = response.body->read(block.get(), kDownloadBlockBytes);
+        if (bytesRead <= 0)
+            break;
+
+        if (!output.write(block.get(), static_cast<size_t>(bytesRead)))
+            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+    }
 
     output.flush();
+    if (!output.getStatus().wasOk())
+        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+
     return ApiResult<Unit>::success({});
 }

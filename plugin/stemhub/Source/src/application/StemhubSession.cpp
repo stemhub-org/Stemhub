@@ -32,12 +32,19 @@ void StemhubSession::shutdown()
 //==============================================================================
 // Jobs and results
 
-void StemhubSession::enqueue(std::function<JobPayload(const IProjectApi&)> run)
+void StemhubSession::enqueue(const uint64_t epoch, std::function<JobPayload(const IProjectApi&, const ReportProgress&)> run)
 {
     // The job holds its own reference to the API, so it never reaches into this session.
-    jobs.enqueue([sharedApi = api, run = std::move(run)]
+    jobs.enqueue([sharedApi = api, epoch, run = std::move(run)](const Jobs::Post& post)
     {
-        return run(*sharedApi);
+        const ReportProgress report = [&post, epoch](const juce::String& text)
+        {
+            post(usecases::ProgressReport { epoch, text });
+        };
+
+        auto payload = run(*sharedApi, report);
+        std::visit([epoch](auto& result) { result.requestEpoch = epoch; }, payload);
+        return payload;
     });
 }
 
@@ -53,16 +60,20 @@ int StemhubSession::flushPendingResultsForTesting()
 
 int StemhubSession::applyFinishedJobs()
 {
-    auto results = jobs.takeResults();
-
     bool didApply = false;
-    for (auto& payload : results)
+    int finishedJobs = 0;
+    for (auto& payload : jobs.takeResults())
+    {
+        if (!std::holds_alternative<ProgressReport>(payload))
+            ++finishedJobs;
+
         didApply = applyResult(std::move(payload)) || didApply;
+    }
 
     if (didApply)
         changed();
 
-    return static_cast<int>(results.size());
+    return finishedJobs;
 }
 
 bool StemhubSession::applyResult(JobPayload payload)
@@ -93,12 +104,10 @@ void StemhubSession::requestSignIn(const juce::String& email, const juce::String
     state.authStatus = Status::progress("Signing in to your StemHub account...");
     changed();
 
-    enqueue([input = usecases::SignInInput { email, password }, epoch = beginRequest()](const IProjectApi& backend)
-                -> JobPayload
+    enqueue(beginRequest(), [input = usecases::SignInInput { email, password }](const IProjectApi& backend, const auto&)
+                                -> JobPayload
     {
-        auto result = usecases::signIn(backend, input);
-        result.requestEpoch = epoch;
-        return result;
+        return usecases::signIn(backend, input);
     });
 }
 
@@ -122,12 +131,10 @@ void StemhubSession::requestRestoreSavedSession()
         state.authState = AuthState::signingIn;
         state.authStatus = Status::progress("Restoring your session...");
 
-        enqueue([input = usecases::RestoreSessionInput { savedToken }, epoch = beginRequest()](const IProjectApi& backend)
-                    -> JobPayload
+        enqueue(beginRequest(), [input = usecases::RestoreSessionInput { savedToken }](const IProjectApi& backend, const auto&)
+                                    -> JobPayload
         {
-            auto result = usecases::restoreSession(backend, input);
-            result.requestEpoch = epoch;
-            return result;
+            return usecases::restoreSession(backend, input);
         });
     }
 
@@ -170,7 +177,9 @@ void StemhubSession::apply(AuthRequestResult result)
 void StemhubSession::signOut()
 {
     JUCE_ASSERT_MESSAGE_THREAD
-    // Whatever is still running belongs to the old session: its result will be dropped.
+    // Whatever is still running belongs to the old session: it is asked to stop, and its result
+    // will be dropped.
+    jobs.stopRunningJobs();
     beginRequest();
     storage.credentials->clear();
     resetState();
@@ -251,11 +260,9 @@ void StemhubSession::openLinkedProject()
     input.localCopy = linkedCopy;
     input.managedWorkingCopyFolder = storage.managedWorkingCopyFolder;
 
-    enqueue([input, epoch = beginRequest()](const IProjectApi& backend) -> JobPayload
+    enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
     {
-        auto result = usecases::openProject(backend, input);
-        result.requestEpoch = epoch;
-        return result;
+        return usecases::openProject(backend, input, report);
     });
 }
 
@@ -286,11 +293,9 @@ void StemhubSession::requestOpenProject(juce::String projectId, juce::File local
     input.localCopy = state.workingCopy;
     input.managedWorkingCopyFolder = storage.managedWorkingCopyFolder;
 
-    enqueue([input, epoch = beginRequest()](const IProjectApi& backend) -> JobPayload
+    enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
     {
-        auto result = usecases::openProject(backend, input);
-        result.requestEpoch = epoch;
-        return result;
+        return usecases::openProject(backend, input, report);
     });
 }
 
@@ -304,12 +309,10 @@ void StemhubSession::requestCreateProject(juce::File localProjectFile)
     state.projectsStatus = Status::progress("Creating project...");
     changed();
 
-    enqueue([input = usecases::CreateProjectInput { std::move(localProjectFile), state.accessToken },
-             epoch = beginRequest()](const IProjectApi& backend) -> JobPayload
+    enqueue(beginRequest(), [input = usecases::CreateProjectInput { std::move(localProjectFile), state.accessToken }](
+                                const IProjectApi& backend, const auto&) -> JobPayload
     {
-        auto result = usecases::createProject(backend, input);
-        result.requestEpoch = epoch;
-        return result;
+        return usecases::createProject(backend, input);
     });
 }
 
@@ -325,8 +328,7 @@ void StemhubSession::apply(ProjectActivationJobResult result)
 
     if (hasError(result))
     {
-        stemhub::log::warning("Opening the project failed: " + result.errorMessage);
-        state.projectsStatus = Status::error(result.errorMessage);
+        showFailure(state.projectsStatus, "Opening the project", result.errorMessage);
         return;
     }
 
@@ -385,11 +387,9 @@ void StemhubSession::requestSelectBranch(juce::String branchId)
     input.token = state.accessToken;
     input.localProjectFile = getEffectiveProjectFile();
 
-    enqueue([input, epoch = beginRequest()](const IProjectApi& backend) -> JobPayload
+    enqueue(beginRequest(), [input](const IProjectApi& backend, const auto&) -> JobPayload
     {
-        auto result = usecases::fetchHistory(backend, input);
-        result.requestEpoch = epoch;
-        return result;
+        return usecases::fetchHistory(backend, input);
     });
 }
 
@@ -422,11 +422,9 @@ void StemhubSession::requestRefreshVersionHistory()
     input.token = state.accessToken;
     input.localProjectFile = getEffectiveProjectFile();
 
-    enqueue([input, epoch = beginRequest()](const IProjectApi& backend) -> JobPayload
+    enqueue(beginRequest(), [input](const IProjectApi& backend, const auto&) -> JobPayload
     {
-        auto result = usecases::fetchHistory(backend, input);
-        result.requestEpoch = epoch;
-        return result;
+        return usecases::fetchHistory(backend, input);
     });
 }
 
@@ -442,8 +440,7 @@ void StemhubSession::apply(BranchHistoryJobResult result)
 
     if (hasError(result))
     {
-        stemhub::log::warning("Loading the history failed: " + result.errorMessage);
-        state.sessionStatus = Status::error(result.errorMessage);
+        showFailure(state.sessionStatus, "Loading the history", result.errorMessage);
         return;
     }
 
@@ -489,11 +486,9 @@ void StemhubSession::requestPushVersion(juce::String commitMessage)
     input.commitMessage = std::move(commitMessage);
     input.token = state.accessToken;
 
-    enqueue([input, epoch = beginRequest()](const IProjectApi& backend) -> JobPayload
+    enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
     {
-        auto result = usecases::pushVersion(backend, input);
-        result.requestEpoch = epoch;
-        return result;
+        return usecases::pushVersion(backend, input, report);
     });
 }
 
@@ -509,8 +504,7 @@ void StemhubSession::apply(PushVersionJobResult result)
 
     if (hasError(result))
     {
-        stemhub::log::warning("Saving a version failed: " + result.errorMessage);
-        state.sessionStatus = Status::error(result.errorMessage);
+        showFailure(state.sessionStatus, "Saving a version", result.errorMessage);
         return;
     }
 
@@ -567,11 +561,9 @@ void StemhubSession::requestRestoreVersion(const juce::String& versionId, const 
         versionId);
     input.token = state.accessToken;
 
-    enqueue([input, epoch = beginRequest()](const IProjectApi& backend) -> JobPayload
+    enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
     {
-        auto result = usecases::restoreVersion(backend, input);
-        result.requestEpoch = epoch;
-        return result;
+        return usecases::restoreVersion(backend, input, report);
     });
 }
 
@@ -587,14 +579,51 @@ void StemhubSession::apply(RestoreVersionJobResult result)
 
     if (hasError(result))
     {
-        stemhub::log::warning("Restoring a version failed: " + result.errorMessage);
-        state.sessionStatus = Status::error(result.errorMessage);
+        showFailure(state.sessionStatus, "Restoring a version", result.errorMessage);
         return;
     }
 
     state.selectedVersionId = result.restoredVersionId;
     state.sessionStatus = std::move(result.status);
     handOverRestoredCopy(result.restoredCopy);
+}
+
+void StemhubSession::cancelRequest()
+{
+    JUCE_ASSERT_MESSAGE_THREAD
+    if (!isBusy() || cancelledMessage.isNotEmpty())
+        return;
+
+    cancelledMessage = state.operationState == OperationState::committing  ? "Save cancelled."
+                     : state.operationState == OperationState::restoring   ? "Restore cancelled."
+                                                                            : "Cancelled.";
+    jobs.stopRunningJobs();
+    statusOfCurrentScreen() = Status::progress("Cancelling...");
+    changed();
+}
+
+void StemhubSession::apply(ProgressReport report)
+{
+    // A report never replaces "Cancelling...", nor the outcome of a job that has ended.
+    if (isBusy() && cancelledMessage.isEmpty())
+        statusOfCurrentScreen() = Status::progress(std::move(report.text));
+}
+
+void StemhubSession::showFailure(Status& target, const juce::String& action, const juce::String& errorMessage)
+{
+    if (cancelledMessage.isNotEmpty())
+    {
+        target = Status::warning(cancelledMessage);
+        return;
+    }
+
+    stemhub::log::warning(action + " failed: " + errorMessage);
+    target = Status::error(errorMessage);
+}
+
+Status& StemhubSession::statusOfCurrentScreen() noexcept
+{
+    return state.operationState == OperationState::loadingProjects ? state.projectsStatus : state.sessionStatus;
 }
 
 void StemhubSession::handOverRestoredCopy(const WorkingCopyBaseline& restoredCopy)

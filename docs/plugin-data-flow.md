@@ -87,6 +87,20 @@ All major actions follow the same async pattern:
 7. The session updates `SessionState` and calls `sendChangeMessage()`.
 8. The editor's `refreshSessionUi()` re-renders the active view.
 
+While a job runs it can post progress reports ("Uploading 12 of 40 new files...") through the
+same queue, tagged with its epoch; they replace the progress status until the result arrives.
+
+**Stopping jobs.** Long work checks `isJobCancelled()` between steps: between two files it hashes,
+uploads or downloads, during an upload (JUCE's progress callback) and between blocks of a download.
+It is true once the thread pool asks the job to stop, which happens when:
+
+- the user presses Cancel during a save or restore (`cancelRequest()`): the job ends with
+  "Save cancelled." or "Restore cancelled.", unless it had already finished, and a cancelled
+  restore removes its folder;
+- the user signs out: the old session's jobs stop, and their results are dropped anyway;
+- the plugin closes: `shutdown()` asks every job to stop and waits for them, which now takes
+  about as long as the slowest request in flight rather than the whole transfer.
+
 ## 5) Connect / Sign-In Flow
 
 ### API calls
@@ -165,6 +179,10 @@ sequenceDiagram
    - `POST /branches/{branchId}/versions/from-manifest`
 5. The job fetches `GET /branches/{branchId}/versions/`; the session selects the new version
    and makes it the parent of the next save.
+
+The dashboard shows "Preparing 3 of 40 files...", then "Uploading 2 of 5 new files...", with a
+Cancel link. A cancel before step 4 creates nothing; once the version is created, the save
+stands.
 
 ### Sequence
 

@@ -6,14 +6,31 @@ namespace
 {
 ApiError withContext(ApiError error, const juce::String& context)
 {
-    error.message = context + (error.message.isNotEmpty() ? ": " + error.message : juce::String("."));
+    // "Cancelled." says it all.
+    if (error.kind != ApiError::Kind::cancelled)
+        error.message = context + (error.message.isNotEmpty() ? ": " + error.message : juce::String("."));
+
     return error;
+}
+
+void reportIfWanted(const stemhub::snapshots::ReportProgress& report, const juce::String& text)
+{
+    if (report != nullptr)
+        report(text);
+}
+
+juce::String countOf(size_t index, size_t total)
+{
+    return juce::String(static_cast<int>(index) + 1) + " of " + juce::String(static_cast<int>(total));
 }
 }
 
 namespace stemhub::snapshots
 {
-ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api, const juce::String& token, const PushRequest& request)
+ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api,
+                                       const juce::String& token,
+                                       const PushRequest& request,
+                                       const ReportProgress& report)
 {
     using Result = ApiResult<VersionSummary>;
 
@@ -33,16 +50,26 @@ ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api, const juce::Strin
     if (!missing.ok())
         return Result::failure(withContext(*missing.error, "Failed to check which files StemHub already has"));
 
-    for (const auto& hash : *missing.value)
+    const auto& missingHashes = *missing.value;
+    for (size_t index = 0; index < missingHashes.size(); ++index)
     {
-        const auto file = fileByHash.find(hash);
+        if (isJobCancelled())
+            return Result::failure(ApiError::cancelled());
+
+        const auto file = fileByHash.find(missingHashes[index]);
         if (file == fileByHash.end())
             continue;
 
-        const auto upload = api.uploadBlob(request.projectId, hash, file->second, token);
+        reportIfWanted(report, "Uploading " + countOf(index, missingHashes.size()) + " new files...");
+        const auto upload = api.uploadBlob(request.projectId, missingHashes[index], file->second, token);
         if (!upload.ok())
             return Result::failure(withContext(*upload.error, "Failed to upload " + file->second.getFileName()));
     }
+
+    if (isJobCancelled())
+        return Result::failure(ApiError::cancelled());
+
+    reportIfWanted(report, "Creating the version...");
 
     CreateVersionRequest createRequest;
     createRequest.commitMessage = request.commitMessage;
@@ -56,7 +83,10 @@ ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api, const juce::Strin
     return created;
 }
 
-ApiResult<juce::File> restoreSnapshot(const IProjectApi& api, const juce::String& token, const RestoreRequest& request)
+ApiResult<juce::File> restoreSnapshot(const IProjectApi& api,
+                                      const juce::String& token,
+                                      const RestoreRequest& request,
+                                      const ReportProgress& report)
 {
     using Result = ApiResult<juce::File>;
 
@@ -88,8 +118,14 @@ ApiResult<juce::File> restoreSnapshot(const IProjectApi& api, const juce::String
     };
 
     juce::File projectFile;
-    for (const auto& entry : parsed.entries)
+    for (size_t index = 0; index < parsed.entries.size(); ++index)
     {
+        if (isJobCancelled())
+            return fail(ApiError::cancelled());
+
+        const auto& entry = parsed.entries[index];
+        reportIfWanted(report, "Downloading " + countOf(index, parsed.entries.size()) + " files...");
+
         // Paths were validated when the manifest was parsed; this re-check is what guarantees
         // nothing is ever written outside the restore folder.
         const auto destination = folder.getChildFile(entry.filename);

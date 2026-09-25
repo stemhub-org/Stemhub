@@ -2,6 +2,7 @@
 
 #include "application/SnapshotBundler.hpp"
 #include "application/SnapshotFiles.hpp"
+#include "network/ApiTypes.hpp"
 
 namespace
 {
@@ -15,7 +16,8 @@ namespace
 }
 
 juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request,
-                                              ContentAddressedManifest& outResult) const
+                                              ContentAddressedManifest& outResult,
+                                              const std::function<void(int, int)>& onFileHashed) const
 {
     outResult = {};
 
@@ -24,6 +26,8 @@ juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request
 
     const auto rootDirectory = request.sourceProjectFile.getParentDirectory();
     const auto includedFiles = stemhub::snapshotfiles::collect(request.sourceProjectFile);
+    if (includedFiles.empty())
+        return juce::Result::fail("Source project file does not exist.");
 
     // Check names and the file count before hashing anything: hashing a large session takes time.
     for (const auto& file : includedFiles)
@@ -45,11 +49,19 @@ juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request
     ContentAddressedFileEntry projectEntry;
     bool haveProjectEntry = false;
 
+    const auto fileCount = static_cast<int>(includedFiles.size());
+    int hashedCount = 0;
     for (const auto& file : includedFiles)
     {
+        if (isJobCancelled())
+            return juce::Result::fail(ApiError::cancelled().message);
+
         const auto sha = sha256OfFile(file);
         if (sha.isEmpty())
             return juce::Result::fail("Failed to hash file: " + file.getFullPathName());
+
+        if (onFileHashed != nullptr)
+            onFileHashed(++hashedCount, fileCount);
 
         ContentAddressedFileEntry entry;
         entry.file = file;

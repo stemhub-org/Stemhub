@@ -10,6 +10,7 @@
 #include "domain/Status.hpp"
 #include "domain/User.hpp"
 #include "domain/Version.hpp"
+#include "application/SnapshotSync.hpp"
 #include "domain/WorkingCopyBaseline.hpp"
 #include "network/ApiClient.hpp"
 
@@ -22,6 +23,15 @@
 // applies results of its latest request.
 namespace stemhub::usecases
 {
+using ReportProgress = stemhub::snapshots::ReportProgress;
+
+// How far a running job got, sent while it runs.
+struct ProgressReport
+{
+    uint64_t requestEpoch {};
+    juce::String text;
+};
+
 struct AuthRequestResult
 {
     uint64_t requestEpoch {};
@@ -88,7 +98,8 @@ struct OpenProjectInput
     juce::File managedWorkingCopyFolder;
 };
 
-ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProjectInput& input);
+// Reports the download when it restores the latest version.
+ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProjectInput& input, const ReportProgress& report = {});
 
 struct CreateProjectInput
 {
@@ -146,7 +157,7 @@ struct PushInput
     juce::String token;
 };
 
-PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input);
+PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input, const ReportProgress& report = {});
 
 struct RestoreVersionJobResult
 {
@@ -168,5 +179,5 @@ struct RestoreInput
     juce::String token;
 };
 
-RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInput& input);
+RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInput& input, const ReportProgress& report = {});
 }

@@ -36,9 +36,16 @@ juce::String sha256Of(const juce::MemoryBlock& data)
     return juce::SHA256(data.getData(), data.getSize()).toHexString();
 }
 
+// Blocks a fake API call until the test releases it. A gate that honours cancels also lets go
+// when the job running the call is asked to stop, as a real transfer does.
 class BlockingGate
 {
 public:
+    explicit BlockingGate(bool honoursCancelToUse = false)
+        : honoursCancel(honoursCancelToUse)
+    {
+    }
+
     void waitUntilEntered()
     {
         expectEntered.wait(2000);
@@ -57,11 +64,15 @@ public:
     void block()
     {
         expectEntered.signal();
-        allowContinue.wait(2000);
+        for (int waited = 0; waited < 2000 && !allowContinue.wait(10); waited += 10)
+            if (honoursCancel && isJobCancelled())
+                break;
+
         finished.signal();
     }
 
 private:
+    const bool honoursCancel;
     juce::WaitableEvent expectEntered;
     juce::WaitableEvent allowContinue;
     juce::WaitableEvent finished;
@@ -241,7 +252,10 @@ public:
                                  const juce::File& destinationFile,
                                  const juce::String& accessToken) const override
     {
-        juce::ignoreUnused(projectId, accessToken);
+        juce::ignoreUnused(accessToken);
+
+        if (auto gate = findGate(downloadGates, projectId))
+            gate->block();
 
         juce::MemoryBlock data;
         {
@@ -327,6 +341,12 @@ public:
         checkMissingGates[projectId] = std::move(gate);
     }
 
+    void setDownloadGate(const juce::String& projectId, std::shared_ptr<BlockingGate> gate)
+    {
+        const std::lock_guard<std::mutex> lock(mutex);
+        downloadGates[projectId] = std::move(gate);
+    }
+
     // Configuration: written by the test thread while no job is running.
     bool cachedSessionIsValid { true };
     std::vector<Project> projects;
@@ -357,6 +377,7 @@ private:
     mutable std::map<juce::String, juce::String> manifestsByVersion;
     mutable std::vector<CreatedVersion> createdVersions;
     std::map<juce::String, std::shared_ptr<BlockingGate>> checkMissingGates;
+    std::map<juce::String, std::shared_ptr<BlockingGate>> downloadGates;
 };
 
 // Serves one canned response per request on 127.0.0.1 and records what it received.
@@ -870,10 +891,10 @@ public:
             signIn(context.session);
             openProject(context.session, projectB.id, {});
 
-            // The save still reaches the server, but its result belongs to the old session.
+            // Signing out asked the save to stop; whatever it ends with belongs to the old session.
             gate->release();
             expect(waitForResults(context.session, 1), "the save should finish");
-            expect(context.api->getCreatedVersions().size() == 2, "the version was created");
+            expect(context.api->getCreatedVersions().size() == 1, "the old save created nothing");
             expect(context.state().selectedProject.has_value() && context.state().selectedProject->id == projectB.id,
                    "project B stays open: " + describe(context.session));
             expect(context.state().versionHistory.size() == 1 && context.state().versionHistory.front().id == versionB,
@@ -903,10 +924,108 @@ public:
             gate->release();
 
             expect(waitForResults(context.session, 1), "the save job should finish");
-            expect(context.api->getCreatedVersions().size() == 1, "the version was created on the server");
+            expect(context.api->getCreatedVersions().empty(), "signing out stopped the save before it created a version");
             expect(context.state().authState == AuthState::signedOut, describe(context.session));
             expect(!context.state().selectedProject.has_value(), "no project after signing out");
             expect(context.state().versionHistory.empty(), "the save's history is dropped");
+        }
+
+        beginTest("A save shows its progress and can be cancelled before its version exists");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+            expect(context.environment.root.getChildFile("kick.wav").replaceWithText("kick"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+
+            auto gate = std::make_shared<BlockingGate>();
+            context.api->setCheckMissingGate(project.id, gate);
+            context.session.requestPushVersion("first");
+            gate->waitUntilEntered();
+            expect(waitUntil(context.session, [&context] { return context.state().sessionStatus.text == "Preparing 2 of 2 files..."; }),
+                   "the save says how far it got: " + describe(context.session));
+
+            context.session.cancelRequest();
+            expect(context.state().sessionStatus.text == "Cancelling..." && context.session.isBusy(),
+                   "it stops at its next step: " + describe(context.session));
+
+            gate->release();
+            expect(waitUntil(context.session, [&context] { return context.isIdle(); }), describe(context.session));
+            expect(context.state().sessionStatus.severity == Status::Severity::warning
+                       && context.state().sessionStatus.text == "Save cancelled.",
+                   describe(context.session));
+            expect(context.api->getCreatedVersions().empty(), "no version is created");
+            expect(context.state().versionHistory.empty() && !context.state().workingCopy.isSet(), "nothing changed");
+
+            context.session.requestPushVersion("again");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
+                   "the next save works: " + describe(context.session));
+        }
+
+        beginTest("A cancelled restore leaves nothing behind");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+            const auto versionId = context.api->addVersion(branch.id, "first", { { "song.flp", "flp" }, { "Drums/kick.wav", "kick" } });
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("mine"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+
+            auto gate = std::make_shared<BlockingGate>();
+            context.api->setDownloadGate(project.id, gate);
+            const auto restoresFolder = context.environment.root.getChildFile("restores");
+            expect(restoresFolder.createDirectory().wasOk());
+            context.session.requestRestoreVersion(versionId, restoresFolder);
+            gate->waitUntilEntered();
+            expect(waitUntil(context.session, [&context] { return context.state().sessionStatus.text == "Downloading 1 of 2 files..."; }),
+                   describe(context.session));
+
+            context.session.cancelRequest();
+            gate->release();
+            expect(waitUntil(context.session, [&context] { return context.isIdle(); }), describe(context.session));
+            expect(context.state().sessionStatus.text == "Restore cancelled.", describe(context.session));
+
+            juce::Array<juce::File> leftovers;
+            restoresFolder.findChildFiles(leftovers, juce::File::findFilesAndDirectories, true);
+            expect(leftovers.isEmpty(), "the folder the restore created is removed");
+            expect(context.openedFiles.isEmpty() && !context.handoffFile().exists(), "nothing is handed to the DAW");
+        }
+
+        beginTest("Closing the plugin stops a running transfer instead of waiting for it");
+        {
+            auto gate = std::make_shared<BlockingGate>(true);
+            juce::uint32 closingTookMs = 0;
+            {
+                TestContext context;
+                const auto project = makeProject("project-1", "Song");
+                const auto branch = makeBranch("branch-1", project.id, "main");
+                context.api->projects = { project };
+                context.api->projectBranches[project.id] = { branch };
+                const auto versionId = context.api->addVersion(branch.id, "first", { { "song.flp", "flp" } });
+                signIn(context.session);
+                openProject(context.session, project.id, {});
+
+                context.api->setDownloadGate(project.id, gate);
+                context.session.requestRestoreVersion(versionId, context.environment.root);
+                gate->waitUntilEntered();
+
+                const auto closingStarted = juce::Time::getMillisecondCounter();
+                context.session.shutdown();
+                closingTookMs = juce::Time::getMillisecondCounter() - closingStarted;
+            }
+
+            // The gate would hold the download for two seconds if nothing asked it to stop.
+            expect(closingTookMs < 1000, "closing took " + juce::String(closingTookMs) + " ms");
         }
 
         beginTest("Destroying the session waits for running jobs");

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <JuceHeader.h>
 
 // The files come from stemhub::snapshotfiles::collect; paths are relative to the project file's folder.
@@ -47,9 +49,11 @@ class SnapshotBundler
     public:
         // Hash every included file (project + assets), build a VersionManifestV1-shaped
         // juce::var, and return both the manifest and the entries so the caller can call
-        // check-missing + uploadBlob.
+        // check-missing + uploadBlob. onFileHashed(done, total) follows the hashing; a
+        // cancelled job stops between two files.
         [[nodiscard]] juce::Result buildManifest(const SnapshotBundleRequest& request,
-                                                 ContentAddressedManifest& outResult) const;
+                                                 ContentAddressedManifest& outResult,
+                                                 const std::function<void(int, int)>& onFileHashed = {}) const;
 
         // Parse a v1 manifest_json blob (as returned by GET /versions/{vid})
         // into a flat list of entries the caller can iterate to download blobs.
