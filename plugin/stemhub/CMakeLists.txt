@@ -30,10 +30,11 @@ set(STEMHUB_CORE_SOURCES
     Source/src/application/ProjectFileService.cpp
     Source/src/application/SessionCache.cpp
     Source/src/application/SnapshotBundler.cpp
+    Source/src/application/SnapshotSync.cpp
     Source/src/application/UseCases.cpp
     Source/src/network/ApiClient.cpp
     Source/src/network/ApiConfig.cpp
-    Source/src/network/VersionControlService.cpp)
+    Source/src/network/ApiJson.cpp)
 
 set(STEMHUB_UI_SOURCES
     Source/src/ui/PluginEditor.cpp

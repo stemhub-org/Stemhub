@@ -9,28 +9,20 @@ void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
 
     if (result.authErrorMessage.isNotEmpty())
     {
-        if (fromCachedSession)
+        if (fromCachedSession && result.sessionExpired)
         {
-            stemhub::sessioncache::clear();
-            currentUser.reset();
-            access_tkn.clear();
-            projectSelectionStatusMessage.clear();
-            activeProjectStatusMessage.clear();
-            projects.clear();
-            branches.clear();
-            versionHistory.clear();
-            selectedVersionId.clear();
-            clearSelectedProject();
-            pendingProjectFile = juce::File();
-            selectedProjectFile = juce::File();
-            authErrorMessage = "Saved session expired. Please sign in again.";
-            setAuthState(AuthState::authError);
-            sendChangeMessage();
+            expireSession("Saved session expired. Please sign in again.");
             return;
         }
 
+        // Signing in failed, or the saved session couldn't be checked (offline, server down).
+        // In that second case the token stays saved, and reopening the plugin tries again.
+        if (fromCachedSession)
+            didAttemptCachedSessionRestore = false;
+
         authErrorMessage = result.authErrorMessage;
         setAuthState(AuthState::authError);
+        sendChangeMessage();
         return;
     }
 
@@ -44,6 +36,15 @@ void StemhubAudioProcessor::applyAuthRequestResult(AuthRequestResult result)
 
     if (fromCachedSession)
         requestRestoreCachedProjectContext();
+}
+
+void StemhubAudioProcessor::expireSession(const juce::String& message)
+{
+    // The backend refused the token: everything tied to it goes, and the user signs in again.
+    signOut();
+    authErrorMessage = message;
+    setAuthState(AuthState::authError);
+    sendChangeMessage();
 }
 
 void StemhubAudioProcessor::signIn(User newUser) noexcept

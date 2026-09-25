@@ -13,70 +13,14 @@
 #include "application/SessionCache.hpp"
 #include "application/SnapshotBundler.hpp"
 #include "network/ApiConfig.hpp"
+#include "network/ApiJson.hpp"
 
 namespace
 {
-ApiResult<LoginResponse> makeLoginResult(const juce::String& accessToken)
+template <typename T>
+ApiResult<T> fail(int statusCode, const juce::String& message)
 {
-    LoginResponse response;
-    response.accessToken = accessToken;
-    return { response, {} };
-}
-
-ApiResult<User> makeUserResult()
-{
-    User user;
-    user.id = "user-1";
-    user.email = "user@example.com";
-    user.username = "stemhub";
-    return { user, {} };
-}
-
-ApiResult<std::vector<Project>> makeProjectsResult(std::vector<Project> projects)
-{
-    return { std::move(projects), {} };
-}
-
-ApiResult<std::vector<Branch>> makeBranchesResult(std::vector<Branch> branches)
-{
-    return { std::move(branches), {} };
-}
-
-juce::var makeVersionJson(const VersionSummary& version)
-{
-    auto* object = new juce::DynamicObject();
-    object->setProperty("id", version.id);
-    object->setProperty("branch_id", version.branchId);
-    object->setProperty("parent_version_id", version.parentVersionId);
-    object->setProperty("created_at", version.createdAt);
-    object->setProperty("commit_message", version.commitMessage);
-    object->setProperty("source_daw", version.sourceDaw);
-    object->setProperty("source_project_filename", version.sourceProjectFilename);
-    return juce::var(object);
-}
-
-ApiResult<juce::var> makeVersionsResult(const std::vector<VersionSummary>& versions)
-{
-    juce::Array<juce::var> versionArray;
-    for (const auto& version : versions)
-        versionArray.add(makeVersionJson(version));
-
-    return { juce::var(versionArray), {} };
-}
-
-ApiResult<juce::var> makeApiError(const juce::String& message, int statusCode = 500)
-{
-    return { {}, ApiError { statusCode, message } };
-}
-
-ApiResult<std::vector<Branch>> makeBranchError(const juce::String& message, int statusCode = 500)
-{
-    return { {}, ApiError { statusCode, message } };
-}
-
-ApiResult<User> makeUserError(const juce::String& message, int statusCode = 401)
-{
-    return { {}, ApiError { statusCode, message } };
+    return ApiResult<T>::failure(ApiError::fromStatus(statusCode, message));
 }
 
 juce::String sha256Of(const juce::MemoryBlock& data)
@@ -131,30 +75,34 @@ public:
     ApiResult<LoginResponse> login(const juce::String& email, const juce::String& password) const override
     {
         juce::ignoreUnused(email, password);
-        return makeLoginResult("token");
+        return ApiResult<LoginResponse>::success({ "token" });
     }
 
     ApiResult<User> fetchCurrentUser(const juce::String& accessToken) const override
     {
         juce::ignoreUnused(accessToken);
-        const std::lock_guard<std::mutex> lock(mutex);
-        if (!cachedSessionIsValid)
-            return makeUserError("expired");
+        if (offline)
+            return ApiResult<User>::failure({ ApiError::Kind::network, 0, "Can't reach StemHub." });
+        if (rejectToken || !cachedSessionIsValid)
+            return fail<User>(401, "Could not validate credentials");
 
-        return makeUserResult();
+        return ApiResult<User>::success({ "user-1", "user@example.com", "stemhub" });
     }
 
     ApiResult<std::vector<Project>> fetchProjects(const juce::String& accessToken) const override
     {
         juce::ignoreUnused(accessToken);
+        if (rejectToken)
+            return fail<std::vector<Project>>(401, "Could not validate credentials");
+
         const std::lock_guard<std::mutex> lock(mutex);
-        return makeProjectsResult(projects);
+        return ApiResult<std::vector<Project>>::success(projects);
     }
 
     ApiResult<Project> createProject(const juce::String& name, const juce::String& accessToken) const override
     {
         juce::ignoreUnused(name, accessToken);
-        return { {}, ApiError { 500, "not implemented in tests" } };
+        return fail<Project>(500, "not implemented in tests");
     }
 
     ApiResult<std::vector<Branch>> fetchBranches(const juce::String& projectId, const juce::String& accessToken) const override
@@ -168,66 +116,65 @@ public:
                 *branchFetchReturned = true;
         }
 
+        if (rejectToken)
+            return fail<std::vector<Branch>>(401, "Could not validate credentials");
+
         const std::lock_guard<std::mutex> lock(mutex);
         if (auto it = branchErrors.find(projectId); it != branchErrors.end())
-            return makeBranchError(it->second);
+            return fail<std::vector<Branch>>(500, it->second);
 
         if (auto it = projectBranches.find(projectId); it != projectBranches.end())
-            return makeBranchesResult(it->second);
+            return ApiResult<std::vector<Branch>>::success(it->second);
 
-        return makeBranchError("No workspaces found for this project.");
+        return ApiResult<std::vector<Branch>>::success({});
     }
 
-    ApiResult<juce::var> requestJson(const juce::String& path,
-                                     const juce::String& httpMethod,
-                                     const juce::String& requestBody,
-                                     const juce::String& bearerToken) const override
+    ApiResult<std::vector<VersionSummary>> fetchVersions(const juce::String& branchId,
+                                                         const juce::String& accessToken) const override
     {
-        juce::ignoreUnused(requestBody, bearerToken);
+        juce::ignoreUnused(accessToken);
 
-        if (httpMethod == "GET" && path.startsWith("/branches/") && path.endsWith("/versions/"))
-        {
-            auto branchId = path.fromFirstOccurrenceOf("/branches/", false, false)
-                .upToLastOccurrenceOf("/versions/", false, false);
+        if (auto gate = findGate(versionFetchGates, branchId))
+            gate->block();
 
-            if (auto gate = findGate(versionFetchGates, branchId))
-                gate->block();
+        if (rejectToken)
+            return fail<std::vector<VersionSummary>>(401, "Could not validate credentials");
 
-            const std::lock_guard<std::mutex> lock(mutex);
-            if (auto it = versionErrors.find(branchId); it != versionErrors.end())
-                return makeApiError(it->second);
+        const std::lock_guard<std::mutex> lock(mutex);
+        if (auto it = versionErrors.find(branchId); it != versionErrors.end())
+            return fail<std::vector<VersionSummary>>(500, it->second);
 
-            if (auto it = branchVersions.find(branchId); it != branchVersions.end())
-                return makeVersionsResult(it->second);
+        if (auto it = branchVersions.find(branchId); it != branchVersions.end())
+            return ApiResult<std::vector<VersionSummary>>::success(it->second);
 
-            return makeVersionsResult({});
-        }
+        return ApiResult<std::vector<VersionSummary>>::success({});
+    }
 
-        if (httpMethod == "GET" && path.startsWith("/versions/"))
-        {
-            const auto versionId = path.fromFirstOccurrenceOf("/versions/", false, false);
-            const std::lock_guard<std::mutex> lock(mutex);
-            const auto manifest = manifestsByVersion.find(versionId);
-            if (manifest == manifestsByVersion.end())
-                return makeApiError("Version not found.", 404);
+    ApiResult<juce::var> fetchVersionManifest(const juce::String& versionId, const juce::String& accessToken) const override
+    {
+        juce::ignoreUnused(accessToken);
+        if (rejectToken)
+            return fail<juce::var>(401, "Could not validate credentials");
 
-            auto* object = new juce::DynamicObject();
-            object->setProperty("id", versionId);
-            object->setProperty("manifest_json", juce::JSON::parse(manifest->second));
-            return { juce::var(object), {} };
-        }
+        const std::lock_guard<std::mutex> lock(mutex);
+        const auto manifest = manifestsByVersion.find(versionId);
+        if (manifest == manifestsByVersion.end())
+            return fail<juce::var>(404, "Version not found.");
 
-        return makeApiError("Unhandled request in test API.");
+        return ApiResult<juce::var>::success(juce::JSON::parse(manifest->second));
     }
 
     ApiResult<std::vector<juce::String>> checkMissingBlobs(const juce::String& projectId,
                                                             const std::vector<juce::String>& sha256s,
                                                             const juce::String& accessToken) const override
     {
-        juce::ignoreUnused(projectId, accessToken);
+        juce::ignoreUnused(accessToken);
 
         if (auto gate = findGate(checkMissingGates, projectId))
             gate->block();
+
+        if (rejectToken)
+            return fail<std::vector<juce::String>>(401, "Could not validate credentials");
 
         const std::lock_guard<std::mutex> lock(mutex);
         std::vector<juce::String> missing;
@@ -235,31 +182,32 @@ public:
             if (blobs.find(sha) == blobs.end())
                 missing.push_back(sha);
 
-        return { missing, {} };
+        return ApiResult<std::vector<juce::String>>::success(missing);
     }
 
-    ApiResult<juce::var> uploadBlob(const juce::String& projectId,
-                                     const juce::String& sha256,
-                                     const juce::File& file,
-                                     const juce::String& accessToken) const override
+    ApiResult<Unit> uploadBlob(const juce::String& projectId,
+                               const juce::String& sha256,
+                               const juce::File& file,
+                               const juce::String& accessToken) const override
     {
         juce::ignoreUnused(projectId, accessToken);
 
         juce::MemoryBlock data;
         if (!file.loadFileAsData(data))
-            return makeApiError("Blob source file does not exist.", 0);
+            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Blob source file does not exist." });
 
         if (sha256Of(data) != sha256)
-            return makeApiError("SHA-256 mismatch.", 400);
+            return fail<Unit>(400, "SHA-256 mismatch.");
 
         const std::lock_guard<std::mutex> lock(mutex);
         blobs[sha256] = data;
-        return { juce::var(new juce::DynamicObject()), {} };
+        ++uploadsBySha[sha256];
+        return ApiResult<Unit>::success({});
     }
 
-    ApiResult<juce::var> createVersionFromManifest(const juce::String& branchId,
-                                                    const juce::var& payload,
-                                                    const juce::String& accessToken) const override
+    ApiResult<VersionSummary> createVersionFromManifest(const juce::String& branchId,
+                                                        const CreateVersionRequest& request,
+                                                        const juce::String& accessToken) const override
     {
         juce::ignoreUnused(accessToken);
 
@@ -269,21 +217,21 @@ public:
         VersionSummary version;
         version.id = juce::String::toHexString(number).paddedLeft('0', 8) + "-0000-4000-8000-000000000000";
         version.branchId = branchId;
-        version.parentVersionId = payload.getProperty("parent_version_id", {}).toString();
-        version.commitMessage = payload.getProperty("commit_message", {}).toString();
+        version.parentVersionId = request.parentVersionId;
+        version.commitMessage = request.commitMessage;
         version.createdAt = "2026-03-19T10:00:" + juce::String(number).paddedLeft('0', 2) + "Z";
-        version.sourceProjectFilename = payload["manifest"].getProperty("source_project_filename", {}).toString();
+        version.sourceProjectFilename = request.manifest.getProperty("source_project_filename", {}).toString();
 
         createdVersions.push_back({ version.id, branchId, version.parentVersionId, version.commitMessage });
-        manifestsByVersion[version.id] = juce::JSON::toString(payload["manifest"]);
+        manifestsByVersion[version.id] = juce::JSON::toString(request.manifest);
         branchVersions[branchId].push_back(version);
-        return { makeVersionJson(version), {} };
+        return ApiResult<VersionSummary>::success(version);
     }
 
-    juce::Result downloadBlob(const juce::String& projectId,
-                               const juce::String& sha256,
-                               const juce::File& destinationFile,
-                               const juce::String& accessToken) const override
+    ApiResult<Unit> downloadBlob(const juce::String& projectId,
+                                 const juce::String& sha256,
+                                 const juce::File& destinationFile,
+                                 const juce::String& accessToken) const override
     {
         juce::ignoreUnused(projectId, accessToken);
 
@@ -292,14 +240,17 @@ public:
             const std::lock_guard<std::mutex> lock(mutex);
             const auto blob = blobs.find(sha256);
             if (blob == blobs.end())
-                return juce::Result::fail("Blob not found");
+                return fail<Unit>(404, "Blob not found");
 
             data = blob->second;
+            if (corruptDownloads)
+                data.append("!", 1);
         }
 
-        return destinationFile.replaceWithData(data.getData(), data.getSize())
-            ? juce::Result::ok()
-            : juce::Result::fail("Could not write " + destinationFile.getFullPathName());
+        if (!destinationFile.replaceWithData(data.getData(), data.getSize()))
+            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+
+        return ApiResult<Unit>::success({});
     }
 
     // Stores a version made of (relative path, content) files, the first being the project
@@ -343,18 +294,23 @@ public:
         manifest->setProperty("project_file", projectFileRef);
         manifest->setProperty("tracks", tracks);
 
-        auto* payload = new juce::DynamicObject();
-        payload->setProperty("commit_message", commitMessage);
-        payload->setProperty("manifest", juce::var(manifest));
-
-        const auto created = createVersionFromManifest(branchId, juce::var(payload), "token");
-        return created.value->getProperty("id", {}).toString();
+        CreateVersionRequest request;
+        request.commitMessage = commitMessage;
+        request.manifest = juce::var(manifest);
+        return createVersionFromManifest(branchId, request, "token").value->id;
     }
 
     std::vector<CreatedVersion> getCreatedVersions() const
     {
         const std::lock_guard<std::mutex> lock(mutex);
         return createdVersions;
+    }
+
+    int getUploadCount(const juce::String& sha) const
+    {
+        const std::lock_guard<std::mutex> lock(mutex);
+        const auto count = uploadsBySha.find(sha);
+        return count != uploadsBySha.end() ? count->second : 0;
     }
 
     void setCheckMissingGate(const juce::String& projectId, std::shared_ptr<BlockingGate> gate)
@@ -374,6 +330,9 @@ public:
     std::map<juce::String, std::shared_ptr<BlockingGate>> branchFetchGates;
     std::map<juce::String, std::shared_ptr<BlockingGate>> versionFetchGates;
     std::shared_ptr<std::atomic<bool>> branchFetchReturned;
+    std::atomic<bool> rejectToken { false };     // every call answers 401
+    std::atomic<bool> offline { false };         // fetchCurrentUser gets no response
+    std::atomic<bool> corruptDownloads { false }; // downloaded blobs don't match their hash
 
 private:
     std::shared_ptr<BlockingGate> findGate(const std::map<juce::String, std::shared_ptr<BlockingGate>>& gates,
@@ -386,6 +345,7 @@ private:
 
     mutable std::mutex mutex;
     mutable std::map<juce::String, juce::MemoryBlock> blobs;
+    mutable std::map<juce::String, int> uploadsBySha;
     mutable std::map<juce::String, juce::String> manifestsByVersion;
     mutable std::vector<CreatedVersion> createdVersions;
     std::map<juce::String, std::shared_ptr<BlockingGate>> checkMissingGates;
@@ -474,7 +434,6 @@ Project makeProject(const juce::String& id, const juce::String& name)
 {
     Project project;
     project.id = id;
-    project.ownerId = "user-1";
     project.name = name;
     return project;
 }
@@ -1142,6 +1101,170 @@ public:
             expect(!WorkingCopyBaseline {}.isSet() && !WorkingCopyBaseline {}.describes(file), "an empty baseline describes nothing");
         }
 
+        beginTest("API responses are parsed into domain values");
+        {
+            namespace json = stemhub::api::json;
+
+            const auto versions = json::parseVersions(juce::JSON::parse(R"([{
+                "id": "v1", "branch_id": "b1", "created_at": "2026-03-18T10:00:00Z", "commit_message": "first",
+                "manifest_json": { "project_file": { "size_bytes": 10 }, "tracks": [ { "size_bytes": 5 }, { "size_bytes": 7 } ] }
+            }])"));
+            expect(versions.ok() && versions.value->size() == 1, "a version list parses");
+            if (versions.ok())
+                expect(versions.value->front().totalSizeBytes == 22, "the size is summed from the manifest");
+
+            expect(!json::parseVersions(juce::JSON::parse(R"({"id": "v1"})")).ok(), "an object is not a list");
+            const auto missingFields = json::parseProject(juce::JSON::parse(R"({"id": "p1"})"));
+            expect(!missingFields.ok() && missingFields.error->kind == ApiError::Kind::invalidResponse,
+                   "a project without a name is invalid");
+            expect(json::parseMissingBlobs(juce::JSON::parse(R"({"missing": ["a", "b"]})")).value->size() == 2);
+            expect(!json::parseLogin(juce::JSON::parse(R"({"token_type": "bearer"})")).ok(), "a login without a token fails");
+
+            expect(json::extractErrorMessage(juce::JSON::parse(R"({"detail": "Incorrect email or password"})"), {}, "x")
+                       == "Incorrect email or password");
+            expect(json::extractErrorMessage(juce::JSON::parse(R"({"detail": [{"msg": "field required"}]})"), {}, "x")
+                       == "field required");
+            expect(json::extractErrorMessage({}, "<html>Bad gateway</html>", "Request failed.") == "Request failed.",
+                   "HTML error pages are not shown");
+
+            expect(ApiError::kindForStatus(401) == ApiError::Kind::unauthorized);
+            expect(ApiError::kindForStatus(422) == ApiError::Kind::invalidRequest);
+            expect(ApiError::kindForStatus(503) == ApiError::Kind::server);
+            expect(ApiError::kindForStatus(0) == ApiError::Kind::network);
+        }
+
+        beginTest("Each distinct file is uploaded once");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+            context.processor.setOpenFileHandler([](const juce::File&) { return true; });
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+            expect(context.environment.root.getChildFile("Drums/kick.wav").create().wasOk());
+            expect(context.environment.root.getChildFile("Drums/kick.wav").replaceWithText("kick"));
+            expect(context.environment.root.getChildFile("Backup/kick copy.wav").create().wasOk());
+            expect(context.environment.root.getChildFile("kick copy.wav").replaceWithText("kick"));
+
+            signIn(context);
+            openProject(context, project.id, projectFile);
+
+            context.processor.requestPushVersion("first", "FL Studio");
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.api->getCreatedVersions().size() == 1; }),
+                   "first save: " + describeProcessorState(context.processor));
+            const auto kickSha = sha256Of(juce::MemoryBlock("kick", 4));
+            expect(context.api->getUploadCount(kickSha) == 1, "two identical files are one upload");
+
+            simulateDawSave(projectFile, " edit");
+            context.processor.requestPushVersion("second", "FL Studio");
+            expect(waitUntil(context.processor, [&context] { return isIdle(context.processor)
+                                                                  && context.api->getCreatedVersions().size() == 2; }),
+                   "second save: " + describeProcessorState(context.processor));
+            expect(context.api->getUploadCount(kickSha) == 1, "files the server has are not uploaded again");
+        }
+
+        beginTest("Saves beyond the backend limits are refused before uploading");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+            context.processor.setOpenFileHandler([](const juce::File&) { return true; });
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+            signIn(context);
+            openProject(context, project.id, projectFile);
+
+            context.processor.requestPushVersion(juce::String::repeatedString("n", 501), "FL Studio");
+            expect(waitUntil(context.processor, [&context] { return context.processor.getOperationState() == OperationState::error; }),
+                   "a long note should fail");
+            expect(context.processor.getActiveProjectStatusMessage().contains("500 characters"),
+                   context.processor.getActiveProjectStatusMessage());
+
+            for (int index = 0; index < 501; ++index)
+                expect(context.environment.root.getChildFile("stem" + juce::String(index) + ".wav").replaceWithText(juce::String(index)));
+
+            context.processor.requestPushVersion("too many files", "FL Studio");
+            expect(waitUntil(context.processor, [&context] { return context.processor.getOperationState() == OperationState::error; }),
+                   "501 audio files should fail");
+            expect(context.processor.getActiveProjectStatusMessage().contains("can hold 500"),
+                   context.processor.getActiveProjectStatusMessage());
+            expect(context.api->getCreatedVersions().empty() && context.api->getUploadCount(sha256Of(juce::MemoryBlock("0", 1))) == 0,
+                   "nothing is uploaded");
+        }
+
+        beginTest("A download that fails its checksum leaves nothing behind");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+            const auto versionId = context.api->addVersion(branch.id, "first", { { "song.flp", "flp" }, { "Drums/kick.wav", "kick" } });
+            context.api->corruptDownloads = true;
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("mine"));
+            signIn(context);
+            openProject(context, project.id, projectFile);
+
+            const auto restoresFolder = context.environment.root.getChildFile("restores");
+            expect(restoresFolder.createDirectory().wasOk());
+            context.processor.requestRestoreVersion(versionId, restoresFolder);
+            expect(waitUntil(context.processor, [&context] { return context.processor.getOperationState() == OperationState::error; }),
+                   "the restore should fail");
+            expect(context.processor.getActiveProjectStatusMessage().contains("checksum"),
+                   context.processor.getActiveProjectStatusMessage());
+
+            juce::Array<juce::File> leftovers;
+            restoresFolder.findChildFiles(leftovers, juce::File::findFilesAndDirectories, true);
+            expect(leftovers.isEmpty(), "the half-restored folder is removed");
+            expect(context.processor.getSelectedProjectFile() == projectFile, "the working file doesn't change");
+        }
+
+        beginTest("A refused token signs the user out");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+            context.processor.setOpenFileHandler([](const juce::File&) { return true; });
+
+            signIn(context);
+            openProject(context, project.id, {});
+
+            context.api->rejectToken = true;
+            context.processor.requestRefreshVersionHistory();
+            expect(waitUntil(context.processor, [&context] { return context.processor.getAuthState() == AuthState::authError; }),
+                   "a 401 should end the session: " + describeProcessorState(context.processor));
+            expect(context.processor.getUIState() == UIState::login, "back on the login screen");
+            expect(context.processor.getAuthErrorMessage().contains("expired"), context.processor.getAuthErrorMessage());
+            expect(stemhub::sessioncache::loadAccessToken().isEmpty(), "the refused token is forgotten");
+        }
+
+        beginTest("Being offline at startup keeps the saved session");
+        {
+            TestContext context;
+            context.api->projects = { makeProject("project-1", "Song") };
+            context.api->offline = true;
+            stemhub::sessioncache::saveAccessToken("valid-token");
+
+            context.processor.requestRestoreCachedSession();
+            expect(waitUntil(context.processor, [&context] { return context.processor.getAuthState() == AuthState::authError; }),
+                   "an unreachable server should be reported: " + describeProcessorState(context.processor));
+            expect(context.processor.getAuthErrorMessage().contains("Can't reach StemHub"), context.processor.getAuthErrorMessage());
+            expect(stemhub::sessioncache::loadAccessToken() == "valid-token", "the saved token is kept");
+
+            context.api->offline = false;
+            context.processor.requestRestoreCachedSession();
+            expect(waitUntil(context.processor, [&context] { return context.processor.getAuthState() == AuthState::signedIn; }),
+                   "the next attempt signs in: " + describeProcessorState(context.processor));
+        }
+
         beginTest("The API base URL is https, or http to this machine");
         {
             using stemhub::api::chooseBaseUrl;
@@ -1185,7 +1308,7 @@ public:
             ApiClient client(server->getBaseUrl());
             const auto result = client.downloadBlob("project-1", juce::String::repeatedString("c", 64), destination, "secret-token");
 
-            expect(result.wasOk(), result.getErrorMessage());
+            expect(result.ok(), result.errorMessage("download failed"));
             expect(destination.loadFileAsString() == "bytes", "the storage response is written to disk");
 
             const auto requests = server->getRequests();
@@ -1241,6 +1364,14 @@ private:
         StemhubAudioProcessor processor;
         ProcessorChangeWatcher watcher;
     };
+
+    void openProject(TestContext& context, const juce::String& projectId, const juce::File& projectFile)
+    {
+        context.processor.requestOpenProject(projectId, projectFile, false);
+        expect(waitUntil(context.processor, [&context] { return context.processor.getSelectedProject().has_value()
+                                                              && isIdle(context.processor); }),
+               "project should open: " + describeProcessorState(context.processor));
+    }
 
     void signIn(TestContext& context)
     {

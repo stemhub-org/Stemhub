@@ -13,6 +13,12 @@ void StemhubAudioProcessor::applyProjectActivationResult(ProjectActivationJobRes
     if (!isCurrentSelectionRequest(result.selectionRequestId))
         return;
 
+    if (result.sessionExpired)
+    {
+        expireSession();
+        return;
+    }
+
     if (hasError(result))
     {
         if (result.fromCachedProjectRestore)
@@ -65,6 +71,12 @@ void StemhubAudioProcessor::applyBranchHistoryResult(BranchHistoryJobResult resu
     if (!isCurrentSelectionRequest(result.selectionRequestId))
         return;
 
+    if (result.sessionExpired)
+    {
+        expireSession();
+        return;
+    }
+
     if (hasError(result))
     {
         setOperationState(OperationState::error);
@@ -88,6 +100,12 @@ void StemhubAudioProcessor::applyBranchHistoryResult(BranchHistoryJobResult resu
 
 void StemhubAudioProcessor::applyPushVersionResult(PushVersionJobResult result)
 {
+    if (result.sessionExpired)
+    {
+        expireSession();
+        return;
+    }
+
     if (hasError(result))
     {
         setOperationState(OperationState::error);
@@ -118,6 +136,12 @@ void StemhubAudioProcessor::applyRestoreVersionResult(RestoreVersionJobResult re
 {
     juce::Logger::writeToLog("[Restore] Processor -> applyRestoreVersionResult restoredVersionId="
                              + result.restoredVersionId);
+
+    if (result.sessionExpired)
+    {
+        expireSession();
+        return;
+    }
 
     if (hasError(result))
     {

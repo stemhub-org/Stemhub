@@ -61,4 +61,7 @@ class SnapshotBundler
         // True for a relative, '/'-separated path whose segments are all plain names, so that
         // restoreDirectory.getChildFile(path) always stays inside restoreDirectory on every OS.
         [[nodiscard]] static bool isSafeManifestPath(const juce::String& path);
+
+        // Lowercase hex SHA-256 of a file's bytes; empty when it can't be read.
+        [[nodiscard]] static juce::String sha256OfFile(const juce::File& file);
 };

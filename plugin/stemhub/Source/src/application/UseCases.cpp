@@ -4,7 +4,7 @@
 #include "application/PluginProcessorHelpers.hpp"
 #include "application/ProjectFileService.hpp"
 #include "application/SnapshotBundler.hpp"
-#include "application/VersionControlService.hpp"
+#include "application/SnapshotSync.hpp"
 
 using namespace stemhub::processorhelpers;
 
@@ -12,6 +12,9 @@ namespace stemhub::usecases
 {
 namespace
 {
+// Longest save note the backend accepts (VersionFromManifestCreate.commit_message).
+constexpr int kMaxCommitMessageLength = 500;
+
 void loadProjects(const IProjectApi& api, const juce::String& token, AuthRequestResult& result)
 {
     auto projectsResult = api.fetchProjects(token);
@@ -24,9 +27,17 @@ void loadProjects(const IProjectApi& api, const juce::String& token, AuthRequest
     }
     else
     {
-        result.projectSelectionStatusMessage = projectsResult.error ? projectsResult.error->message
-                                                                    : "Failed to load projects.";
+        result.projectSelectionStatusMessage = projectsResult.errorMessage("Failed to load projects.");
     }
+}
+
+// Records a failed call on a job result: its message, and whether the session is over.
+template <typename Result, typename T>
+Result& failWith(Result& result, const ApiResult<T>& call, const juce::String& fallback)
+{
+    result.errorMessage = call.errorMessage(fallback);
+    result.sessionExpired = call.isUnauthorized();
+    return result;
 }
 
 // "main" when the project has one, otherwise its first branch.
@@ -39,12 +50,6 @@ const Branch& chooseDefaultBranch(const std::vector<Branch>& branches)
     return branchIt != branches.end() ? *branchIt : branches.front();
 }
 
-VersionControlService makeVersionService(const IProjectApi& api, const juce::String& token)
-{
-    VersionControlService service(api);
-    service.setAccessToken(token);
-    return service;
-}
 }
 
 AuthRequestResult signIn(const IProjectApi& api, const SignInInput& input)
@@ -54,17 +59,15 @@ AuthRequestResult signIn(const IProjectApi& api, const SignInInput& input)
     auto loginResult = api.login(input.email, input.password);
     if (!loginResult.ok())
     {
-        result.authErrorMessage = loginResult.error ? loginResult.error->message
-                                                    : "Failed to sign in.";
+        result.authErrorMessage = loginResult.errorMessage("Failed to sign in.");
         return result;
     }
 
     const auto token = loginResult.value->accessToken;
     auto userResult = api.fetchCurrentUser(token);
-    if (!userResult.ok() || !userResult.value->isValid())
+    if (!userResult.ok())
     {
-        result.authErrorMessage = userResult.error ? userResult.error->message
-                                                   : "Failed to load your user profile.";
+        result.authErrorMessage = userResult.errorMessage("Failed to load your user profile.");
         return result;
     }
 
@@ -81,9 +84,13 @@ AuthRequestResult restoreSession(const IProjectApi& api, const RestoreSessionInp
     result.token = input.token;
 
     auto userResult = api.fetchCurrentUser(input.token);
-    if (!userResult.ok() || !userResult.value->isValid())
+    if (!userResult.ok())
     {
-        result.authErrorMessage = "Cached session is no longer valid.";
+        // Only a refused token ends the saved session. Offline, or with the server down, it is
+        // kept so the next attempt can use it.
+        result.sessionExpired = userResult.isUnauthorized() || userResult.error->kind == ApiError::Kind::forbidden;
+        result.authErrorMessage = result.sessionExpired ? juce::String("Saved session expired. Please sign in again.")
+                                                        : userResult.errorMessage("Couldn't restore your session.");
         return result;
     }
 
@@ -113,10 +120,11 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     }
 
     const auto branchesResult = api.fetchBranches(input.projectId, input.token);
-    if (!branchesResult.ok() || !branchesResult.value.has_value() || branchesResult.value->empty())
+    if (!branchesResult.ok())
+        return failWith(result, branchesResult, "Failed to load workspaces.");
+    if (branchesResult.value->empty())
     {
-        result.errorMessage = branchesResult.error ? branchesResult.error->message
-                                                   : "No workspaces found for this project.";
+        result.errorMessage = "No workspaces found for this project.";
         return result;
     }
 
@@ -126,12 +134,11 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
 
-    auto versionService = makeVersionService(api, input.token);
-    const auto versionsResult = versionService.fetchVersionHistory(selectedBranch.id, input.token);
-    if (!versionsResult.ok() || !versionsResult.value.has_value())
+    const auto versionsResult = api.fetchVersions(selectedBranch.id, input.token);
+    if (!versionsResult.ok())
     {
-        result.activeProjectStatusMessage = versionsResult.error ? versionsResult.error->message
-                                                                 : "Project ready, but failed to load version history.";
+        result.sessionExpired = versionsResult.isUnauthorized();
+        result.activeProjectStatusMessage = versionsResult.errorMessage("Project ready, but failed to load version history.");
         return result;
     }
 
@@ -202,18 +209,16 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
         stemhub::projectfiles::resolveRestoreProjectName(result.versions, latestVersion.id, projectIt->name),
         latestVersion.id);
 
-    juce::File restoredProjectFile;
-    const auto restoreStatus = versionService.restoreVersionFromManifest(projectIt->id,
-                                                                         latestVersion.id,
-                                                                         restoreFolder,
-                                                                         restoredProjectFile);
-    if (restoreStatus.failed())
+    const auto restored = stemhub::snapshots::restoreSnapshot(api, input.token, { projectIt->id, latestVersion.id, restoreFolder });
+    if (!restored.ok())
     {
+        result.sessionExpired = restored.isUnauthorized();
         result.activeProjectStatusMessage = "Project ready, but the latest version couldn't be restored: "
-            + restoreStatus.getErrorMessage();
+            + restored.errorMessage("unknown error");
         return result;
     }
 
+    const auto& restoredProjectFile = *restored.value;
     result.projectFile = restoredProjectFile;
     result.workingCopy = WorkingCopyBaseline::recordedNow(restoredProjectFile, latestVersion.id);
     result.selectedVersionId = latestVersion.id;
@@ -239,22 +244,19 @@ ProjectActivationJobResult createProject(const IProjectApi& api, const CreatePro
     }
 
     const auto createdProject = api.createProject(projectName, input.token);
-    if (!createdProject.ok() || !createdProject.value.has_value())
-    {
-        result.errorMessage = createdProject.error ? createdProject.error->message
-                                                   : "Failed to create project.";
-        return result;
-    }
+    if (!createdProject.ok())
+        return failWith(result, createdProject, "Failed to create project.");
 
     auto projectsResult = api.fetchProjects(input.token);
-    if (projectsResult.ok() && projectsResult.value.has_value())
+    if (projectsResult.ok())
         result.projects = std::move(*projectsResult.value);
 
     const auto branchesResult = api.fetchBranches(createdProject.value->id, input.token);
-    if (!branchesResult.ok() || !branchesResult.value.has_value() || branchesResult.value->empty())
+    if (!branchesResult.ok())
+        return failWith(result, branchesResult, "Project created, but its workspaces couldn't be loaded.");
+    if (branchesResult.value->empty())
     {
-        result.errorMessage = branchesResult.error ? branchesResult.error->message
-                                                   : "Project created but no workspace was returned.";
+        result.errorMessage = "Project created but no workspace was returned.";
         return result;
     }
 
@@ -264,8 +266,8 @@ ProjectActivationJobResult createProject(const IProjectApi& api, const CreatePro
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
 
-    const auto versionsResult = makeVersionService(api, input.token).fetchVersionHistory(selectedBranch.id, input.token);
-    if (versionsResult.ok() && versionsResult.value.has_value())
+    const auto versionsResult = api.fetchVersions(selectedBranch.id, input.token);
+    if (versionsResult.ok())
     {
         result.versions = *versionsResult.value;
         sortVersionHistoryNewestFirst(result.versions);
@@ -274,8 +276,8 @@ ProjectActivationJobResult createProject(const IProjectApi& api, const CreatePro
 
     if (!versionsResult.ok())
     {
-        result.activeProjectStatusMessage = versionsResult.error ? versionsResult.error->message
-                                                                 : "Project created, but failed to load version history.";
+        result.sessionExpired = versionsResult.isUnauthorized();
+        result.activeProjectStatusMessage = versionsResult.errorMessage("Project created, but failed to load version history.");
     }
     else if (result.versions.empty())
     {
@@ -295,13 +297,9 @@ BranchHistoryJobResult fetchHistory(const IProjectApi& api, const FetchHistoryIn
     result.branchId = input.branchId;
     result.branchName = input.branchName;
 
-    const auto versionsResult = makeVersionService(api, input.token).fetchVersionHistory(input.branchId, input.token);
-    if (!versionsResult.ok() || !versionsResult.value.has_value())
-    {
-        result.errorMessage = versionsResult.error ? versionsResult.error->message
-                                                   : "Failed to load version history.";
-        return result;
-    }
+    const auto versionsResult = api.fetchVersions(input.branchId, input.token);
+    if (!versionsResult.ok())
+        return failWith(result, versionsResult, "Failed to load version history.");
 
     result.versions = *versionsResult.value;
     sortVersionHistoryNewestFirst(result.versions);
@@ -331,6 +329,11 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
         result.errorMessage = "Choose a project file before saving.";
         return result;
     }
+    if (input.commitMessage.length() > kMaxCommitMessageLength)
+    {
+        result.errorMessage = "Save notes are limited to " + juce::String(kMaxCommitMessageLength) + " characters.";
+        return result;
+    }
 
     // Taken before hashing: if the DAW saves again meanwhile, the next save sees a change.
     const auto sizeBeforeHashing = input.projectFile.getSize();
@@ -349,26 +352,22 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
         return result;
     }
 
-    PushVersionRequest pushRequest;
+    stemhub::snapshots::PushRequest pushRequest;
     pushRequest.projectId = input.projectId;
     pushRequest.branchId = input.branchId;
     pushRequest.commitMessage = input.commitMessage;
     pushRequest.parentVersionId = input.parentVersionId;
     pushRequest.manifest = std::move(manifest);
 
-    auto versionService = makeVersionService(api, input.token);
-    const auto pushStatus = versionService.pushVersion(pushRequest);
-    if (pushStatus.failed())
-    {
-        result.errorMessage = pushStatus.getErrorMessage();
-        return result;
-    }
+    const auto pushed = stemhub::snapshots::pushSnapshot(api, input.token, pushRequest);
+    if (!pushed.ok())
+        return failWith(result, pushed, "Failed to save the version.");
 
-    result.pushedVersionId = versionService.getLastVersionId();
+    result.pushedVersionId = pushed.value->id;
     result.pushedCopy = { input.projectFile, result.pushedVersionId, sizeBeforeHashing, modTimeBeforeHashing };
 
-    auto versionsResult = versionService.fetchVersionHistory(input.branchId, input.token);
-    if (versionsResult.ok() && versionsResult.value.has_value())
+    auto versionsResult = api.fetchVersions(input.branchId, input.token);
+    if (versionsResult.ok())
     {
         sortVersionHistoryNewestFirst(*versionsResult.value);
         result.refreshedVersions = std::move(*versionsResult.value);
@@ -377,7 +376,7 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input)
     else
     {
         result.activeProjectStatusMessage = "Version saved. Sync to see it in the history ("
-            + (versionsResult.error ? versionsResult.error->message : juce::String("history unavailable")) + ").";
+            + versionsResult.errorMessage("history unavailable") + ").";
     }
 
     return result;
@@ -398,22 +397,12 @@ RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInpu
         result.errorMessage = "Choose a project before restoring.";
         return result;
     }
-    // The request picked a folder that did not exist. Anything there now is someone else's.
-    if (input.destinationFolder.exists())
-    {
-        result.errorMessage = "The restore folder already exists: " + input.destinationFolder.getFullPathName();
-        return result;
-    }
 
-    juce::File restoredProjectFile;
-    const auto status = makeVersionService(api, input.token)
-                            .restoreVersionFromManifest(input.projectId, input.versionId, input.destinationFolder, restoredProjectFile);
-    if (status.failed())
-    {
-        result.errorMessage = status.getErrorMessage();
-        return result;
-    }
+    const auto restored = stemhub::snapshots::restoreSnapshot(api, input.token, { input.projectId, input.versionId, input.destinationFolder });
+    if (!restored.ok())
+        return failWith(result, restored, "Failed to restore the version.");
 
+    const auto& restoredProjectFile = *restored.value;
     result.restoredProjectFile = restoredProjectFile;
     result.restoredCopy = WorkingCopyBaseline::recordedNow(restoredProjectFile, input.versionId);
     result.activeProjectStatusMessage = "Version restored successfully: " + restoredProjectFile.getFileName();

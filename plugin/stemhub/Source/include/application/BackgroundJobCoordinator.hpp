@@ -106,7 +106,6 @@ public:
         if (results.empty())
             return false;
 
-        const auto activeGeneration = requestGeneration.load();
         bool didApply = false;
 
         while (!results.empty())
@@ -114,7 +113,8 @@ public:
             auto result = std::move(results.front());
             results.pop_front();
 
-            if (result.requestGeneration != activeGeneration)
+            // Checked per result: applying one may end the session (sign-out, expired token).
+            if (result.requestGeneration != requestGeneration.load())
                 continue;
 
             applyResult(std::move(result));

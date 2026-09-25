@@ -5,16 +5,19 @@
 
 #include <JuceHeader.h>
 
-#include "application/VersionControlUtils.hpp"
 #include "domain/Branch.hpp"
 #include "domain/Project.hpp"
 #include "domain/User.hpp"
+#include "domain/Version.hpp"
 #include "domain/WorkingCopyBaseline.hpp"
 #include "network/ApiClient.hpp"
 
 // The background work behind each user action. Every function takes an input built on the
 // message thread and returns a result for the message thread to apply. They share no state, so
 // they can run on any worker thread; the API must be safe to call from several threads.
+//
+// sessionExpired in a result means the backend refused the token (HTTP 401): the session is
+// over and the user has to sign in again.
 namespace stemhub::usecases
 {
 struct AuthRequestResult
@@ -25,6 +28,7 @@ struct AuthRequestResult
     juce::String authErrorMessage;
     juce::String projectSelectionStatusMessage;
     bool fromCachedSession { false };
+    bool sessionExpired { false };
 };
 
 struct SignInInput
@@ -61,6 +65,7 @@ struct ProjectActivationJobResult
     juce::String activeProjectStatusMessage;
     bool refreshProjects { false };
     bool fromCachedProjectRestore { false };
+    bool sessionExpired { false };
 };
 
 struct OpenProjectInput
@@ -95,10 +100,9 @@ struct BranchHistoryJobResult
     juce::String branchId;
     juce::String branchName;
     juce::String selectedVersionId;
-    // The version the local file's restore folder names, if any.
-    juce::String hintedVersionId;
     juce::String errorMessage;
     juce::String activeProjectStatusMessage;
+    bool sessionExpired { false };
 };
 
 struct FetchHistoryInput
@@ -122,6 +126,7 @@ struct PushVersionJobResult
     std::optional<std::vector<VersionSummary>> refreshedVersions;
     juce::String errorMessage;
     juce::String activeProjectStatusMessage;
+    bool sessionExpired { false };
 };
 
 struct PushInput
@@ -144,6 +149,7 @@ struct RestoreVersionJobResult
     WorkingCopyBaseline restoredCopy;
     juce::String errorMessage;
     juce::String activeProjectStatusMessage;
+    bool sessionExpired { false };
 };
 
 struct RestoreInput
