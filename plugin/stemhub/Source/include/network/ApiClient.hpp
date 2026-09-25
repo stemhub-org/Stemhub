@@ -49,6 +49,7 @@ public:
 class ApiClient final : public IProjectApi
 {
 public:
+    // Without a base URL, the configured one is used (see network/ApiConfig.hpp).
     explicit ApiClient(juce::String baseUrl = {});
 
     ApiResult<juce::var> requestJson(const juce::String& path,
