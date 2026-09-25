@@ -27,7 +27,6 @@ private:
     juce::TextEditor emailInput;
     juce::TextEditor passwordInput;
     juce::Label authStateLabel;
-    juce::Label logoLabel;
     juce::Label titleLabel;
     juce::Label subtitleLabel;
     juce::Label emailLabel;
@@ -88,6 +87,10 @@ private:
     juce::TextButton createProjectButton { "Create Project" };
     juce::TextButton signOutButton { "Sign Out" };
 
+    juce::Rectangle<int> metaRowBounds;
+    juce::Rectangle<int> fileStripBounds;
+    juce::Rectangle<int> emptyStateBounds;
+
     void rebuildProjectCards();
     void updateProjectFilterButtons();
     void selectProjectById(const juce::String& projectId, bool triggerOpen);
@@ -139,8 +142,12 @@ private:
     std::vector<juce::String> versionDisplayLabels;
     juce::String selectedProjectFilePath;
     int packagedFileCount { 0 };
-    juce::Label headerLogoLabel;
-    juce::Label headerTitle;
+    juce::Rectangle<int> headerLogoBounds;
+    juce::Rectangle<int> heroPatternBounds;
+    juce::Rectangle<int> historyCountBounds;
+    int headerDividerY { 0 };
+    int historyDividerY { 0 };
+    int footerDividerY { 0 };
     juce::Label headerProjectLabel;
     juce::Label projectStatusLabel;
     juce::Label snapshotSectionLabel;
@@ -165,6 +172,7 @@ private:
 
     void rebuildVersionCards();
     void updateSnapshotSummary();
+    void updateSnapshotTitleFont();
     void updateFooterSummary();
     void selectVersionById(const juce::String& versionId, bool triggerChange);
 };
