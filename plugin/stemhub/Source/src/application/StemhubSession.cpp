@@ -35,14 +35,14 @@ void StemhubSession::shutdown()
 void StemhubSession::enqueue(const uint64_t epoch, std::function<JobPayload(const IProjectApi&, const ReportProgress&)> run)
 {
     // The job holds its own reference to the API, so it never reaches into this session.
-    jobs.enqueue([sharedApi = api, epoch, run = std::move(run)](const Jobs::Post& post)
+    jobs.enqueue([sharedApi = api, epoch, task = std::move(run)](const Jobs::Post& post)
     {
         const ReportProgress report = [&post, epoch](const juce::String& text)
         {
             post(usecases::ProgressReport { epoch, text });
         };
 
-        auto payload = run(*sharedApi, report);
+        auto payload = task(*sharedApi, report);
         std::visit([epoch](auto& result) { result.requestEpoch = epoch; }, payload);
         return payload;
     });

@@ -58,10 +58,10 @@ public:
         if (isClosed)
             return;
 
-        pool.addJob([this, task = std::move(task)]
+        pool.addJob([this, job = std::move(task)]
         {
             const Post post = [this](Result result) { queue(std::move(result)); };
-            queue(task(post));
+            queue(job(post));
         });
     }
 
