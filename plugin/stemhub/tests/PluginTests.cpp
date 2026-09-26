@@ -36,8 +36,9 @@ juce::String sha256Of(const juce::MemoryBlock& data)
     return juce::SHA256(data.getData(), data.getSize()).toHexString();
 }
 
-// Blocks a fake API call until the test releases it. A gate that honours cancels also lets go
-// when the job running the call is asked to stop, as a real transfer does.
+// Blocks a fake API call until the test releases it; once released, it stays open for later
+// calls. A gate that honours cancels also lets go when the job running the call is asked to
+// stop, as a real transfer does.
 class BlockingGate
 {
 public:
@@ -74,7 +75,7 @@ public:
 private:
     const bool honoursCancel;
     juce::WaitableEvent expectEntered;
-    juce::WaitableEvent allowContinue;
+    juce::WaitableEvent allowContinue { true }; // manual reset: release() opens it for good
     juce::WaitableEvent finished;
 };
 
