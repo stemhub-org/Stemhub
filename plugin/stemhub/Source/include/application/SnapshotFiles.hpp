@@ -10,6 +10,7 @@ namespace stemhub::snapshotfiles
 // The project file first, then the audio and MIDI files in its folder and subfolders, sorted by
 // path. Left out: hidden files and dot-files, "Backup" folders, and copies this plugin restored
 // there (a "<name>-<version>" folder holding a DAW project), which are projects of their own.
+// Empty when the job running it is asked to stop.
 std::vector<juce::File> collect(const juce::File& projectFile);
 
 // What a save of projectFile takes, for the dashboard.

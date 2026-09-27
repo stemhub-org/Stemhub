@@ -44,10 +44,13 @@ public:
                    describe(context.session));
             expect(context.api->getCreatedVersions().empty(), "no version is created");
             expect(context.state().versionHistory.empty() && !context.state().workingCopy.isSet(), "nothing changed");
+            expect(context.state().lastSavedVersionId.isEmpty(), "no saved version, so the note is kept for the retry");
 
             context.session.requestPushVersion("again");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    "the next save works: " + describe(context.session));
+            expect(context.state().lastSavedVersionId == context.api->getCreatedVersions().front().id,
+                   "the saved version is announced, which clears the note");
         }
 
         beginTest("A cancelled restore leaves nothing behind");
@@ -267,7 +270,7 @@ public:
                                                            { { "song.flp", "flp" }, { "Samples/kick.wav", "kick" } });
 
             signIn(context.session);
-            context.session.requestOpenProject(project.id, {}, true);
+            context.session.requestOpenProject(project.id, true);
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
                    "the latest version should be restored: " + describe(context.session));
 
@@ -313,7 +316,7 @@ public:
             context.api->addVersion(branch.id, "second", { { "song.flp", "flp v2" } });
 
             context.session.showProjectSelection();
-            context.session.requestOpenProject(project.id, projectFile, true);
+            context.session.requestOpenProject(project.id, true);
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 2; }),
                    "the project should reopen: " + describe(context.session));
             expect(context.state().selectedProjectFile == projectFile, "the edited copy stays the working file");
@@ -343,7 +346,7 @@ public:
 
             const auto newerVersionId = context.api->addVersion(branch.id, "second", { { "song.flp", "flp v2" } });
             context.session.showProjectSelection();
-            context.session.requestOpenProject(project.id, projectFile, true);
+            context.session.requestOpenProject(project.id, true);
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
                    "the newer version should be restored: " + describe(context.session));
             const auto newerCopy = context.openedFiles.getFirst();
@@ -509,6 +512,65 @@ public:
             expect(leftovers.isEmpty(), "the half-restored folder is removed");
             expect(context.state().selectedProjectFile == projectFile, "the working file doesn't change");
             expect(context.openedFiles.isEmpty() && !context.handoffFile().exists(), "nothing is handed to the DAW");
+        }
+
+        beginTest("A restore hand-off survives the plugin window opening before the host's saved state");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+            const auto versionId = context.api->addVersion(branch.id, "first", { { "song.flp", "flp v1" } });
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("mine"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+            context.session.requestRestoreVersion(versionId, context.environment.root);
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
+                   describe(context.session));
+            const auto restoredFile = context.openedFiles.getFirst();
+
+            // The DAW opens the copy and shows the plugin window, which was open when the project was
+            // saved, before it hands the new instance its saved state.
+            auto restoredInstance = context.makeInstance();
+            restoredInstance->requestRestoreSavedSession();
+            restoredInstance->restoreLink({ project.id, branch.id, projectFile });
+            expect(waitUntil(*restoredInstance, [&restoredInstance]
+            {
+                return !restoredInstance->isBusy() && restoredInstance->getState().selectedProject.has_value();
+            }), describe(*restoredInstance));
+            expect(restoredInstance->getState().selectedProjectFile == restoredFile,
+                   "the instance works on the restored copy: " + restoredInstance->getState().selectedProjectFile.getFullPathName());
+            expect(restoredInstance->getState().openedVersionId == versionId, "and knows which version it holds");
+        }
+
+        beginTest("A failed save or restore says what failed, once");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+
+            // What ApiClient reports when the server gives no detail.
+            context.api->createVersionError = "Failed to create the version.";
+            context.session.requestPushVersion("first");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
+                   describe(context.session));
+            expect(context.state().sessionStatus.text == "Failed to create the version.", context.state().sessionStatus.text);
+
+            // A version deleted since the history was loaded.
+            context.session.requestRestoreVersion("deleted-version", context.environment.root);
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
+                   describe(context.session));
+            expect(context.state().sessionStatus.text.contains("Version not found")
+                       && !context.state().sessionStatus.text.contains("file list"),
+                   context.state().sessionStatus.text);
         }
     }
 };

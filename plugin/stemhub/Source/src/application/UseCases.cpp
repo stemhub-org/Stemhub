@@ -236,7 +236,6 @@ ProjectActivationJobResult createProject(const IProjectApi& api, const CreatePro
 {
     ProjectActivationJobResult result;
     result.projectFile = input.localProjectFile;
-    result.refreshProjects = true;
 
     const auto projectName = input.localProjectFile.existsAsFile()
         ? input.localProjectFile.getFileNameWithoutExtension()
@@ -252,22 +251,28 @@ ProjectActivationJobResult createProject(const IProjectApi& api, const CreatePro
     if (!createdProject.ok())
         return failWith(result, createdProject, "Failed to create project.");
 
-    auto projectsResult = api.fetchProjects(input.token);
-    if (projectsResult.ok())
-        result.projects = std::move(*projectsResult.value);
+    // From here on the project exists: whatever fails next, the grid must show it.
+    result.selectedProject = *createdProject.value;
+
+    if (auto projectsResult = api.fetchProjects(input.token); projectsResult.ok())
+        result.refreshedProjects = std::move(*projectsResult.value);
 
     const auto branchesResult = api.fetchBranches(createdProject.value->id, input.token);
     if (!branchesResult.ok())
-        return failWith(result, branchesResult, "Project created, but its workspaces couldn't be loaded.");
+    {
+        result.sessionExpired = branchesResult.isUnauthorized();
+        result.errorMessage = "Project \"" + projectName + "\" was created, but its workspaces couldn't be loaded: "
+                            + branchesResult.errorMessage("unknown error");
+        return result;
+    }
     if (branchesResult.value->empty())
     {
-        result.errorMessage = "Project created but no workspace was returned.";
+        result.errorMessage = "Project \"" + projectName + "\" was created, but it has no workspace.";
         return result;
     }
 
     result.branches = *branchesResult.value;
     const auto selectedBranch = chooseBranch(result.branches, {});
-    result.selectedProject = *createdProject.value;
     result.branchId = selectedBranch.id;
     result.branchName = selectedBranch.name;
 

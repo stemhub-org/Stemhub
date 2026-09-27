@@ -194,9 +194,10 @@ ApiResult<juce::var> ApiClient::fetchVersionManifest(const juce::String& version
     if (!version.ok())
         return version;
 
+    // The version exists, but was saved without a manifest (by the old upload flow).
     const auto manifest = version.value->getProperty("manifest_json", {});
     if (!manifest.isObject())
-        return ApiResult<juce::var>::failure({ ApiError::Kind::notFound, 404, "This version has no file list." });
+        return ApiResult<juce::var>::failure({ ApiError::Kind::invalidResponse, 0, "This version has no file list, so it can't be restored." });
 
     return ApiResult<juce::var>::success(manifest);
 }
