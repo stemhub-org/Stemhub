@@ -104,6 +104,38 @@ public:
 
             expect(!WorkingCopyBaseline {}.isSet() && !WorkingCopyBaseline {}.describes(file), "an empty baseline describes nothing");
         }
+
+        beginTest("Collecting a project's files stops when its job is asked to stop");
+        {
+            TestEnvironment environment;
+            const auto projectFile = environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+            for (int index = 0; index < 20; ++index)
+                expect(environment.root.getChildFile("stem" + juce::String(index) + ".wav").replaceWithText("stem"));
+
+            // Like the plugin window's file count when the window closes.
+            BlockingGate gate;
+            BackgroundJobCoordinator<size_t> jobs { 1, [] {} };
+            jobs.enqueue([&gate, projectFile](const auto&)
+            {
+                gate.block();
+                return stemhub::snapshotfiles::collect(projectFile).size();
+            });
+            expect(gate.waitUntilEntered(), "the count should start");
+            jobs.stopRunningJobs();
+            gate.release();
+
+            std::vector<size_t> counts;
+            const auto deadline = juce::Time::getMillisecondCounter() + static_cast<juce::uint32>(kWaitTimeoutMs);
+            while (counts.empty() && juce::Time::getMillisecondCounter() < deadline)
+            {
+                counts = jobs.takeResults();
+                juce::Thread::sleep(5);
+            }
+
+            expect(counts.size() == 1 && counts.front() == 0,
+                   "a stopped count walks no further: " + juce::String(counts.empty() ? -1 : static_cast<int>(counts.front())));
+        }
     }
 };
 

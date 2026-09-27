@@ -110,6 +110,7 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(juce::AudioProcessor& o
     dashboardView.onCancel = [this] { session.cancelRequest(); };
     dashboardView.setMaxNoteLength(kMaxSaveNoteLength);
 
+    lastSeenSavedVersionId = session.getState().lastSavedVersionId;
     session.requestRestoreSavedSession();
     refreshSessionUi();
 }
@@ -150,16 +151,16 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
 {
     const auto& state = session.getState();
 
-    // A save that finished cleanly consumes its note, and changed what the next one takes; a
-    // failed one keeps the note for the retry.
-    const auto didSave = lastObservedOperationState == OperationState::committing
-                      && state.operationState == OperationState::idle
-                      && !state.sessionStatus.isError();
-    lastObservedOperationState = state.operationState;
-    if (didSave)
+    // A save that created a version consumes its note, and changed what the next one takes. A
+    // failed or cancelled save keeps the note for the retry.
+    if (state.lastSavedVersionId != lastSeenSavedVersionId)
     {
-        dashboardView.clearCommitMessage();
-        countedProjectFile = juce::File();
+        lastSeenSavedVersionId = state.lastSavedVersionId;
+        if (lastSeenSavedVersionId.isNotEmpty())
+        {
+            dashboardView.clearCommitMessage();
+            countedProjectFile = juce::File();
+        }
     }
 
     const bool isSignedIn = state.authState == AuthState::signedIn;
@@ -191,14 +192,14 @@ void StemhubAudioProcessorEditor::refreshProjectSelectionUi()
     for (const auto& project : state.projects)
         projectItems.push_back({ project.id, project.name, project.description, project.category, project.isPublic });
 
-    const auto effectiveProjectFile = session.getEffectiveProjectFile();
-    const auto hasSelectedProjectFile = effectiveProjectFile.existsAsFile();
+    const auto gridProjectFile = session.getProjectFileForGrid();
+    const auto hasSelectedProjectFile = gridProjectFile.existsAsFile();
     const auto status = projectGridStatus(state);
     projectSelectionView.setMessage(status.text, toMessageStatus(status.severity));
     projectSelectionView.setActivity(toSessionActivity(state.operationState));
     projectSelectionView.setProjectFileSelectionState(hasSelectedProjectFile,
                                                       hasSelectedProjectFile
-                                                          ? effectiveProjectFile.getFullPathName()
+                                                          ? gridProjectFile.getFullPathName()
                                                           : juce::String());
     projectSelectionView.setCanCreateProject(hasSelectedProjectFile);
     projectSelectionView.setAccountName(state.currentUser ? state.currentUser->username : juce::String());
@@ -264,18 +265,19 @@ void StemhubAudioProcessorEditor::handleAsyncUpdate()
 
 void StemhubAudioProcessorEditor::handleChooseProjectFileClick()
 {
-    launchProjectFileChooser("Select a DAW project file", [this](const juce::File& file)
+    launchProjectFileChooser("Select a DAW project file", session.getProjectFileForGrid(), [this](const juce::File& file)
     {
-        session.setPendingProjectFile(file);
+        session.chooseProjectFile(file);
     });
 }
 
 void StemhubAudioProcessorEditor::launchProjectFileChooser(const juce::String& title,
+                                                           const juce::File& initialFile,
                                                            std::function<void(const juce::File&)> onFileChosen)
 {
     projectFileChooser = std::make_unique<juce::FileChooser>(
         title,
-        session.getState().pendingProjectFile,
+        initialFile,
         kProjectFilePattern);
 
     constexpr auto chooserFlags = juce::FileBrowserComponent::openMode
@@ -326,24 +328,18 @@ void StemhubAudioProcessorEditor::handleOpenProjectClick()
         return;
     }
 
-    const auto projectFile = session.getEffectiveProjectFile();
-    if (projectFile.existsAsFile())
-        session.setPendingProjectFile(projectFile);
-
-    session.requestOpenProject(projectId, projectFile, true);
+    session.requestOpenProject(projectId, true);
 }
 
 void StemhubAudioProcessorEditor::handleCreateProjectClick()
 {
-    const auto selectedFile = session.getEffectiveProjectFile();
-    if (!selectedFile.existsAsFile())
+    if (!session.getProjectFileForGrid().existsAsFile())
     {
         showWarning(*this, "Create project", "Choose a project file first.");
         return;
     }
 
-    session.setPendingProjectFile(selectedFile);
-    session.requestCreateProject(selectedFile);
+    session.requestCreateProject();
 }
 
 void StemhubAudioProcessorEditor::handleSignInClick()
@@ -437,10 +433,10 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
         return;
     }
 
-    const auto effectiveProjectFile = session.getEffectiveProjectFile();
-    if (!effectiveProjectFile.existsAsFile())
+    if (!session.getEffectiveProjectFile().existsAsFile())
     {
-        launchProjectFileChooser("Select a DAW project file before saving", [this, note](const juce::File& file)
+        launchProjectFileChooser("Select a DAW project file before saving", session.getState().selectedProjectFile,
+                                 [this, note](const juce::File& file)
         {
             session.setPendingProjectFile(file);
             session.requestPushVersion(note);
@@ -448,7 +444,6 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
         return;
     }
 
-    session.setPendingProjectFile(effectiveProjectFile);
     session.requestPushVersion(note);
 }
 

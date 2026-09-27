@@ -43,8 +43,8 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 - `link`: the StemHub project, branch and working file of the DAW project this instance lives in
 - Messages: one `Status` (severity + text) per screen: `authStatus`, `projectsStatus`, `sessionStatus`
 - Project selection: `projects`, `selectedProject`, `branches`, `selectedBranchId`
-- Versioning: `versionHistory`, `selectedVersionId`, `openedVersionId` (the version in the DAW)
-- Filesystem: `pendingProjectFile`, `selectedProjectFile`, working-copy baseline (file, version id, size and modification time recorded by the last save or restore)
+- Versioning: `versionHistory`, `selectedVersionId`, `openedVersionId` (the version in the DAW), `lastSavedVersionId` (set only when a save creates a version: the editor clears the save note then, and keeps it after a failed or cancelled save)
+- Filesystem: `chosenProjectFile` (picked on the project grid, for the next project opened or created there), `pendingProjectFile`, `selectedProjectFile`, working-copy baseline (file, version id, size and modification time recorded by the last save or restore)
 - Background payloads: `AuthRequestResult`, `ProjectActivationJobResult`, `BranchHistoryJobResult`, `PushVersionJobResult`, `RestoreVersionJobResult`
 
 ## 3) End-To-End Lifecycle
@@ -55,8 +55,13 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 2. Plugin editor is created: the saved token signs the user in, or the user signs in from the
    Login view.
 3. The session fetches user + projects. The linked project opens (its branch and working file);
-   without a link, the UI moves to Project Selection.
-4. User opens an existing project or creates one from a local DAW file.
+   without a link, the UI moves to Project Selection. An instance still without a link takes a
+   hand-off meant for any project only now, since hosts may open the window before handing back
+   the saved link.
+4. User opens an existing project or creates one from a local DAW file. A file chosen on the
+   grid goes with the next project opened or created there; otherwise a project keeps its own
+   file and branch only if it is the one open here or the linked one, and opens without a file
+   otherwise. A project created before a later step fails is still added to the grid.
 5. The session fetches branches and initial version history; UI moves to Dashboard. When the
    project is opened from the grid and this instance has no local copy (or an unchanged copy of
    an older version), the latest version is restored into a new folder and opened in the DAW as
@@ -90,16 +95,18 @@ All major actions follow the same async pattern:
 While a job runs it can post progress reports ("Uploading 12 of 40 new files...") through the
 same queue, tagged with its epoch; they replace the progress status until the result arrives.
 
-**Stopping jobs.** Long work checks `isJobCancelled()` between steps: between two files it hashes,
-uploads or downloads, during an upload (JUCE's progress callback) and between blocks of a download.
-It is true once the thread pool asks the job to stop, which happens when:
+**Stopping jobs.** Long work checks `isJobCancelled()` between steps: while it walks the project
+folder, between two files it hashes, uploads or downloads, during an upload (JUCE's progress
+callback) and between blocks of a download. It is true once the thread pool asks the job to stop,
+which happens when:
 
 - the user presses Cancel during a save or restore (`cancelRequest()`): the job ends with
   "Save cancelled." or "Restore cancelled.", unless it had already finished, and a cancelled
   restore removes its folder;
 - the user signs out: the old session's jobs stop, and their results are dropped anyway;
 - the plugin closes: `shutdown()` asks every job to stop and waits for them, which now takes
-  about as long as the slowest request in flight rather than the whole transfer.
+  about as long as the slowest request in flight rather than the whole transfer. Closing the
+  plugin window does the same for the dashboard's file count.
 
 ## 5) Connect / Sign-In Flow
 

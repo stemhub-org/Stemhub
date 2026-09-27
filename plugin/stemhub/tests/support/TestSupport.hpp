@@ -120,9 +120,13 @@ protected:
                "the saved session should restore: " + describe(session));
     }
 
+    // With projectFile as its working file, as when the file is chosen on the grid first.
     void openProject(StemhubSession& session, const juce::String& projectId, const juce::File& projectFile)
     {
-        session.requestOpenProject(projectId, projectFile);
+        if (projectFile != juce::File())
+            session.chooseProjectFile(projectFile);
+
+        session.requestOpenProject(projectId);
         expect(waitUntil(session, [&session, projectId]
         {
             const auto& state = session.getState();

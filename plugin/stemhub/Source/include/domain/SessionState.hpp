@@ -62,8 +62,12 @@ struct SessionState
     juce::String selectedVersionId;
     // The version loaded in the DAW, as far as the plugin knows.
     juce::String openedVersionId;
+    // The version the last save created: a save that ends any other way doesn't change it.
+    juce::String lastSavedVersionId;
 
-    // A project file the user picked, not yet tied to a project.
+    // A DAW project file chosen on the project grid, for the next project opened or created there.
+    juce::File chosenProjectFile;
+    // The open project's working file when the user picked another one to save from.
     juce::File pendingProjectFile;
     // The selected project's working file.
     juce::File selectedProjectFile;

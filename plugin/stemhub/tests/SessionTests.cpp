@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <memory>
 
@@ -149,9 +150,9 @@ public:
 
             auto openGate = std::make_shared<BlockingGate>();
             context.api->branchFetchGates[projectA.id] = openGate;
-            context.session.requestOpenProject(projectA.id, {});
+            context.session.requestOpenProject(projectA.id);
             expectEntered(*openGate, "opening project A");
-            context.session.requestOpenProject(projectB.id, {});
+            context.session.requestOpenProject(projectB.id);
             expect(context.state().operationState == OperationState::loadingProjects, describe(context.session));
 
             openGate->release();
@@ -166,7 +167,7 @@ public:
             expectEntered(*historyGate, "the branch switch");
             context.session.requestSelectBranch(branchMain.id);
             context.session.requestRefreshVersionHistory();
-            context.session.requestOpenProject(projectB.id, {});
+            context.session.requestOpenProject(projectB.id);
             expect(context.state().operationState == OperationState::pulling, describe(context.session));
 
             historyGate->release();
@@ -280,7 +281,7 @@ public:
                 context.api->branchFetchReturned = jobReturned;
                 signIn(context.session);
 
-                context.session.requestOpenProject(project.id, {});
+                context.session.requestOpenProject(project.id);
                 expectEntered(*gate, "opening the project");
 
                 // Released while the session is being destroyed.
@@ -333,6 +334,101 @@ public:
             expect(waitUntil(context.session, [&context] { return context.state().authState == AuthState::signedIn; }),
                    "the next attempt signs in: " + describe(context.session));
         }
+
+        beginTest("Creating a project keeps the project list when a later step fails");
+        {
+            TestContext context;
+            context.api->projects = { makeProject("project-1", "Existing") };
+            const auto projectFile = context.environment.root.getChildFile("new song.flp");
+            expect(projectFile.replaceWithText("flp"));
+            signIn(context.session);
+
+            // The list can't be reloaded once the project is created.
+            context.api->failProjectList = true;
+            context.session.chooseProjectFile(projectFile);
+            context.session.requestCreateProject();
+            expect(waitUntil(context.session, [&context] { return context.isIdle(); }), describe(context.session));
+            expect(context.state().selectedProject.has_value() && context.state().selectedProject->id == "created-1",
+                   "the new project opens: " + describe(context.session));
+            expect(context.state().projects.size() == 2,
+                   "the grid keeps its projects and shows the new one: " + juce::String(static_cast<int>(context.state().projects.size())));
+
+            // The project is created, but its workspaces can't be loaded.
+            context.api->failProjectList = false;
+            context.api->branchErrors["created-2"] = "Failed to load workspaces.";
+            context.session.showProjectSelection();
+            context.session.chooseProjectFile(projectFile);
+            context.session.requestCreateProject();
+            expect(waitUntil(context.session, [&context] { return context.isIdle(); }), describe(context.session));
+            expect(context.state().projectsStatus.isError() && context.state().projectsStatus.text.contains("was created"),
+                   "the error says the project exists: " + describe(context.session));
+            const auto& projects = context.state().projects;
+            expect(std::any_of(projects.begin(), projects.end(), [](const Project& project) { return project.id == "created-2"; }),
+                   "so the grid lists it, and it isn't created twice");
+        }
+
+        beginTest("Opening another project from the grid doesn't take this project's file");
+        {
+            TestContext context;
+            const auto projectA = makeProject("project-a", "Song A");
+            const auto projectB = makeProject("project-b", "Song B");
+            context.api->projects = { projectA, projectB };
+            context.api->projectBranches[projectA.id] = { makeBranch("branch-a", projectA.id, "main") };
+            context.api->projectBranches[projectB.id] = { makeBranch("branch-b", projectB.id, "main") };
+            const auto fileA = context.environment.root.getChildFile("a.flp");
+            const auto movedFileA = context.environment.root.getChildFile("moved").getChildFile("a.flp");
+            expect(fileA.replaceWithText("a") && movedFileA.create().wasOk() && movedFileA.replaceWithText("a"));
+
+            signIn(context.session);
+            openProject(context.session, projectA.id, fileA);
+            // Saving A, the user picks its file from another folder, as the save dialog lets them.
+            context.session.setPendingProjectFile(movedFileA);
+            context.session.requestPushVersion("from A");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().workingCopy.isSet(); }),
+                   describe(context.session));
+
+            context.session.showProjectSelection();
+            openFromGrid(context.session, projectB.id);
+            expect(waitUntil(context.session, [&context, &projectB]
+            {
+                return context.isIdle() && context.state().selectedProject.has_value() && context.state().selectedProject->id == projectB.id;
+            }), describe(context.session));
+            expect(context.session.getEffectiveProjectFile() == juce::File(),
+                   "B has no local file yet: " + context.session.getEffectiveProjectFile().getFullPathName());
+            expect(context.state().link.workingFile == juce::File(), "the DAW project isn't linked to A's file");
+            expect(!context.state().workingCopy.isSet(), "B doesn't take A's version as its base");
+        }
+
+        beginTest("Reopening the linked project from the grid opens its branch");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branchMain = makeBranch("branch-main", project.id, "main");
+            const auto branchAlt = makeBranch("branch-alt", project.id, "alt");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branchMain, branchAlt };
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+            context.storage.credentials->saveToken("valid-token");
+
+            context.session.restoreLink({ project.id, branchAlt.id, projectFile });
+            restoreSavedSession(context.session);
+            expect(context.state().selectedBranchId == branchAlt.id, describe(context.session));
+
+            context.session.showProjectSelection();
+            openFromGrid(context.session, project.id);
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().uiState == UIState::dashboard; }),
+                   describe(context.session));
+            expect(context.state().selectedBranchId == branchAlt.id, "the branch it was on, not main: " + describe(context.session));
+            expect(context.session.getEffectiveProjectFile() == projectFile, "with its file");
+        }
+    }
+
+private:
+    // As the project grid does when a tile is clicked.
+    static void openFromGrid(StemhubSession& session, const juce::String& projectId)
+    {
+        session.requestOpenProject(projectId, true);
     }
 };
 

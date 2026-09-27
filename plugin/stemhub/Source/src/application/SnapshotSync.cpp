@@ -6,10 +6,12 @@ namespace
 {
 ApiError withContext(ApiError error, const juce::String& context)
 {
-    // "Cancelled." says it all.
-    if (error.kind != ApiError::Kind::cancelled)
-        error.message = context + (error.message.isNotEmpty() ? ": " + error.message : juce::String("."));
+    // "Cancelled." says it all, and ApiClient falls back to the same words when the server gave
+    // no detail: "Failed to create the version." needs no second "Failed to create the version".
+    if (error.kind == ApiError::Kind::cancelled || error.message == context + ".")
+        return error;
 
+    error.message = context + (error.message.isNotEmpty() ? ": " + error.message : juce::String("."));
     return error;
 }
 
@@ -99,9 +101,7 @@ ApiResult<juce::File> restoreSnapshot(const IProjectApi& api,
 
     const auto manifest = api.fetchVersionManifest(request.versionId, token);
     if (!manifest.ok())
-        return Result::failure(manifest.error->kind == ApiError::Kind::notFound
-                                   ? ApiError { ApiError::Kind::notFound, 404, "This version has no file list, so it can't be restored." }
-                                   : withContext(*manifest.error, "Failed to load the version"));
+        return Result::failure(withContext(*manifest.error, "Failed to load the version"));
 
     ParsedManifest parsed;
     if (const auto status = SnapshotBundler::parseManifest(*manifest.value, parsed); status.failed())
