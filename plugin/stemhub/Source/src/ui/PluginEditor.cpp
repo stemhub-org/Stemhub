@@ -2,8 +2,6 @@
 
 namespace
 {
-constexpr auto kProjectFilePattern = "*.flp;*.als";
-
 namespace theme = stemhub::plugin::theme;
 
 theme::MessageStatus toMessageStatus(Status::Severity severity)
@@ -24,6 +22,7 @@ SessionActivity toSessionActivity(OperationState operation)
 {
     switch (operation)
     {
+        case OperationState::signingIn:
         case OperationState::loadingProjects:
         case OperationState::pulling:    return SessionActivity::loading;
         case OperationState::committing: return SessionActivity::saving;
@@ -163,7 +162,7 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
         }
     }
 
-    const bool isSignedIn = state.authState == AuthState::signedIn;
+    const bool isSignedIn = state.isSignedIn();
     const bool showProjectSelection = isSignedIn && state.uiState == UIState::projectSelection;
     const bool showDashboard = isSignedIn && !showProjectSelection;
 
@@ -227,25 +226,24 @@ void StemhubAudioProcessorEditor::refreshDashboardUi()
     for (const auto& version : state.versionHistory)
         versionItems.push_back(toVersionListItem(version, state.openedVersionId));
 
-    const auto fileToDisplay = session.getEffectiveProjectFile();
+    const auto& workingFile = state.workingFile;
+    const auto* branch = state.selectedBranch();
 
     dashboardView.setProjectStatusMessage(state.sessionStatus.text, toMessageStatus(state.sessionStatus.severity));
     dashboardView.setActivity(toSessionActivity(state.operationState));
     dashboardView.setBranches(branchNames, branchIds, state.selectedBranchId);
     dashboardView.setVersions(versionItems, state.selectedVersionId);
     dashboardView.setProjectNameMessage(state.selectedProject ? state.selectedProject->name : "No project selected");
-    dashboardView.setBranchNameMessage(state.selectedBranchName.isNotEmpty() ? state.selectedBranchName
-                                                                             : "Workspace not selected");
-    dashboardView.setSelectedProjectFilePath(fileToDisplay.existsAsFile()
-                                                ? fileToDisplay.getFullPathName()
-                                                : juce::String());
+    dashboardView.setBranchNameMessage(branch != nullptr ? branch->name : "Workspace not selected");
+    dashboardView.setSelectedProjectFilePath(workingFile.existsAsFile() ? workingFile.getFullPathName() : juce::String());
 
     refreshSnapshotSize();
 }
 
 void StemhubAudioProcessorEditor::refreshSnapshotSize()
 {
-    const auto projectFile = session.getEffectiveProjectFile();
+    const auto& workingFile = session.getState().workingFile;
+    const auto projectFile = workingFile.existsAsFile() ? workingFile : juce::File();
     if (projectFile == countedProjectFile)
         return;
 
@@ -278,7 +276,7 @@ void StemhubAudioProcessorEditor::launchProjectFileChooser(const juce::String& t
     projectFileChooser = std::make_unique<juce::FileChooser>(
         title,
         initialFile,
-        kProjectFilePattern);
+        stemhub::snapshotfiles::projectFilePattern());
 
     constexpr auto chooserFlags = juce::FileBrowserComponent::openMode
         | juce::FileBrowserComponent::canSelectFiles;
@@ -296,9 +294,9 @@ void StemhubAudioProcessorEditor::launchProjectFileChooser(const juce::String& t
 void StemhubAudioProcessorEditor::launchProjectFolderChooser(const juce::String& title,
                                                            std::function<void(const juce::File&)> onFolderChosen)
 {
-    const auto& pendingProjectFile = session.getState().pendingProjectFile;
-    const auto defaultFolder = pendingProjectFile.existsAsFile()
-        ? pendingProjectFile.getParentDirectory()
+    const auto workingFolder = session.getState().workingFile.getParentDirectory();
+    const auto defaultFolder = workingFolder.isDirectory()
+        ? workingFolder
         : juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
 
     projectFileChooser = std::make_unique<juce::FileChooser>(
@@ -403,10 +401,8 @@ void StemhubAudioProcessorEditor::handleRestoreClick()
                                      });
     };
 
-    auto restoreFolder = session.getEffectiveProjectFile().getParentDirectory();
-    if (!restoreFolder.isDirectory())
-        restoreFolder = session.getState().pendingProjectFile.getParentDirectory();
-
+    // Next to the working file, when its folder is there.
+    const auto restoreFolder = session.getState().workingFile.getParentDirectory();
     if (!restoreFolder.isDirectory())
     {
         launchProjectFolderChooser("Select where to restore version snapshot", [selectedVersionId, confirmAndRestore](const juce::File& folder)
@@ -433,12 +429,12 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
         return;
     }
 
-    if (!session.getEffectiveProjectFile().existsAsFile())
+    if (!session.getState().workingFile.existsAsFile())
     {
-        launchProjectFileChooser("Select a DAW project file before saving", session.getState().selectedProjectFile,
+        launchProjectFileChooser("Select a DAW project file before saving", session.getState().workingFile,
                                  [this, note](const juce::File& file)
         {
-            session.setPendingProjectFile(file);
+            session.setWorkingFile(file);
             session.requestPushVersion(note);
         });
         return;
@@ -449,8 +445,7 @@ void StemhubAudioProcessorEditor::requestSaveWithCommitMessage(juce::String comm
 
 bool StemhubAudioProcessorEditor::hasActiveProjectSelection() const
 {
-    const auto& state = session.getState();
-    return state.selectedProject.has_value() && state.selectedBranchId.isNotEmpty();
+    return session.getState().hasOpenProject();
 }
 
 void StemhubAudioProcessorEditor::handleSyncClick()

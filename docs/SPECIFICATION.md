@@ -237,7 +237,7 @@ Full detail lives in [TECHNICAL_CONTEXT.md](./TECHNICAL_CONTEXT.md) and [plugin-
 ### Cross-cutting patterns (from CLAUDE.md)
 - **Backend:** async-first, dependency injection, soft deletes (`is_deleted` + `deleted_at`), Pydantic validation at boundaries.
 - **Frontend:** centralized `authFetch` for all API calls (token + error handling), App Router file-based routing, theme provider.
-- **Plugin:** enum-based state machines (`AuthState`, `UIState`, `OperationState`), background jobs with generation tracking, `ChangeBroadcaster` for editor updates, `IProjectApi` for testability.
+- **Plugin:** one session object owning the state (`UIState`, `OperationState`), background jobs tagged with a request epoch and ended by one rule, `ChangeBroadcaster` for editor updates, `IProjectApi` for testability.
 
 ### Standards
 - **Accessibility:** WCAG 2.1 AA for the web app.

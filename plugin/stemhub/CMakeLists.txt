@@ -27,7 +27,7 @@ set(STEMHUB_CORE_SOURCES
     Source/src/application/CredentialStore.cpp
     Source/src/application/Log.cpp
     Source/src/application/PluginState.cpp
-    Source/src/application/ProjectFileService.cpp
+    Source/src/application/RestoreFolders.cpp
     Source/src/application/RestoreHandoff.cpp
     Source/src/application/SessionStorage.cpp
     Source/src/application/SnapshotFiles.cpp
@@ -36,6 +36,7 @@ set(STEMHUB_CORE_SOURCES
     Source/src/application/UseCases.cpp
     Source/src/application/WorkingCopyIndex.cpp
     Source/src/domain/Manifest.cpp
+    Source/src/domain/VersionHistory.cpp
     Source/src/network/ApiClient.cpp
     Source/src/network/ApiConfig.cpp
     Source/src/network/ApiJson.cpp)

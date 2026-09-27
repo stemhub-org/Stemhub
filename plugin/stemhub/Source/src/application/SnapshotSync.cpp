@@ -23,7 +23,7 @@ ApiError withContext(ApiError error, const juce::String& context)
 
 ApiError localFileError(const juce::String& message)
 {
-    return { ApiError::Kind::localFile, 0, message };
+    return { ApiError::Kind::localFile, message };
 }
 
 void reportIfWanted(const ReportProgress& report, const juce::String& text)
@@ -68,12 +68,12 @@ ApiResult<Snapshot> buildSnapshot(const juce::File& projectFile, const ReportPro
         // Paths keep their folders: basenames alone made files from different folders collide.
         const auto path = toManifestPath(file, root);
         if (!manifest::isSafePath(path))
-            return Result::failure({ ApiError::Kind::invalidRequest, 0, "Can't save \"" + path + "\": rename this file and try again." });
+            return Result::failure({ ApiError::Kind::invalidRequest, "Can't save \"" + path + "\": rename this file and try again." });
     }
 
     const auto trackCount = files.size() - 1;
     if (trackCount > manifest::kMaxTracks)
-        return Result::failure({ ApiError::Kind::invalidRequest, 0,
+        return Result::failure({ ApiError::Kind::invalidRequest,
                                  "This project folder has " + juce::String(static_cast<int>(trackCount))
                                      + " audio files; a version can hold " + juce::String(static_cast<int>(manifest::kMaxTracks))
                                      + ". Move the ones this project doesn't use out of its folder." });
@@ -110,10 +110,7 @@ ApiResult<Snapshot> buildSnapshot(const juce::File& projectFile, const ReportPro
 
 namespace stemhub::snapshots
 {
-ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api,
-                                       const juce::String& token,
-                                       const PushRequest& request,
-                                       const ReportProgress& report)
+ApiResult<VersionSummary> pushSnapshot(const SignedInApi& api, const PushRequest& request, const ReportProgress& report)
 {
     using Result = ApiResult<VersionSummary>;
     jassert(request.projectId.isNotEmpty() && request.branchId.isNotEmpty());
@@ -122,7 +119,7 @@ ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api,
     if (!snapshot.ok())
         return Result::failure(*snapshot.error);
 
-    const auto missing = api.checkMissingBlobs(request.projectId, snapshot.value->distinctHashes, token);
+    const auto missing = api.checkMissingBlobs(request.projectId, snapshot.value->distinctHashes);
     if (!missing.ok())
         return Result::failure(withContext(*missing.error, "Failed to check which files StemHub already has"));
 
@@ -137,7 +134,7 @@ ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api,
             continue;
 
         reportIfWanted(report, "Uploading " + countOf(index, missingHashes.size()) + " new files...");
-        const auto upload = api.uploadBlob(request.projectId, missingHashes[index], file->second, token);
+        const auto upload = api.uploadBlob(request.projectId, missingHashes[index], file->second);
         if (!upload.ok())
             return Result::failure(withContext(*upload.error, "Failed to upload " + file->second.getFileName()));
     }
@@ -152,17 +149,14 @@ ApiResult<VersionSummary> pushSnapshot(const IProjectApi& api,
     createRequest.parentVersionId = request.parentVersionId;
     createRequest.manifest = manifest::toJson(snapshot.value->manifest);
 
-    auto created = api.createVersionFromManifest(request.branchId, createRequest, token);
+    auto created = api.createVersionFromManifest(request.branchId, createRequest);
     if (!created.ok())
         return Result::failure(withContext(*created.error, "Failed to create the version"));
 
     return created;
 }
 
-ApiResult<juce::File> restoreSnapshot(const IProjectApi& api,
-                                      const juce::String& token,
-                                      const RestoreRequest& request,
-                                      const ReportProgress& report)
+ApiResult<juce::File> restoreSnapshot(const SignedInApi& api, const RestoreRequest& request, const ReportProgress& report)
 {
     using Result = ApiResult<juce::File>;
     jassert(request.projectId.isNotEmpty() && request.versionId.isNotEmpty());
@@ -171,13 +165,13 @@ ApiResult<juce::File> restoreSnapshot(const IProjectApi& api,
     if (folder.exists())
         return Result::failure(localFileError("The restore folder already exists: " + folder.getFullPathName()));
 
-    const auto manifestJson = api.fetchVersionManifest(request.versionId, token);
+    const auto manifestJson = api.fetchVersionManifest(request.versionId);
     if (!manifestJson.ok())
         return Result::failure(withContext(*manifestJson.error, "Failed to load the version"));
 
     manifest::Manifest version;
     if (const auto status = manifest::fromJson(*manifestJson.value, version); status.failed())
-        return Result::failure({ ApiError::Kind::invalidResponse, 0, status.getErrorMessage() });
+        return Result::failure({ ApiError::Kind::invalidResponse, status.getErrorMessage() });
 
     const auto partialFolder = folder.getSiblingFile("." + folder.getFileName() + ".partial-" + juce::Uuid().toString().substring(0, 8));
     if (!partialFolder.createDirectory())
@@ -208,7 +202,7 @@ ApiResult<juce::File> restoreSnapshot(const IProjectApi& api,
         if (!destination.isAChildOf(partialFolder) || !destination.getParentDirectory().createDirectory())
             return fail(localFileError("Could not create " + file.path + " inside the restore folder."));
 
-        const auto download = api.downloadBlob(request.projectId, file.sha256, destination, token);
+        const auto download = api.downloadBlob(request.projectId, file.sha256, destination);
         if (!download.ok())
             return fail(withContext(*download.error, "Failed to download " + file.path));
 
@@ -218,8 +212,8 @@ ApiResult<juce::File> restoreSnapshot(const IProjectApi& api,
 
         if (sha != file.sha256)
             return fail(destination.getSize() < file.sizeBytes
-                            ? ApiError { ApiError::Kind::network, 0, "The download of " + file.path + " stopped early. Try again." }
-                            : ApiError { ApiError::Kind::invalidResponse, 0, "The downloaded " + file.path + " doesn't match its checksum." });
+                            ? ApiError { ApiError::Kind::network, "The download of " + file.path + " stopped early. Try again." }
+                            : ApiError { ApiError::Kind::invalidResponse, "The downloaded " + file.path + " doesn't match its checksum." });
     }
 
     // Marks the copy as a project of its own, which a save of a project around it leaves out.

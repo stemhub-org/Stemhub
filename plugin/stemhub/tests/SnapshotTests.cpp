@@ -1,4 +1,4 @@
-#include "application/ProjectFileService.hpp"
+#include "application/RestoreFolders.hpp"
 #include "application/SnapshotFiles.hpp"
 #include "domain/Manifest.hpp"
 #include "support/TestSupport.hpp"
@@ -159,15 +159,15 @@ public:
 
         beginTest("Projects restored on opening go under the project's and workspace's names");
         {
-            namespace projectfiles = stemhub::projectfiles;
+            namespace restorefolders = stemhub::restorefolders;
 
             const auto base = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("StemHub");
-            const auto root = projectfiles::getRestoredProjectRoot(base, makeProject("project-1", " AC/DC: Live? "),
-                                                                   makeBranch("branch-1", "project-1", "main"));
+            const auto root = restorefolders::projectRoot(base, makeProject("project-1", " AC/DC: Live? "),
+                                                      makeBranch("branch-1", "project-1", "main"));
             expect(root == base.getChildFile("ACDC Live").getChildFile("main"), root.getFullPathName());
 
-            const auto fallback = projectfiles::getRestoredProjectRoot(base, makeProject("project-1", ".."),
-                                                                       makeBranch("branch/1", "project-1", "  "));
+            const auto fallback = restorefolders::projectRoot(base, makeProject("project-1", ".."),
+                                                          makeBranch("branch/1", "project-1", "  "));
             expect(fallback == base.getChildFile("project-1").getChildFile("branch-1"),
                    "a name that can't be a folder gives way to the id: " + fallback.getFullPathName());
         }
