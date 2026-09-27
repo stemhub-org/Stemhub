@@ -1,4 +1,4 @@
-#include "ui/Views.hpp"
+#include "ui/LoginView.hpp"
 
 namespace
 {
@@ -72,53 +72,76 @@ LoginView::LoginView()
     addAndMakeVisible(passwordLabel);
     styleFieldLabel(passwordLabel, "Password");
 
+    const auto signIn = [this]
+    {
+        if (signInButton.isEnabled() && onSignIn != nullptr)
+            onSignIn();
+    };
+
     addAndMakeVisible(emailInput);
     theme::stylePaperTextInput(emailInput, "you@example.com");
+    emailInput.setTitle("Email");
+    emailInput.onReturnKey = signIn;
 
     addAndMakeVisible(passwordInput);
     theme::stylePaperTextInput(passwordInput, "Your password");
     passwordInput.setPasswordCharacter(static_cast<juce::juce_wchar>(0x2022));
+    passwordInput.setTitle("Password");
+    passwordInput.onReturnKey = signIn;
 
     addAndMakeVisible(signInButton);
     signInButton.setButtonText("Sign in  " + theme::arrowRight());
     theme::stylePrimaryButton(signInButton);
     signInButton.setTooltip("Sign in to access Stemhub projects.");
-    signInButton.onClick = [this]
+    signInButton.onClick = signIn;
+
+    addChildComponent(cancelButton);
+    cancelButton.setButtonText("Cancel");
+    theme::styleLinkButton(cancelButton, Theme::kInkSubtle, Theme::kInk);
+    cancelButton.getProperties().set("underlined", true);
+    cancelButton.getProperties().set("stemhubAlignLeft", true);
+    cancelButton.setTooltip("Stop signing in.");
+    cancelButton.onClick = [this]
     {
-        if (onSignIn != nullptr)
-            onSignIn();
+        if (onCancel != nullptr)
+            onCancel();
     };
-
-    addAndMakeVisible(forgotPasswordButton);
-    forgotPasswordButton.setButtonText("Forgot password?");
-    theme::styleLinkButton(forgotPasswordButton, Theme::kInkSubtle, Theme::kInk);
-    forgotPasswordButton.getProperties().set("underlined", true);
-    forgotPasswordButton.getProperties().set("stemhubAlignLeft", true);
-    forgotPasswordButton.onClick = [] {};
-
-    // Offline mode is not wired up yet; keep the control out of the layout until it is.
-    addChildComponent(offlineButton);
-    offlineButton.setButtonText("Continue offline");
-    theme::styleSecondaryButton(offlineButton);
-    offlineButton.onClick = [] {};
 }
 
-void LoginView::setMessage(const juce::String& message, stemhub::plugin::theme::MessageStatus status)
+void LoginView::show(const LoginModel& model)
+{
+    if (model.status == shown.status && model.isSigningIn == shown.isSigningIn)
+        return;
+
+    shown = model;
+    showStatus(model.status.text, theme::messageStatusFor(model.status.severity), model.isSigningIn);
+}
+
+void LoginView::showFormMessage(const juce::String& message)
+{
+    showStatus(message, theme::MessageStatus::warning, false);
+}
+
+void LoginView::clearInputs()
+{
+    emailInput.clear();
+    passwordInput.clear();
+}
+
+void LoginView::showStatus(const juce::String& message, stemhub::plugin::theme::MessageStatus status, bool isSigningIn)
 {
     theme::styleStatusLabel(authStateLabel, message, status);
     theme::adaptStatusLabelForPaper(authStateLabel, status);
     authStateLabel.setTooltip(message);
     authStateLabel.setVisible(message.isNotEmpty());
 
-    const bool isLoadingInProgress = status == theme::MessageStatus::loading;
-    signInButton.setEnabled(!isLoadingInProgress);
-    emailInput.setEnabled(!isLoadingInProgress);
-    passwordInput.setEnabled(!isLoadingInProgress);
-    forgotPasswordButton.setEnabled(!isLoadingInProgress);
-    offlineButton.setEnabled(!isLoadingInProgress);
-    theme::setButtonBusy(signInButton, isLoadingInProgress);
-    signInButton.setButtonText(isLoadingInProgress ? juce::String("Signing in...")
-                                                   : "Sign in  " + theme::arrowRight());
+    signInButton.setEnabled(!isSigningIn);
+    emailInput.setEnabled(!isSigningIn);
+    passwordInput.setEnabled(!isSigningIn);
+    theme::setButtonBusy(signInButton, isSigningIn);
+    signInButton.setButtonText(isSigningIn ? juce::String("Signing in...")
+                                           : "Sign in  " + theme::arrowRight());
+    cancelButton.setVisible(isSigningIn);
     resized();
     repaint();
 }
@@ -196,7 +219,7 @@ void LoginView::resized()
     const auto layout = computeLayout(getWidth(), getHeight());
     auto content = layout.card.reduced(kCardPadding);
 
-    forgotPasswordButton.setBounds(content.removeFromBottom(20).withWidth(140));
+    cancelButton.setBounds(content.removeFromBottom(20).withWidth(140));
 
     content.removeFromTop(14); // eyebrow, painted
     content.removeFromTop(16);
@@ -227,5 +250,4 @@ void LoginView::resized()
     }
 
     signInButton.setBounds(content.removeFromTop(46));
-    offlineButton.setBounds(0, 0, 0, 0);
 }

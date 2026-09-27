@@ -7,8 +7,15 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 - `StemhubAudioProcessor` (`plugin/stemhub/Source/src/application/PluginProcessor.cpp`)
   - What the host sees: audio passes through untouched. Owns the session and creates the editor.
 - `StemhubAudioProcessorEditor` (`plugin/stemhub/Source/src/ui/PluginEditor.cpp`)
-  - Owns the views. Shows the session's state and turns clicks and shortcuts into its intents
-    (`requestSignIn`, `requestOpenProject`, `requestPushVersion`, etc.).
+  - Owns the views, and turns clicks into the session's intents (`requestSignIn`,
+    `requestOpenProject`, `requestPushVersion`, etc.). Keys the plugin doesn't use, Cmd/Ctrl+S
+    among them, go to the DAW.
+- `SessionPresenter` (`plugin/stemhub/Source/src/ui/SessionPresenter.cpp`)
+  - Works out what each screen shows from `SessionState`: plain view models, without widgets, so
+    the tests check them. `UiFormat` writes times, sizes and titles the same way everywhere.
+  - The views (`LoginView`, `ProjectSelectionView` with its tiles, `DashboardView` with the
+    `VersionTimeline` and the `VersionDetailCard`) each take their model and change only what
+    differs from what they show.
 - `StemhubSession` (`plugin/stemhub/Source/src/application/StemhubSession.cpp`)
   - The single owner of `SessionState`, used only on the message thread.
   - Starts one background job at a time, applies its result, and tells listeners through its
@@ -102,8 +109,8 @@ All major actions follow the same async pattern:
 7. `finish()` applies the one rule every job ends with: the session is idle again; a refused
    token signs the user out; a failure (or a cancel) shows on the operation's screen. Otherwise
    the session applies the rest of the result.
-8. The session calls `sendChangeMessage()`, and the editor's `refreshSessionUi()` re-renders the
-   active view.
+8. The session calls `sendChangeMessage()`. The editor's `refreshSessionUi()` gets the visible
+   screen's model from `SessionPresenter`, and that view updates what changed.
 
 While a job runs it can post progress reports ("Uploading 12 of 40 new files...") through the
 same queue, tagged with its epoch; they replace the progress status until the result arrives.
@@ -280,8 +287,8 @@ sequenceDiagram
 
 - UI layer does not call backend directly; it only talks to the session.
 - The session does not perform HTTP directly; its jobs call the use cases, which use `IProjectApi`.
-- The session and everything under it build without JUCE's GUI and audio modules: the tests
-  link only `juce_events` and `juce_cryptography`.
+- The session and everything under it, and the presenter above it, build without JUCE's GUI and
+  audio modules: the tests link only `juce_events` and `juce_cryptography`.
 - Network layer (`ApiClient`) is replaceable via `IProjectApi` injection (the tests use a fake).
 - Versioning logic (`SnapshotSync`, `SnapshotFiles`, `stemhub::manifest`) is isolated from view logic and from JUCE widgets.
 - Background execution is centralized (`BackgroundJobCoordinator`) and shared by all request types.
