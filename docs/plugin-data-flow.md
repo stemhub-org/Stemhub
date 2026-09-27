@@ -22,8 +22,9 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
     JSON parsing lives in `ApiJson.cpp`. Every failure is an `ApiError` with a kind (network,
     unauthorized, not found, server, ...).
 - `SnapshotSync` (`plugin/stemhub/Source/src/application/SnapshotSync.cpp`)
-  - Stateless content-addressed push (upload what the server lacks, then create the version)
-    and restore (download into a new folder, verify every SHA-256).
+  - Stateless content-addressed push (hash the project's files, upload what the server lacks,
+    then create the version) and restore (download into a hidden folder, verify every SHA-256,
+    then rename it to its place).
 - `UseCases` (`plugin/stemhub/Source/src/application/UseCases.cpp`)
   - The background work of each action, as functions from an input built on the message
     thread to a result the session applies.
@@ -32,8 +33,9 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
     in its folder and subfolders, without hidden files, `Backup` folders, and copies the plugin
     restored there. The push and the dashboard's "12 files · 340 MB" count both use it; the
     editor counts in the background.
-- `SnapshotBundler` (`plugin/stemhub/Source/src/application/SnapshotBundler.cpp`)
-  - Hashes those files and builds the version manifest; validates manifests before a restore
+  - Hashes files, reading them in large blocks and stopping when its job is asked to.
+- `stemhub::manifest` (`plugin/stemhub/Source/src/domain/Manifest.cpp`)
+  - The version manifest format in one place: written for a save, and validated before a restore
     (see `docs/content-addressed-storage.md`).
 
 ## 2) Data Objects Moving Through The Flow
@@ -178,17 +180,17 @@ sequenceDiagram
    extension.
 2. The session picks the parent version (the working copy's version, else the branch head) and
    enqueues the job with everything it needs.
-3. `SnapshotBundler::buildManifest(...)` hashes the files `SnapshotFiles::collect` lists; paths
-   are stored relative to the project file's folder.
-4. `stemhub::snapshots::pushSnapshot(...)` calls the backend:
+3. `stemhub::snapshots::pushSnapshot(...)` hashes the files `SnapshotFiles::collect` lists (paths
+   relative to the project file's folder, checked against the backend limits first), then calls
+   the backend:
    - `POST /projects/{projectId}/blobs/check-missing`
    - `PUT /projects/{projectId}/blobs/{sha256}` for each missing file
    - `POST /branches/{branchId}/versions/from-manifest`
-5. The job fetches `GET /branches/{branchId}/versions/`; the session selects the new version
+4. The job fetches `GET /branches/{branchId}/versions/`; the session selects the new version
    and makes it the parent of the next save.
 
 The dashboard shows "Preparing 3 of 40 files...", then "Uploading 2 of 5 new files...", with a
-Cancel link. A cancel before step 4 creates nothing; once the version is created, the save
+Cancel link. A cancel before the version is created creates nothing; once it is, the save
 stands.
 
 ### Sequence
@@ -199,7 +201,6 @@ sequenceDiagram
     participant E as PluginEditor
     participant P as StemhubSession
     participant W as Push job
-    participant S as SnapshotBundler
     participant V as SnapshotSync
     participant A as ApiClient
 
@@ -207,9 +208,8 @@ sequenceDiagram
     E->>P: requestPushVersion
     P->>P: Check the file changed, set committing, pick the parent
     P->>W: Enqueue the push with its input
-    W->>S: Hash files and build manifest
-    S-->>W: Return manifest and file entries
     W->>V: Push version request
+    V->>V: Collect and hash files, build the manifest
     V->>A: POST blobs check-missing
     V->>A: PUT each missing blob
     V->>A: POST branch versions from-manifest
@@ -270,7 +270,7 @@ sequenceDiagram
 - The session and everything under it build without JUCE's GUI and audio modules: the tests
   link only `juce_events` and `juce_cryptography`.
 - Network layer (`ApiClient`) is replaceable via `IProjectApi` injection (the tests use a fake).
-- Versioning logic (`SnapshotSync`, `SnapshotBundler`) is isolated from view logic and from JUCE widgets.
+- Versioning logic (`SnapshotSync`, `SnapshotFiles`, `stemhub::manifest`) is isolated from view logic and from JUCE widgets.
 - Background execution is centralized (`BackgroundJobCoordinator`) and shared by all request types.
 
 ## 11) What Is Saved Where

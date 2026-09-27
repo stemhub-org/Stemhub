@@ -24,6 +24,10 @@ struct Summary
 // Lists the folder, so it belongs on a background thread.
 Summary summarize(const juce::File& projectFile);
 
+// Lowercase hex SHA-256 of a file's bytes. Empty when the file can't be read, or when the job
+// running it is asked to stop partway.
+[[nodiscard]] juce::String sha256OfFile(const juce::File& file);
+
 [[nodiscard]] bool isDawProjectFile(const juce::File& file);
 
 // "FL Studio" for .flp, "Ableton Live" for .als, empty otherwise.

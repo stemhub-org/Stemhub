@@ -512,6 +512,57 @@ public:
             expect(leftovers.isEmpty(), "the half-restored folder is removed");
             expect(context.state().selectedProjectFile == projectFile, "the working file doesn't change");
             expect(context.openedFiles.isEmpty() && !context.handoffFile().exists(), "nothing is handed to the DAW");
+
+            // A connection that drops midway is not a corrupt file.
+            context.api->corruptDownloads = false;
+            context.api->truncateDownloads = true;
+            context.session.requestRestoreVersion(versionId, restoresFolder);
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
+                   "the restore should fail: " + describe(context.session));
+            expect(context.state().sessionStatus.text.contains("stopped early"), describe(context.session));
+            leftovers.clear();
+            restoresFolder.findChildFiles(leftovers, juce::File::findFilesAndDirectories, true);
+            expect(leftovers.isEmpty(), "nothing is left behind either");
+        }
+
+        beginTest("A restored folder only appears once every file is in it");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+            const auto versionId = context.api->addVersion(branch.id, "first", { { "song.flp", "flp" }, { "Drums/kick.wav", "kick" } });
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("mine"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+
+            auto gate = std::make_shared<BlockingGate>();
+            context.api->setDownloadGate(project.id, gate);
+            const auto restoresFolder = context.environment.root.getChildFile("restores");
+            expect(restoresFolder.createDirectory().wasOk());
+            context.session.requestRestoreVersion(versionId, restoresFolder);
+            expectEntered(*gate, "the first download");
+
+            const auto visibleFolders = [&restoresFolder]
+            {
+                juce::StringArray names;
+                for (const auto& entry : juce::RangedDirectoryIterator(restoresFolder, false, "*", juce::File::findDirectories))
+                    if (!entry.getFile().getFileName().startsWithChar('.'))
+                        names.add(entry.getFile().getFileName());
+                return names;
+            };
+            expect(visibleFolders().isEmpty(), "nothing appears while files are missing: " + visibleFolders().joinIntoString(", "));
+
+            gate->release();
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
+                   describe(context.session));
+            juce::Array<juce::File> everything;
+            restoresFolder.findChildFiles(everything, juce::File::findDirectories, false);
+            expect(everything.size() == 1 && visibleFolders().size() == 1, "only the finished folder remains");
+            expect(context.openedFiles.getFirst().getParentDirectory().getChildFile("Drums/kick.wav").loadFileAsString() == "kick");
         }
 
         beginTest("A restore hand-off survives the plugin window opening before the host's saved state");

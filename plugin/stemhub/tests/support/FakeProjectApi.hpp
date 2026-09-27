@@ -233,6 +233,8 @@ public:
             data = blob->second;
             if (corruptDownloads)
                 data.append("!", 1);
+            if (truncateDownloads)
+                data.setSize(data.getSize() / 2);
         }
 
         if (!destinationFile.replaceWithData(data.getData(), data.getSize()))
@@ -328,6 +330,7 @@ public:
     std::atomic<bool> rejectToken { false };     // every call answers 401
     std::atomic<bool> offline { false };         // fetchCurrentUser gets no response
     std::atomic<bool> corruptDownloads { false }; // downloaded blobs don't match their hash
+    std::atomic<bool> truncateDownloads { false }; // downloads stop halfway
     std::atomic<bool> failProjectList { false };  // fetchProjects answers 500
 
 private:

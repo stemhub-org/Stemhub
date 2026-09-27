@@ -1,5 +1,5 @@
-#include "application/SnapshotBundler.hpp"
 #include "application/SnapshotFiles.hpp"
+#include "domain/Manifest.hpp"
 #include "support/TestSupport.hpp"
 
 namespace
@@ -16,16 +16,16 @@ public:
         beginTest("Manifest paths must stay inside the restore folder");
         {
             for (const auto* path : { "song.flp", "Drums/kick.wav", "Samples/Imported/Kick 01.wav", "a.b/c.wav" })
-                expect(SnapshotBundler::isSafeManifestPath(path), juce::String("should accept ") + path);
+                expect(stemhub::manifest::isSafePath(path), juce::String("should accept ") + path);
 
             for (const auto* path : { "", "/etc/passwd", "../evil.wav", "Drums/../../evil.wav", "./song.flp",
                                       "a//b.wav", "a/b/", "C:\\evil.wav", "C:evil.wav", "..\\evil.wav",
                                       "Drums\\kick.wav", "trailing.", "trailing ", "NUL.wav", "Samples/con",
                                       "bad\nname.wav" })
-                expect(!SnapshotBundler::isSafeManifestPath(path), juce::String("should reject ") + juce::String(path).quoted());
+                expect(!stemhub::manifest::isSafePath(path), juce::String("should reject ") + juce::String(path).quoted());
 
-            expect(SnapshotBundler::isSafeManifestPath(juce::String::repeatedString("a", 255)), "255 characters fit the backend limit");
-            expect(!SnapshotBundler::isSafeManifestPath(juce::String::repeatedString("a", 256)), "256 characters exceed the backend limit");
+            expect(stemhub::manifest::isSafePath(juce::String::repeatedString("a", 255)), "255 characters fit the backend limit");
+            expect(!stemhub::manifest::isSafePath(juce::String::repeatedString("a", 256)), "256 characters exceed the backend limit");
         }
 
         beginTest("Manifests with unsafe or conflicting entries are rejected");
@@ -33,22 +33,85 @@ public:
             const auto shaA = juce::String::repeatedString("a", 64);
             const auto shaB = juce::String::repeatedString("b", 64);
 
-            ParsedManifest parsed;
-            auto result = SnapshotBundler::parseManifest(makeManifest("../../evil.flp", shaA, {}), parsed);
+            namespace manifest = stemhub::manifest;
+
+            manifest::Manifest parsed;
+            auto result = manifest::fromJson(makeManifest("../../evil.flp", shaA, {}), parsed);
             expect(result.failed() && result.getErrorMessage().contains("unsafe"), "traversal in the project file is rejected");
 
-            result = SnapshotBundler::parseManifest(
+            result = manifest::fromJson(
                 makeManifest("song.flp", shaA, { { "Drums/kick.wav", shaA }, { "drums/KICK.wav", shaB } }), parsed);
             expect(result.failed() && result.getErrorMessage().contains("two different files"),
                    "two different files at the same path are rejected");
 
-            result = SnapshotBundler::parseManifest(
+            result = manifest::fromJson(
                 makeManifest("song.flp", shaA, { { "Drums/kick.wav", shaB }, { "Drums/kick.wav", shaB } }), parsed);
-            expect(result.wasOk() && parsed.entries.size() == 2, "an exact duplicate is kept once");
+            expect(result.wasOk() && parsed.tracks.size() == 1, "an exact duplicate is kept once");
 
-            result = SnapshotBundler::parseManifest(
+            result = manifest::fromJson(
                 makeManifest("song.flp", "../" + shaA.substring(3), {}), parsed);
             expect(result.failed(), "a hash that is not hex is rejected");
+
+            auto negativeSize = makeManifest("song.flp", shaA, {});
+            negativeSize.getProperty("project_file", {}).getDynamicObject()->setProperty("size_bytes", -1);
+            expect(manifest::fromJson(negativeSize, parsed).failed(), "a negative size is rejected");
+        }
+
+        beginTest("A manifest reads back what was written");
+        {
+            namespace manifest = stemhub::manifest;
+
+            manifest::Manifest written;
+            written.sourceDaw = "Ableton Live";
+            written.projectFile = { juce::String::repeatedString("a", 64), 10, "song.als" };
+            written.tracks = { { juce::String::repeatedString("b", 64), 5, "Samples/Imported/kick 01.wav" },
+                               { juce::String::repeatedString("c", 64), 7, "loop.aif" } };
+
+            const auto json = manifest::toJson(written);
+            expect(json.getProperty("source_project_filename", {}).toString() == "song.als");
+            expect(json.getProperty("tracks", {})[0].getProperty("name", {}).toString() == "kick 01", "tracks are named after their file");
+            expect(manifest::totalSize(json) == 22, "the history shows the files' total size");
+
+            manifest::Manifest read;
+            expect(manifest::fromJson(json, read).wasOk());
+            expect(read.sourceDaw == written.sourceDaw && read.projectFile.path == "song.als" && read.projectFile.sizeBytes == 10);
+            expect(read.tracks.size() == 2 && read.tracks[0].path == "Samples/Imported/kick 01.wav"
+                       && read.tracks[1].sha256 == written.tracks[1].sha256);
+        }
+
+        beginTest("Files are hashed in blocks, and a stopped job stops hashing");
+        {
+            TestEnvironment environment;
+            const auto file = environment.root.getChildFile("stem.wav");
+            juce::MemoryBlock content((3 << 20) + 17);
+            auto* bytes = static_cast<juce::uint8*>(content.getData());
+            for (size_t index = 0; index < content.getSize(); ++index)
+                bytes[index] = static_cast<juce::uint8>(index * 31 + 7);
+            expect(file.replaceWithData(content.getData(), content.getSize()));
+
+            expect(stemhub::snapshotfiles::sha256OfFile(file) == sha256Of(content), "the same digest across block boundaries");
+            expect(stemhub::snapshotfiles::sha256OfFile(environment.root.getChildFile("missing.wav")).isEmpty(), "a missing file has none");
+
+            BlockingGate gate;
+            BackgroundJobCoordinator<juce::String> jobs { 1, [] {} };
+            jobs.enqueue([&gate, file](const auto&)
+            {
+                gate.block();
+                return stemhub::snapshotfiles::sha256OfFile(file);
+            });
+            expect(gate.waitUntilEntered(), "the hash should start");
+            jobs.stopRunningJobs();
+            gate.release();
+
+            std::vector<juce::String> hashes;
+            const auto deadline = juce::Time::getMillisecondCounter() + static_cast<juce::uint32>(kWaitTimeoutMs);
+            while (hashes.empty() && juce::Time::getMillisecondCounter() < deadline)
+            {
+                hashes = jobs.takeResults();
+                juce::Thread::sleep(5);
+            }
+
+            expect(hashes.size() == 1 && hashes.front().isEmpty(), "a stopped job gets no hash");
         }
 
         beginTest("A save takes the project's audio, and leaves out backups and restored copies");
