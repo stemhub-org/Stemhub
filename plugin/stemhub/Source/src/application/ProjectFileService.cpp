@@ -101,9 +101,9 @@ bool openInSystem(const juce::File& file)
         return true;
 
    #if JUCE_MAC
+    // Arguments go as they are: no quoting to get wrong with spaces or quotes in the path.
     juce::ChildProcess openProcess;
-    const auto escapedPath = file.getFullPathName().replace("\"", "\\\"");
-    return openProcess.start("open \"" + escapedPath + "\"");
+    return openProcess.start(juce::StringArray { "open", file.getFullPathName() });
    #else
     return false;
    #endif

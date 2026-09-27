@@ -2,7 +2,7 @@
 
 ## Problem
 
-The current storage model treats every version as a single opaque bundle: each commit re-uploads and re-stores the entire DAW project (FLP + all audio stems). For a typical mixing workflow — where a session might contain 200–500 MB of unchanged audio and 1–2 MB of edited FLP — this wastes:
+The original storage model treated every version as a single opaque bundle: each commit re-uploads and re-stores the entire DAW project (FLP + all audio stems). For a typical mixing workflow — where a session might contain 200–500 MB of unchanged audio and 1–2 MB of edited FLP — this wastes:
 
 - **Storage:** N copies of the same 500 MB stem set for a project with N versions.
 - **Bandwidth:** The plugin re-uploads the same stems on every commit; slow, and painful on residential upload speeds.
@@ -55,18 +55,18 @@ Deprecate (but don't drop yet): `artifact_path`, `artifact_size_bytes`, `artifac
   },
   "tracks": [
     {
-      "name": "Kick",
+      "name": "kick",
       "sha256": "def...",
       "size_bytes": 4823040,
-      "filename": "kick.wav",
-      "bpm": 128,
-      "key": "F#m",
-      "duration_seconds": 12
+      "filename": "Samples/kick.wav"
     }
-  ],
-  "mixer_state": { ... existing snapshot_manifest ... }
+  ]
 }
 ```
+
+The backend schema (`VersionManifestV1` in `schemas.py`) also accepts optional track metadata
+(`bpm`, `key`, `duration_seconds`) and a `mixer_state`; the plugin writes neither. It builds and
+reads manifests in one place, `domain/Manifest.hpp` (`stemhub::manifest`).
 
 Rules:
 - `manifest_version` is required from day one. Bump when schema changes.
@@ -87,17 +87,17 @@ Project-scoped dedupe still solves 95% of the problem (the wasteful case is *the
 Client-side hashing is mandatory — the whole point is that the client can skip uploading blobs the server already has.
 
 ```
-1. Plugin snapshots the DAW session → list of files (FLP + stems).
+1. Plugin snapshots the DAW session → list of files (FLP + stems), checked against the backend
+   limits (500 tracks, paths of 255 characters) before anything is hashed.
 2. For each file, plugin computes SHA-256 locally.
-3. Plugin POSTs POST /projects/{pid}/blobs/check
-     body: {"sha256s": ["abc...", "def...", ...]}
+3. Plugin POSTs /projects/{pid}/blobs/check-missing
+     body: {"sha256s": ["abc...", "def...", ...]}   (identical files are offered once)
    → returns {"missing": ["def..."]}   (only blobs the server needs)
-4. For each missing sha256:
-     Server returns a presigned PUT URL (GCS) or a token-scoped upload endpoint (localfs).
-     Plugin uploads bytes directly to that URL.
+4. For each missing sha256, plugin PUTs /projects/{pid}/blobs/{sha256} (multipart, field "file").
      Server verifies SHA-256 after upload (integrity guarantee). On mismatch → delete blob, 400.
-5. Plugin POSTs POST /projects/{pid}/branches/{bid}/versions
-     body: { "commit_message": "...", "manifest": { ...manifest v1... } }
+5. Plugin POSTs /branches/{bid}/versions/from-manifest
+     body: { "commit_message": "...", "parent_version_id": "...", "manifest": { ...manifest v1... } }
+     (parent_version_id: the version the saved file was based on, when known)
      Server validates:
        - manifest_version supported
        - every referenced sha256 exists in blob table for this project
@@ -110,13 +110,19 @@ Client-side hashing is mandatory — the whole point is that the client can skip
 ## Download flow (pull)
 
 ```
-1. Plugin GETs GET /versions/{vid}     → returns manifest_json.
-2. Plugin diffs local filesystem against manifest → list of missing sha256s.
-3. For each missing sha256, plugin GETs GET /projects/{pid}/blobs/{sha256}
+1. Plugin GETs /versions/{vid}     → returns manifest_json (a version without one, saved by the
+   old upload flow, can't be restored).
+2. Plugin creates a hidden folder next to the destination (`.<name>.partial-<id>`).
+3. For each file in the manifest, plugin GETs /projects/{pid}/blobs/{sha256}
    → server returns the bytes, or a 307 to a presigned GET URL (GCS). The plugin follows that
      redirect itself and does not send its bearer token to the storage host.
-4. Plugin downloads, verifies SHA-256 locally before writing to disk.
+4. Plugin writes each file into the hidden folder and verifies its SHA-256 (a short file is
+   reported as an interrupted download).
+5. Once every file is there, the hidden folder is renamed to the destination. A failure or a
+   cancel deletes it, so a folder that looks restored is always complete.
 ```
+
+Every restore goes to a new folder: the plugin never writes into an existing one.
 
 ## Garbage collection
 
@@ -137,7 +143,7 @@ The user is at < 100 users. Simplest path:
 
 1. Ship the new schema behind an unused endpoint set (`/v2/...` or feature-flagged).
 2. Backfill: for each existing Version, treat the whole artifact bundle as a single blob (SHA-256 the archive, insert one `blob` row, build a minimal manifest with `manifest_version: 0` meaning "legacy bundle"). This is a one-shot script.
-3. Switch the plugin to the new endpoints. Old versions remain readable via the legacy code path.
+3. Switch the plugin to the new endpoints. (Done: the plugin only reads `manifest_version` 1, and reports a version without a manifest as having no file list.)
 4. After 30 days with no legacy pulls, delete the legacy fields.
 
 If wiping alpha data is acceptable, skip steps 2–4 and cut over directly.

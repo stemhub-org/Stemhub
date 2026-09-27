@@ -3,9 +3,6 @@
 #include "application/UseCases.hpp"
 #include "application/SessionHelpers.hpp"
 #include "application/ProjectFileService.hpp"
-#include "application/SnapshotBundler.hpp"
-#include "application/SnapshotFiles.hpp"
-#include "application/SnapshotSync.hpp"
 
 using namespace stemhub::sessionhelpers;
 
@@ -339,7 +336,9 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input,
         result.errorMessage = "Choose a project file before saving.";
         return result;
     }
-    if (input.commitMessage.trim().length() > kMaxSaveNoteLength)
+
+    const auto note = input.commitMessage.trim();
+    if (note.length() > kMaxSaveNoteLength)
     {
         result.errorMessage = "Save notes are limited to " + juce::String(kMaxSaveNoteLength) + " characters.";
         return result;
@@ -349,29 +348,12 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input,
     const auto sizeBeforeHashing = input.projectFile.getSize();
     const auto modTimeBeforeHashing = input.projectFile.getLastModificationTime().toMilliseconds();
 
-    SnapshotBundleRequest bundleRequest;
-    bundleRequest.sourceProjectFile = input.projectFile;
-    bundleRequest.sourceDaw = stemhub::snapshotfiles::dawNameFor(input.projectFile);
-
-    ContentAddressedManifest manifest;
-    const auto manifestStatus = SnapshotBundler().buildManifest(bundleRequest, manifest, [&report](int done, int total)
-    {
-        if (report != nullptr)
-            report("Preparing " + juce::String(done) + " of " + juce::String(total) + " files...");
-    });
-    if (manifestStatus.failed())
-    {
-        result.errorMessage = manifestStatus.getErrorMessage();
-        return result;
-    }
-
     stemhub::snapshots::PushRequest pushRequest;
     pushRequest.projectId = input.projectId;
     pushRequest.branchId = input.branchId;
-    pushRequest.commitMessage = input.commitMessage.trim().isNotEmpty() ? input.commitMessage.trim()
-                                                                       : juce::String(kDefaultSaveNote);
+    pushRequest.projectFile = input.projectFile;
+    pushRequest.commitMessage = note.isNotEmpty() ? note : juce::String(kDefaultSaveNote);
     pushRequest.parentVersionId = input.parentVersionId;
-    pushRequest.manifest = std::move(manifest);
 
     const auto pushed = stemhub::snapshots::pushSnapshot(api, input.token, pushRequest, report);
     if (!pushed.ok())
@@ -401,17 +383,7 @@ RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInpu
     RestoreVersionJobResult result;
     result.restoredVersionId = input.versionId;
 
-    if (input.versionId.isEmpty())
-    {
-        result.errorMessage = "Select a version before restoring.";
-        return result;
-    }
-    if (input.projectId.isEmpty())
-    {
-        result.errorMessage = "Choose a project before restoring.";
-        return result;
-    }
-
+    // The session checked the version and the project before starting the job.
     const auto restored = stemhub::snapshots::restoreSnapshot(api, input.token, { input.projectId, input.versionId, input.destinationFolder }, report);
     if (!restored.ok())
         return failWith(result, restored, "Failed to restore the version.");
