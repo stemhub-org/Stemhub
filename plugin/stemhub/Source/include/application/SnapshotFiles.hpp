@@ -7,10 +7,13 @@
 // Which files a save takes. The push and the dashboard's count both use this one rule.
 namespace stemhub::snapshotfiles
 {
+// Marks a folder this plugin restored a version into: a project of its own, which a save of the
+// project around it leaves out. Being a dot-file, it is never saved itself.
+inline constexpr const char* kRestoredCopyMarker = ".stemhub-restored";
+
 // The project file first, then the audio and MIDI files in its folder and subfolders, sorted by
 // path. Left out: hidden files and dot-files, "Backup" folders, and copies this plugin restored
-// there (a "<name>-<version>" folder holding a DAW project), which are projects of their own.
-// Empty when the job running it is asked to stop.
+// there (folders with a kRestoredCopyMarker). Empty when the job running it is asked to stop.
 std::vector<juce::File> collect(const juce::File& projectFile);
 
 // What a save of projectFile takes, for the dashboard.

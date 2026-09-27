@@ -1,3 +1,4 @@
+#include "application/ProjectFileService.hpp"
 #include "application/SnapshotFiles.hpp"
 #include "domain/Manifest.hpp"
 #include "support/TestSupport.hpp"
@@ -130,24 +131,45 @@ public:
             expect(write("song.flp", "flp") && write("Drums/kick.wav", "kick") && write("Loops/loop 01.aif", "loop")
                    && write("mix-deadbeef/vocal.wav", "vocal") && write("notes.txt", "notes")
                    && write("Backup/song overwritten.flp", "old") && write("backup/old kick.wav", "old kick")
-                   && write(".hidden.wav", "hidden") && write("song-0123abcd/song.flp", "restored")
-                   && write("song-0123abcd/Drums/kick.wav", "kick") && write("song-0123abcd (2)/song.flp", "restored 2"));
+                   && write(".hidden.wav", "hidden"));
+
+            // A copy the plugin restored here is marked as such; a folder merely named like one is
+            // the user's.
+            expect(write("song-0123abcd/" + juce::String(snapshotfiles::kRestoredCopyMarker), "version-1")
+                   && write("song-0123abcd/song.flp", "restored") && write("song-0123abcd/Drums/kick.wav", "kick")
+                   && write("Drums-20240101/idea.flp", "idea") && write("Drums-20240101/snare.wav", "snare"));
 
             const auto files = snapshotfiles::collect(projectFile);
             juce::StringArray paths;
             for (const auto& file : files)
                 paths.add(file.getRelativePathFrom(folder).replaceCharacter('\\', '/'));
 
-            expect(paths.joinIntoString(", ") == "song.flp, Drums/kick.wav, Loops/loop 01.aif, mix-deadbeef/vocal.wav",
+            expect(paths.joinIntoString(", ")
+                       == "song.flp, Drums-20240101/snare.wav, Drums/kick.wav, Loops/loop 01.aif, mix-deadbeef/vocal.wav",
                    "project file first, then its audio by path: " + paths.joinIntoString(", "));
 
             const auto summary = snapshotfiles::summarize(projectFile);
-            expect(summary.fileCount == 4 && summary.totalBytes == 3 + 4 + 4 + 5, juce::String(summary.totalBytes));
+            expect(summary.fileCount == 5 && summary.totalBytes == 3 + 5 + 4 + 4 + 5, juce::String(summary.totalBytes));
             expect(snapshotfiles::collect(folder.getChildFile("missing.flp")).empty(), "no project file, nothing to save");
 
             expect(snapshotfiles::dawNameFor(projectFile) == "FL Studio");
             expect(snapshotfiles::dawNameFor(folder.getChildFile("song.als")) == "Ableton Live");
             expect(snapshotfiles::dawNameFor(folder.getChildFile("song.ptx")).isEmpty());
+        }
+
+        beginTest("Projects restored on opening go under the project's and workspace's names");
+        {
+            namespace projectfiles = stemhub::projectfiles;
+
+            const auto base = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("StemHub");
+            const auto root = projectfiles::getRestoredProjectRoot(base, makeProject("project-1", " AC/DC: Live? "),
+                                                                   makeBranch("branch-1", "project-1", "main"));
+            expect(root == base.getChildFile("ACDC Live").getChildFile("main"), root.getFullPathName());
+
+            const auto fallback = projectfiles::getRestoredProjectRoot(base, makeProject("project-1", ".."),
+                                                                       makeBranch("branch/1", "project-1", "  "));
+            expect(fallback == base.getChildFile("project-1").getChildFile("branch-1"),
+                   "a name that can't be a folder gives way to the id: " + fallback.getFullPathName());
         }
 
         beginTest("A working-copy baseline only vouches for what it recorded");

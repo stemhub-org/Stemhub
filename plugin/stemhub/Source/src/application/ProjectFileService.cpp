@@ -65,19 +65,16 @@ juce::File chooseRestoreFolder(const juce::File& parent,
     return folder;
 }
 
-juce::File getDefaultManagedWorkingCopyFolder()
+juce::File getRestoredProjectRoot(const juce::File& baseFolder, const Project& project, const Branch& branch)
 {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("Stemhub")
-        .getChildFile("working-copy");
-}
+    const auto folderName = [](const juce::String& name, const juce::String& id, const juce::String& fallback)
+    {
+        const auto legalName = juce::File::createLegalFileName(name).trim().trimCharactersAtStart(".").trimCharactersAtEnd(".");
+        return legalName.isNotEmpty() ? legalName : sanitizePathSegment(id, fallback);
+    };
 
-juce::File getManagedWorkingCopyRoot(const juce::File& baseFolder,
-                                     const juce::String& projectId,
-                                     const juce::String& branchId)
-{
-    return baseFolder.getChildFile(sanitizePathSegment(projectId, "project"))
-                     .getChildFile(sanitizePathSegment(branchId, "branch"));
+    return baseFolder.getChildFile(folderName(project.name, project.id, "project"))
+                     .getChildFile(folderName(branch.name, branch.id, "branch"));
 }
 
 juce::File resolveEffectiveProjectFile(const juce::File& selectedFile,

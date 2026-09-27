@@ -11,6 +11,7 @@
 #include "domain/User.hpp"
 #include "domain/Version.hpp"
 #include "application/SnapshotSync.hpp"
+#include "application/WorkingCopyIndex.hpp"
 #include "domain/WorkingCopyBaseline.hpp"
 #include "network/ApiClient.hpp"
 
@@ -93,10 +94,11 @@ struct OpenProjectInput
     // An explicit open from the project grid: restore the latest version when doing so
     // replaces nothing (no local copy, or an unchanged copy of an older version).
     bool restoreLatestIfSafe { false };
-    // What this instance recorded about localProjectFile; unset when it knows nothing.
-    WorkingCopyBaseline localCopy;
+    // Says which version localProjectFile holds, when this machine saved or restored it for
+    // this project and branch. A restored copy is recorded there too.
+    WorkingCopyIndex workingCopies;
     // Where the latest version is restored when there is no local copy.
-    juce::File managedWorkingCopyFolder;
+    juce::File restoredProjectsFolder;
 };
 
 // Reports the download when it restores the latest version.
@@ -128,7 +130,6 @@ struct FetchHistoryInput
     juce::String branchName;
     juce::String preferredVersionId;
     juce::String token;
-    juce::File localProjectFile;
 };
 
 BranchHistoryJobResult fetchHistory(const IProjectApi& api, const FetchHistoryInput& input);
@@ -156,6 +157,8 @@ struct PushInput
     // Empty gets kDefaultSaveNote.
     juce::String commitMessage;
     juce::String token;
+    // The saved file is recorded there with its new version.
+    WorkingCopyIndex workingCopies;
 };
 
 PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input, const ReportProgress& report = {});
@@ -175,9 +178,12 @@ struct RestoreInput
 {
     juce::String projectId;
     juce::String versionId;
+    juce::String branchId;
     // A folder that doesn't exist yet: restores never write into existing folders.
     juce::File destinationFolder;
     juce::String token;
+    // The restored project file is recorded there with its version.
+    WorkingCopyIndex workingCopies;
 };
 
 RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInput& input, const ReportProgress& report = {});

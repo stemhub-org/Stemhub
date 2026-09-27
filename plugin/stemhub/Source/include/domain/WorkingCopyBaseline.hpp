@@ -8,8 +8,7 @@ struct WorkingCopyBaseline
 {
     juce::File file;
     juce::String versionId;
-    // -1 when unknown, e.g. when the version was read from a restore folder's name rather than
-    // recorded while this plugin wrote or pushed the file.
+    // -1 when unknown: the file then never counts as unchanged.
     juce::int64 sizeBytes { -1 };
     juce::int64 modTimeMs { -1 };
 
