@@ -26,4 +26,7 @@ struct Status
 
     [[nodiscard]] bool isEmpty() const noexcept { return text.isEmpty(); }
     [[nodiscard]] bool isError() const noexcept { return severity == Severity::error; }
+
+    bool operator==(const Status& other) const noexcept { return severity == other.severity && text == other.text; }
+    bool operator!=(const Status& other) const noexcept { return !(*this == other); }
 };

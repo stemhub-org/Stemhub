@@ -41,13 +41,22 @@ set(STEMHUB_CORE_SOURCES
     Source/src/network/ApiConfig.cpp
     Source/src/network/ApiJson.cpp)
 
+# What the screens show and how values are written, without widgets: the tests build it too.
+set(STEMHUB_PRESENTATION_SOURCES
+    Source/src/ui/SessionPresenter.cpp
+    Source/src/ui/UiFormat.cpp)
+
 # The host-facing processor, the editor and its views.
 set(STEMHUB_PLUGIN_SOURCES
     Source/src/application/PluginProcessor.cpp
+    Source/src/ui/DashboardView.cpp
+    Source/src/ui/LoginView.cpp
     Source/src/ui/PluginEditor.cpp
     Source/src/ui/PluginTheme.cpp
-    Source/src/ui/DashboardView.cpp
-    Source/src/ui/LoginView.cpp)
+    Source/src/ui/ProjectSelectionView.cpp
+    Source/src/ui/ProjectTiles.cpp
+    Source/src/ui/VersionDetailCard.cpp
+    Source/src/ui/VersionTimeline.cpp)
 
 # Settings every StemHub target shares. JUCE compiles its modules into each target that links
 # them, so the core is shared as a source list: a static library would build JUCE twice.
@@ -84,7 +93,7 @@ juce_add_plugin(stemhub
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     COPY_PLUGIN_AFTER_BUILD ${COPY_PLUGIN}
     PLUGIN_MANUFACTURER_CODE Manu
     PLUGIN_CODE Wbcr
@@ -105,7 +114,7 @@ juce_add_binary_data(stemhub_assets
         Resources/fonts/PlusJakartaSans-SemiBold.ttf
         Resources/fonts/PlusJakartaSans-Bold.ttf)
 
-target_sources(stemhub PRIVATE ${STEMHUB_CORE_SOURCES} ${STEMHUB_PLUGIN_SOURCES})
+target_sources(stemhub PRIVATE ${STEMHUB_CORE_SOURCES} ${STEMHUB_PRESENTATION_SOURCES} ${STEMHUB_PLUGIN_SOURCES})
 stemhub_configure_target(stemhub)
 target_compile_definitions(stemhub PRIVATE JUCE_WEB_BROWSER=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(stemhub PRIVATE stemhub_assets juce::juce_audio_utils)
@@ -116,6 +125,7 @@ set(STEMHUB_TEST_SOURCES
     tests/ApiTests.cpp
     tests/PersistenceTests.cpp
     tests/SaveRestoreTests.cpp
+    tests/PresenterTests.cpp
     tests/SessionTests.cpp
     tests/SnapshotTests.cpp)
 
@@ -123,7 +133,7 @@ juce_add_console_app(stemhub_plugin_tests NEEDS_CURL TRUE)
 
 juce_generate_juce_header(stemhub_plugin_tests)
 
-target_sources(stemhub_plugin_tests PRIVATE ${STEMHUB_CORE_SOURCES} ${STEMHUB_TEST_SOURCES})
+target_sources(stemhub_plugin_tests PRIVATE ${STEMHUB_CORE_SOURCES} ${STEMHUB_PRESENTATION_SOURCES} ${STEMHUB_TEST_SOURCES})
 stemhub_configure_target(stemhub_plugin_tests)
 target_include_directories(stemhub_plugin_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 # Failed assertions are checked and logged in Release too, through the test app's console logger.

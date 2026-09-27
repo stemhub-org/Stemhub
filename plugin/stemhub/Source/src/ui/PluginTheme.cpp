@@ -1,4 +1,5 @@
 #include "ui/PluginTheme.hpp"
+#include "ui/UiFormat.hpp"
 #include "StemhubAssets.h"
 
 #include <array>
@@ -129,6 +130,20 @@ void fillLogoParts(juce::Graphics& g, const juce::AffineTransform& transform, ju
 }
 
 //==============================================================================
+MessageStatus messageStatusFor(Status::Severity severity)
+{
+    switch (severity)
+    {
+        case Status::Severity::progress: return MessageStatus::loading;
+        case Status::Severity::success:  return MessageStatus::success;
+        case Status::Severity::warning:  return MessageStatus::warning;
+        case Status::Severity::error:    return MessageStatus::error;
+        case Status::Severity::info:     break;
+    }
+
+    return MessageStatus::neutral;
+}
+
 juce::Colour statusColour(MessageStatus status)
 {
     switch (status)
@@ -136,17 +151,17 @@ juce::Colour statusColour(MessageStatus status)
         case MessageStatus::loading: return PluginTheme::kSlate;
         case MessageStatus::success: return PluginTheme::kAccent;
         case MessageStatus::warning: return PluginTheme::kWarning;
-        case MessageStatus::error: return PluginTheme::kError;
-        case MessageStatus::disabled: return PluginTheme::kDisabled;
-        case MessageStatus::neutral:
-        default: return PluginTheme::kForegroundSubtle;
+        case MessageStatus::error:   return PluginTheme::kError;
+        case MessageStatus::neutral: break;
     }
+
+    return PluginTheme::kForegroundSubtle;
 }
 
 juce::String arrowRight() { return juce::String::fromUTF8("\xe2\x86\x92"); }
 juce::String arrowLeft() { return juce::String::fromUTF8("\xe2\x86\x90"); }
-juce::String middleDot() { return juce::String::fromUTF8("\xc2\xb7"); }
-juce::String ellipsis() { return juce::String::fromUTF8("\xe2\x80\xa6"); }
+juce::String middleDot() { return stemhub::uiformat::middleDot(); }
+juce::String ellipsis() { return stemhub::uiformat::ellipsis(); }
 
 juce::Font displayFont(float size) { return makeFont(Face::syneExtraBold, size, -0.02f); }
 juce::Font headingFont(float size) { return makeFont(Face::jakartaBold, size, -0.01f); }
