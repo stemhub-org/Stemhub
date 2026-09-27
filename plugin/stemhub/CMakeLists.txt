@@ -107,9 +107,27 @@ stemhub_configure_target(stemhub)
 target_compile_definitions(stemhub PRIVATE JUCE_WEB_BROWSER=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(stemhub PRIVATE stemhub_assets juce::juce_audio_utils)
 
+set(STEMHUB_TEST_SOURCES
+    tests/Main.cpp
+    tests/support/TestSupport.cpp
+    tests/ApiTests.cpp
+    tests/PersistenceTests.cpp
+    tests/SaveRestoreTests.cpp
+    tests/SessionTests.cpp
+    tests/SnapshotTests.cpp)
+
 juce_add_console_app(stemhub_plugin_tests NEEDS_CURL TRUE)
 
 juce_generate_juce_header(stemhub_plugin_tests)
 
-target_sources(stemhub_plugin_tests PRIVATE ${STEMHUB_CORE_SOURCES} tests/PluginTests.cpp)
+target_sources(stemhub_plugin_tests PRIVATE ${STEMHUB_CORE_SOURCES} ${STEMHUB_TEST_SOURCES})
 stemhub_configure_target(stemhub_plugin_tests)
+target_include_directories(stemhub_plugin_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+# Failed assertions are checked and logged in Release too, through the test app's console logger.
+target_compile_definitions(stemhub_plugin_tests PRIVATE JUCE_LOG_ASSERTIONS=1)
+
+enable_testing()
+add_test(NAME stemhub_plugin_tests COMMAND stemhub_plugin_tests)
+# JUCE logs a failed assertion or a leaked object and carries on; either fails the run.
+set_tests_properties(stemhub_plugin_tests PROPERTIES
+    FAIL_REGULAR_EXPRESSION "JUCE Assertion failure;Leaked objects detected")
