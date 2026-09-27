@@ -3,7 +3,6 @@
 #include <map>
 
 #include "application/SnapshotFiles.hpp"
-#include "application/SessionHelpers.hpp"
 #include "network/ApiTypes.hpp"
 
 namespace stemhub::snapshotfiles
@@ -27,17 +26,9 @@ bool isAsset(const juce::File& file)
     });
 }
 
-// A folder this plugin restored a version into: its name ends in the version's id prefix.
 bool isRestoredCopy(const juce::File& folder)
 {
-    if (stemhub::sessionhelpers::extractVersionPrefixFromPathPart(folder.getFileName()).isEmpty())
-        return false;
-
-    for (const auto& entry : juce::RangedDirectoryIterator(folder, false, "*", juce::File::findFiles))
-        if (isDawProjectFile(entry.getFile()))
-            return true;
-
-    return false;
+    return folder.getChildFile(kRestoredCopyMarker).existsAsFile();
 }
 
 class FolderRules

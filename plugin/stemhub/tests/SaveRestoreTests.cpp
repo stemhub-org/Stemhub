@@ -275,7 +275,8 @@ public:
                    "the latest version should be restored: " + describe(context.session));
 
             const auto restoredFile = context.openedFiles.getFirst();
-            expect(restoredFile.isAChildOf(context.environment.root.getChildFile("managed")), restoredFile.getFullPathName());
+            expect(restoredFile == context.restoredProjectsFolder().getChildFile("Song/main/song-" + versionId.substring(0, 8) + "/song.flp"),
+                   "it goes to <project>/<workspace>/<name>-<version>: " + restoredFile.getFullPathName());
             expect(restoredFile.getParentDirectory().getChildFile("Samples/kick.wav").loadFileAsString() == "kick");
             expect(context.state().selectedProject.has_value() && context.state().selectedProjectFile == juce::File(),
                    "this instance had no copy of its own and still has none");
@@ -350,7 +351,7 @@ public:
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
                    "the newer version should be restored: " + describe(context.session));
             const auto newerCopy = context.openedFiles.getFirst();
-            expect(newerCopy.loadFileAsString() == "flp v2" && newerCopy.isAChildOf(context.environment.root.getChildFile("managed")),
+            expect(newerCopy.loadFileAsString() == "flp v2" && newerCopy.isAChildOf(context.restoredProjectsFolder()),
                    newerCopy.getFullPathName());
             expect(context.state().selectedProjectFile == projectFile && projectFile.loadFileAsString() == "flp v1",
                    "this instance keeps its older copy");
@@ -398,31 +399,76 @@ public:
             expect(openedByHand->getState().workingCopy.versionId == versionId, "it knows which version the copy holds");
         }
 
-        beginTest("A restore folder's version is the next parent but never blocks a save");
+        beginTest("After the DAW reopens a project, a save builds on the version its file was saved as");
         {
             TestContext context;
             const auto project = makeProject("project-1", "Song");
             const auto branch = makeBranch("branch-1", project.id, "main");
             context.api->projects = { project };
             context.api->projectBranches[project.id] = { branch };
-            const auto restoredVersionId = context.api->addVersion(branch.id, "first", { { "song.flp", "flp v1" } });
-            context.api->addVersion(branch.id, "second", { { "song.flp", "flp v2" } });
 
-            // A copy restored in an earlier session: only its folder name says which version it is.
-            const auto restoredFile = context.environment.root
-                                          .getChildFile("song-" + restoredVersionId.substring(0, 8))
-                                          .getChildFile("song.flp");
-            expect(restoredFile.getParentDirectory().createDirectory().wasOk());
-            expect(restoredFile.replaceWithText("flp v1"));
-
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp v1"));
             signIn(context.session);
-            openProject(context.session, project.id, restoredFile);
+            openProject(context.session, project.id, projectFile);
+            context.session.requestPushVersion("first");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
+                   describe(context.session));
+            const auto savedVersionId = context.state().workingCopy.versionId;
 
-            context.session.requestPushVersion("from the restored copy");
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.api->getCreatedVersions().size() == 3; }),
-                   "the save must not be refused: " + describe(context.session));
-            expect(context.api->getCreatedVersions().back().parentVersionId == restoredVersionId,
-                   "the restored version is the parent, not the branch head");
+            // A collaborator saves while the DAW is closed; then the DAW reopens the project, with
+            // a new plugin instance and the link saved in the project.
+            context.api->addVersion(branch.id, "from a collaborator", { { "song.flp", "theirs" } });
+            auto reopened = context.makeInstance();
+            reopened->restoreLink({ project.id, branch.id, projectFile });
+            restoreSavedSession(*reopened);
+            const auto& reopenedState = reopened->getState();
+            expect(reopenedState.workingCopy.versionId == savedVersionId && reopenedState.openedVersionId == savedVersionId,
+                   "it knows which version the file holds: " + describe(*reopened));
+
+            reopened->requestPushVersion("nothing new");
+            expect(reopenedState.sessionStatus.text.contains("No changes"), "an unchanged file isn't saved again: " + describe(*reopened));
+
+            simulateDawSave(projectFile, " edit");
+            reopened->requestPushVersion("second");
+            expect(waitUntil(*reopened, [&context, &reopened] { return !reopened->isBusy() && context.api->getCreatedVersions().size() == 3; }),
+                   describe(*reopened));
+            expect(context.api->getCreatedVersions().back().parentVersionId == savedVersionId,
+                   "the parent is the version the file came from, not the collaborator's newer one");
+        }
+
+        beginTest("What a file holds only counts for the project and workspace it was saved to");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto otherProject = makeProject("project-2", "Other song");
+            const auto main = makeBranch("branch-1", project.id, "main");
+            const auto feature = makeBranch("branch-2", project.id, "feature");
+            context.api->projects = { project, otherProject };
+            context.api->projectBranches[project.id] = { main, feature };
+            context.api->projectBranches[otherProject.id] = { makeBranch("branch-3", otherProject.id, "main") };
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp v1"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+            context.session.requestPushVersion("first");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
+                   describe(context.session));
+
+            for (const auto& link : { ProjectLink { project.id, feature.id, projectFile },
+                                      ProjectLink { otherProject.id, "branch-3", projectFile } })
+            {
+                auto instance = context.makeInstance();
+                instance->restoreLink(link);
+                restoreSavedSession(*instance);
+                const auto& state = instance->getState();
+                expect(state.selectedProject.has_value() && state.selectedProject->id == link.projectId
+                           && state.selectedBranchId == link.branchId && state.selectedProjectFile == projectFile,
+                       describe(*instance));
+                expect(!state.workingCopy.isSet() && state.openedVersionId.isEmpty(),
+                       "the file holds no version of " + link.projectId + "/" + link.branchId);
+            }
         }
 
         beginTest("Each distinct file is uploaded once");
