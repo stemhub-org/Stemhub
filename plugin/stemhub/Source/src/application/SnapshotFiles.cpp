@@ -4,6 +4,7 @@
 
 #include "application/SnapshotFiles.hpp"
 #include "application/SessionHelpers.hpp"
+#include "network/ApiTypes.hpp"
 
 namespace stemhub::snapshotfiles
 {
@@ -81,6 +82,10 @@ std::vector<juce::File> collect(const juce::File& projectFile)
                                                            juce::File::findFiles | juce::File::ignoreHiddenFiles,
                                                            juce::File::FollowSymlinks::noCycles))
     {
+        // A large folder takes a while to walk: a job asked to stop gets nothing.
+        if (isJobCancelled())
+            return {};
+
         const auto file = entry.getFile();
         if (file != projectFile && isAsset(file) && !isDotFile(file) && !rules.isLeftOut(file.getParentDirectory()))
             files.push_back(file);

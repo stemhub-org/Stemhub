@@ -62,8 +62,10 @@ AuthRequestResult restoreSession(const IProjectApi& api, const RestoreSessionInp
 struct ProjectActivationJobResult
 {
     uint64_t requestEpoch {};
+    // Set as soon as the project exists, even when a later step fails.
     std::optional<Project> selectedProject;
-    std::vector<Project> projects;
+    // The project list reloaded after creating a project, when that worked.
+    std::optional<std::vector<Project>> refreshedProjects;
     std::vector<Branch> branches;
     std::vector<VersionSummary> versions;
     juce::String branchId;
@@ -77,7 +79,6 @@ struct ProjectActivationJobResult
     WorkingCopyBaseline restoredCopy;
     juce::String errorMessage;
     Status status;
-    bool refreshProjects { false };
     bool sessionExpired { false };
 };
 

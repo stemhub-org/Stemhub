@@ -119,11 +119,6 @@ void StemhubSession::requestRestoreSavedSession()
 
     didAttemptSavedSessionRestore = true;
 
-    // A DAW project saved without a link (never linked, or by an earlier version): if the DAW
-    // has just opened a restored copy, this instance is the one it was restored for.
-    if (!state.link.isSet() && !state.selectedProject.has_value())
-        takeRestoreHandoff({});
-
     const auto savedToken = storage.credentials->loadToken();
     const auto isSigningIn = state.authState == AuthState::signedIn || state.authState == AuthState::signingIn;
     if (savedToken.isNotEmpty() && !isSigningIn)
@@ -170,6 +165,13 @@ void StemhubSession::apply(AuthRequestResult result)
     state.projects = std::move(result.projects);
     state.projectsStatus = std::move(result.projectsStatus);
     storage.credentials->saveToken(state.accessToken);
+
+    // A DAW project saved without a link (never linked, or by an earlier version): if the DAW has
+    // just opened a restored copy, this instance is the one it was restored for. Only taken now:
+    // the plugin window can open before the host hands back the saved link, and a restored copy's
+    // own link names its project.
+    if (!state.link.isSet() && !state.selectedProject.has_value())
+        takeRestoreHandoff({});
 
     openLinkedProject();
 }
@@ -269,29 +271,44 @@ void StemhubSession::openLinkedProject()
 //==============================================================================
 // Projects and branches
 
-void StemhubSession::requestOpenProject(juce::String projectId, juce::File localProjectFile, const bool restoreLatestIfSafe)
+void StemhubSession::chooseProjectFile(const juce::File& file)
+{
+    JUCE_ASSERT_MESSAGE_THREAD
+    state.chosenProjectFile = file;
+    changed();
+}
+
+void StemhubSession::requestOpenProject(juce::String projectId, const bool restoreLatestIfSafe)
 {
     JUCE_ASSERT_MESSAGE_THREAD
     if (isBusy())
         return;
 
-    // The working file of the project open until now is not a copy of another project.
-    if (state.selectedProject.has_value() && state.selectedProject->id != projectId
-        && localProjectFile == state.selectedProjectFile)
-        localProjectFile = juce::File();
+    // A project keeps its branch, file and baseline only when it is the one open here or the one
+    // this DAW project is linked to: another project's file is not a copy of this one.
+    const auto isOpenHere = state.selectedProject.has_value() && state.selectedProject->id == projectId;
+    const auto isLinked = state.link.projectId == projectId;
+
+    usecases::OpenProjectInput input;
+    input.projectId = std::move(projectId);
+    input.preferredBranchId = isOpenHere ? state.selectedBranchId
+                            : isLinked   ? state.link.branchId
+                                         : juce::String();
+    input.localProjectFile = state.chosenProjectFile != juce::File() ? state.chosenProjectFile
+                           : isOpenHere                              ? getEffectiveProjectFile()
+                           : isLinked                                ? state.link.workingFile
+                                                                     : juce::File();
+    input.localCopy = isOpenHere ? state.workingCopy
+                    : isLinked   ? linkedCopy
+                                 : WorkingCopyBaseline {};
+    input.availableProjects = state.projects;
+    input.token = state.accessToken;
+    input.restoreLatestIfSafe = restoreLatestIfSafe;
+    input.managedWorkingCopyFolder = storage.managedWorkingCopyFolder;
 
     state.operationState = OperationState::loadingProjects;
     state.projectsStatus = Status::progress("Opening project...");
     changed();
-
-    usecases::OpenProjectInput input;
-    input.projectId = std::move(projectId);
-    input.localProjectFile = std::move(localProjectFile);
-    input.availableProjects = state.projects;
-    input.token = state.accessToken;
-    input.restoreLatestIfSafe = restoreLatestIfSafe;
-    input.localCopy = state.workingCopy;
-    input.managedWorkingCopyFolder = storage.managedWorkingCopyFolder;
 
     enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
     {
@@ -299,7 +316,7 @@ void StemhubSession::requestOpenProject(juce::String projectId, juce::File local
     });
 }
 
-void StemhubSession::requestCreateProject(juce::File localProjectFile)
+void StemhubSession::requestCreateProject()
 {
     JUCE_ASSERT_MESSAGE_THREAD
     if (isBusy())
@@ -309,7 +326,7 @@ void StemhubSession::requestCreateProject(juce::File localProjectFile)
     state.projectsStatus = Status::progress("Creating project...");
     changed();
 
-    enqueue(beginRequest(), [input = usecases::CreateProjectInput { std::move(localProjectFile), state.accessToken }](
+    enqueue(beginRequest(), [input = usecases::CreateProjectInput { getProjectFileForGrid(), state.accessToken }](
                                 const IProjectApi& backend, const auto&) -> JobPayload
     {
         return usecases::createProject(backend, input);
@@ -319,6 +336,19 @@ void StemhubSession::requestCreateProject(juce::File localProjectFile)
 void StemhubSession::apply(ProjectActivationJobResult result)
 {
     state.operationState = OperationState::idle;
+
+    // A project created before a later step failed still belongs in the grid, or it would be
+    // created again.
+    if (result.refreshedProjects.has_value())
+    {
+        state.projects = std::move(*result.refreshedProjects);
+    }
+    else if (result.selectedProject.has_value())
+    {
+        const auto& project = *result.selectedProject;
+        if (std::none_of(state.projects.begin(), state.projects.end(), [&project](const Project& listed) { return listed.id == project.id; }))
+            state.projects.push_back(project);
+    }
 
     if (result.sessionExpired)
     {
@@ -331,9 +361,6 @@ void StemhubSession::apply(ProjectActivationJobResult result)
         showFailure(state.projectsStatus, "Opening the project", result.errorMessage);
         return;
     }
-
-    if (result.refreshProjects)
-        state.projects = std::move(result.projects);
 
     // The project grid's progress message is done with; the dashboard reports the outcome.
     state.projectsStatus = {};
@@ -518,6 +545,7 @@ void StemhubSession::apply(PushVersionJobResult result)
         state.workingCopy = result.pushedCopy;
         state.selectedVersionId = state.workingCopy.versionId;
         state.openedVersionId = state.workingCopy.versionId;
+        state.lastSavedVersionId = state.workingCopy.versionId;
     }
 
     state.sessionStatus = std::move(result.status);
@@ -671,6 +699,11 @@ juce::File StemhubSession::getEffectiveProjectFile() const
     return stemhub::projectfiles::resolveEffectiveProjectFile(state.selectedProjectFile, state.pendingProjectFile);
 }
 
+juce::File StemhubSession::getProjectFileForGrid() const
+{
+    return state.chosenProjectFile.existsAsFile() ? state.chosenProjectFile : getEffectiveProjectFile();
+}
+
 bool StemhubSession::isWriteOperationInProgress() const noexcept
 {
     return state.operationState == OperationState::committing
@@ -684,6 +717,8 @@ void StemhubSession::enterProject(Project project, juce::String branchId, juce::
     state.selectedBranchName = std::move(branchName);
     state.selectedProjectFile = std::move(projectFile);
     state.pendingProjectFile = state.selectedProjectFile;
+    // The file chosen on the grid went with this project.
+    state.chosenProjectFile = juce::File();
     state.uiState = UIState::dashboard;
     linkedCopy = {};
 }

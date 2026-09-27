@@ -26,6 +26,8 @@ juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request
 
     const auto rootDirectory = request.sourceProjectFile.getParentDirectory();
     const auto includedFiles = stemhub::snapshotfiles::collect(request.sourceProjectFile);
+    if (isJobCancelled())
+        return juce::Result::fail(ApiError::cancelled().message);
     if (includedFiles.empty())
         return juce::Result::fail("Source project file does not exist.");
 

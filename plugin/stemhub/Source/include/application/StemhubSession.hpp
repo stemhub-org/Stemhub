@@ -42,6 +42,9 @@ public:
     [[nodiscard]] bool isWriteOperationInProgress() const noexcept;
     // The file a save would push: the one the user just picked, else the project's working file.
     [[nodiscard]] juce::File getEffectiveProjectFile() const;
+    // The file the project grid offers to create a project from: the one chosen there, else the
+    // open project's.
+    [[nodiscard]] juce::File getProjectFileForGrid() const;
 
     // ── Intents ──
     void requestSignIn(const juce::String& email, const juce::String& password);
@@ -54,11 +57,17 @@ public:
     // open here. A restore hand-off waiting for that project (for any project, when there is no
     // link) is taken now: the DAW is opening that restored copy.
     void restoreLink(ProjectLink savedLink);
+    // A DAW project file picked on the project grid: the next project opened or created there
+    // works on it.
+    void chooseProjectFile(const juce::File& file);
+    // Opens with the file chosen on the grid, else the file the project already has here (its
+    // working file, or the one this DAW project is linked to), on the branch it was on.
     // restoreLatestIfSafe: an explicit open from the project grid. When this instance has no
     // local copy of the project, or an unchanged one behind the branch head, the latest version
     // is restored into a new folder and opened in the DAW. Unsaved local changes are never replaced.
-    void requestOpenProject(juce::String projectId, juce::File localProjectFile, bool restoreLatestIfSafe = false);
-    void requestCreateProject(juce::File localProjectFile);
+    void requestOpenProject(juce::String projectId, bool restoreLatestIfSafe = false);
+    // Creates a StemHub project from getProjectFileForGrid().
+    void requestCreateProject();
     void requestSelectBranch(juce::String branchId);
     void requestRefreshVersionHistory();
     // Uploads only the files the server doesn't have yet. See docs/content-addressed-storage.md.

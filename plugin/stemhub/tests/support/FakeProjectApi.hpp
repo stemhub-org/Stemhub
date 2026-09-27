@@ -60,15 +60,27 @@ public:
         juce::ignoreUnused(accessToken);
         if (rejectToken)
             return fail<std::vector<Project>>(401, "Could not validate credentials");
+        if (failProjectList)
+            return fail<std::vector<Project>>(500, "Failed to load projects.");
 
         const std::lock_guard<std::mutex> lock(mutex);
-        return ApiResult<std::vector<Project>>::success(projects);
+        auto all = projects;
+        all.insert(all.end(), createdProjects.begin(), createdProjects.end());
+        return ApiResult<std::vector<Project>>::success(all);
     }
 
+    // Created projects are named "created-1", "created-2"... and get a "main" branch, as on the
+    // backend.
     ApiResult<Project> createProject(const juce::String& name, const juce::String& accessToken) const override
     {
-        juce::ignoreUnused(name, accessToken);
-        return fail<Project>(500, "not implemented in tests");
+        juce::ignoreUnused(accessToken);
+
+        const std::lock_guard<std::mutex> lock(mutex);
+        Project project;
+        project.id = "created-" + juce::String(static_cast<int>(createdProjects.size()) + 1);
+        project.name = name;
+        createdProjects.push_back(project);
+        return ApiResult<Project>::success(project);
     }
 
     ApiResult<std::vector<Branch>> fetchBranches(const juce::String& projectId, const juce::String& accessToken) const override
@@ -91,6 +103,10 @@ public:
 
         if (auto it = projectBranches.find(projectId); it != projectBranches.end())
             return ApiResult<std::vector<Branch>>::success(it->second);
+
+        for (const auto& created : createdProjects)
+            if (created.id == projectId)
+                return ApiResult<std::vector<Branch>>::success({ Branch { projectId + "-main", projectId, "main" } });
 
         return ApiResult<std::vector<Branch>>::success({});
     }
@@ -178,6 +194,9 @@ public:
         juce::ignoreUnused(accessToken);
 
         const std::lock_guard<std::mutex> lock(mutex);
+        if (createVersionError.isNotEmpty())
+            return fail<VersionSummary>(500, createVersionError);
+
         const auto number = static_cast<int>(createdVersions.size()) + 1;
 
         VersionSummary version;
@@ -302,12 +321,14 @@ public:
     mutable std::map<juce::String, std::vector<VersionSummary>> branchVersions;
     std::map<juce::String, juce::String> branchErrors;
     std::map<juce::String, juce::String> versionErrors;
+    juce::String createVersionError; // creating a version answers 500 with this message
     std::map<juce::String, std::shared_ptr<BlockingGate>> branchFetchGates;
     std::map<juce::String, std::shared_ptr<BlockingGate>> versionFetchGates;
     std::shared_ptr<std::atomic<bool>> branchFetchReturned;
     std::atomic<bool> rejectToken { false };     // every call answers 401
     std::atomic<bool> offline { false };         // fetchCurrentUser gets no response
     std::atomic<bool> corruptDownloads { false }; // downloaded blobs don't match their hash
+    std::atomic<bool> failProjectList { false };  // fetchProjects answers 500
 
 private:
     std::shared_ptr<BlockingGate> findGate(const std::map<juce::String, std::shared_ptr<BlockingGate>>& gates,
@@ -323,6 +344,7 @@ private:
     mutable std::map<juce::String, int> uploadsBySha;
     mutable std::map<juce::String, juce::String> manifestsByVersion;
     mutable std::vector<CreatedVersion> createdVersions;
+    mutable std::vector<Project> createdProjects;
     std::map<juce::String, std::shared_ptr<BlockingGate>> checkMissingGates;
     std::map<juce::String, std::shared_ptr<BlockingGate>> downloadGates;
 };

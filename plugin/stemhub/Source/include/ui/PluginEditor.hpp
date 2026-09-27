@@ -45,6 +45,7 @@ private:
     void handleRestoreClick();
 
     void launchProjectFileChooser(const juce::String& title,
+                                  const juce::File& initialFile,
                                   std::function<void(const juce::File&)> onFileChosen);
     void launchProjectFolderChooser(const juce::String& title,
                                    std::function<void(const juce::File&)> onFolderChosen);
@@ -60,7 +61,8 @@ private:
     DashboardView dashboardView;
     juce::TooltipWindow tooltipWindow { this, 600 };
     std::unique_ptr<juce::AlertWindow> commitPopup;
-    OperationState lastObservedOperationState { OperationState::idle };
+    // The last saved version this editor has shown: a new one means the note was saved.
+    juce::String lastSeenSavedVersionId;
     std::unique_ptr<juce::FileChooser> projectFileChooser;
     // The file whose snapshot size the dashboard shows, or is counting.
     juce::File countedProjectFile;

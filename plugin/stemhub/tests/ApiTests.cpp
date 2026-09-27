@@ -105,6 +105,23 @@ public:
                 expect(!requests[1].headers.containsIgnoreCase("authorization"), "the token never reaches storage");
             }
         }
+
+        beginTest("A version without a file list is reported as such, not as missing");
+        {
+            LocalHttpServer server([](const LocalHttpServer::Request& request)
+            {
+                juce::ignoreUnused(request);
+                const juce::String body = R"({"id": "v1", "branch_id": "b1"})";
+                return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                     + juce::String(static_cast<int>(body.getNumBytesAsUTF8())) + "\r\nConnection: close\r\n\r\n" + body;
+            });
+
+            ApiClient client(server.getBaseUrl());
+            const auto manifest = client.fetchVersionManifest("v1", "secret-token");
+            expect(!manifest.ok() && manifest.error->kind == ApiError::Kind::invalidResponse,
+                   "a version the server has, without a manifest, is not a missing version");
+            expect(manifest.errorMessage({}).contains("file list"), manifest.errorMessage({}));
+        }
     }
 };
 

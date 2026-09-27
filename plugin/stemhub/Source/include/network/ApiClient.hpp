@@ -30,7 +30,8 @@ public:
     virtual ApiResult<std::vector<Branch>> fetchBranches(const juce::String& projectId, const juce::String& accessToken) const = 0;
     virtual ApiResult<std::vector<VersionSummary>> fetchVersions(const juce::String& branchId,
                                                                  const juce::String& accessToken) const = 0;
-    // The version's content-addressed manifest (manifest_json); notFound when it has none.
+    // The version's content-addressed manifest (manifest_json). notFound when the version doesn't
+    // exist; invalidResponse when it was saved without a manifest.
     virtual ApiResult<juce::var> fetchVersionManifest(const juce::String& versionId,
                                                       const juce::String& accessToken) const = 0;
 
