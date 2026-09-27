@@ -4,24 +4,10 @@ namespace stemhub::test
 {
 namespace
 {
-const char* toString(AuthState state)
-{
-    switch (state)
-    {
-        case AuthState::signedOut: return "signedOut";
-        case AuthState::signingIn: return "signingIn";
-        case AuthState::signedIn: return "signedIn";
-        case AuthState::authError: return "authError";
-    }
-
-    return "unknown";
-}
-
 const char* toString(UIState state)
 {
     switch (state)
     {
-        case UIState::login: return "login";
         case UIState::projectSelection: return "projectSelection";
         case UIState::dashboard: return "dashboard";
     }
@@ -34,6 +20,7 @@ const char* toString(OperationState state)
     switch (state)
     {
         case OperationState::idle: return "idle";
+        case OperationState::signingIn: return "signingIn";
         case OperationState::loadingProjects: return "loadingProjects";
         case OperationState::committing: return "committing";
         case OperationState::pulling: return "pulling";
@@ -84,7 +71,7 @@ VersionSummary makeVersion(const juce::String& id, const juce::String& branchId,
 juce::String describe(const StemhubSession& session)
 {
     const auto& state = session.getState();
-    return "auth=" + juce::String(toString(state.authState))
+    return "signedIn=" + juce::String(state.isSignedIn() ? "yes" : "no")
         + ", ui=" + juce::String(toString(state.uiState))
         + ", op=" + juce::String(toString(state.operationState))
         + ", authStatus=" + state.authStatus.text

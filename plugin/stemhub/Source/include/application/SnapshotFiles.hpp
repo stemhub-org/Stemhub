@@ -31,7 +31,8 @@ Summary summarize(const juce::File& projectFile);
 // running it is asked to stop partway.
 [[nodiscard]] juce::String sha256OfFile(const juce::File& file);
 
-[[nodiscard]] bool isDawProjectFile(const juce::File& file);
+// The DAW project files the plugin works with, for a file chooser: "*.flp;*.als".
+[[nodiscard]] juce::String projectFilePattern();
 
 // "FL Studio" for .flp, "Ableton Live" for .als, empty otherwise.
 [[nodiscard]] juce::String dawNameFor(const juce::File& projectFile);
