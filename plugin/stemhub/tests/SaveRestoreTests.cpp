@@ -127,7 +127,7 @@ public:
                    restoredFolder.getFullPathName());
             expect(restoredFolder.getChildFile("Drums/kick.wav").loadFileAsString() == "kick", "nested files keep their folder");
             expect(restoredFolder.getChildFile("kick.wav").loadFileAsString() == "a different kick", "same-name files don't collide");
-            expect(context.state().selectedProjectFile == projectFile, "this instance stays with its own project file");
+            expect(context.state().workingFile == projectFile, "this instance stays with its own project file");
             expect(context.handoffFile().existsAsFile(), "the restored copy waits for the instance the DAW opens");
 
             // The DAW opens the copy with a plugin instance of its own. Its saved state is from
@@ -137,7 +137,7 @@ public:
             expect(!context.handoffFile().exists(), "the hand-off is taken once");
             restoreSavedSession(*restoredInstance);
             const auto& restoredState = restoredInstance->getState();
-            expect(restoredState.selectedProjectFile == restoredFile, "the copy is that instance's working file: " + describe(*restoredInstance));
+            expect(restoredState.workingFile == restoredFile, "the copy is that instance's working file: " + describe(*restoredInstance));
             expect(restoredState.link.workingFile == restoredFile, "and what its DAW project will be saved with");
             expect(restoredState.openedVersionId == firstVersionId, "the restored version is the one in the DAW");
 
@@ -183,7 +183,7 @@ public:
             expect(restoredFile.loadFileAsString() == "flp v1 edit 1 edit 2", "an earlier restore is never deleted");
             expect(context.openedFiles.getLast().getParentDirectory().getFileName() == restoredFolder.getFileName() + " (2)",
                    "the new folder is numbered: " + context.openedFiles.getLast().getFullPathName());
-            expect(restoredState.selectedProjectFile == restoredFile, "the instance keeps working on its copy");
+            expect(restoredState.workingFile == restoredFile, "the instance keeps working on its copy");
         }
 
         beginTest("A save leaves out a copy restored into its own folder");
@@ -259,6 +259,30 @@ public:
             expect(context.state().uiState == UIState::projectSelection, "back to the grid once the save is done");
         }
 
+        beginTest("Opening from the grid restores the latest version only when that replaces nothing");
+        {
+            using stemhub::usecases::LatestVersionPlan;
+            using stemhub::usecases::planLatestVersion;
+
+            const auto file = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("song.flp");
+            const WorkingCopyBaseline olderCopy { file, "version-1", 10, 1000 };
+            const WorkingCopyBaseline latestCopy { file, "version-2", 10, 1000 };
+            const WorkingCopyBaseline unrecorded { file, "version-1" };
+
+            expect(planLatestVersion(false, {}, false, "version-2") == LatestVersionPlan::restoreLatest, "no local file");
+            expect(planLatestVersion(true, {}, false, "version-2") == LatestVersionPlan::keepLocalFile,
+                   "a file nothing is recorded about stays");
+            expect(planLatestVersion(true, unrecorded, true, "version-2") == LatestVersionPlan::keepLocalFile,
+                   "a version without its size and time vouches for nothing");
+            expect(planLatestVersion(true, olderCopy, false, "version-2") == LatestVersionPlan::keepLocalChanges,
+                   "unsaved changes are never replaced");
+            expect(planLatestVersion(true, latestCopy, false, "version-2") == LatestVersionPlan::keepLocalChanges,
+                   "not even on the latest version");
+            expect(planLatestVersion(true, latestCopy, true, "version-2") == LatestVersionPlan::alreadyLatest);
+            expect(planLatestVersion(true, olderCopy, true, "version-2") == LatestVersionPlan::restoreLatest,
+                   "an unchanged older copy is brought up to date");
+        }
+
         beginTest("Opening a project without a local copy restores its latest version");
         {
             TestContext context;
@@ -278,7 +302,7 @@ public:
             expect(restoredFile == context.restoredProjectsFolder().getChildFile("Song/main/song-" + versionId.substring(0, 8) + "/song.flp"),
                    "it goes to <project>/<workspace>/<name>-<version>: " + restoredFile.getFullPathName());
             expect(restoredFile.getParentDirectory().getChildFile("Samples/kick.wav").loadFileAsString() == "kick");
-            expect(context.state().selectedProject.has_value() && context.state().selectedProjectFile == juce::File(),
+            expect(context.state().selectedProject.has_value() && context.state().workingFile == juce::File(),
                    "this instance had no copy of its own and still has none");
             expect(context.state().projectsStatus.isEmpty(), "the grid's progress message is cleared");
 
@@ -292,7 +316,7 @@ public:
             const auto& restoredState = restoredInstance->getState();
             expect(restoredState.selectedProject.has_value() && restoredState.selectedProject->id == project.id,
                    "the instance takes the hand-off: " + describe(*restoredInstance));
-            expect(restoredState.selectedProjectFile == restoredFile, "and works on the restored copy");
+            expect(restoredState.workingFile == restoredFile, "and works on the restored copy");
             expect(restoredState.openedVersionId == versionId, "the restored version is the one in the DAW");
         }
 
@@ -320,7 +344,7 @@ public:
             context.session.requestOpenProject(project.id, true);
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 2; }),
                    "the project should reopen: " + describe(context.session));
-            expect(context.state().selectedProjectFile == projectFile, "the edited copy stays the working file");
+            expect(context.state().workingFile == projectFile, "the edited copy stays the working file");
             expect(projectFile.loadFileAsString() == "flp v1 my edit", "the edited copy is untouched");
             expect(context.state().sessionStatus.severity == Status::Severity::warning
                        && context.state().sessionStatus.text.contains("not saved"),
@@ -353,14 +377,14 @@ public:
             const auto newerCopy = context.openedFiles.getFirst();
             expect(newerCopy.loadFileAsString() == "flp v2" && newerCopy.isAChildOf(context.restoredProjectsFolder()),
                    newerCopy.getFullPathName());
-            expect(context.state().selectedProjectFile == projectFile && projectFile.loadFileAsString() == "flp v1",
+            expect(context.state().workingFile == projectFile && projectFile.loadFileAsString() == "flp v1",
                    "this instance keeps its older copy");
             expect(context.state().openedVersionId == firstVersionId, describe(context.session));
 
             auto newerInstance = context.makeInstance();
             newerInstance->restoreLink({ project.id, branch.id, projectFile });
             restoreSavedSession(*newerInstance);
-            expect(newerInstance->getState().selectedProjectFile == newerCopy, describe(*newerInstance));
+            expect(newerInstance->getState().workingFile == newerCopy, describe(*newerInstance));
             expect(newerInstance->getState().openedVersionId == newerVersionId);
         }
 
@@ -388,14 +412,14 @@ public:
             expect(context.state().sessionStatus.severity == Status::Severity::warning
                        && context.state().sessionStatus.text.contains(restoredFile.getFullPathName()),
                    "the user is told where the restored project is: " + describe(context.session));
-            expect(context.state().selectedProjectFile == projectFile, "this instance keeps its own file");
+            expect(context.state().workingFile == projectFile, "this instance keeps its own file");
             expect(context.handoffFile().existsAsFile(), "the copy waits for the user to open it");
 
             // Opened by hand, with no link saved in it: the instance picks the copy up when its
             // window opens.
             auto openedByHand = context.makeInstance();
             restoreSavedSession(*openedByHand);
-            expect(openedByHand->getState().selectedProjectFile == restoredFile, describe(*openedByHand));
+            expect(openedByHand->getState().workingFile == restoredFile, describe(*openedByHand));
             expect(openedByHand->getState().workingCopy.versionId == versionId, "it knows which version the copy holds");
         }
 
@@ -464,7 +488,7 @@ public:
                 restoreSavedSession(*instance);
                 const auto& state = instance->getState();
                 expect(state.selectedProject.has_value() && state.selectedProject->id == link.projectId
-                           && state.selectedBranchId == link.branchId && state.selectedProjectFile == projectFile,
+                           && state.selectedBranchId == link.branchId && state.workingFile == projectFile,
                        describe(*instance));
                 expect(!state.workingCopy.isSet() && state.openedVersionId.isEmpty(),
                        "the file holds no version of " + link.projectId + "/" + link.branchId);
@@ -556,7 +580,7 @@ public:
             juce::Array<juce::File> leftovers;
             restoresFolder.findChildFiles(leftovers, juce::File::findFilesAndDirectories, true);
             expect(leftovers.isEmpty(), "the half-restored folder is removed");
-            expect(context.state().selectedProjectFile == projectFile, "the working file doesn't change");
+            expect(context.state().workingFile == projectFile, "the working file doesn't change");
             expect(context.openedFiles.isEmpty() && !context.handoffFile().exists(), "nothing is handed to the DAW");
 
             // A connection that drops midway is not a corrupt file.
@@ -638,8 +662,8 @@ public:
             {
                 return !restoredInstance->isBusy() && restoredInstance->getState().selectedProject.has_value();
             }), describe(*restoredInstance));
-            expect(restoredInstance->getState().selectedProjectFile == restoredFile,
-                   "the instance works on the restored copy: " + restoredInstance->getState().selectedProjectFile.getFullPathName());
+            expect(restoredInstance->getState().workingFile == restoredFile,
+                   "the instance works on the restored copy: " + restoredInstance->getState().workingFile.getFullPathName());
             expect(restoredInstance->getState().openedVersionId == versionId, "and knows which version it holds");
         }
 

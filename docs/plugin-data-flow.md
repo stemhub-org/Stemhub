@@ -20,7 +20,8 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
   - One typed call per endpoint: auth, user, projects, branches, versions, version manifest,
     blob check/upload/download, version creation from a manifest. The HTTP plumbing is private;
     JSON parsing lives in `ApiJson.cpp`. Every failure is an `ApiError` with a kind (network,
-    unauthorized, not found, server, ...).
+    unauthorized, not found, server, ...). `SignedInApi` is the same API with the signed-in
+    user's token on every call; each signed-in job gets one.
 - `SnapshotSync` (`plugin/stemhub/Source/src/application/SnapshotSync.cpp`)
   - Stateless content-addressed push (hash the project's files, upload what the server lacks,
     then create the version) and restore (download into a hidden folder, verify every SHA-256,
@@ -44,13 +45,13 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 ## 2) Data Objects Moving Through The Flow
 
 - `SessionState` holds all of it:
-- Auth/session: `authState`, `uiState`, `operationState`, `accessToken`, `currentUser`
+- Auth/session: `currentUser` and `accessToken` (both set while signed in), `uiState` (the project grid or the dashboard; signed out, the login screen shows), `operationState` (the one job running: signing in, loading, saving, pulling or restoring)
 - `link`: the StemHub project, branch and working file of the DAW project this instance lives in
 - Messages: one `Status` (severity + text) per screen: `authStatus`, `projectsStatus`, `sessionStatus`
 - Project selection: `projects`, `selectedProject`, `branches`, `selectedBranchId`
 - Versioning: `versionHistory`, `selectedVersionId`, `openedVersionId` (the version in the DAW), `lastSavedVersionId` (set only when a save creates a version: the editor clears the save note then, and keeps it after a failed or cancelled save)
-- Filesystem: `chosenProjectFile` (picked on the project grid, for the next project opened or created there), `pendingProjectFile`, `selectedProjectFile`, working-copy baseline (file, version id, size and modification time recorded by the last save or restore, read back from the working-copy record when a project opens)
-- Background payloads: `AuthRequestResult`, `ProjectActivationJobResult`, `BranchHistoryJobResult`, `PushVersionJobResult`, `RestoreVersionJobResult`
+- Filesystem: `chosenProjectFile` (picked on the project grid, for the next project opened or created there), `workingFile` (the file the open project saves from and its link names; it may be missing, on a drive that isn't plugged in, and stays until the user picks another), working-copy baseline (file, version id, size and modification time recorded by the last save or restore, read back from the working-copy record when a project opens)
+- Background payloads: `AuthRequestResult`, `ProjectActivationJobResult`, `BranchHistoryJobResult`, `PushVersionJobResult`, `RestoreVersionJobResult`. Each is a `JobOutcome` (an error message, a status for the user, and whether the backend refused the token) plus what the job produced.
 
 ## 3) End-To-End Lifecycle
 
@@ -89,15 +90,20 @@ All major actions follow the same async pattern:
 
 1. UI calls a `StemhubSession::request*` intent. While another job runs it is ignored (sign-out
    excepted), and the views disable the controls that would send it.
-2. The session sets the operation state and a progress `Status`, and starts a new request epoch.
-3. It enqueues the use case with an input built on the message thread: token, ids, files.
-4. A worker runs the use case against `IProjectApi` and returns a typed result tagged with the
-   epoch; `BackgroundJobCoordinator` queues it and calls `triggerAsyncUpdate()`.
+2. `start()` sets the operation state and a progress `Status` on the operation's screen, and
+   starts a new request epoch.
+3. It enqueues the use case with an input built on the message thread (ids, files). Signed-in
+   jobs get a `SignedInApi`, the API with the token the session had when the job started.
+4. A worker runs the use case and returns its typed result; the coordinator queues it with the
+   epoch and calls `triggerAsyncUpdate()`.
 5. `handleAsyncUpdate()` runs on the message thread and takes the queued results.
 6. A result is applied only if its epoch is still the latest. Signing out starts a new epoch, so
    whatever was running before is dropped when it finishes.
-7. The session updates `SessionState` and calls `sendChangeMessage()`.
-8. The editor's `refreshSessionUi()` re-renders the active view.
+7. `finish()` applies the one rule every job ends with: the session is idle again; a refused
+   token signs the user out; a failure (or a cancel) shows on the operation's screen. Otherwise
+   the session applies the rest of the result.
+8. The session calls `sendChangeMessage()`, and the editor's `refreshSessionUi()` re-renders the
+   active view.
 
 While a job runs it can post progress reports ("Uploading 12 of 40 new files...") through the
 same queue, tagged with its epoch; they replace the progress status until the result arrives.
@@ -107,8 +113,8 @@ folder, between two files it hashes, uploads or downloads, during an upload (JUC
 callback) and between blocks of a download. It is true once the thread pool asks the job to stop,
 which happens when:
 
-- the user presses Cancel during a save or restore (`cancelRequest()`): the job ends with
-  "Save cancelled." or "Restore cancelled.", unless it had already finished, and a cancelled
+- the user presses Cancel (`cancelRequest()`): the job ends with "Save cancelled.",
+  "Restore cancelled." or "Sign-in cancelled.", unless it had already finished, and a cancelled
   restore removes its folder;
 - the user signs out: the old session's jobs stop, and their results are dropped anyway;
 - the plugin closes: `shutdown()` asks every job to stop and waits for them, which now takes
@@ -176,7 +182,7 @@ sequenceDiagram
 - No other save, restore or project load is running.
 - Selected project exists.
 - Selected branch exists.
-- Effective project file exists on disk and changed since the last save or restore.
+- The working file exists on disk and changed since the last save or restore.
 
 ### Data path
 

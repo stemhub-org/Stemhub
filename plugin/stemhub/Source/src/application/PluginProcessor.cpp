@@ -99,28 +99,11 @@ bool StemhubAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) c
         && output == layouts.getMainInputChannelSet();
 }
 
-template <typename SampleType>
-static void clearExtraOutputChannels(juce::AudioProcessor& processor, juce::AudioBuffer<SampleType>& buffer)
-{
-    const auto totalNumInputChannels = processor.getTotalNumInputChannels();
-    const auto totalNumOutputChannels = processor.getTotalNumOutputChannels();
-
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear(i, 0, buffer.getNumSamples());
-}
-
+// The buffer holds the input, and the layout has no output without an input: leaving it as it
+// is passes the audio through.
 void StemhubAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    juce::ScopedNoDenormals noDenormals;
-    juce::ignoreUnused(midiMessages);
-    clearExtraOutputChannels(*this, buffer);
-}
-
-void StemhubAudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midiMessages)
-{
-    juce::ScopedNoDenormals noDenormals;
-    juce::ignoreUnused(midiMessages);
-    clearExtraOutputChannels(*this, buffer);
+    juce::ignoreUnused(buffer, midiMessages);
 }
 
 bool StemhubAudioProcessor::hasEditor() const

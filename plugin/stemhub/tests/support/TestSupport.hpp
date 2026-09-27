@@ -110,7 +110,7 @@ protected:
     void signIn(StemhubSession& session)
     {
         session.requestSignIn("user@example.com", "secret");
-        expect(waitUntil(session, [&session] { return session.getState().authState == AuthState::signedIn && !session.isBusy(); }),
+        expect(waitUntil(session, [&session] { return session.getState().isSignedIn() && !session.isBusy(); }),
                "sign-in should succeed: " + describe(session));
     }
 
@@ -118,8 +118,14 @@ protected:
     void restoreSavedSession(StemhubSession& session)
     {
         session.requestRestoreSavedSession();
-        expect(waitUntil(session, [&session] { return session.getState().authState == AuthState::signedIn && !session.isBusy(); }),
+        expect(waitUntil(session, [&session] { return session.getState().isSignedIn() && !session.isBusy(); }),
                "the saved session should restore: " + describe(session));
+    }
+
+    // Signed out, with nothing running: the login screen.
+    static bool isOnLoginScreen(const StemhubSession& session)
+    {
+        return !session.getState().isSignedIn() && !session.isBusy();
     }
 
     // With projectFile as its working file, as when the file is chosen on the grid first.

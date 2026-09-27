@@ -1,19 +1,60 @@
 #include <algorithm>
+#include <utility>
 
 #include "application/StemhubSession.hpp"
 #include "application/Log.hpp"
-#include "application/ProjectFileService.hpp"
+#include "application/RestoreFolders.hpp"
 #include "application/RestoreHandoff.hpp"
-#include "application/SessionHelpers.hpp"
-
-using namespace stemhub::sessionhelpers;
 
 namespace usecases = stemhub::usecases;
+
+namespace
+{
+// How the log names an operation, and what the user reads when it is cancelled.
+struct OperationWords
+{
+    const char* name;
+    const char* cancelled;
+};
+
+OperationWords wordsFor(const OperationState operation)
+{
+    switch (operation)
+    {
+        case OperationState::signingIn:       return { "Signing in", "Sign-in cancelled." };
+        case OperationState::loadingProjects: return { "Opening the project", "Cancelled." };
+        case OperationState::pulling:         return { "Loading the history", "Cancelled." };
+        case OperationState::committing:      return { "Saving a version", "Save cancelled." };
+        case OperationState::restoring:       return { "Restoring a version", "Restore cancelled." };
+        case OperationState::idle:            break;
+    }
+
+    return { "Working", "Cancelled." };
+}
+
+// Hands a project file to the DAW, through the system's "open with" association.
+bool openInSystem(const juce::File& file)
+{
+    if (!file.existsAsFile())
+        return false;
+
+    if (file.startAsProcess())
+        return true;
+
+   #if JUCE_MAC
+    // Arguments go as they are: no quoting to get wrong with spaces or quotes in the path.
+    juce::ChildProcess openProcess;
+    return openProcess.start(juce::StringArray { "open", file.getFullPathName() });
+   #else
+    return false;
+   #endif
+}
+}
 
 StemhubSession::StemhubSession(std::shared_ptr<const IProjectApi> apiToUse, SessionStorage storageToUse)
     : api(std::move(apiToUse)),
       storage(std::move(storageToUse)),
-      openFileHandler([](const juce::File& file) { return stemhub::projectfiles::openInSystem(file); })
+      openFileHandler(openInSystem)
 {
     jassert(api != nullptr && storage.credentials != nullptr);
 }
@@ -32,20 +73,65 @@ void StemhubSession::shutdown()
 //==============================================================================
 // Jobs and results
 
-void StemhubSession::enqueue(const uint64_t epoch, std::function<JobPayload(const IProjectApi&, const ReportProgress&)> run)
+void StemhubSession::start(const OperationState operation, const juce::String& progress, Job job)
 {
+    state.operationState = operation;
+    statusOfCurrentScreen() = Status::progress(progress);
+    changed();
+
     // The job holds its own reference to the API, so it never reaches into this session.
-    jobs.enqueue([sharedApi = api, epoch, task = std::move(run)](const Jobs::Post& post)
+    const auto epoch = beginRequest();
+    jobs.enqueue([sharedApi = api, epoch, task = std::move(job)](const Jobs::Post& post)
     {
         const ReportProgress report = [&post, epoch](const juce::String& text)
         {
-            post(usecases::ProgressReport { epoch, text });
+            post({ epoch, ProgressReport { text } });
         };
 
-        auto payload = task(*sharedApi, report);
-        std::visit([epoch](auto& result) { result.requestEpoch = epoch; }, payload);
-        return payload;
+        return TaggedPayload { epoch, task(*sharedApi, report) };
     });
+}
+
+StemhubSession::Job StemhubSession::asSignedIn(SignedInJob job) const
+{
+    return [token = state.accessToken, signedInJob = std::move(job)](const IProjectApi& backend, const ReportProgress& report)
+    {
+        return signedInJob(SignedInApi(backend, token), report);
+    };
+}
+
+bool StemhubSession::finish(const JobOutcome& outcome)
+{
+    auto& screenStatus = statusOfCurrentScreen();
+    const auto operation = std::exchange(state.operationState, OperationState::idle);
+
+    if (outcome.sessionExpired)
+    {
+        expireSession();
+        return false;
+    }
+
+    if (!outcome.failed())
+        return true;
+
+    // A cancel is no error: the job stopped as asked.
+    if (cancelledMessage.isNotEmpty())
+    {
+        screenStatus = Status::warning(cancelledMessage);
+    }
+    else
+    {
+        stemhub::log::warning(juce::String(wordsFor(operation).name) + " failed: " + outcome.errorMessage);
+        screenStatus = Status::error(outcome.errorMessage);
+    }
+
+    return false;
+}
+
+void StemhubSession::refuse(Status reason)
+{
+    state.sessionStatus = std::move(reason);
+    changed();
 }
 
 void StemhubSession::handleAsyncUpdate()
@@ -62,12 +148,12 @@ int StemhubSession::applyFinishedJobs()
 {
     bool didApply = false;
     int finishedJobs = 0;
-    for (auto& payload : jobs.takeResults())
+    for (auto& tagged : jobs.takeResults())
     {
-        if (!std::holds_alternative<ProgressReport>(payload))
+        if (!std::holds_alternative<ProgressReport>(tagged.payload))
             ++finishedJobs;
 
-        didApply = applyResult(std::move(payload)) || didApply;
+        didApply = applyResult(std::move(tagged)) || didApply;
     }
 
     if (didApply)
@@ -76,18 +162,45 @@ int StemhubSession::applyFinishedJobs()
     return finishedJobs;
 }
 
-bool StemhubSession::applyResult(JobPayload payload)
+bool StemhubSession::applyResult(TaggedPayload tagged)
 {
-    return std::visit([this](auto&& result)
-    {
-        // The one staleness rule: a result counts only if nothing was requested after it.
-        // Checked per result, as applying one can start a request or end the session.
-        if (!isCurrent(result.requestEpoch))
-            return false;
+    // The one staleness rule: a result counts only if nothing was requested after it. Checked
+    // per result, as applying one can start a request or end the session.
+    if (!isCurrent(tagged.requestEpoch))
+        return false;
 
-        apply(std::move(result));
-        return true;
-    }, std::move(payload));
+    std::visit([this](auto&& payload) { apply(std::move(payload)); }, std::move(tagged.payload));
+    return true;
+}
+
+void StemhubSession::apply(ProgressReport report)
+{
+    // A report never replaces "Cancelling...", nor the outcome of a job that has ended.
+    if (isBusy() && cancelledMessage.isEmpty())
+        statusOfCurrentScreen() = Status::progress(std::move(report.text));
+}
+
+void StemhubSession::cancelRequest()
+{
+    JUCE_ASSERT_MESSAGE_THREAD
+    if (!isBusy() || cancelledMessage.isNotEmpty())
+        return;
+
+    cancelledMessage = wordsFor(state.operationState).cancelled;
+    jobs.stopRunningJobs();
+    statusOfCurrentScreen() = Status::progress("Cancelling...");
+    changed();
+}
+
+Status& StemhubSession::statusOfCurrentScreen() noexcept
+{
+    if (state.operationState == OperationState::signingIn)
+        return state.authStatus;
+
+    if (state.operationState == OperationState::loadingProjects)
+        return state.projectsStatus;
+
+    return state.sessionStatus;
 }
 
 //==============================================================================
@@ -96,19 +209,15 @@ bool StemhubSession::applyResult(JobPayload payload)
 void StemhubSession::requestSignIn(const juce::String& email, const juce::String& password)
 {
     JUCE_ASSERT_MESSAGE_THREAD
-    if (state.authState == AuthState::signingIn)
+    if (isBusy())
         return;
 
     resetState();
-    state.authState = AuthState::signingIn;
-    state.authStatus = Status::progress("Signing in to your StemHub account...");
-    changed();
-
-    enqueue(beginRequest(), [input = usecases::SignInInput { email, password }](const IProjectApi& backend, const auto&)
-                                -> JobPayload
-    {
-        return usecases::signIn(backend, input);
-    });
+    start(OperationState::signingIn, "Signing in to your StemHub account...",
+          [input = usecases::SignInInput { email, password }](const IProjectApi& backend, const auto&) -> JobPayload
+          {
+              return usecases::signIn(backend, input);
+          });
 }
 
 void StemhubSession::requestRestoreSavedSession()
@@ -120,50 +229,31 @@ void StemhubSession::requestRestoreSavedSession()
     didAttemptSavedSessionRestore = true;
 
     const auto savedToken = storage.credentials->loadToken();
-    const auto isSigningIn = state.authState == AuthState::signedIn || state.authState == AuthState::signingIn;
-    if (savedToken.isNotEmpty() && !isSigningIn)
-    {
-        state.authState = AuthState::signingIn;
-        state.authStatus = Status::progress("Restoring your session...");
+    if (savedToken.isEmpty() || state.isSignedIn() || isBusy())
+        return;
 
-        enqueue(beginRequest(), [input = usecases::RestoreSessionInput { savedToken }](const IProjectApi& backend, const auto&)
-                                    -> JobPayload
-        {
-            return usecases::restoreSession(backend, input);
-        });
-    }
-
-    changed();
+    start(OperationState::signingIn, "Restoring your session...",
+          [input = usecases::RestoreSessionInput { savedToken }](const IProjectApi& backend, const auto&) -> JobPayload
+          {
+              return usecases::restoreSession(backend, input);
+          });
 }
 
 void StemhubSession::apply(AuthRequestResult result)
 {
-    if (result.authErrorMessage.isNotEmpty())
-    {
-        if (result.fromSavedSession && result.sessionExpired)
-        {
-            expireSession("Saved session expired. Please sign in again.");
-            return;
-        }
+    // Offline, or with the server down, the saved token stays, and reopening the plugin tries again.
+    if (result.fromSavedSession && result.failed() && !result.sessionExpired)
+        didAttemptSavedSessionRestore = false;
 
-        // Signing in failed, or the saved session couldn't be checked (offline, server down).
-        // In that second case the token stays saved, and reopening the plugin tries again.
-        if (result.fromSavedSession)
-            didAttemptSavedSessionRestore = false;
-
-        stemhub::log::warning("Sign-in failed: " + result.authErrorMessage);
-        state.authState = AuthState::authError;
-        state.authStatus = Status::error(result.authErrorMessage);
+    if (!finish(result))
         return;
-    }
 
-    state.authState = AuthState::signedIn;
     state.uiState = UIState::projectSelection;
     state.authStatus = {};
     state.accessToken = std::move(result.token);
     state.currentUser = std::move(result.user);
     state.projects = std::move(result.projects);
-    state.projectsStatus = std::move(result.projectsStatus);
+    state.projectsStatus = std::move(result.status);
     storage.credentials->saveToken(state.accessToken);
 
     // A DAW project saved without a link (never linked, or by an earlier version): if the DAW has
@@ -195,12 +285,11 @@ void StemhubSession::resetState()
     state.link = std::move(link);
 }
 
-void StemhubSession::expireSession(const juce::String& message)
+void StemhubSession::expireSession()
 {
     stemhub::log::info("StemHub refused the token: signed out.");
     signOut();
-    state.authState = AuthState::authError;
-    state.authStatus = Status::warning(message);
+    state.authStatus = Status::warning("Your session expired. Sign in again.");
 }
 
 void StemhubSession::restoreLink(ProjectLink savedLink)
@@ -232,7 +321,7 @@ void StemhubSession::takeRestoreHandoff(const juce::String& projectId)
 
 void StemhubSession::openLinkedProject()
 {
-    if (!state.link.isSet() || state.authState != AuthState::signedIn || state.selectedProject.has_value() || isBusy())
+    if (!state.link.isSet() || !state.isSignedIn() || state.selectedProject.has_value() || isBusy())
         return;
 
     const auto isListed = std::any_of(state.projects.begin(), state.projects.end(), [this](const Project& project)
@@ -246,23 +335,20 @@ void StemhubSession::openLinkedProject()
         return;
     }
 
-    state.operationState = OperationState::loadingProjects;
-    state.projectsStatus = Status::progress("Opening the linked project...");
-
     usecases::OpenProjectInput input;
     input.projectId = state.link.projectId;
     input.preferredBranchId = state.link.branchId;
     // Passed even when it is missing (a drive not plugged in), so the link keeps the path.
     input.localProjectFile = state.link.workingFile;
     input.availableProjects = state.projects;
-    input.token = state.accessToken;
     input.workingCopies = storage.workingCopies;
     input.restoredProjectsFolder = storage.restoredProjectsFolder;
 
-    enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
-    {
-        return usecases::openProject(backend, input, report);
-    });
+    start(OperationState::loadingProjects, "Opening the linked project...",
+          asSignedIn([input](const SignedInApi& backend, const ReportProgress& report) -> JobPayload
+          {
+              return usecases::openProject(backend, input, report);
+          }));
 }
 
 //==============================================================================
@@ -292,23 +378,19 @@ void StemhubSession::requestOpenProject(juce::String projectId, const bool resto
                             : isLinked   ? state.link.branchId
                                          : juce::String();
     input.localProjectFile = state.chosenProjectFile != juce::File() ? state.chosenProjectFile
-                           : isOpenHere                              ? getEffectiveProjectFile()
+                           : isOpenHere                              ? state.workingFile
                            : isLinked                                ? state.link.workingFile
                                                                      : juce::File();
     input.availableProjects = state.projects;
-    input.token = state.accessToken;
     input.restoreLatestIfSafe = restoreLatestIfSafe;
     input.workingCopies = storage.workingCopies;
     input.restoredProjectsFolder = storage.restoredProjectsFolder;
 
-    state.operationState = OperationState::loadingProjects;
-    state.projectsStatus = Status::progress("Opening project...");
-    changed();
-
-    enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
-    {
-        return usecases::openProject(backend, input, report);
-    });
+    start(OperationState::loadingProjects, "Opening project...",
+          asSignedIn([input](const SignedInApi& backend, const ReportProgress& report) -> JobPayload
+          {
+              return usecases::openProject(backend, input, report);
+          }));
 }
 
 void StemhubSession::requestCreateProject()
@@ -317,21 +399,16 @@ void StemhubSession::requestCreateProject()
     if (isBusy())
         return;
 
-    state.operationState = OperationState::loadingProjects;
-    state.projectsStatus = Status::progress("Creating project...");
-    changed();
-
-    enqueue(beginRequest(), [input = usecases::CreateProjectInput { getProjectFileForGrid(), state.accessToken }](
-                                const IProjectApi& backend, const auto&) -> JobPayload
-    {
-        return usecases::createProject(backend, input);
-    });
+    start(OperationState::loadingProjects, "Creating project...",
+          asSignedIn([input = usecases::CreateProjectInput { getProjectFileForGrid() }](const SignedInApi& backend, const auto&)
+                         -> JobPayload
+          {
+              return usecases::createProject(backend, input);
+          }));
 }
 
 void StemhubSession::apply(ProjectActivationJobResult result)
 {
-    state.operationState = OperationState::idle;
-
     // A project created before a later step failed still belongs in the grid, or it would be
     // created again.
     if (result.refreshedProjects.has_value())
@@ -345,24 +422,15 @@ void StemhubSession::apply(ProjectActivationJobResult result)
             state.projects.push_back(project);
     }
 
-    if (result.sessionExpired)
-    {
-        expireSession();
+    if (!finish(result))
         return;
-    }
-
-    if (hasError(result))
-    {
-        showFailure(state.projectsStatus, "Opening the project", result.errorMessage);
-        return;
-    }
 
     // The project grid's progress message is done with; the dashboard reports the outcome.
     state.projectsStatus = {};
     state.branches = std::move(result.branches);
     state.versionHistory = std::move(result.versions);
-    state.selectedVersionId = chooseSelectedVersionId(state.versionHistory, result.selectedVersionId);
-    enterProject(*result.selectedProject, result.branchId, result.branchName, std::move(result.projectFile));
+    state.selectedVersionId = std::move(result.selectedVersionId);
+    enterProject(*result.selectedProject, std::move(result.branchId), std::move(result.projectFile));
     state.workingCopy = std::move(result.workingCopy);
     // The DAW has the working file open; it holds a known version only while the file is unchanged.
     state.openedVersionId = state.workingCopy.isUnchanged() ? state.workingCopy.versionId : juce::String();
@@ -382,8 +450,7 @@ void StemhubSession::requestSelectBranch(juce::String branchId)
 
     if (!state.selectedProject.has_value())
     {
-        state.sessionStatus = Status::error("Choose a project before selecting a workspace.");
-        changed();
+        refuse(Status::error("Choose a project before selecting a workspace."));
         return;
     }
 
@@ -394,24 +461,19 @@ void StemhubSession::requestSelectBranch(juce::String branchId)
 
     if (branchIt == state.branches.end())
     {
-        state.sessionStatus = Status::error("Selected workspace is no longer available.");
-        changed();
+        refuse(Status::error("Selected workspace is no longer available."));
         return;
     }
-
-    state.operationState = OperationState::pulling;
-    state.sessionStatus = Status::progress("Loading workspace history...");
-    changed();
 
     usecases::FetchHistoryInput input;
     input.branchId = std::move(branchId);
     input.branchName = branchIt->name;
-    input.token = state.accessToken;
 
-    enqueue(beginRequest(), [input](const IProjectApi& backend, const auto&) -> JobPayload
-    {
-        return usecases::fetchHistory(backend, input);
-    });
+    start(OperationState::pulling, "Loading workspace history...",
+          asSignedIn([input](const SignedInApi& backend, const auto&) -> JobPayload
+          {
+              return usecases::fetchHistory(backend, input);
+          }));
 }
 
 void StemhubSession::requestRefreshVersionHistory()
@@ -420,49 +482,30 @@ void StemhubSession::requestRefreshVersionHistory()
     if (isBusy())
         return;
 
-    if (!hasProjectAndBranchSelected(state.selectedProject, state.selectedBranchId))
+    if (!state.hasOpenProject())
     {
-        state.sessionStatus = Status::error("Choose a project and workspace before refreshing history.");
-        changed();
+        refuse(Status::error("Choose a project and workspace before refreshing history."));
         return;
     }
 
-    const auto branchIt = std::find_if(state.branches.begin(), state.branches.end(), [this](const Branch& branch)
-    {
-        return branch.id == state.selectedBranchId;
-    });
-
-    state.operationState = OperationState::pulling;
-    state.sessionStatus = Status::progress("Refreshing version history...");
-    changed();
+    const auto* branch = state.selectedBranch();
 
     usecases::FetchHistoryInput input;
     input.branchId = state.selectedBranchId;
-    input.branchName = branchIt != state.branches.end() ? branchIt->name : state.selectedBranchName;
+    input.branchName = branch != nullptr ? branch->name : juce::String();
     input.preferredVersionId = state.selectedVersionId;
-    input.token = state.accessToken;
 
-    enqueue(beginRequest(), [input](const IProjectApi& backend, const auto&) -> JobPayload
-    {
-        return usecases::fetchHistory(backend, input);
-    });
+    start(OperationState::pulling, "Refreshing version history...",
+          asSignedIn([input](const SignedInApi& backend, const auto&) -> JobPayload
+          {
+              return usecases::fetchHistory(backend, input);
+          }));
 }
 
 void StemhubSession::apply(BranchHistoryJobResult result)
 {
-    state.operationState = OperationState::idle;
-
-    if (result.sessionExpired)
-    {
-        expireSession();
+    if (!finish(result))
         return;
-    }
-
-    if (hasError(result))
-    {
-        showFailure(state.sessionStatus, "Loading the history", result.errorMessage);
-        return;
-    }
 
     // The backend only accepts a parent from the same branch. Refreshing the same branch leaves
     // the files on disk, and so the working copy, as they are.
@@ -470,9 +513,8 @@ void StemhubSession::apply(BranchHistoryJobResult result)
         clearWorkingCopy();
 
     state.selectedBranchId = std::move(result.branchId);
-    state.selectedBranchName = std::move(result.branchName);
     state.versionHistory = std::move(result.versions);
-    state.selectedVersionId = chooseSelectedVersionId(state.versionHistory, result.selectedVersionId);
+    state.selectedVersionId = std::move(result.selectedVersionId);
     state.sessionStatus = std::move(result.status);
 }
 
@@ -485,49 +527,32 @@ void StemhubSession::requestPushVersion(juce::String commitMessage)
     if (isBusy())
         return;
 
-    const auto projectFile = getEffectiveProjectFile();
-    if (hasCleanWorkingCopy(projectFile))
+    if (hasCleanWorkingCopy())
     {
-        state.sessionStatus = Status::warning("No changes to save: the project file is the same as the last saved "
-                                              "or restored version. Save the project in your DAW first.");
-        changed();
+        refuse(Status::warning("No changes to save: the project file is the same as the last saved "
+                               "or restored version. Save the project in your DAW first."));
         return;
     }
 
-    state.operationState = OperationState::committing;
-    state.sessionStatus = Status::progress("Saving version...");
-    changed();
-
     usecases::PushInput input;
-    input.projectFile = projectFile;
+    input.projectFile = state.workingFile;
     input.projectId = state.selectedProject.has_value() ? state.selectedProject->id : juce::String();
     input.branchId = state.selectedBranchId;
-    input.parentVersionId = getParentVersionForNextSave(projectFile);
+    input.parentVersionId = getParentVersionForNextSave();
     input.commitMessage = std::move(commitMessage);
-    input.token = state.accessToken;
     input.workingCopies = storage.workingCopies;
 
-    enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
-    {
-        return usecases::pushVersion(backend, input, report);
-    });
+    start(OperationState::committing, "Saving version...",
+          asSignedIn([input](const SignedInApi& backend, const ReportProgress& report) -> JobPayload
+          {
+              return usecases::pushVersion(backend, input, report);
+          }));
 }
 
 void StemhubSession::apply(PushVersionJobResult result)
 {
-    state.operationState = OperationState::idle;
-
-    if (result.sessionExpired)
-    {
-        expireSession();
+    if (!finish(result))
         return;
-    }
-
-    if (hasError(result))
-    {
-        showFailure(state.sessionStatus, "Saving a version", result.errorMessage);
-        return;
-    }
 
     if (result.refreshedVersions.has_value())
         state.versionHistory = std::move(*result.refreshedVersions);
@@ -551,103 +576,48 @@ void StemhubSession::requestRestoreVersion(const juce::String& versionId, const 
     if (isBusy())
         return;
 
-    if (!hasProjectAndBranchSelected(state.selectedProject, state.selectedBranchId))
+    if (!state.hasOpenProject())
     {
-        state.sessionStatus = Status::error("Choose a project before restoring.");
-        changed();
+        refuse(Status::error("Choose a project before restoring."));
         return;
     }
     if (!projectFolder.isDirectory())
     {
-        state.sessionStatus = Status::error("Choose a valid restore destination folder.");
-        changed();
+        refuse(Status::error("Choose a valid restore destination folder."));
         return;
     }
     if (versionId.isEmpty())
     {
-        state.sessionStatus = Status::error("Select a version before restoring.");
-        changed();
+        refuse(Status::error("Select a version before restoring."));
         return;
     }
 
-    state.operationState = OperationState::restoring;
-    state.sessionStatus = Status::progress("Restoring version...");
-    changed();
+    namespace restorefolders = stemhub::restorefolders;
 
     usecases::RestoreInput input;
     input.projectId = state.selectedProject->id;
     input.versionId = versionId;
     input.branchId = state.selectedBranchId;
-    input.destinationFolder = stemhub::projectfiles::chooseRestoreFolder(
-        projectFolder,
-        stemhub::projectfiles::resolveRestoreProjectName(state.versionHistory, versionId, state.selectedProject->name),
-        versionId);
-    input.token = state.accessToken;
+    input.destinationFolder = restorefolders::newFolder(projectFolder,
+                                                        restorefolders::projectName(state.versionHistory, versionId, state.selectedProject->name),
+                                                        versionId);
     input.workingCopies = storage.workingCopies;
 
-    enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
-    {
-        return usecases::restoreVersion(backend, input, report);
-    });
+    start(OperationState::restoring, "Restoring version...",
+          asSignedIn([input](const SignedInApi& backend, const ReportProgress& report) -> JobPayload
+          {
+              return usecases::restoreVersion(backend, input, report);
+          }));
 }
 
 void StemhubSession::apply(RestoreVersionJobResult result)
 {
-    state.operationState = OperationState::idle;
-
-    if (result.sessionExpired)
-    {
-        expireSession();
+    if (!finish(result))
         return;
-    }
 
-    if (hasError(result))
-    {
-        showFailure(state.sessionStatus, "Restoring a version", result.errorMessage);
-        return;
-    }
-
-    state.selectedVersionId = result.restoredVersionId;
+    state.selectedVersionId = result.restoredCopy.versionId;
     state.sessionStatus = std::move(result.status);
     handOverRestoredCopy(result.restoredCopy);
-}
-
-void StemhubSession::cancelRequest()
-{
-    JUCE_ASSERT_MESSAGE_THREAD
-    if (!isBusy() || cancelledMessage.isNotEmpty())
-        return;
-
-    cancelledMessage = state.operationState == OperationState::committing  ? "Save cancelled."
-                     : state.operationState == OperationState::restoring   ? "Restore cancelled."
-                                                                            : "Cancelled.";
-    jobs.stopRunningJobs();
-    statusOfCurrentScreen() = Status::progress("Cancelling...");
-    changed();
-}
-
-void StemhubSession::apply(ProgressReport report)
-{
-    // A report never replaces "Cancelling...", nor the outcome of a job that has ended.
-    if (isBusy() && cancelledMessage.isEmpty())
-        statusOfCurrentScreen() = Status::progress(std::move(report.text));
-}
-
-void StemhubSession::showFailure(Status& target, const juce::String& action, const juce::String& errorMessage)
-{
-    if (cancelledMessage.isNotEmpty())
-    {
-        target = Status::warning(cancelledMessage);
-        return;
-    }
-
-    stemhub::log::warning(action + " failed: " + errorMessage);
-    target = Status::error(errorMessage);
-}
-
-Status& StemhubSession::statusOfCurrentScreen() noexcept
-{
-    return state.operationState == OperationState::loadingProjects ? state.projectsStatus : state.sessionStatus;
 }
 
 void StemhubSession::handOverRestoredCopy(const WorkingCopyBaseline& restoredCopy)
@@ -672,10 +642,10 @@ void StemhubSession::setSelectedVersionId(juce::String versionId)
     changed();
 }
 
-void StemhubSession::setPendingProjectFile(const juce::File& file)
+void StemhubSession::setWorkingFile(const juce::File& file)
 {
     JUCE_ASSERT_MESSAGE_THREAD
-    state.pendingProjectFile = file;
+    state.workingFile = file;
     changed();
 }
 
@@ -683,21 +653,19 @@ void StemhubSession::showProjectSelection()
 {
     JUCE_ASSERT_MESSAGE_THREAD
     // A save or restore in flight belongs to this project; leaving would mix its result into another.
-    if (isWriteOperationInProgress() || state.authState != AuthState::signedIn)
+    if (isWriteOperationInProgress() || !state.isSignedIn())
         return;
 
     state.uiState = UIState::projectSelection;
     changed();
 }
 
-juce::File StemhubSession::getEffectiveProjectFile() const
-{
-    return stemhub::projectfiles::resolveEffectiveProjectFile(state.selectedProjectFile, state.pendingProjectFile);
-}
-
 juce::File StemhubSession::getProjectFileForGrid() const
 {
-    return state.chosenProjectFile.existsAsFile() ? state.chosenProjectFile : getEffectiveProjectFile();
+    if (state.chosenProjectFile.existsAsFile())
+        return state.chosenProjectFile;
+
+    return state.workingFile.existsAsFile() ? state.workingFile : juce::File();
 }
 
 bool StemhubSession::isWriteOperationInProgress() const noexcept
@@ -706,13 +674,11 @@ bool StemhubSession::isWriteOperationInProgress() const noexcept
         || state.operationState == OperationState::restoring;
 }
 
-void StemhubSession::enterProject(Project project, juce::String branchId, juce::String branchName, juce::File projectFile)
+void StemhubSession::enterProject(Project project, juce::String branchId, juce::File workingFile)
 {
     state.selectedProject = std::move(project);
     state.selectedBranchId = std::move(branchId);
-    state.selectedBranchName = std::move(branchName);
-    state.selectedProjectFile = std::move(projectFile);
-    state.pendingProjectFile = state.selectedProjectFile;
+    state.workingFile = std::move(workingFile);
     // The file chosen on the grid went with this project.
     state.chosenProjectFile = juce::File();
     state.uiState = UIState::dashboard;
@@ -723,9 +689,7 @@ void StemhubSession::refreshLink()
     if (!state.selectedProject.has_value())
         return;
 
-    state.link = { state.selectedProject->id,
-                   state.selectedBranchId,
-                   state.pendingProjectFile != juce::File() ? state.pendingProjectFile : state.selectedProjectFile };
+    state.link = { state.selectedProject->id, state.selectedBranchId, state.workingFile };
 }
 
 void StemhubSession::clearWorkingCopy()
@@ -734,14 +698,14 @@ void StemhubSession::clearWorkingCopy()
     state.openedVersionId.clear();
 }
 
-bool StemhubSession::hasCleanWorkingCopy(const juce::File& workingFile) const
+bool StemhubSession::hasCleanWorkingCopy() const
 {
-    return state.workingCopy.describes(workingFile) && state.workingCopy.isUnchanged();
+    return state.workingCopy.describes(state.workingFile) && state.workingCopy.isUnchanged();
 }
 
-juce::String StemhubSession::getParentVersionForNextSave(const juce::File& projectFile) const
+juce::String StemhubSession::getParentVersionForNextSave() const
 {
-    if (state.workingCopy.describes(projectFile))
+    if (state.workingCopy.describes(state.workingFile))
         return state.workingCopy.versionId;
 
     return state.versionHistory.empty() ? juce::String() : state.versionHistory.front().id;

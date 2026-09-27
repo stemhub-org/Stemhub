@@ -41,14 +41,22 @@ public:
     ApiResult<LoginResponse> login(const juce::String& email, const juce::String& password) const override
     {
         juce::ignoreUnused(email, password);
+
+        if (auto gate = findGate(loginGates, {}))
+            gate->block();
+
         return ApiResult<LoginResponse>::success({ "token" });
     }
 
     ApiResult<User> fetchCurrentUser(const juce::String& accessToken) const override
     {
         juce::ignoreUnused(accessToken);
+
+        // As ApiClient does before each request.
+        if (isJobCancelled())
+            return ApiResult<User>::failure(ApiError::cancelled());
         if (offline)
-            return ApiResult<User>::failure({ ApiError::Kind::network, 0, "Can't reach StemHub." });
+            return ApiResult<User>::failure({ ApiError::Kind::network, "Can't reach StemHub." });
         if (rejectToken || !cachedSessionIsValid)
             return fail<User>(401, "Could not validate credentials");
 
@@ -176,7 +184,7 @@ public:
 
         juce::MemoryBlock data;
         if (!file.loadFileAsData(data))
-            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Blob source file does not exist." });
+            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, "Blob source file does not exist." });
 
         if (sha256Of(data) != sha256)
             return fail<Unit>(400, "SHA-256 mismatch.");
@@ -238,7 +246,7 @@ public:
         }
 
         if (!destinationFile.replaceWithData(data.getData(), data.getSize()))
-            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, "Could not write " + destinationFile.getFullPathName() });
 
         return ApiResult<Unit>::success({});
     }
@@ -315,6 +323,12 @@ public:
         downloadGates[projectId] = std::move(gate);
     }
 
+    void setLoginGate(std::shared_ptr<BlockingGate> gate)
+    {
+        const std::lock_guard<std::mutex> lock(mutex);
+        loginGates[{}] = std::move(gate);
+    }
+
     // Configuration: written by the test thread while no job is running.
     bool cachedSessionIsValid { true };
     std::vector<Project> projects;
@@ -350,5 +364,6 @@ private:
     mutable std::vector<Project> createdProjects;
     std::map<juce::String, std::shared_ptr<BlockingGate>> checkMissingGates;
     std::map<juce::String, std::shared_ptr<BlockingGate>> downloadGates;
+    std::map<juce::String, std::shared_ptr<BlockingGate>> loginGates;
 };
 }

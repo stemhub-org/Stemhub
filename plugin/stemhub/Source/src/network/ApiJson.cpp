@@ -5,7 +5,7 @@ namespace
 {
 ApiError invalidResponse(const juce::String& message)
 {
-    return { ApiError::Kind::invalidResponse, 200, message };
+    return { ApiError::Kind::invalidResponse, message };
 }
 
 template <typename Item, typename Parser>

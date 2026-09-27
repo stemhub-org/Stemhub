@@ -11,6 +11,14 @@ namespace
 {
 constexpr std::array<const char*, 9> kAssetExtensions { "wav", "mp3", "flac", "ogg", "aiff", "aif", "m4a", "mid", "midi" };
 
+struct DawFileType
+{
+    const char* extension;
+    const char* dawName;
+};
+
+constexpr std::array<DawFileType, 2> kDawFileTypes { { { "flp", "FL Studio" }, { "als", "Ableton Live" } } };
+
 // Dot-files are left out on every system, not only where the OS hides them: macOS writes
 // "._kick.wav" companions onto drives that Windows then sees as ordinary files.
 bool isDotFile(const juce::File& file)
@@ -151,18 +159,20 @@ juce::String sha256OfFile(const juce::File& file)
     return input.wasStopped() ? juce::String() : hash;
 }
 
-bool isDawProjectFile(const juce::File& file)
+juce::String projectFilePattern()
 {
-    return file.hasFileExtension("flp") || file.hasFileExtension("als");
+    juce::StringArray patterns;
+    for (const auto& type : kDawFileTypes)
+        patterns.add("*." + juce::String(type.extension));
+
+    return patterns.joinIntoString(";");
 }
 
 juce::String dawNameFor(const juce::File& projectFile)
 {
-    if (projectFile.hasFileExtension("flp"))
-        return "FL Studio";
-
-    if (projectFile.hasFileExtension("als"))
-        return "Ableton Live";
+    for (const auto& type : kDawFileTypes)
+        if (projectFile.hasFileExtension(type.extension))
+            return type.dawName;
 
     return {};
 }

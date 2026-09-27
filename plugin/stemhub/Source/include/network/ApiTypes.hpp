@@ -22,7 +22,6 @@ struct ApiError
     };
 
     Kind kind { Kind::network };
-    int statusCode { 0 };
     juce::String message;
 
     static Kind kindForStatus(int statusCode) noexcept
@@ -38,12 +37,12 @@ struct ApiError
 
     static ApiError fromStatus(int statusCode, juce::String message)
     {
-        return { kindForStatus(statusCode), statusCode, std::move(message) };
+        return { kindForStatus(statusCode), std::move(message) };
     }
 
     static ApiError cancelled()
     {
-        return { Kind::cancelled, 0, "Cancelled." };
+        return { Kind::cancelled, "Cancelled." };
     }
 
     [[nodiscard]] bool isUnauthorized() const noexcept { return kind == Kind::unauthorized; }
