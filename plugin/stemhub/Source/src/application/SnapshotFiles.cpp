@@ -65,6 +65,44 @@ private:
     juce::File root;
     std::map<juce::String, bool> leftOutByPath;
 };
+
+// Feeds a file to juce::SHA256, which asks for 64 bytes at a time: reading the file itself that
+// way took a system call per 64 bytes. The file is read in large blocks instead, and the stream
+// ends early, once per block, when the job running it is asked to stop.
+class HashInput final : public juce::InputStream
+{
+public:
+    explicit HashInput(juce::InputStream& sourceToRead)
+        : source(sourceToRead, kBlockBytes)
+    {
+    }
+
+    juce::int64 getTotalLength() override { return source.getTotalLength(); }
+    bool isExhausted() override { return stopped || source.isExhausted(); }
+    juce::int64 getPosition() override { return source.getPosition(); }
+    bool setPosition(juce::int64 newPosition) override { return source.setPosition(newPosition); }
+
+    int read(void* destBuffer, int maxBytesToRead) override
+    {
+        bytesSinceCheck += maxBytesToRead;
+        if (bytesSinceCheck >= kBlockBytes)
+        {
+            bytesSinceCheck = 0;
+            stopped = stopped || isJobCancelled();
+        }
+
+        return stopped ? 0 : source.read(destBuffer, maxBytesToRead);
+    }
+
+    [[nodiscard]] bool wasStopped() const noexcept { return stopped; }
+
+private:
+    static constexpr int kBlockBytes = 1 << 20;
+
+    juce::BufferedInputStream source;
+    int bytesSinceCheck { kBlockBytes }; // checks before the first block too
+    bool stopped { false };
+};
 }
 
 std::vector<juce::File> collect(const juce::File& projectFile)
@@ -109,6 +147,17 @@ Summary summarize(const juce::File& projectFile)
     }
 
     return summary;
+}
+
+juce::String sha256OfFile(const juce::File& file)
+{
+    juce::FileInputStream fileStream(file);
+    if (!fileStream.openedOk())
+        return {};
+
+    HashInput input(fileStream);
+    const auto hash = juce::SHA256(input).toHexString();
+    return input.wasStopped() ? juce::String() : hash;
 }
 
 bool isDawProjectFile(const juce::File& file)
