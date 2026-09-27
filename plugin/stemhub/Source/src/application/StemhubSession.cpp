@@ -212,10 +212,7 @@ void StemhubSession::restoreLink(ProjectLink savedLink)
 
     // An empty state doesn't undo a link taken from a restore hand-off.
     if (savedLink.isSet())
-    {
         state.link = std::move(savedLink);
-        linkedCopy = {};
-    }
 
     takeRestoreHandoff(state.link.projectId);
     openLinkedProject();
@@ -228,9 +225,9 @@ void StemhubSession::takeRestoreHandoff(const juce::String& projectId)
     if (!handoff.has_value())
         return;
 
-    // The DAW has just opened this restored copy as the project this instance lives in.
-    state.link = { handoff->projectId, handoff->branchId, handoff->copy.file };
-    linkedCopy = handoff->copy;
+    // The DAW has just opened this restored copy as the project this instance lives in. Which
+    // version it holds was recorded when it was restored.
+    state.link = { handoff->projectId, handoff->branchId, handoff->file };
 }
 
 void StemhubSession::openLinkedProject()
@@ -259,8 +256,8 @@ void StemhubSession::openLinkedProject()
     input.localProjectFile = state.link.workingFile;
     input.availableProjects = state.projects;
     input.token = state.accessToken;
-    input.localCopy = linkedCopy;
-    input.managedWorkingCopyFolder = storage.managedWorkingCopyFolder;
+    input.workingCopies = storage.workingCopies;
+    input.restoredProjectsFolder = storage.restoredProjectsFolder;
 
     enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
     {
@@ -284,8 +281,8 @@ void StemhubSession::requestOpenProject(juce::String projectId, const bool resto
     if (isBusy())
         return;
 
-    // A project keeps its branch, file and baseline only when it is the one open here or the one
-    // this DAW project is linked to: another project's file is not a copy of this one.
+    // A project keeps its branch and file only when it is the one open here or the one this DAW
+    // project is linked to: another project's file is not a copy of this one.
     const auto isOpenHere = state.selectedProject.has_value() && state.selectedProject->id == projectId;
     const auto isLinked = state.link.projectId == projectId;
 
@@ -298,13 +295,11 @@ void StemhubSession::requestOpenProject(juce::String projectId, const bool resto
                            : isOpenHere                              ? getEffectiveProjectFile()
                            : isLinked                                ? state.link.workingFile
                                                                      : juce::File();
-    input.localCopy = isOpenHere ? state.workingCopy
-                    : isLinked   ? linkedCopy
-                                 : WorkingCopyBaseline {};
     input.availableProjects = state.projects;
     input.token = state.accessToken;
     input.restoreLatestIfSafe = restoreLatestIfSafe;
-    input.managedWorkingCopyFolder = storage.managedWorkingCopyFolder;
+    input.workingCopies = storage.workingCopies;
+    input.restoredProjectsFolder = storage.restoredProjectsFolder;
 
     state.operationState = OperationState::loadingProjects;
     state.projectsStatus = Status::progress("Opening project...");
@@ -412,7 +407,6 @@ void StemhubSession::requestSelectBranch(juce::String branchId)
     input.branchId = std::move(branchId);
     input.branchName = branchIt->name;
     input.token = state.accessToken;
-    input.localProjectFile = getEffectiveProjectFile();
 
     enqueue(beginRequest(), [input](const IProjectApi& backend, const auto&) -> JobPayload
     {
@@ -447,7 +441,6 @@ void StemhubSession::requestRefreshVersionHistory()
     input.branchName = branchIt != state.branches.end() ? branchIt->name : state.selectedBranchName;
     input.preferredVersionId = state.selectedVersionId;
     input.token = state.accessToken;
-    input.localProjectFile = getEffectiveProjectFile();
 
     enqueue(beginRequest(), [input](const IProjectApi& backend, const auto&) -> JobPayload
     {
@@ -512,6 +505,7 @@ void StemhubSession::requestPushVersion(juce::String commitMessage)
     input.parentVersionId = getParentVersionForNextSave(projectFile);
     input.commitMessage = std::move(commitMessage);
     input.token = state.accessToken;
+    input.workingCopies = storage.workingCopies;
 
     enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
     {
@@ -583,11 +577,13 @@ void StemhubSession::requestRestoreVersion(const juce::String& versionId, const 
     usecases::RestoreInput input;
     input.projectId = state.selectedProject->id;
     input.versionId = versionId;
+    input.branchId = state.selectedBranchId;
     input.destinationFolder = stemhub::projectfiles::chooseRestoreFolder(
         projectFolder,
         stemhub::projectfiles::resolveRestoreProjectName(state.versionHistory, versionId, state.selectedProject->name),
         versionId);
     input.token = state.accessToken;
+    input.workingCopies = storage.workingCopies;
 
     enqueue(beginRequest(), [input](const IProjectApi& backend, const ReportProgress& report) -> JobPayload
     {
@@ -659,7 +655,7 @@ void StemhubSession::handOverRestoredCopy(const WorkingCopyBaseline& restoredCop
     // The DAW opens the copy as a project of its own, and the instance loaded with it takes over
     // from there. This instance stays with the file of the DAW project it lives in.
     stemhub::handoff::write(storage.restoreHandoffFile,
-                            { state.selectedProject->id, state.selectedBranchId, restoredCopy, juce::Time::getCurrentTime() });
+                            { state.selectedProject->id, state.selectedBranchId, restoredCopy.file, juce::Time::getCurrentTime() });
 
     if (!openFileHandler(restoredCopy.file))
         state.sessionStatus = Status::warning("Restored to " + restoredCopy.file.getFullPathName()
@@ -720,7 +716,6 @@ void StemhubSession::enterProject(Project project, juce::String branchId, juce::
     // The file chosen on the grid went with this project.
     state.chosenProjectFile = juce::File();
     state.uiState = UIState::dashboard;
-    linkedCopy = {};
 }
 
 void StemhubSession::refreshLink()

@@ -162,8 +162,6 @@ private:
     SessionState state;
     std::shared_ptr<const IProjectApi> api;
     SessionStorage storage;
-    // What the linked working file holds, when a restore hand-off said so.
-    WorkingCopyBaseline linkedCopy;
     uint64_t currentRequestEpoch { 0 };
     // Set by cancelRequest() until the next request: what the cancelled job's failure shows.
     juce::String cancelledMessage;

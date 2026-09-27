@@ -74,13 +74,15 @@ struct TestContext
     [[nodiscard]] const SessionState& state() const noexcept { return session.getState(); }
     [[nodiscard]] bool isIdle() const noexcept { return !session.isBusy(); }
     [[nodiscard]] const juce::File& handoffFile() const noexcept { return storage.restoreHandoffFile; }
+    [[nodiscard]] const juce::File& restoredProjectsFolder() const noexcept { return storage.restoredProjectsFolder; }
 
     // Declared first, so it is cleaned up after the sessions and the jobs that use its files.
     TestEnvironment environment;
     std::shared_ptr<FakeProjectApi> api { std::make_shared<FakeProjectApi>() };
     SessionStorage storage { std::make_shared<InMemoryCredentialStore>(),
                              environment.root.getChildFile("pending-restore.json"),
-                             environment.root.getChildFile("managed") };
+                             environment.root.getChildFile("Documents").getChildFile("StemHub"),
+                             WorkingCopyIndex(environment.root.getChildFile("working-copies.json")) };
     juce::Array<juce::File> openedFiles;
     bool canOpenFiles { true };
     StemhubSession session { api, storage };

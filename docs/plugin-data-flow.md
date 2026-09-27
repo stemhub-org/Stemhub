@@ -31,12 +31,15 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 - `SnapshotFiles` (`plugin/stemhub/Source/src/application/SnapshotFiles.cpp`)
   - The one rule for which files a save takes: the project file, then the audio and MIDI files
     in its folder and subfolders, without hidden files, `Backup` folders, and copies the plugin
-    restored there. The push and the dashboard's "12 files · 340 MB" count both use it; the
-    editor counts in the background.
+    restored there (folders holding a `.stemhub-restored` marker). The push and the dashboard's
+    "12 files · 340 MB" count both use it; the editor counts in the background.
   - Hashes files, reading them in large blocks and stopping when its job is asked to.
 - `stemhub::manifest` (`plugin/stemhub/Source/src/domain/Manifest.cpp`)
   - The version manifest format in one place: written for a save, and validated before a restore
     (see `docs/content-addressed-storage.md`).
+- `WorkingCopyIndex` (`plugin/stemhub/Source/src/application/WorkingCopyIndex.cpp`)
+  - Which version each local project file holds: written after every save and restore, read when
+    a project opens (see section 11).
 
 ## 2) Data Objects Moving Through The Flow
 
@@ -46,7 +49,7 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 - Messages: one `Status` (severity + text) per screen: `authStatus`, `projectsStatus`, `sessionStatus`
 - Project selection: `projects`, `selectedProject`, `branches`, `selectedBranchId`
 - Versioning: `versionHistory`, `selectedVersionId`, `openedVersionId` (the version in the DAW), `lastSavedVersionId` (set only when a save creates a version: the editor clears the save note then, and keeps it after a failed or cancelled save)
-- Filesystem: `chosenProjectFile` (picked on the project grid, for the next project opened or created there), `pendingProjectFile`, `selectedProjectFile`, working-copy baseline (file, version id, size and modification time recorded by the last save or restore)
+- Filesystem: `chosenProjectFile` (picked on the project grid, for the next project opened or created there), `pendingProjectFile`, `selectedProjectFile`, working-copy baseline (file, version id, size and modification time recorded by the last save or restore, read back from the working-copy record when a project opens)
 - Background payloads: `AuthRequestResult`, `ProjectActivationJobResult`, `BranchHistoryJobResult`, `PushVersionJobResult`, `RestoreVersionJobResult`
 
 ## 3) End-To-End Lifecycle
@@ -64,10 +67,12 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
    grid goes with the next project opened or created there; otherwise a project keeps its own
    file and branch only if it is the one open here or the linked one, and opens without a file
    otherwise. A project created before a later step fails is still added to the grid.
-5. The session fetches branches and initial version history; UI moves to Dashboard. When the
-   project is opened from the grid and this instance has no local copy (or an unchanged copy of
-   an older version), the latest version is restored into a new folder and opened in the DAW as
-   a project of its own. Unsaved local changes are never replaced.
+5. The session fetches branches and initial version history; UI moves to Dashboard. The
+   working-copy record says which version the local file holds, if this machine saved or
+   restored it for this project and branch. When the project is opened from the grid and this
+   instance has no local copy (or an unchanged copy of an older version), the latest version is
+   restored into a new folder under `Documents/StemHub` and opened in the DAW as a project of its
+   own. Unsaved local changes are never replaced.
 6. User pushes a version:
    - files are hashed and only the ones the server lacks are uploaded,
    - the version is created from the manifest,
@@ -179,7 +184,9 @@ sequenceDiagram
    "Save from plugin" and shown as "Untitled snapshot"; the DAW name comes from the file's
    extension.
 2. The session picks the parent version (the working copy's version, else the branch head) and
-   enqueues the job with everything it needs.
+   enqueues the job with everything it needs. The working copy's version survives a restart of
+   the DAW through the working-copy record, so a collaborator's newer version is never taken
+   for the parent of a file that doesn't contain it.
 3. `stemhub::snapshots::pushSnapshot(...)` hashes the files `SnapshotFiles::collect` lists (paths
    relative to the project file's folder, checked against the backend limits first), then calls
    the backend:
@@ -280,12 +287,28 @@ sequenceDiagram
   a copy the host can read from any thread and marks the DAW project as modified when the link
   changes. The version the file holds is never saved: a restored copy carries the state saved
   with an older version.
-- **`<app data>/Stemhub/credentials.json`**: the access token, shared by every instance. Its
-  folder is 0700 and the file 0600 on macOS and Linux. Signing out or a refused token deletes it.
-- **`<app data>/Stemhub/pending-restore.json`**: the restore hand-off. The instance that restores
-  a version writes it (project, branch, restored file, its version, size and modification time)
-  just before asking the DAW to open the copy. The instance the DAW loads with that project
-  takes it, once; an instance without a link takes any. Nobody taking it within 10 minutes
-  means the DAW didn't open the copy, and it is dropped.
-- **`<app data>/Stemhub/working-copy/<project>/<branch>/`**: latest versions restored when a
-  project is opened without a local copy.
+The plugin's own files are in its app data folder (`stemhub::folders::appData()`):
+`~/Library/Application Support/Stemhub` on macOS, `%LOCALAPPDATA%\Stemhub` on Windows (not the
+roaming profile: these files name paths on this machine), `~/.config/Stemhub` on Linux.
+
+- **`credentials.json`**: the access token, shared by every instance. Its folder is 0700 and the
+  file 0600 on macOS and Linux. Signing out or a refused token deletes it.
+- **`pending-restore.json`**: the restore hand-off. The instance that restores a version writes
+  it (project, branch, restored file) just before asking the DAW to open the copy. The instance
+  the DAW loads with that project takes it, once; an instance without a link takes any. Nobody
+  taking it within 10 minutes means the DAW didn't open the copy, and it is dropped.
+- **`working-copies.json`**: the working-copy record. For each project file this machine saved
+  or restored: its project, branch and version, with its size and modification time then. Every
+  instance writes it after a save or a restore (under a lock shared by all processes) and reads
+  it when a project opens, so after a restart a save still builds on the version its file holds,
+  and an unchanged file is still not saved again. It keeps the 1000 files recorded last; a file
+  that is missing stays recorded, since it may be on a drive that isn't plugged in.
+- **`config.json`**: optional settings, such as the API base URL.
+
+Versions restored when a project is opened without a local copy go to
+**`Documents/StemHub/<project>/<workspace>/<name>-<version>/`**, where the user can find and keep
+them. A restored folder holds a `.stemhub-restored` marker.
+
+Earlier versions used `~/Library/Stemhub` on macOS and `%APPDATA%\Stemhub` on Windows. On first
+start the plugin deletes the token and the hand-off left there (so users sign in once), moves
+`config.json`, and leaves projects restored there where they are.

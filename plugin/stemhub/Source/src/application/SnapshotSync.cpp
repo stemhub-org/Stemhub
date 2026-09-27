@@ -222,6 +222,10 @@ ApiResult<juce::File> restoreSnapshot(const IProjectApi& api,
                             : ApiError { ApiError::Kind::invalidResponse, 0, "The downloaded " + file.path + " doesn't match its checksum." });
     }
 
+    // Marks the copy as a project of its own, which a save of a project around it leaves out.
+    if (!partialFolder.getChildFile(stemhub::snapshotfiles::kRestoredCopyMarker).replaceWithText(request.versionId))
+        return fail(localFileError("Could not write in " + partialFolder.getFullPathName()));
+
     if (!partialFolder.moveFileTo(folder))
         return fail(localFileError("Could not move the restored files to " + folder.getFullPathName()));
 

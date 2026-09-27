@@ -118,11 +118,16 @@ Client-side hashing is mandatory — the whole point is that the client can skip
      redirect itself and does not send its bearer token to the storage host.
 4. Plugin writes each file into the hidden folder and verifies its SHA-256 (a short file is
    reported as an interrupted download).
-5. Once every file is there, the hidden folder is renamed to the destination. A failure or a
-   cancel deletes it, so a folder that looks restored is always complete.
+5. Once every file is there, the plugin writes a `.stemhub-restored` marker into the hidden
+   folder and renames it to the destination. A failure or a cancel deletes it, so a folder that
+   looks restored is always complete.
 ```
 
-Every restore goes to a new folder: the plugin never writes into an existing one.
+Every restore goes to a new folder: the plugin never writes into an existing one. The marker
+makes the copy a project of its own: saving a project whose folder contains it leaves it out.
+The plugin also records which version the restored project file holds (see
+`docs/plugin-data-flow.md`, section 11), so the copy's first save names that version as its
+parent.
 
 ## Garbage collection
 

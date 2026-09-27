@@ -53,6 +53,16 @@ const Branch& chooseBranch(const std::vector<Branch>& branches, const juce::Stri
     return mainIt != branches.end() ? *mainIt : branches.front();
 }
 
+// What the local file holds, as recorded the last time this machine saved or restored it, when
+// that was for this project and branch: a version from another branch can't be a save's parent.
+WorkingCopyBaseline knownCopy(const OpenProjectInput& input, const juce::String& branchId)
+{
+    const auto recorded = input.workingCopies.find(input.localProjectFile);
+    if (recorded.has_value() && recorded->projectId == input.projectId && recorded->branchId == branchId)
+        return recorded->copy;
+
+    return {};
+}
 }
 
 AuthRequestResult signIn(const IProjectApi& api, const SignInInput& input)
@@ -149,15 +159,9 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     sortVersionHistoryNewestFirst(result.versions);
 
     const auto& localFile = input.localProjectFile;
-    const auto& localCopy = input.localCopy;
-    const auto hintedVersionId = resolveVersionIdFromProjectPath(localFile, result.versions);
-    result.selectedVersionId = chooseSelectedVersionId(result.versions, hintedVersionId);
-
-    // What the local file holds: what this instance recorded, else what its folder name says.
-    if (localCopy.describes(localFile))
-        result.workingCopy = localCopy;
-    else if (hintedVersionId.isNotEmpty())
-        result.workingCopy = { localFile, hintedVersionId };
+    const auto localCopy = knownCopy(input, selectedBranch.id);
+    result.workingCopy = localCopy;
+    result.selectedVersionId = chooseSelectedVersionId(result.versions, localCopy.versionId);
 
     const auto hasLocalCopy = localFile.existsAsFile();
     const auto usingLocalFileMessage = hasLocalCopy
@@ -183,9 +187,9 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     const auto& latestVersion = result.versions.front();
     if (hasLocalCopy)
     {
-        // Nothing certain is known about this file (the user linked it, or it was restored in
-        // another session), so it stays as it is.
-        if (!localCopy.describes(localFile) || !localCopy.hasRecordedState())
+        // Nothing is recorded about this file for this project and workspace (the user picked
+        // it, or it was never saved or restored on this machine), so it stays as it is.
+        if (!localCopy.hasRecordedState())
         {
             result.status = Status::success(usingLocalFileMessage);
             return result;
@@ -208,7 +212,7 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
     // No local copy, or an unchanged copy of an older version: bring in the latest one. It goes
     // to a new folder, so nothing on disk is replaced, and opens as a DAW project of its own.
     const auto restoreFolder = stemhub::projectfiles::chooseRestoreFolder(
-        stemhub::projectfiles::getManagedWorkingCopyRoot(input.managedWorkingCopyFolder, projectIt->id, selectedBranch.id),
+        stemhub::projectfiles::getRestoredProjectRoot(input.restoredProjectsFolder, *projectIt, selectedBranch),
         stemhub::projectfiles::resolveRestoreProjectName(result.versions, latestVersion.id, projectIt->name),
         latestVersion.id);
 
@@ -223,6 +227,7 @@ ProjectActivationJobResult openProject(const IProjectApi& api, const OpenProject
 
     const auto& restoredProjectFile = *restored.value;
     result.restoredCopy = WorkingCopyBaseline::recordedNow(restoredProjectFile, latestVersion.id);
+    input.workingCopies.record({ projectIt->id, selectedBranch.id, result.restoredCopy });
     result.selectedVersionId = latestVersion.id;
     result.status = Status::success("Project ready. Latest version restored to "
                                     + restoredProjectFile.getParentDirectory().getFullPathName() + ".");
@@ -310,10 +315,7 @@ BranchHistoryJobResult fetchHistory(const IProjectApi& api, const FetchHistoryIn
 
     result.versions = *versionsResult.value;
     sortVersionHistoryNewestFirst(result.versions);
-    const auto hintedVersionId = resolveVersionIdFromProjectPath(input.localProjectFile, result.versions);
-    result.selectedVersionId = chooseSelectedVersionId(result.versions, input.preferredVersionId.isNotEmpty()
-                                                                            ? input.preferredVersionId
-                                                                            : hintedVersionId);
+    result.selectedVersionId = chooseSelectedVersionId(result.versions, input.preferredVersionId);
 
     result.status = Status::success(result.versions.empty()
                                         ? "Loaded workspace \"" + input.branchName + "\". No versions yet."
@@ -361,6 +363,7 @@ PushVersionJobResult pushVersion(const IProjectApi& api, const PushInput& input,
 
     result.pushedVersionId = pushed.value->id;
     result.pushedCopy = { input.projectFile, result.pushedVersionId, sizeBeforeHashing, modTimeBeforeHashing };
+    input.workingCopies.record({ input.projectId, input.branchId, result.pushedCopy });
 
     auto versionsResult = api.fetchVersions(input.branchId, input.token);
     if (versionsResult.ok())
@@ -391,6 +394,7 @@ RestoreVersionJobResult restoreVersion(const IProjectApi& api, const RestoreInpu
     const auto& restoredProjectFile = *restored.value;
     result.restoredProjectFile = restoredProjectFile;
     result.restoredCopy = WorkingCopyBaseline::recordedNow(restoredProjectFile, input.versionId);
+    input.workingCopies.record({ input.projectId, input.branchId, result.restoredCopy });
     result.status = Status::success("Version restored to " + restoredProjectFile.getParentDirectory().getFullPathName() + ".");
     return result;
 }

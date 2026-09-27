@@ -1,4 +1,5 @@
 #include "network/ApiConfig.hpp"
+#include "application/AppFolders.hpp"
 #include "application/Log.hpp"
 
 #ifndef STEMHUB_DEFAULT_API_BASE_URL
@@ -64,9 +65,7 @@ juce::String chooseBaseUrl(const juce::String& fromEnvironment,
 
 juce::File getConfigFile()
 {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("Stemhub")
-        .getChildFile("config.json");
+    return stemhub::folders::appData().getChildFile("config.json");
 }
 
 juce::String resolveBaseUrl()

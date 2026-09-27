@@ -4,18 +4,16 @@
 
 #include <JuceHeader.h>
 
-#include "domain/WorkingCopyBaseline.hpp"
-
 // A restored copy the DAW is about to open as a project of its own. The plugin instance that
 // restored it writes this just before asking the DAW to open the file. The instance the DAW then
-// loads with that project takes it, once, and so knows which file it works on and which version
-// that file holds; the restoring instance keeps its own file.
+// loads with that project takes it, once, and so knows which file it works on; which version the
+// file holds is in the working-copy record. The restoring instance keeps its own file.
 struct RestoreHandoff
 {
     juce::String projectId;
     juce::String branchId;
-    // The restored project file and its version, recorded right after the restore.
-    WorkingCopyBaseline copy;
+    // The restored project file.
+    juce::File file;
     juce::Time createdAt;
 };
 
