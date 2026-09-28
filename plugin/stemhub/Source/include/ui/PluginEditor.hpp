@@ -44,11 +44,13 @@ private:
     juce::File getEffectiveProjectFile() const;
     void showCommitMessagePopupForSave();
     void requestSaveWithCommitMessage(juce::String commitMessage);
+    // Declared before the views: it owns the embedded brand typefaces they build fonts from.
+    stemhub::plugin::theme::StemhubPluginLookAndFeel pluginLookAndFeel;
     LoginView loginView;
     ProjectSelectionView projectSelectionView;
     DashboardView dashboardView;
-    stemhub::plugin::theme::StemhubPluginLookAndFeel pluginLookAndFeel;
     juce::LookAndFeel* previousLookAndFeel { nullptr };
+    OperationState lastObservedOperationState { OperationState::idle };
     StemhubAudioProcessor& audioProcessor;
     std::unique_ptr<juce::FileChooser> projectFileChooser;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessorEditor)
