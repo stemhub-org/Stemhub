@@ -41,6 +41,17 @@ juce_add_plugin(stemhub
 
 juce_generate_juce_header(stemhub)
 
+# Brand typefaces (SIL OFL 1.1, see Resources/fonts/OFL-*.txt), embedded so the UI renders identically in every DAW.
+juce_add_binary_data(stemhub_assets
+    HEADER_NAME StemhubAssets.h
+    NAMESPACE StemhubAssets
+    SOURCES
+        Resources/fonts/Syne-ExtraBold.ttf
+        Resources/fonts/PlusJakartaSans-Regular.ttf
+        Resources/fonts/PlusJakartaSans-Medium.ttf
+        Resources/fonts/PlusJakartaSans-SemiBold.ttf
+        Resources/fonts/PlusJakartaSans-Bold.ttf)
+
 target_sources(stemhub
     PRIVATE
         Source/src/ui/PluginEditor.cpp
@@ -72,6 +83,7 @@ target_compile_definitions(stemhub
 
 target_link_libraries(stemhub
     PRIVATE
+        stemhub_assets
         juce::juce_audio_utils
         juce::juce_cryptography
         juce::juce_recommended_config_flags

@@ -2,59 +2,69 @@
 
 namespace
 {
-juce::Rectangle<int> computeFormBounds(const int containerWidth, const int containerHeight)
+namespace theme = stemhub::plugin::theme;
+using Theme = theme::PluginTheme;
+
+constexpr int kOuterPadding = 28;
+constexpr int kCardPadding = 28;
+
+struct LoginLayout
 {
-    const auto width = juce::jmin(420, juce::jmax(320, containerWidth - 48));
-    const auto height = juce::jmin(520, juce::jmax(460, containerHeight - 40));
-    const auto x = (containerWidth - width) / 2;
-    const auto y = (containerHeight - height) / 2;
-    return { x, y, width, height };
+    juce::Rectangle<int> metaRow;
+    int dividerY { 0 };
+    juce::Rectangle<int> hero;
+    juce::Rectangle<int> card;
+};
+
+LoginLayout computeLayout(const int width, const int height)
+{
+    LoginLayout layout;
+    auto area = juce::Rectangle<int>(width, height).reduced(kOuterPadding);
+
+    layout.metaRow = area.removeFromTop(14);
+    area.removeFromTop(14);
+    layout.dividerY = area.getY();
+    area.removeFromTop(24);
+
+    const auto cardWidth = juce::jlimit(300, 380, static_cast<int>(static_cast<float>(width) * 0.47f));
+    layout.card = area.removeFromRight(cardWidth);
+    area.removeFromRight(32);
+    layout.hero = area;
+    return layout;
 }
 
-void styleLink(juce::TextButton& button, bool underlined)
+juce::StringArray heroLines()
 {
-    button.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
-    button.setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
-    button.setColour(juce::TextButton::textColourOffId, stemhub::plugin::theme::PluginTheme::kForegroundSubtle);
-    button.setColour(juce::TextButton::textColourOnId, stemhub::plugin::theme::PluginTheme::kForeground);
-    button.setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    button.setSize(0, 24);
-    button.getProperties().set("underlined", underlined);
+    return { "OPEN", "THE", "SESSION." };
 }
 
 void styleFieldLabel(juce::Label& label, const juce::String& text)
 {
-    label.setText(text, juce::dontSendNotification);
-    label.setFont(stemhub::plugin::theme::bodyFont(13.0f, juce::Font::bold));
-    label.setColour(juce::Label::textColourId, stemhub::plugin::theme::PluginTheme::kForegroundSubtle);
-    label.setJustificationType(juce::Justification::centredLeft);
+    theme::styleMetaLabel(label, text, Theme::kInk);
 }
 }
 
 LoginView::LoginView()
 {
     addAndMakeVisible(authStateLabel);
-    stemhub::plugin::theme::styleStatusLabel(authStateLabel, {}, stemhub::plugin::theme::MessageStatus::neutral);
+    theme::styleStatusLabel(authStateLabel, {}, theme::MessageStatus::neutral);
     authStateLabel.setVisible(false);
 
-    addAndMakeVisible(logoLabel);
-    logoLabel.setJustificationType(juce::Justification::centred);
-    logoLabel.setColour(juce::Label::backgroundColourId, stemhub::plugin::theme::PluginTheme::kAccent);
-    logoLabel.setColour(juce::Label::textColourId, stemhub::plugin::theme::PluginTheme::kBackground);
-    logoLabel.setFont(stemhub::plugin::theme::headingFont(21.0f));
-    logoLabel.setText("S", juce::dontSendNotification);
-
     addAndMakeVisible(titleLabel);
-    titleLabel.setText("Stemhub Session", juce::dontSendNotification);
-    titleLabel.setFont(stemhub::plugin::theme::headingFont(30.0f));
-    titleLabel.setColour(juce::Label::textColourId, stemhub::plugin::theme::PluginTheme::kForeground);
-    titleLabel.setJustificationType(juce::Justification::centred);
+    titleLabel.setText("Welcome back.", juce::dontSendNotification);
+    titleLabel.setFont(theme::headingFont(25.0f));
+    titleLabel.setColour(juce::Label::textColourId, Theme::kInk);
+    titleLabel.setJustificationType(juce::Justification::centredLeft);
+    titleLabel.setMinimumHorizontalScale(1.0f);
+    titleLabel.setBorderSize({});
 
     addAndMakeVisible(subtitleLabel);
-    subtitleLabel.setText("Sign in to sync your music projects", juce::dontSendNotification);
-    subtitleLabel.setFont(stemhub::plugin::theme::bodyFont(14.0f));
-    subtitleLabel.setColour(juce::Label::textColourId, stemhub::plugin::theme::PluginTheme::kForegroundTertiary);
-    subtitleLabel.setJustificationType(juce::Justification::centred);
+    subtitleLabel.setText("Sign in to sync your music projects.", juce::dontSendNotification);
+    subtitleLabel.setFont(theme::bodyFont(13.0f));
+    subtitleLabel.setColour(juce::Label::textColourId, Theme::kInkSubtle);
+    subtitleLabel.setJustificationType(juce::Justification::centredLeft);
+    subtitleLabel.setMinimumHorizontalScale(1.0f);
+    subtitleLabel.setBorderSize({});
 
     addAndMakeVisible(emailLabel);
     styleFieldLabel(emailLabel, "Email");
@@ -63,15 +73,15 @@ LoginView::LoginView()
     styleFieldLabel(passwordLabel, "Password");
 
     addAndMakeVisible(emailInput);
-    stemhub::plugin::theme::styleTextInput(emailInput, "you@example.com");
+    theme::stylePaperTextInput(emailInput, "you@example.com");
 
     addAndMakeVisible(passwordInput);
-    stemhub::plugin::theme::styleTextInput(passwordInput, "........");
-    passwordInput.setPasswordCharacter('*');
+    theme::stylePaperTextInput(passwordInput, "Your password");
+    passwordInput.setPasswordCharacter(static_cast<juce::juce_wchar>(0x2022));
 
     addAndMakeVisible(signInButton);
-    signInButton.setButtonText("Sign In");
-    stemhub::plugin::theme::stylePrimaryButton(signInButton);
+    signInButton.setButtonText("Sign in  " + theme::arrowRight());
+    theme::stylePrimaryButton(signInButton);
     signInButton.setTooltip("Sign in to access Stemhub projects.");
     signInButton.onClick = [this]
     {
@@ -81,104 +91,141 @@ LoginView::LoginView()
 
     addAndMakeVisible(forgotPasswordButton);
     forgotPasswordButton.setButtonText("Forgot password?");
-    styleLink(forgotPasswordButton, true);
+    theme::styleLinkButton(forgotPasswordButton, Theme::kInkSubtle, Theme::kInk);
+    forgotPasswordButton.getProperties().set("underlined", true);
+    forgotPasswordButton.getProperties().set("stemhubAlignLeft", true);
     forgotPasswordButton.onClick = [] {};
 
-    addAndMakeVisible(offlineButton);
-    offlineButton.setButtonText("Continue Offline");
-    stemhub::plugin::theme::styleSecondaryButton(offlineButton);
+    // Offline mode is not wired up yet; keep the control out of the layout until it is.
+    addChildComponent(offlineButton);
+    offlineButton.setButtonText("Continue offline");
+    theme::styleSecondaryButton(offlineButton);
     offlineButton.onClick = [] {};
 }
 
 void LoginView::setMessage(const juce::String& message, stemhub::plugin::theme::MessageStatus status)
 {
-    stemhub::plugin::theme::styleStatusLabel(authStateLabel, message, status);
+    theme::styleStatusLabel(authStateLabel, message, status);
+    theme::adaptStatusLabelForPaper(authStateLabel, status);
     authStateLabel.setTooltip(message);
     authStateLabel.setVisible(message.isNotEmpty());
 
-    const bool isLoadingInProgress = status == stemhub::plugin::theme::MessageStatus::loading;
+    const bool isLoadingInProgress = status == theme::MessageStatus::loading;
     signInButton.setEnabled(!isLoadingInProgress);
     emailInput.setEnabled(!isLoadingInProgress);
     passwordInput.setEnabled(!isLoadingInProgress);
     forgotPasswordButton.setEnabled(!isLoadingInProgress);
     offlineButton.setEnabled(!isLoadingInProgress);
-    signInButton.setAlpha(isLoadingInProgress ? 0.72f : 1.0f);
-    signInButton.setButtonText(isLoadingInProgress ? "Signing in..." : "Sign In");
+    theme::setButtonBusy(signInButton, isLoadingInProgress);
+    signInButton.setButtonText(isLoadingInProgress ? juce::String("Signing in...")
+                                                   : "Sign in  " + theme::arrowRight());
     resized();
     repaint();
 }
 
 void LoginView::paint(juce::Graphics& g)
 {
-    g.fillAll(stemhub::plugin::theme::PluginTheme::kBackground);
+    g.fillAll(Theme::kBackground);
 
-    const auto form = computeFormBounds(getWidth(), getHeight()).toFloat();
-    const auto separatorY = form.getBottom() - 102.0f;
+    const auto layout = computeLayout(getWidth(), getHeight());
 
-    g.setColour(stemhub::plugin::theme::PluginTheme::kBorderSubtle);
-    g.drawLine(form.getX(), separatorY, form.getRight(), separatorY, 1.0f);
+    theme::paintMetaText(g, "StemHub / Session", layout.metaRow, Theme::kForeground);
+    theme::paintMetaText(g, "Version control for music", layout.metaRow, Theme::kForegroundSubtle,
+                         juce::Justification::centredRight);
+    g.setColour(Theme::kSurfaceBorder);
+    g.fillRect(layout.metaRow.getX(), layout.dividerY, layout.metaRow.getWidth(), 1);
 
-    const auto logoBounds = juce::Rectangle<float>(48.0f, 48.0f)
-                                .withCentre({ static_cast<float>(getWidth()) * 0.5f, form.getY() + 24.0f });
-    g.setColour(stemhub::plugin::theme::PluginTheme::kAccentGlow);
-    g.fillRoundedRectangle(logoBounds.expanded(6.0f), 12.0f);
-    g.setColour(stemhub::plugin::theme::PluginTheme::kAccent.withAlpha(0.25f));
-    g.drawRoundedRectangle(logoBounds.expanded(0.5f), 12.0f, 1.0f);
+    // Hero column: the figure catching the signal, then the campaign line.
+    auto hero = layout.hero;
+    const auto markHeight = 62.0f;
+    theme::paintLogoMark(g,
+                         hero.removeFromTop(static_cast<int>(markHeight)).toFloat(),
+                         Theme::kForeground,
+                         juce::RectanglePlacement(juce::RectanglePlacement::xLeft | juce::RectanglePlacement::yTop));
+    hero.removeFromTop(30);
+
+    const auto lines = heroLines();
+    const auto fontSize = theme::fitDisplayFontSize(lines, static_cast<float>(hero.getWidth()), 58.0f);
+    const auto capHeight = fontSize * 0.545f;
+    const auto lineStep = std::round(fontSize * 0.76f);
+    auto baseline = static_cast<float>(hero.getY()) + capHeight;
+
+    g.setColour(Theme::kForeground);
+    g.setFont(theme::displayFont(fontSize));
+    for (int i = 0; i < lines.size(); ++i)
+    {
+        g.setColour(i == lines.size() - 1 ? Theme::kAccent : Theme::kForeground);
+        g.drawSingleLineText(lines[i], hero.getX(), static_cast<int>(baseline));
+        if (i < lines.size() - 1)
+            baseline += lineStep;
+    }
+
+    const auto tagText = "Save " + theme::middleDot() + " Sync " + theme::middleDot() + " Restore";
+    const auto tagWidth = juce::GlyphArrangement::getStringWidth(theme::labelFont(9.5f), tagText.toUpperCase()) + 20.0f;
+    theme::paintTag(g, tagText,
+                    { static_cast<float>(hero.getX()), baseline + 22.0f, tagWidth, 22.0f },
+                    Theme::kForeground, Theme::kInk);
+
+    auto footer = layout.hero.withTop(layout.hero.getBottom() - 90);
+    theme::paintBlockPattern(g,
+                             footer.removeFromTop(24).withWidth(juce::jmin(232, footer.getWidth())).toFloat(),
+                             "stemhub-session",
+                             16,
+                             Theme::kForeground.withAlpha(0.88f),
+                             Theme::kAccent);
+    footer.removeFromTop(16);
+    g.setColour(Theme::kForegroundSubtle);
+    g.setFont(theme::bodyFont(13.0f));
+    g.drawFittedText("Version every idea without leaving your DAW. Save snapshots, switch branches and pass the session on.",
+                     footer, juce::Justification::topLeft, 3, 1.0f);
+
+    // Sign-in card: a Paper block colliding with the Ink field.
+    g.setColour(Theme::kPaper);
+    g.fillRect(layout.card);
+
+    auto eyebrow = layout.card.reduced(kCardPadding).removeFromTop(14);
+    g.setColour(Theme::kAccent);
+    g.fillRect(eyebrow.removeFromLeft(8).withSizeKeepingCentre(8, 8));
+    eyebrow.removeFromLeft(8);
+    theme::paintMetaText(g, "Sign in / 01", eyebrow, Theme::kInk);
+    theme::paintMetaText(g, "Account", eyebrow, Theme::kInkSubtle, juce::Justification::centredRight);
 }
 
 void LoginView::resized()
 {
-    auto form = computeFormBounds(getWidth(), getHeight());
-    auto content = form;
+    const auto layout = computeLayout(getWidth(), getHeight());
+    auto content = layout.card.reduced(kCardPadding);
 
-    auto logoRow = content.removeFromTop(64);
-    logoLabel.setBounds(logoRow.withSizeKeepingCentre(48, 48));
+    forgotPasswordButton.setBounds(content.removeFromBottom(20).withWidth(140));
 
-    content.removeFromTop(18);
-    auto titleRow = content.removeFromTop(42);
-    titleLabel.setBounds(titleRow);
+    content.removeFromTop(14); // eyebrow, painted
+    content.removeFromTop(16);
+    titleLabel.setBounds(content.removeFromTop(32));
+    content.removeFromTop(2);
+    subtitleLabel.setBounds(content.removeFromTop(20));
 
-    auto subtitleRow = content.removeFromTop(30);
-    subtitleLabel.setBounds(subtitleRow);
+    content.removeFromTop(24);
+    emailLabel.setBounds(content.removeFromTop(14));
+    content.removeFromTop(6);
+    emailInput.setBounds(content.removeFromTop(42));
 
-    content.removeFromTop(28);
-
-    auto emailLabelRow = content.removeFromTop(22);
-    emailLabel.setBounds(emailLabelRow);
-
-    content.removeFromTop(8);
-    auto emailRow = content.removeFromTop(46);
-    emailInput.setBounds(emailRow);
-
-    content.removeFromTop(18);
-    auto passwordLabelRow = content.removeFromTop(22);
-    passwordLabel.setBounds(passwordLabelRow);
-
-    content.removeFromTop(8);
-    auto passwordRow = content.removeFromTop(46);
-    passwordInput.setBounds(passwordRow);
+    content.removeFromTop(14);
+    passwordLabel.setBounds(content.removeFromTop(14));
+    content.removeFromTop(6);
+    passwordInput.setBounds(content.removeFromTop(42));
 
     content.removeFromTop(18);
 
     if (authStateLabel.isVisible())
     {
-        auto statusRow = content.removeFromTop(38);
-        authStateLabel.setBounds(statusRow);
-        content.removeFromTop(12);
+        authStateLabel.setBounds(content.removeFromTop(38));
+        content.removeFromTop(10);
     }
     else
     {
         authStateLabel.setBounds(0, 0, 0, 0);
     }
 
-    auto signRow = content.removeFromTop(46);
-    signInButton.setBounds(signRow);
-
-    content.removeFromTop(26);
-    auto forgotRow = content.removeFromTop(24);
-    forgotPasswordButton.setBounds(forgotRow.withWidth(220).withX(form.getX() + (form.getWidth() - 220) / 2));
-
-    content.removeFromTop(44);
-    auto offlineRow = content.removeFromTop(46);
-    offlineButton.setBounds(offlineRow);
+    signInButton.setBounds(content.removeFromTop(46));
+    offlineButton.setBounds(0, 0, 0, 0);
 }

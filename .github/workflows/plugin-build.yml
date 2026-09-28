@@ -5,6 +5,7 @@ on:
     paths:
       - "plugin/stemhub/Source/**"
       - "plugin/stemhub/tests/**"
+      - "plugin/stemhub/Resources/**"
       - "plugin/stemhub/CMakeLists.txt"
       - ".github/workflows/plugin-build.yml"
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - "plugin/stemhub/Source/**"
       - "plugin/stemhub/tests/**"
+      - "plugin/stemhub/Resources/**"
       - "plugin/stemhub/CMakeLists.txt"
       - ".github/workflows/plugin-build.yml"
   workflow_dispatch:
