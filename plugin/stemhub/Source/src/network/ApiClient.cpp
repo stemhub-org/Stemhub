@@ -1,463 +1,330 @@
 #include "network/ApiClient.hpp"
-#include "network/ApiUtils.hpp"
+#include "network/ApiConfig.hpp"
+#include "network/ApiJson.hpp"
 
 namespace
 {
-juce::String resolveApiBaseUrl(juce::String configuredBaseUrl)
+namespace json = stemhub::api::json;
+
+// How long a request may stall (connecting, or waiting for bytes) before it fails. JUCE applies
+// this to each phase of a request, not to its total duration.
+constexpr int kRequestTimeoutMs = 10000;
+constexpr int kDownloadTimeoutMs = 30000;
+constexpr int kUploadTimeoutMs = 120000;
+
+// Downloads are read in blocks this size, so a cancel stops them between two blocks.
+constexpr int kDownloadBlockBytes = 256 * 1024;
+
+juce::String authorizationHeader(const juce::String& accessToken)
 {
-    if (configuredBaseUrl.isNotEmpty())
-        return configuredBaseUrl;
-
-    const auto fromEnvironment = juce::SystemStats::getEnvironmentVariable("STEMHUB_API_BASE_URL", {});
-    if (fromEnvironment.isNotEmpty())
-        return fromEnvironment;
-
-    return "http://localhost:8000";
+    return accessToken.isNotEmpty() ? "Authorization: Bearer " + accessToken + "\r\n" : juce::String();
 }
 
-juce::String buildJsonHeaders(const juce::String& bearerToken)
+struct HttpResponse
 {
-    juce::String headers;
-    headers << "Content-Type: application/json\r\n";
-    headers << "Accept: application/json\r\n";
+    std::unique_ptr<juce::InputStream> body; // null when nothing came back
+    int statusCode { 0 };
+    juce::StringPairArray headers;
+};
 
-    if (bearerToken.isNotEmpty())
-        headers << "Authorization: Bearer " << bearerToken << "\r\n";
-
-    return headers;
+HttpResponse send(const juce::URL& url,
+                  const juce::String& method,
+                  const juce::String& extraHeaders,
+                  int timeoutMs,
+                  int maxRedirects = 5)
+{
+    HttpResponse response;
+    response.body = url.createInputStream(juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
+                                              .withHttpRequestCmd(method)
+                                              .withExtraHeaders(extraHeaders)
+                                              .withResponseHeaders(&response.headers)
+                                              .withStatusCode(&response.statusCode)
+                                              .withNumRedirectsToFollow(maxRedirects)
+                                              .withConnectionTimeoutMs(timeoutMs)
+                                              // Called as the request body goes out: a cancel stops an upload midway.
+                                              .withProgressCallback([](int, int) { return !isJobCancelled(); }));
+    return response;
 }
 
-juce::String buildBinaryHeaders(const juce::String& bearerToken)
+bool isSuccessStatus(const int statusCode)
 {
-    juce::String headers;
-    headers << "Accept: application/octet-stream\r\n";
-
-    if (bearerToken.isNotEmpty())
-        headers << "Authorization: Bearer " << bearerToken << "\r\n";
-
-    return headers;
+    return statusCode >= 200 && statusCode < 300;
 }
 
-juce::String extractErrorMessage(const juce::var& parsedJson,
-                                 const juce::String& responseText,
-                                 const juce::String& fallback)
+bool isRedirectStatus(const int statusCode)
 {
-    if (auto* object = parsedJson.getDynamicObject())
-    {
-        const auto detail = object->getProperty("detail");
-        if (detail.isString())
-        {
-            const auto detailString = detail.toString();
-            if (detailString.isNotEmpty())
-                return detailString;
-        }
-
-        if (detail.isArray())
-        {
-            if (const auto* array = detail.getArray(); array != nullptr && !array->isEmpty())
-            {
-                if (auto* firstObject = array->getReference(0).getDynamicObject())
-                {
-                    const auto message = firstObject->getProperty("msg").toString();
-                    if (message.isNotEmpty())
-                        return message;
-                }
-            }
-        }
-    }
-
-    return responseText.isNotEmpty() ? responseText : fallback;
+    return statusCode == 301 || statusCode == 302 || statusCode == 303 || statusCode == 307 || statusCode == 308;
 }
 
-ApiResult<Project> parseProject(const juce::var& value)
+ApiError networkError()
 {
-    auto* object = value.getDynamicObject();
-    if (object == nullptr)
-        return { {}, ApiError { 200, "Project response is not a JSON object." } };
-
-    Project project;
-    project.id = object->getProperty("id").toString();
-    project.ownerId = object->getProperty("owner_id").toString();
-    project.name = object->getProperty("name").toString();
-    project.description = object->getProperty("description").toString();
-    project.category = object->getProperty("category").toString();
-    project.isPublic = static_cast<bool>(object->getProperty("is_public"));
-    project.isDeleted = static_cast<bool>(object->getProperty("is_deleted"));
-
-    if (!project.isValid())
-        return { {}, ApiError { 200, "Project response is missing required fields." } };
-
-    return { project, {} };
+    return { ApiError::Kind::network, 0, "Can't reach StemHub. Check your connection and try again." };
 }
 
-ApiResult<Branch> parseBranch(const juce::var& value)
+// Absolute locations are used as they are; "/path" is resolved against the request's origin.
+juce::String resolveRedirectLocation(const juce::String& requestUrl, const juce::String& location)
 {
-    auto* object = value.getDynamicObject();
-    if (object == nullptr)
-        return { {}, ApiError { 200, "Branch response is not a JSON object." } };
+    if (location.startsWithIgnoreCase("https://") || location.startsWithIgnoreCase("http://"))
+        return location;
 
-    Branch branch;
-    branch.id = object->getProperty("id").toString();
-    branch.projectId = object->getProperty("project_id").toString();
-    branch.name = object->getProperty("name").toString();
-    branch.isDeleted = static_cast<bool>(object->getProperty("is_deleted"));
+    if (!location.startsWithChar('/'))
+        return {};
 
-    if (!branch.isValid())
-        return { {}, ApiError { 200, "Branch response is missing required fields." } };
+    const auto schemeEnd = requestUrl.indexOf("://");
+    if (schemeEnd < 0)
+        return {};
 
-    return { branch, {} };
+    const auto pathStart = requestUrl.indexOfChar(schemeEnd + 3, '/');
+    return (pathStart < 0 ? requestUrl : requestUrl.substring(0, pathStart)) + location;
+}
+
+// Reads a response body as JSON, or turns a failed response into an ApiError.
+ApiResult<juce::var> readJson(HttpResponse response, const juce::String& failureMessage)
+{
+    if (response.body == nullptr)
+        return ApiResult<juce::var>::failure(networkError());
+
+    const auto text = response.body->readEntireStreamAsString();
+    const auto parsed = juce::JSON::parse(text);
+
+    if (!isSuccessStatus(response.statusCode))
+        return ApiResult<juce::var>::failure(
+            ApiError::fromStatus(response.statusCode, json::extractErrorMessage(parsed, text, failureMessage)));
+
+    if (parsed.isVoid())
+        return ApiResult<juce::var>::failure({ ApiError::Kind::invalidResponse, response.statusCode, "StemHub returned invalid JSON." });
+
+    return ApiResult<juce::var>::success(parsed);
+}
+
+// Chains a JSON response into one of the json:: parsers.
+template <typename Parser>
+auto parseResponse(const ApiResult<juce::var>& response, Parser&& parse) -> decltype(parse(juce::var()))
+{
+    using Result = decltype(parse(juce::var()));
+    if (!response.ok())
+        return Result::failure(*response.error);
+
+    return parse(*response.value);
+}
+
+juce::var makeObject(std::initializer_list<std::pair<const char*, juce::var>> properties)
+{
+    auto* object = new juce::DynamicObject();
+    for (const auto& [name, value] : properties)
+        object->setProperty(name, value);
+
+    return juce::var(object);
 }
 }
 
 ApiClient::ApiClient(juce::String apiBaseUrl)
-    : baseUrl(resolveApiBaseUrl(std::move(apiBaseUrl)))
+    : baseUrl(apiBaseUrl.isNotEmpty() ? std::move(apiBaseUrl) : stemhub::api::resolveBaseUrl())
 {
 }
 
-ApiResult<juce::var> ApiClient::requestJson(const juce::String& path, const juce::String& httpMethod, const juce::String& requestBody, const juce::String& bearerToken) const
+ApiResult<juce::var> ApiClient::requestJson(const juce::String& method,
+                                            const juce::String& path,
+                                            const juce::var& body,
+                                            const juce::String& accessToken,
+                                            const juce::String& failureMessage) const
 {
-    auto url = juce::URL(baseUrl + path);
-
-    if (requestBody.isNotEmpty())
-        url = url.withPOSTData(requestBody);
-
-    juce::StringPairArray responseHeaders;
-    int statusCode = 0;
-
-    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-        .withHttpRequestCmd(httpMethod)
-        .withExtraHeaders(buildJsonHeaders(bearerToken))
-        .withResponseHeaders(&responseHeaders)
-        .withStatusCode(&statusCode)
-        .withConnectionTimeoutMs(10000);
-
-    auto stream = url.createInputStream(options);
-
-    if (stream == nullptr)
-        return { {}, ApiError { statusCode, "Failed to connect to backend." } };
-
-    const auto responseText = stream->readEntireStreamAsString();
-    const auto parsedJson = juce::JSON::parse(responseText);
-
-    if (statusCode < 200 || statusCode >= 300)
-    {
-        return { {}, ApiError { statusCode, extractErrorMessage(parsedJson,
-                                                                responseText,
-                                                                "Backend request failed.") } };
-    }
-
-    if (parsedJson.isVoid())
-        return { {}, ApiError { statusCode, "Backend returned invalid JSON." } };
-
-    return { parsedJson, {} };
-}
-
-ApiResult<juce::var> ApiClient::uploadFile(const juce::String& path,
-                                           const juce::File& file,
-                                           const juce::String& formFieldName,
-                                           const juce::String& bearerToken) const
-{
-    if (!file.existsAsFile())
-        return { {}, ApiError { 0, "Snapshot file does not exist." } };
-
-    auto url = juce::URL(baseUrl + path).withFileToUpload(formFieldName, file, "application/octet-stream");
-
-    juce::StringPairArray responseHeaders;
-    int statusCode = 0;
-
-    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-        .withHttpRequestCmd("POST")
-        .withExtraHeaders("Accept: application/json\r\nAuthorization: Bearer " + bearerToken + "\r\n")
-        .withResponseHeaders(&responseHeaders)
-        .withStatusCode(&statusCode)
-        .withConnectionTimeoutMs(30000);
-
-    auto stream = url.createInputStream(options);
-    if (stream == nullptr)
-        return { {}, ApiError { statusCode, "Failed to connect to backend." } };
-
-    const auto responseText = stream->readEntireStreamAsString();
-    const auto parsedJson = juce::JSON::parse(responseText);
-
-    if (statusCode < 200 || statusCode >= 300)
-    {
-        return { {}, ApiError { statusCode, extractErrorMessage(parsedJson,
-                                                                responseText,
-                                                                "File upload failed.") } };
-    }
-
-    if (parsedJson.isVoid())
-        return { {}, ApiError { statusCode, "Backend returned invalid JSON." } };
-
-    return { parsedJson, {} };
-}
-
-juce::Result ApiClient::downloadFile(const juce::String& path,
-                                     const juce::File& destinationFile,
-                                     const juce::String& bearerToken) const
-{
-    juce::Logger::writeToLog("[Restore] ApiClient -> downloadFile path=" + path
-                             + ", destination=" + destinationFile.getFullPathName()
-                             + ", baseUrl=" + baseUrl);
+    if (isJobCancelled())
+        return ApiResult<juce::var>::failure(ApiError::cancelled());
 
     auto url = juce::URL(baseUrl + path);
+    if (!body.isVoid())
+        url = url.withPOSTData(juce::JSON::toString(body));
 
-    juce::StringPairArray responseHeaders;
-    int statusCode = 0;
+    const auto headers = "Content-Type: application/json\r\nAccept: application/json\r\n" + authorizationHeader(accessToken);
+    auto response = send(url, method, headers, kRequestTimeoutMs);
 
-    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-        .withHttpRequestCmd("GET")
-        .withExtraHeaders(buildBinaryHeaders(bearerToken))
-        .withResponseHeaders(&responseHeaders)
-        .withStatusCode(&statusCode)
-        .withConnectionTimeoutMs(30000);
+    // Stopped while sending. A request that went through reports its real result, even if a
+    // cancel came meanwhile: the server has acted on it.
+    if (response.body == nullptr && isJobCancelled())
+        return ApiResult<juce::var>::failure(ApiError::cancelled());
 
-    auto stream = url.createInputStream(options);
-    if (stream == nullptr)
-    {
-        juce::Logger::writeToLog("[Restore] ApiClient -> connect failed, statusCode=" + juce::String(statusCode));
-        return juce::Result::fail("Failed to connect to backend.");
-    }
-
-    if (statusCode < 200 || statusCode >= 300)
-    {
-        const auto responseText = stream->readEntireStreamAsString();
-        const auto parsedJson = juce::JSON::parse(responseText);
-        juce::Logger::writeToLog("[Restore] ApiClient -> download error status="
-                                 + juce::String(statusCode)
-                                 + ", body="
-                                 + extractErrorMessage(parsedJson, responseText, "File download failed."));
-        return juce::Result::fail(extractErrorMessage(parsedJson, responseText, "File download failed."));
-    }
-    juce::Logger::writeToLog("[Restore] ApiClient -> HTTP status=" + juce::String(statusCode));
-
-    destinationFile.getParentDirectory().createDirectory();
-
-    juce::FileOutputStream output(destinationFile);
-    if (!output.openedOk())
-    {
-        juce::Logger::writeToLog("[Restore] ApiClient -> cannot open destination file");
-        return juce::Result::fail("Failed to open destination file for writing.");
-    }
-
-    const auto bytes = output.writeFromInputStream(*stream, -1);
-    if (bytes < 0)
-    {
-        juce::Logger::writeToLog("[Restore] ApiClient -> write failed");
-        return juce::Result::fail("Failed to write downloaded snapshot to disk.");
-    }
-
-    juce::Logger::writeToLog("[Restore] ApiClient -> wrote bytes=" + juce::String(bytes)
-                             + ", destinationSize=" + juce::String(destinationFile.getSize()));
-
-    output.flush();
-    juce::Logger::writeToLog("[Restore] ApiClient -> download complete");
-    return juce::Result::ok();
+    return readJson(std::move(response), failureMessage);
 }
 
-ApiResult<LoginResponse> ApiClient::login(const juce::String& email,
-                                          const juce::String& password) const
+ApiResult<LoginResponse> ApiClient::login(const juce::String& email, const juce::String& password) const
 {
-    juce::DynamicObject::Ptr bodyObject = new juce::DynamicObject();
-    bodyObject->setProperty("email", email);
-    bodyObject->setProperty("password", password);
-
-    const auto body = juce::JSON::toString(juce::var(bodyObject.get()));
-
-    auto jsonResult = requestJson("/auth/login", "POST", body, {});
-    if (!jsonResult.ok())
-        return { {}, jsonResult.error };
-
-    auto* object = jsonResult.value->getDynamicObject();
-    if (object == nullptr)
-        return { {}, ApiError { 200, "Login response is not a JSON object." } };
-
-    LoginResponse response;
-    response.accessToken = object->getProperty("access_token").toString();
-    response.tokenType = object->getProperty("token_type").toString();
-
-    if (response.accessToken.isEmpty())
-        return { {}, ApiError { 200, "Login response did not contain an access token." } };
-
-    return { response, {} };
+    return parseResponse(requestJson("POST", "/auth/login", makeObject({ { "email", email }, { "password", password } }), {}, "Failed to sign in."),
+                         json::parseLogin);
 }
 
 ApiResult<User> ApiClient::fetchCurrentUser(const juce::String& accessToken) const
 {
-    auto jsonResult = requestJson("/auth/me", "GET", {}, accessToken);
-    if (!jsonResult.ok())
-        return { {}, jsonResult.error };
-
-    auto* object = jsonResult.value->getDynamicObject();
-    if (object == nullptr)
-        return { {}, ApiError { 200, "User response is not a JSON object." } };
-
-    User user;
-    user.id = object->getProperty("id").toString();
-    user.email = object->getProperty("email").toString();
-    user.username = object->getProperty("username").toString();
-
-    if (!user.isValid())
-        return { {}, ApiError { 200, "User response is missing required fields." } };
-
-    return { user, {} };
+    return parseResponse(requestJson("GET", "/auth/me", {}, accessToken, "Failed to load your user profile."),
+                         json::parseUser);
 }
 
 ApiResult<std::vector<Project>> ApiClient::fetchProjects(const juce::String& accessToken) const
 {
-    auto jsonResult = requestJson("/projects/", "GET", {}, accessToken);
-    if (!jsonResult.ok())
-        return { {}, jsonResult.error };
-
-    if (!jsonResult.value->isArray())
-        return { {}, ApiError { 200, "Projects response is not a JSON array." } };
-
-    std::vector<Project> projects;
-    const auto* array = jsonResult.value->getArray();
-    projects.reserve(static_cast<size_t>(array->size()));
-
-    for (const auto& item : *array)
-    {
-        const auto project = parseProject(item);
-        if (!project.ok())
-            return { {}, project.error };
-
-        projects.push_back(*project.value);
-    }
-
-    return { projects, {} };
+    return parseResponse(requestJson("GET", "/projects/", {}, accessToken, "Failed to load projects."),
+                         json::parseProjects);
 }
 
 ApiResult<Project> ApiClient::createProject(const juce::String& name, const juce::String& accessToken) const
 {
-    juce::DynamicObject::Ptr bodyObject = new juce::DynamicObject();
-    bodyObject->setProperty("name", name);
-    bodyObject->setProperty("description", {});
-    bodyObject->setProperty("category", "General");
-    bodyObject->setProperty("is_public", false);
-
-    const auto body = juce::JSON::toString(juce::var(bodyObject.get()));
-    const auto jsonResult = requestJson("/projects/", "POST", body, accessToken);
-    if (!jsonResult.ok())
-        return { {}, jsonResult.error };
-
-    return parseProject(*jsonResult.value);
+    const auto body = makeObject({ { "name", name },
+                                   { "description", juce::var() },
+                                   { "category", "General" },
+                                   { "is_public", false } });
+    return parseResponse(requestJson("POST", "/projects/", body, accessToken, "Failed to create the project."),
+                         json::parseProject);
 }
 
 ApiResult<std::vector<Branch>> ApiClient::fetchBranches(const juce::String& projectId, const juce::String& accessToken) const
 {
-    auto jsonResult = requestJson("/projects/" + projectId + "/branches/", "GET", {}, accessToken);
-    if (!jsonResult.ok())
-        return { {}, jsonResult.error };
+    return parseResponse(requestJson("GET", "/projects/" + projectId + "/branches/", {}, accessToken, "Failed to load workspaces."),
+                         json::parseBranches);
+}
 
-    if (!jsonResult.value->isArray())
-        return { {}, ApiError { 200, "Branches response is not a JSON array." } };
+ApiResult<std::vector<VersionSummary>> ApiClient::fetchVersions(const juce::String& branchId,
+                                                                const juce::String& accessToken) const
+{
+    return parseResponse(requestJson("GET", "/branches/" + branchId + "/versions/", {}, accessToken, "Failed to load version history."),
+                         json::parseVersions);
+}
 
-    std::vector<Branch> branches;
-    const auto* array = jsonResult.value->getArray();
-    branches.reserve(static_cast<size_t>(array->size()));
+ApiResult<juce::var> ApiClient::fetchVersionManifest(const juce::String& versionId, const juce::String& accessToken) const
+{
+    const auto version = requestJson("GET", "/versions/" + versionId, {}, accessToken, "Failed to load the version.");
+    if (!version.ok())
+        return version;
 
-    for (const auto& item : *array)
-    {
-        const auto branch = parseBranch(item);
-        if (!branch.ok())
-            return { {}, branch.error };
+    const auto manifest = version.value->getProperty("manifest_json", {});
+    if (!manifest.isObject())
+        return ApiResult<juce::var>::failure({ ApiError::Kind::notFound, 404, "This version has no file list." });
 
-        branches.push_back(*branch.value);
-    }
-
-    return { branches, {} };
+    return ApiResult<juce::var>::success(manifest);
 }
 
 ApiResult<std::vector<juce::String>> ApiClient::checkMissingBlobs(const juce::String& projectId,
                                                                    const std::vector<juce::String>& sha256s,
                                                                    const juce::String& accessToken) const
 {
-    auto* obj = new juce::DynamicObject();
-    juce::Array<juce::var> arr;
-    arr.ensureStorageAllocated(static_cast<int>(sha256s.size()));
+    juce::Array<juce::var> hashes;
     for (const auto& sha : sha256s)
-        arr.add(sha);
-    obj->setProperty("sha256s", arr);
-    const auto body = juce::JSON::toString(juce::var(obj));
+        hashes.add(sha);
 
-    const auto path = "/projects/" + projectId + "/blobs/check-missing";
-    const auto jsonResult = requestJson(path, "POST", body, accessToken);
-    if (!jsonResult.ok())
-        return { {}, jsonResult.error };
-
-    const auto missingVar = jsonResult.value->getProperty("missing", juce::var());
-    if (!missingVar.isArray())
-        return { {}, ApiError { 200, "check-missing response has no 'missing' array." } };
-
-    std::vector<juce::String> missing;
-    const auto* missingArray = missingVar.getArray();
-    missing.reserve(static_cast<size_t>(missingArray->size()));
-    for (const auto& item : *missingArray)
-        missing.push_back(item.toString());
-
-    return { missing, {} };
+    return parseResponse(requestJson("POST",
+                                     "/projects/" + projectId + "/blobs/check-missing",
+                                     makeObject({ { "sha256s", hashes } }),
+                                     accessToken,
+                                     "Failed to check which files StemHub already has."),
+                         json::parseMissingBlobs);
 }
 
-ApiResult<juce::var> ApiClient::uploadBlob(const juce::String& projectId,
-                                            const juce::String& sha256,
-                                            const juce::File& file,
-                                            const juce::String& accessToken) const
+ApiResult<Unit> ApiClient::uploadBlob(const juce::String& projectId,
+                                      const juce::String& sha256,
+                                      const juce::File& file,
+                                      const juce::String& accessToken) const
 {
     if (!file.existsAsFile())
-        return { {}, ApiError { 0, "Blob source file does not exist." } };
+        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, file.getFileName() + " no longer exists." });
 
-    // Backend expects multipart/form-data with a "file" field, PUT method.
-    // Matches routers/blobs.py::upload_blob signature.
-    const auto path = "/projects/" + projectId + "/blobs/" + sha256;
-    auto url = juce::URL(baseUrl + path).withFileToUpload("file", file, "application/octet-stream");
+    if (isJobCancelled())
+        return ApiResult<Unit>::failure(ApiError::cancelled());
 
-    juce::StringPairArray responseHeaders;
-    int statusCode = 0;
+    // Multipart/form-data with a "file" field, as routers/blobs.py::upload_blob expects.
+    const auto url = juce::URL(baseUrl + "/projects/" + projectId + "/blobs/" + sha256)
+                         .withFileToUpload("file", file, "application/octet-stream");
+    auto sent = send(url, "PUT", "Accept: application/json\r\n" + authorizationHeader(accessToken), kUploadTimeoutMs);
+    if (sent.body == nullptr && isJobCancelled())
+        return ApiResult<Unit>::failure(ApiError::cancelled());
 
-    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-        .withHttpRequestCmd("PUT")
-        .withExtraHeaders("Accept: application/json\r\nAuthorization: Bearer " + accessToken + "\r\n")
-        .withResponseHeaders(&responseHeaders)
-        .withStatusCode(&statusCode)
-        .withConnectionTimeoutMs(120000);
+    const auto response = readJson(std::move(sent), "Failed to upload " + file.getFileName() + ".");
+    if (!response.ok())
+        return ApiResult<Unit>::failure(*response.error);
 
-    auto stream = url.createInputStream(options);
-    if (stream == nullptr)
-        return { {}, ApiError { statusCode, "Failed to connect to backend for blob upload." } };
-
-    const auto responseText = stream->readEntireStreamAsString();
-    const auto parsedJson = juce::JSON::parse(responseText);
-
-    if (statusCode < 200 || statusCode >= 300)
-        return { {}, ApiError { statusCode, extractErrorMessage(parsedJson, responseText, "Blob upload failed.") } };
-
-    if (parsedJson.isVoid())
-        return { {}, ApiError { statusCode, "Backend returned invalid JSON." } };
-
-    return { parsedJson, {} };
+    return ApiResult<Unit>::success({});
 }
 
-ApiResult<juce::var> ApiClient::createVersionFromManifest(const juce::String& branchId,
-                                                           const juce::var& payload,
-                                                           const juce::String& accessToken) const
+ApiResult<VersionSummary> ApiClient::createVersionFromManifest(const juce::String& branchId,
+                                                               const CreateVersionRequest& request,
+                                                               const juce::String& accessToken) const
 {
-    const auto body = juce::JSON::toString(payload);
-    const auto path = "/branches/" + branchId + "/versions/from-manifest";
-    const auto jsonResult = requestJson(path, "POST", body, accessToken);
-    if (!jsonResult.ok())
-        return { {}, jsonResult.error };
-    return { *jsonResult.value, {} };
+    auto* body = new juce::DynamicObject();
+    if (request.commitMessage.isNotEmpty())
+        body->setProperty("commit_message", request.commitMessage);
+    if (request.parentVersionId.isNotEmpty())
+        body->setProperty("parent_version_id", request.parentVersionId);
+    body->setProperty("manifest", request.manifest);
+
+    return parseResponse(requestJson("POST",
+                                     "/branches/" + branchId + "/versions/from-manifest",
+                                     juce::var(body),
+                                     accessToken,
+                                     "Failed to create the version."),
+                         json::parseVersionSummary);
 }
 
-juce::Result ApiClient::downloadBlob(const juce::String& projectId,
-                                       const juce::String& sha256,
-                                       const juce::File& destinationFile,
-                                       const juce::String& accessToken) const
+ApiResult<Unit> ApiClient::downloadBlob(const juce::String& projectId,
+                                        const juce::String& sha256,
+                                        const juce::File& destinationFile,
+                                        const juce::String& accessToken) const
 {
-    // Reuse the existing downloadFile plumbing. Backend may 307-redirect to
-    // a presigned URL (GCS); juce::URL's input stream follows redirects.
-    return downloadFile("/projects/" + projectId + "/blobs/" + sha256,
-                        destinationFile,
-                        accessToken);
+    if (isJobCancelled())
+        return ApiResult<Unit>::failure(ApiError::cancelled());
+
+    // The API answers with the bytes, or with a 307 to a presigned storage URL. That redirect
+    // is followed here rather than by JUCE, which would send our bearer token to the storage
+    // host as well (the Windows implementation re-sends every extra header).
+    const auto apiUrl = baseUrl + "/projects/" + projectId + "/blobs/" + sha256;
+    auto response = send(juce::URL(apiUrl),
+                         "GET",
+                         "Accept: application/octet-stream\r\n" + authorizationHeader(accessToken),
+                         kDownloadTimeoutMs,
+                         0);
+
+    if (response.body != nullptr && isRedirectStatus(response.statusCode))
+    {
+        const auto storageUrl = resolveRedirectLocation(apiUrl, response.headers.getValue("Location", {}));
+        if (storageUrl.isEmpty())
+            return ApiResult<Unit>::failure({ ApiError::Kind::invalidResponse, response.statusCode,
+                                              "The file download was redirected to an invalid location." });
+
+        // Presigned URLs carry their own authorization; parsing them would re-encode the signature.
+        response = send(juce::URL::createWithoutParsing(storageUrl), "GET", {}, kDownloadTimeoutMs);
+    }
+
+    if (response.body == nullptr)
+        return ApiResult<Unit>::failure(networkError());
+
+    if (!isSuccessStatus(response.statusCode))
+    {
+        const auto text = response.body->readEntireStreamAsString();
+        return ApiResult<Unit>::failure(ApiError::fromStatus(
+            response.statusCode,
+            json::extractErrorMessage(juce::JSON::parse(text), {}, "File download failed (HTTP " + juce::String(response.statusCode) + ").")));
+    }
+
+    juce::FileOutputStream output(destinationFile);
+    if (!output.openedOk())
+        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+
+    output.setPosition(0);
+    output.truncate();
+
+    juce::HeapBlock<char> block(kDownloadBlockBytes);
+    for (;;)
+    {
+        if (isJobCancelled())
+            return ApiResult<Unit>::failure(ApiError::cancelled());
+
+        const auto bytesRead = response.body->read(block.get(), kDownloadBlockBytes);
+        if (bytesRead <= 0)
+            break;
+
+        if (!output.write(block.get(), static_cast<size_t>(bytesRead)))
+            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+    }
+
+    output.flush();
+    if (!output.getStatus().wasOk())
+        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+
+    return ApiResult<Unit>::success({});
 }

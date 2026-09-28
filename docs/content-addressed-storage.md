@@ -71,7 +71,8 @@ Deprecate (but don't drop yet): `artifact_path`, `artifact_size_bytes`, `artifac
 Rules:
 - `manifest_version` is required from day one. Bump when schema changes.
 - All referenced blobs must exist in the `blob` table for this project before the manifest can be saved.
-- Filenames inside the manifest are display-only. Actual retrieval is by SHA-256.
+- Blobs are retrieved by SHA-256. `filename` is where the plugin writes the file on restore: the path relative to the project folder, `/`-separated (`Samples/Imported/kick.wav`), so the folder layout the DAW expects comes back intact. Older manifests hold bare file names and restore into one folder.
+- The plugin treats `filename` as untrusted: it only accepts relative paths made of plain segments (no `..`, absolute paths, drive letters, backslashes or reserved Windows names, at most 255 characters) and refuses a manifest that lists two different files at the same path.
 
 ## Scope: project-scoped vs global blobs
 
@@ -112,7 +113,8 @@ Client-side hashing is mandatory — the whole point is that the client can skip
 1. Plugin GETs GET /versions/{vid}     → returns manifest_json.
 2. Plugin diffs local filesystem against manifest → list of missing sha256s.
 3. For each missing sha256, plugin GETs GET /projects/{pid}/blobs/{sha256}
-   → server returns a presigned GET URL (GCS) or 302 to a signed local endpoint.
+   → server returns the bytes, or a 307 to a presigned GET URL (GCS). The plugin follows that
+     redirect itself and does not send its bearer token to the storage host.
 4. Plugin downloads, verifies SHA-256 locally before writing to disk.
 ```
 

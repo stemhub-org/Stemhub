@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
+# Rebuilds and relaunches the Standalone app whenever Source/ changes.
+# macOS only: relies on fswatch and `open`. Configure ./build first (e.g. with build-vst3.sh).
 set -euo pipefail
+
+if [[ "$(uname -s)" != "Darwin" ]]; then
+    echo "watch-plugin.sh only runs on macOS."
+    exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build"

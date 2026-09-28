@@ -15,19 +15,26 @@ fi
 cmake_args=(
     -S "${PLUGIN_DIR}"
     -B "${BUILD_DIR}"
-    -G Ninja
     "-DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
     -DCOPY_PLUGIN=ON
 )
+
+# Ninja when it is installed and the build folder is new; otherwise CMake's default generator.
+if command -v ninja >/dev/null 2>&1 && [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
+    cmake_args+=(-G Ninja)
+fi
 
 if [[ -n "${JUCE_DIR:-}" ]]; then
     cmake_args+=("-DJUCE_DIR=${JUCE_DIR}")
 fi
 
-cmake "${cmake_args[@]}"
-cmake --build "${BUILD_DIR}" --target stemhub_VST3 --config "${BUILD_TYPE}"
-
+targets=(stemhub_VST3)
 if [[ "$(uname -s)" == "Darwin" ]]; then
-    echo "Built VST3 target. Rescan plugins in FL Studio from:"
-    echo "  Options -> Manage plugins -> Find plugins"
+    targets+=(stemhub_AU)
 fi
+
+cmake "${cmake_args[@]}"
+cmake --build "${BUILD_DIR}" --target "${targets[@]}" --config "${BUILD_TYPE}"
+
+echo "Built ${targets[*]} and copied the plugin to your plug-in folder."
+echo "Rescan plugins in your DAW, e.g. in FL Studio: Options -> Manage plugins -> Find plugins"

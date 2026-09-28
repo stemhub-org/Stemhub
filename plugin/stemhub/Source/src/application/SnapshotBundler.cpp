@@ -1,230 +1,73 @@
-#include <algorithm>
-#include <array>
+#include <map>
 
 #include "application/SnapshotBundler.hpp"
+#include "application/SnapshotFiles.hpp"
+#include "network/ApiTypes.hpp"
 
 namespace
 {
-    juce::String sha256HexOfFile(const juce::File& file)
-    {
-        juce::FileInputStream stream(file);
-        if (!stream.openedOk())
-            return {};
-        return juce::SHA256(stream).toHexString();
-    }
-}
-
-namespace
-{
-    constexpr std::array<const char*, 9> kBundledAssetExtensions = {
-        "wav", "mp3", "flac", "ogg", "aiff", "aif", "m4a", "mid", "midi"
-    };
+    // Backend limit on the files of one version besides the project file (VersionManifestV1.tracks).
+    constexpr size_t kMaxManifestTracks = 500;
 
     juce::String toArchivePath(const juce::File& file, const juce::File& rootDirectory)
     {
         return file.getRelativePathFrom(rootDirectory).replaceCharacter('\\', '/');
     }
-
-    bool isBackupPath(const juce::File& candidateFile, const juce::File& rootFolder)
-    {
-        const auto relativePath = candidateFile.getRelativePathFrom(rootFolder).replaceCharacter('\\', '/');
-        if (relativePath.isEmpty())
-            return false;
-
-        juce::StringArray parts;
-        parts.addTokens(relativePath, "/", "");
-        for (int i = 0; i < parts.size() - 1; ++i)
-        {
-            if (parts[i].equalsIgnoreCase("backup"))
-                return true;
-        }
-
-        return false;
-    }
-
-    bool shouldIncludeInSnapshot(const juce::File& candidateFile,
-                                 const juce::File& rootDirectory,
-                                 const juce::File& sourceProjectFile)
-    {
-        if (!candidateFile.existsAsFile())
-            return false;
-
-        if (candidateFile == sourceProjectFile)
-            return true;
-
-        for (const auto* ext : kBundledAssetExtensions)
-        {
-            if (candidateFile.hasFileExtension(ext))
-                return !isBackupPath(candidateFile, rootDirectory);
-        }
-
-        return false;
-    }
-
-    bool isSourceFileWithinRoot(const juce::File& sourceFile, const juce::File& rootDirectory)
-    {
-        if (!sourceFile.existsAsFile() || !rootDirectory.isDirectory())
-            return false;
-
-        const auto sourceParent = sourceFile.getParentDirectory();
-        return sourceParent == rootDirectory || sourceFile.isAChildOf(rootDirectory);
-    }
 }
 
-juce::Result SnapshotBundler::bundleProject(const SnapshotBundleRequest& request,
-                                                  SnapshotBundleResult& outResult) const
+juce::Result SnapshotBundler::buildManifest(const SnapshotBundleRequest& request,
+                                              ContentAddressedManifest& outResult,
+                                              const std::function<void(int, int)>& onFileHashed) const
 {
     outResult = {};
 
     if (!request.sourceProjectFile.existsAsFile())
         return juce::Result::fail("Source project file does not exist.");
 
-    if (!request.projectRootDirectory.isDirectory())
-        return juce::Result::fail("Project root directory does not exist.");
-
-    if (!isSourceFileWithinRoot(request.sourceProjectFile, request.projectRootDirectory))
-        return juce::Result::fail("Project file must be inside the selected project root directory.");
-
-    juce::Array<juce::File> discoveredFiles;
-    request.projectRootDirectory.findChildFiles(discoveredFiles, juce::File::findFiles, true);
-
-    if (discoveredFiles.isEmpty())
-        return juce::Result::fail("Project root directory does not contain files to bundle.");
-
-    std::sort(discoveredFiles.begin(), discoveredFiles.end(), [](const juce::File& lhs, const juce::File& rhs)
-    {
-        return lhs.getFullPathName() < rhs.getFullPathName();
-    });
-
-    const auto tempRoot = juce::File::getSpecialLocation(juce::File::tempDirectory)
-                              .getChildFile("stemhub-snapshots");
-
-    if ((!tempRoot.exists() && !tempRoot.createDirectory()) || !tempRoot.isDirectory())
-        return juce::Result::fail("Failed to prepare temporary folder for snapshot export.");
-
-    const auto bundleId = juce::Uuid().toString();
-    const auto manifestFile = tempRoot.getChildFile("manifest_" + bundleId + ".json");
-    const auto bundleFile = tempRoot.getChildFile("snapshot_" + bundleId + ".zip");
-
-    juce::Array<juce::var> manifestFiles;
-    manifestFiles.ensureStorageAllocated(discoveredFiles.size());
-
-    juce::ZipFile::Builder zipBuilder;
-
-    for (const auto& file : discoveredFiles)
-    {
-        if (!shouldIncludeInSnapshot(file, request.projectRootDirectory, request.sourceProjectFile))
-            continue;
-
-        const auto archivePath = toArchivePath(file, request.projectRootDirectory);
-        if (archivePath.isEmpty())
-            continue;
-
-        zipBuilder.addFile(file, 9, archivePath);
-
-        juce::DynamicObject::Ptr fileEntry = new juce::DynamicObject();
-        fileEntry->setProperty("relative_path", archivePath);
-        fileEntry->setProperty("size_bytes", file.getSize());
-        manifestFiles.add(juce::var(fileEntry.get()));
-    }
-
-    if (request.previewTrackFile.existsAsFile())
-    {
-        const auto previewArchivePath = "preview/latest_track.wav";
-        zipBuilder.addFile(request.previewTrackFile, 9, previewArchivePath);
-        juce::DynamicObject::Ptr previewEntry = new juce::DynamicObject();
-        previewEntry->setProperty("relative_path", previewArchivePath);
-        previewEntry->setProperty("size_bytes", request.previewTrackFile.getSize());
-        manifestFiles.add(juce::var(previewEntry.get()));
-    }
-
-    if (manifestFiles.isEmpty())
-        return juce::Result::fail("Project root directory does not contain files to bundle.");
-
-    juce::DynamicObject::Ptr manifestObject = new juce::DynamicObject();
-    manifestObject->setProperty("schema_version", 1);
-    manifestObject->setProperty("created_at_utc", juce::Time::getCurrentTime().toISO8601(true));
-    manifestObject->setProperty("source_daw", request.sourceDaw);
-    manifestObject->setProperty("project_name", request.sourceProjectFile.getFileNameWithoutExtension());
-    manifestObject->setProperty("flp_relative_path", toArchivePath(request.sourceProjectFile, request.projectRootDirectory));
-    if (request.previewTrackFile.existsAsFile())
-        manifestObject->setProperty("preview_track_path", "preview/latest_track.wav");
-    manifestObject->setProperty("file_count", manifestFiles.size());
-    manifestObject->setProperty("files", juce::var(manifestFiles));
-
-    const auto manifest = juce::var(manifestObject.get());
-    const auto manifestJson = juce::JSON::toString(manifest, true);
-    if (!manifestFile.replaceWithText(manifestJson))
-        return juce::Result::fail("Failed to write snapshot manifest.");
-
-    zipBuilder.addFile(manifestFile, 9, "manifest.json");
-
-    juce::FileOutputStream output(bundleFile);
-    if (!output.openedOk())
-    {
-        manifestFile.deleteFile();
-        return juce::Result::fail("Failed to create snapshot bundle file.");
-    }
-
-    if (!zipBuilder.writeToStream(output, nullptr))
-    {
-        manifestFile.deleteFile();
-        bundleFile.deleteFile();
-        return juce::Result::fail("Failed to write snapshot bundle archive.");
-    }
-
-    output.flush();
-    manifestFile.deleteFile();
-
-    outResult.bundleFile = bundleFile;
-    outResult.manifest = manifest;
-    return juce::Result::ok();
-}
-
-juce::Result SnapshotBundler::buildContentAddressedManifest(const SnapshotBundleRequest& request,
-                                                              ContentAddressedManifest& outResult) const
-{
-    outResult = {};
-
-    if (!request.sourceProjectFile.existsAsFile())
+    const auto rootDirectory = request.sourceProjectFile.getParentDirectory();
+    const auto includedFiles = stemhub::snapshotfiles::collect(request.sourceProjectFile);
+    if (includedFiles.empty())
         return juce::Result::fail("Source project file does not exist.");
 
-    if (!request.projectRootDirectory.isDirectory())
-        return juce::Result::fail("Project root directory does not exist.");
-
-    if (!isSourceFileWithinRoot(request.sourceProjectFile, request.projectRootDirectory))
-        return juce::Result::fail("Project file must be inside the selected project root directory.");
-
-    juce::Array<juce::File> discoveredFiles;
-    request.projectRootDirectory.findChildFiles(discoveredFiles, juce::File::findFiles, true);
-
-    if (discoveredFiles.isEmpty())
-        return juce::Result::fail("Project root directory does not contain files to bundle.");
-
-    std::sort(discoveredFiles.begin(), discoveredFiles.end(), [](const juce::File& lhs, const juce::File& rhs)
+    // Check names and the file count before hashing anything: hashing a large session takes time.
+    for (const auto& file : includedFiles)
     {
-        return lhs.getFullPathName() < rhs.getFullPathName();
-    });
+        // Keep the folder structure: basenames alone made files from different folders collide.
+        const auto relativePath = toArchivePath(file, rootDirectory);
+        if (!isSafeManifestPath(relativePath))
+            return juce::Result::fail("Can't save \"" + relativePath + "\": rename this file and try again.");
+    }
+
+    const auto trackCount = includedFiles.size() - 1;
+    if (trackCount > kMaxManifestTracks)
+        return juce::Result::fail("This project folder has " + juce::String(static_cast<int>(trackCount))
+                                  + " audio files; a version can hold " + juce::String(static_cast<int>(kMaxManifestTracks))
+                                  + ". Move the ones this project doesn't use out of its folder.");
 
     std::vector<ContentAddressedFileEntry> entries;
-    entries.reserve(static_cast<size_t>(discoveredFiles.size()));
+    entries.reserve(static_cast<size_t>(includedFiles.size()));
     ContentAddressedFileEntry projectEntry;
     bool haveProjectEntry = false;
 
-    for (const auto& file : discoveredFiles)
+    const auto fileCount = static_cast<int>(includedFiles.size());
+    int hashedCount = 0;
+    for (const auto& file : includedFiles)
     {
-        if (!shouldIncludeInSnapshot(file, request.projectRootDirectory, request.sourceProjectFile))
-            continue;
+        if (isJobCancelled())
+            return juce::Result::fail(ApiError::cancelled().message);
 
-        const auto sha = sha256HexOfFile(file);
+        const auto sha = sha256OfFile(file);
         if (sha.isEmpty())
             return juce::Result::fail("Failed to hash file: " + file.getFullPathName());
+
+        if (onFileHashed != nullptr)
+            onFileHashed(++hashedCount, fileCount);
 
         ContentAddressedFileEntry entry;
         entry.file = file;
         entry.sha256 = sha;
         entry.sizeBytes = file.getSize();
-        entry.filename = file.getFileName();
+        entry.filename = toArchivePath(file, rootDirectory);
         entry.isProjectFile = (file == request.sourceProjectFile);
 
         if (entry.isProjectFile)
@@ -261,7 +104,7 @@ juce::Result SnapshotBundler::buildContentAddressedManifest(const SnapshotBundle
     juce::DynamicObject::Ptr manifest = new juce::DynamicObject();
     manifest->setProperty("manifest_version", 1);
     manifest->setProperty("source_daw", request.sourceDaw);
-    manifest->setProperty("source_project_filename", projectEntry.filename);
+    manifest->setProperty("source_project_filename", projectEntry.file.getFileName());
     manifest->setProperty("project_file", juce::var(projectFileObj.get()));
     manifest->setProperty("tracks", juce::var(tracks));
 
@@ -277,6 +120,25 @@ juce::Result SnapshotBundler::buildContentAddressedManifest(const SnapshotBundle
 
 namespace
 {
+    constexpr int kMaxManifestPathLength = 255; // ManifestBlobRef.filename limit on the backend
+
+    bool isSha256Hex(const juce::String& value)
+    {
+        return value.length() == 64 && value.containsOnly("0123456789abcdef");
+    }
+
+    // Device names Windows resolves anywhere in a path ("NUL.wav" included).
+    bool isReservedWindowsName(const juce::String& segment)
+    {
+        static const juce::StringArray reservedNames {
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+        };
+
+        return reservedNames.contains(segment.upToFirstOccurrenceOf(".", false, false).trimEnd(), true);
+    }
+
     bool readBlobRef(const juce::var& value, ParsedManifestEntry& outEntry)
     {
         auto* obj = value.getDynamicObject();
@@ -286,12 +148,56 @@ namespace
         outEntry.sha256 = obj->getProperty("sha256").toString().toLowerCase();
         outEntry.filename = obj->getProperty("filename").toString();
         outEntry.sizeBytes = static_cast<juce::int64>(obj->getProperty("size_bytes"));
-        return outEntry.sha256.length() == 64 && outEntry.filename.isNotEmpty();
+        return isSha256Hex(outEntry.sha256) && outEntry.filename.isNotEmpty();
+    }
+
+    juce::String describeManifestPath(const juce::String& path)
+    {
+        const auto printable = path.retainCharacters(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._-/()");
+        return "\"" + (printable.length() > 80 ? printable.substring(0, 80) + "..." : printable) + "\"";
     }
 }
 
-juce::Result SnapshotBundler::parseContentAddressedManifest(const juce::var& manifestJson,
-                                                              ParsedManifest& outResult)
+juce::String SnapshotBundler::sha256OfFile(const juce::File& file)
+{
+    juce::FileInputStream stream(file);
+    if (!stream.openedOk())
+        return {};
+
+    return juce::SHA256(stream).toHexString();
+}
+
+bool SnapshotBundler::isSafeManifestPath(const juce::String& path)
+{
+    if (path.isEmpty() || path.length() > kMaxManifestPathLength)
+        return false;
+
+    // Backslashes and colons turn into separators, drive letters or streams on Windows.
+    if (path.startsWithChar('/') || path.containsAnyOf("\\:"))
+        return false;
+
+    for (const auto character : path)
+        if (character < 0x20 || character == 0x7f)
+            return false;
+
+    juce::StringArray segments;
+    segments.addTokens(path, "/", {});
+
+    for (const auto& segment : segments)
+    {
+        // Empty, "." and ".." segments navigate. Windows also drops trailing dots and spaces,
+        // so "name." and "name " would land on "name".
+        if (segment.isEmpty() || segment.endsWithChar('.') || segment.endsWithChar(' ')
+            || isReservedWindowsName(segment))
+            return false;
+    }
+
+    return true;
+}
+
+juce::Result SnapshotBundler::parseManifest(const juce::var& manifestJson,
+                                              ParsedManifest& outResult)
 {
     outResult = {};
 
@@ -311,7 +217,9 @@ juce::Result SnapshotBundler::parseContentAddressedManifest(const juce::var& man
     if (!readBlobRef(root->getProperty("project_file"), projectEntry))
         return juce::Result::fail("Manifest project_file is missing or malformed.");
     projectEntry.isProjectFile = true;
-    outResult.entries.push_back(std::move(projectEntry));
+
+    std::vector<ParsedManifestEntry> candidates;
+    candidates.push_back(std::move(projectEntry));
 
     const auto tracksVar = root->getProperty("tracks");
     if (tracksVar.isArray())
@@ -321,8 +229,30 @@ juce::Result SnapshotBundler::parseContentAddressedManifest(const juce::var& man
             ParsedManifestEntry entry;
             if (!readBlobRef(trackVar, entry))
                 return juce::Result::fail("Manifest track entry is malformed.");
-            outResult.entries.push_back(std::move(entry));
+            candidates.push_back(std::move(entry));
         }
+    }
+
+    // One file per path. Paths are compared case-insensitively because macOS and Windows
+    // file systems are; the same content listed twice is written once.
+    std::map<juce::String, juce::String> hashByPath;
+    for (auto& entry : candidates)
+    {
+        if (!isSafeManifestPath(entry.filename))
+            return juce::Result::fail("This version contains an unsafe file path "
+                                      + describeManifestPath(entry.filename) + " and was not restored.");
+
+        const auto key = entry.filename.toLowerCase();
+        if (const auto existing = hashByPath.find(key); existing != hashByPath.end())
+        {
+            if (existing->second != entry.sha256)
+                return juce::Result::fail("This version lists two different files at "
+                                          + describeManifestPath(entry.filename) + " and was not restored.");
+            continue;
+        }
+
+        hashByPath.emplace(key, entry.sha256);
+        outResult.entries.push_back(std::move(entry));
     }
 
     return juce::Result::ok();
