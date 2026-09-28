@@ -1,7 +1,10 @@
+from types import SimpleNamespace
+
 from stemhub.flp_mixer_snapshot import (
     MixerInsertSnapshot,
     MixerProjectSnapshot,
     MixerSlotSnapshot,
+    build_mixer_snapshot,
     diff_mixer_project_snapshots,
 )
 
@@ -117,3 +120,24 @@ def test_diff_mixer_project_snapshots_falls_back_to_binary_change_when_mixer_uns
     assert len(diff_result.changes) == 1
     assert diff_result.changes[0].type == "project_binary_changed"
     assert diff_result.changes[0].insert_iid == -1
+
+
+def test_diff_mixer_project_snapshots_reports_master_volume_change() -> None:
+    # PyFLP yields the Master insert with iid -1.
+    def pyflp_project(master_volume: int) -> SimpleNamespace:
+        master = SimpleNamespace(iid=-1, name="Master", enabled=True, volume=master_volume, pan=0)
+        return SimpleNamespace(mixer=[master])
+
+    base_snapshot = build_mixer_snapshot(pyflp_project(12800))
+    target_snapshot = build_mixer_snapshot(pyflp_project(10000))
+
+    diff_result = diff_mixer_project_snapshots(base_snapshot, target_snapshot)
+
+    assert [
+        (change.type, change.insert_iid, change.before, change.after, change.message)
+        for change in diff_result.changes
+    ] == [
+        ("insert_volume_changed", 0, 12800, 10000, "Master volume changed: 12800 -> 10000"),
+    ]
+    assert diff_result.summary.inserts_changed == 1
+    assert diff_result.summary.parameter_changes == 1

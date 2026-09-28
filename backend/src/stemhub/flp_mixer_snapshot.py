@@ -9,6 +9,11 @@ from stemhub.dependency_guard import ensure_pyflp_available
 from stemhub.storage import StorageService
 
 
+# PyFLP numbers inserts from -1 (Master); snapshots use FL Studio's numbering, where Master is 0.
+PYFLP_TO_FL_INSERT_OFFSET = 1
+MASTER_INSERT_IID = 0
+
+
 class MixerSnapshotError(RuntimeError):
     """Raised when a version artifact cannot produce a valid FL Studio mixer snapshot."""
 
@@ -113,13 +118,13 @@ def build_mixer_snapshot(
 
     for insert in getattr(project, "mixer", []):
         iid = _safe_model_attr(insert, "iid")
-        if iid is None or iid == -1:
+        if iid is None:
             continue
 
         slots = _build_slot_snapshots(insert)
         inserts.append(
             MixerInsertSnapshot(
-                iid=int(iid),
+                iid=int(iid) + PYFLP_TO_FL_INSERT_OFFSET,
                 name=_normalize_optional_text(_safe_model_attr(insert, "name")),
                 enabled=_coerce_optional_bool(_safe_model_attr(insert, "enabled")),
                 volume=_coerce_optional_int(_safe_model_attr(insert, "volume")),
@@ -508,8 +513,8 @@ def _serialize_slot(slot: MixerSlotSnapshot) -> dict[str, Any]:
 
 
 def _format_insert_label(insert_iid: int, insert_name: str | None) -> str:
-    label = f"Insert {insert_iid}"
-    if insert_name:
+    label = "Master" if insert_iid == MASTER_INSERT_IID else f"Insert {insert_iid}"
+    if insert_name and insert_name != label:
         return f'{label} "{insert_name}"'
     return label
 
