@@ -1,10 +1,10 @@
 #include <algorithm>
-#include <vector>
 
-#include "application/ProjectFileService.hpp"
+#include "application/RestoreFolders.hpp"
 
 namespace
 {
+// Letters, digits, '-', '_' and '.', with anything else turned into single dashes.
 juce::String sanitizePathSegment(const juce::String& value, const juce::String& fallback)
 {
     juce::String output;
@@ -17,19 +17,24 @@ juce::String sanitizePathSegment(const juce::String& value, const juce::String& 
         output += isAllowed ? juce::String::charToString(ch) : "-";
     }
 
-    output = output.trim().replace("--", "-");
     while (output.contains("--"))
         output = output.replace("--", "-");
     output = output.trimCharactersAtStart("-").trimCharactersAtEnd("-");
     return output.isNotEmpty() ? output : fallback;
 }
+
+juce::String folderNameFor(const juce::String& name, const juce::String& id, const juce::String& fallback)
+{
+    const auto legalName = juce::File::createLegalFileName(name).trim().trimCharactersAtStart(".").trimCharactersAtEnd(".");
+    return legalName.isNotEmpty() ? legalName : sanitizePathSegment(id, fallback);
+}
 }
 
-namespace stemhub::projectfiles
+namespace stemhub::restorefolders
 {
-juce::String resolveRestoreProjectName(const std::vector<VersionSummary>& versions,
-                                       const juce::String& versionId,
-                                       const juce::String& fallbackName)
+juce::String projectName(const std::vector<VersionSummary>& versions,
+                         const juce::String& versionId,
+                         const juce::String& fallbackName)
 {
     const auto it = std::find_if(versions.begin(), versions.end(), [&versionId](const VersionSummary& version)
     {
@@ -51,9 +56,7 @@ juce::String resolveRestoreProjectName(const std::vector<VersionSummary>& versio
     return legalFallbackName.isNotEmpty() ? legalFallbackName : "restored-project";
 }
 
-juce::File chooseRestoreFolder(const juce::File& parent,
-                               const juce::String& projectName,
-                               const juce::String& versionId)
+juce::File newFolder(const juce::File& parent, const juce::String& projectName, const juce::String& versionId)
 {
     const auto folderName = juce::File::createLegalFileName(
         projectName + "-" + versionId.substring(0, juce::jmin(8, versionId.length())));
@@ -65,47 +68,9 @@ juce::File chooseRestoreFolder(const juce::File& parent,
     return folder;
 }
 
-juce::File getDefaultManagedWorkingCopyFolder()
+juce::File projectRoot(const juce::File& baseFolder, const Project& project, const Branch& branch)
 {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("Stemhub")
-        .getChildFile("working-copy");
-}
-
-juce::File getManagedWorkingCopyRoot(const juce::File& baseFolder,
-                                     const juce::String& projectId,
-                                     const juce::String& branchId)
-{
-    return baseFolder.getChildFile(sanitizePathSegment(projectId, "project"))
-                     .getChildFile(sanitizePathSegment(branchId, "branch"));
-}
-
-juce::File resolveEffectiveProjectFile(const juce::File& selectedFile,
-                                       const juce::File& pendingFile)
-{
-    if (pendingFile.existsAsFile())
-        return pendingFile;
-
-    if (selectedFile.existsAsFile())
-        return selectedFile;
-
-    return {};
-}
-
-bool openInSystem(const juce::File& file)
-{
-    if (!file.existsAsFile())
-        return false;
-
-    if (file.startAsProcess())
-        return true;
-
-   #if JUCE_MAC
-    juce::ChildProcess openProcess;
-    const auto escapedPath = file.getFullPathName().replace("\"", "\\\"");
-    return openProcess.start("open \"" + escapedPath + "\"");
-   #else
-    return false;
-   #endif
+    return baseFolder.getChildFile(folderNameFor(project.name, project.id, "project"))
+                     .getChildFile(folderNameFor(branch.name, branch.id, "branch"));
 }
 }

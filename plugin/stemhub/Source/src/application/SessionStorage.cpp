@@ -1,15 +1,36 @@
 #include "application/SessionStorage.hpp"
-#include "application/ProjectFileService.hpp"
+#include "application/AppFolders.hpp"
+
+namespace
+{
+// Earlier versions kept a global "last project" and the token in session.json, and, on macOS and
+// Windows, their files in another folder. The token there would stay in clear text: signing in
+// once writes the new one. Projects restored there are left alone.
+void removeLegacyFiles(const juce::File& appData)
+{
+    const auto legacy = stemhub::folders::legacyAppData();
+    legacy.getChildFile("session.json").deleteFile();
+
+    if (legacy == appData)
+        return;
+
+    legacy.getChildFile("credentials.json").deleteFile();
+    legacy.getChildFile("pending-restore.json").deleteFile();
+
+    const auto legacyConfig = legacy.getChildFile("config.json");
+    const auto config = appData.getChildFile("config.json");
+    if (legacyConfig.existsAsFile() && !config.exists() && appData.createDirectory().wasOk())
+        legacyConfig.moveFileTo(config);
+}
+}
 
 SessionStorage SessionStorage::forCurrentUser()
 {
-    const auto folder = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Stemhub");
+    const auto appData = stemhub::folders::appData();
+    removeLegacyFiles(appData);
 
-    // Earlier versions kept the token in session.json, next to a global "last project" that each
-    // DAW project's own link replaces. Signing in once writes the new store.
-    folder.getChildFile("session.json").deleteFile();
-
-    return { std::make_shared<FileCredentialStore>(folder.getChildFile("credentials.json")),
-             folder.getChildFile("pending-restore.json"),
-             stemhub::projectfiles::getDefaultManagedWorkingCopyFolder() };
+    return { std::make_shared<FileCredentialStore>(appData.getChildFile("credentials.json")),
+             appData.getChildFile("pending-restore.json"),
+             stemhub::folders::restoredProjects(),
+             WorkingCopyIndex(appData.getChildFile("working-copies.json")) };
 }

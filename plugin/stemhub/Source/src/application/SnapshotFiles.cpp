@@ -3,13 +3,21 @@
 #include <map>
 
 #include "application/SnapshotFiles.hpp"
-#include "application/SessionHelpers.hpp"
+#include "network/ApiTypes.hpp"
 
 namespace stemhub::snapshotfiles
 {
 namespace
 {
 constexpr std::array<const char*, 9> kAssetExtensions { "wav", "mp3", "flac", "ogg", "aiff", "aif", "m4a", "mid", "midi" };
+
+struct DawFileType
+{
+    const char* extension;
+    const char* dawName;
+};
+
+constexpr std::array<DawFileType, 2> kDawFileTypes { { { "flp", "FL Studio" }, { "als", "Ableton Live" } } };
 
 // Dot-files are left out on every system, not only where the OS hides them: macOS writes
 // "._kick.wav" companions onto drives that Windows then sees as ordinary files.
@@ -26,17 +34,9 @@ bool isAsset(const juce::File& file)
     });
 }
 
-// A folder this plugin restored a version into: its name ends in the version's id prefix.
 bool isRestoredCopy(const juce::File& folder)
 {
-    if (stemhub::sessionhelpers::extractVersionPrefixFromPathPart(folder.getFileName()).isEmpty())
-        return false;
-
-    for (const auto& entry : juce::RangedDirectoryIterator(folder, false, "*", juce::File::findFiles))
-        if (isDawProjectFile(entry.getFile()))
-            return true;
-
-    return false;
+    return folder.getChildFile(kRestoredCopyMarker).existsAsFile();
 }
 
 class FolderRules
@@ -64,6 +64,44 @@ private:
     juce::File root;
     std::map<juce::String, bool> leftOutByPath;
 };
+
+// Feeds a file to juce::SHA256, which asks for 64 bytes at a time: reading the file itself that
+// way took a system call per 64 bytes. The file is read in large blocks instead, and the stream
+// ends early, once per block, when the job running it is asked to stop.
+class HashInput final : public juce::InputStream
+{
+public:
+    explicit HashInput(juce::InputStream& sourceToRead)
+        : source(sourceToRead, kBlockBytes)
+    {
+    }
+
+    juce::int64 getTotalLength() override { return source.getTotalLength(); }
+    bool isExhausted() override { return stopped || source.isExhausted(); }
+    juce::int64 getPosition() override { return source.getPosition(); }
+    bool setPosition(juce::int64 newPosition) override { return source.setPosition(newPosition); }
+
+    int read(void* destBuffer, int maxBytesToRead) override
+    {
+        bytesSinceCheck += maxBytesToRead;
+        if (bytesSinceCheck >= kBlockBytes)
+        {
+            bytesSinceCheck = 0;
+            stopped = stopped || isJobCancelled();
+        }
+
+        return stopped ? 0 : source.read(destBuffer, maxBytesToRead);
+    }
+
+    [[nodiscard]] bool wasStopped() const noexcept { return stopped; }
+
+private:
+    static constexpr int kBlockBytes = 1 << 20;
+
+    juce::BufferedInputStream source;
+    int bytesSinceCheck { kBlockBytes }; // checks before the first block too
+    bool stopped { false };
+};
 }
 
 std::vector<juce::File> collect(const juce::File& projectFile)
@@ -81,6 +119,10 @@ std::vector<juce::File> collect(const juce::File& projectFile)
                                                            juce::File::findFiles | juce::File::ignoreHiddenFiles,
                                                            juce::File::FollowSymlinks::noCycles))
     {
+        // A large folder takes a while to walk: a job asked to stop gets nothing.
+        if (isJobCancelled())
+            return {};
+
         const auto file = entry.getFile();
         if (file != projectFile && isAsset(file) && !isDotFile(file) && !rules.isLeftOut(file.getParentDirectory()))
             files.push_back(file);
@@ -106,18 +148,31 @@ Summary summarize(const juce::File& projectFile)
     return summary;
 }
 
-bool isDawProjectFile(const juce::File& file)
+juce::String sha256OfFile(const juce::File& file)
 {
-    return file.hasFileExtension("flp") || file.hasFileExtension("als");
+    juce::FileInputStream fileStream(file);
+    if (!fileStream.openedOk())
+        return {};
+
+    HashInput input(fileStream);
+    const auto hash = juce::SHA256(input).toHexString();
+    return input.wasStopped() ? juce::String() : hash;
+}
+
+juce::String projectFilePattern()
+{
+    juce::StringArray patterns;
+    for (const auto& type : kDawFileTypes)
+        patterns.add("*." + juce::String(type.extension));
+
+    return patterns.joinIntoString(";");
 }
 
 juce::String dawNameFor(const juce::File& projectFile)
 {
-    if (projectFile.hasFileExtension("flp"))
-        return "FL Studio";
-
-    if (projectFile.hasFileExtension("als"))
-        return "Ableton Live";
+    for (const auto& type : kDawFileTypes)
+        if (projectFile.hasFileExtension(type.extension))
+            return type.dawName;
 
     return {};
 }

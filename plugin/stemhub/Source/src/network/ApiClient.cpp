@@ -58,7 +58,7 @@ bool isRedirectStatus(const int statusCode)
 
 ApiError networkError()
 {
-    return { ApiError::Kind::network, 0, "Can't reach StemHub. Check your connection and try again." };
+    return { ApiError::Kind::network, "Can't reach StemHub. Check your connection and try again." };
 }
 
 // Absolute locations are used as they are; "/path" is resolved against the request's origin.
@@ -92,7 +92,7 @@ ApiResult<juce::var> readJson(HttpResponse response, const juce::String& failure
             ApiError::fromStatus(response.statusCode, json::extractErrorMessage(parsed, text, failureMessage)));
 
     if (parsed.isVoid())
-        return ApiResult<juce::var>::failure({ ApiError::Kind::invalidResponse, response.statusCode, "StemHub returned invalid JSON." });
+        return ApiResult<juce::var>::failure({ ApiError::Kind::invalidResponse, "StemHub returned invalid JSON." });
 
     return ApiResult<juce::var>::success(parsed);
 }
@@ -194,9 +194,10 @@ ApiResult<juce::var> ApiClient::fetchVersionManifest(const juce::String& version
     if (!version.ok())
         return version;
 
+    // The version exists, but was saved without a manifest (by the old upload flow).
     const auto manifest = version.value->getProperty("manifest_json", {});
     if (!manifest.isObject())
-        return ApiResult<juce::var>::failure({ ApiError::Kind::notFound, 404, "This version has no file list." });
+        return ApiResult<juce::var>::failure({ ApiError::Kind::invalidResponse, "This version has no file list, so it can't be restored." });
 
     return ApiResult<juce::var>::success(manifest);
 }
@@ -223,7 +224,7 @@ ApiResult<Unit> ApiClient::uploadBlob(const juce::String& projectId,
                                       const juce::String& accessToken) const
 {
     if (!file.existsAsFile())
-        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, file.getFileName() + " no longer exists." });
+        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, file.getFileName() + " no longer exists." });
 
     if (isJobCancelled())
         return ApiResult<Unit>::failure(ApiError::cancelled());
@@ -283,7 +284,7 @@ ApiResult<Unit> ApiClient::downloadBlob(const juce::String& projectId,
     {
         const auto storageUrl = resolveRedirectLocation(apiUrl, response.headers.getValue("Location", {}));
         if (storageUrl.isEmpty())
-            return ApiResult<Unit>::failure({ ApiError::Kind::invalidResponse, response.statusCode,
+            return ApiResult<Unit>::failure({ ApiError::Kind::invalidResponse,
                                               "The file download was redirected to an invalid location." });
 
         // Presigned URLs carry their own authorization; parsing them would re-encode the signature.
@@ -303,7 +304,7 @@ ApiResult<Unit> ApiClient::downloadBlob(const juce::String& projectId,
 
     juce::FileOutputStream output(destinationFile);
     if (!output.openedOk())
-        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, "Could not write " + destinationFile.getFullPathName() });
 
     output.setPosition(0);
     output.truncate();
@@ -319,12 +320,12 @@ ApiResult<Unit> ApiClient::downloadBlob(const juce::String& projectId,
             break;
 
         if (!output.write(block.get(), static_cast<size_t>(bytesRead)))
-            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+            return ApiResult<Unit>::failure({ ApiError::Kind::localFile, "Could not write " + destinationFile.getFullPathName() });
     }
 
     output.flush();
     if (!output.getStatus().wasOk())
-        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, 0, "Could not write " + destinationFile.getFullPathName() });
+        return ApiResult<Unit>::failure({ ApiError::Kind::localFile, "Could not write " + destinationFile.getFullPathName() });
 
     return ApiResult<Unit>::success({});
 }

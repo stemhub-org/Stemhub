@@ -10,7 +10,6 @@ namespace stemhub::log
 {
 void info(const juce::String& message);
 void warning(const juce::String& message);
-void error(const juce::String& message);
 
 // plugin.log in the user's log folder, installed as JUCE's logger. Every plugin instance holds it
 // through a juce::SharedResourcePointer<LogFile>, so one file serves them all and outlives the
