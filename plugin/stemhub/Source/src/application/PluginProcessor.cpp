@@ -1,83 +1,199 @@
 #include "application/PluginProcessor.hpp"
-
-namespace
-{
-std::unique_ptr<juce::FileLogger> globalFileLogger;
-juce::Logger* previousLogger = nullptr;
-int activeLoggerUsers = 0;
-
-void installStemhubFileLogger()
-{
-    if (++activeLoggerUsers > 1)
-        return;
-
-    previousLogger = juce::Logger::getCurrentLogger();
-
-    globalFileLogger.reset(juce::FileLogger::createDefaultAppLogger(
-        "Stemhub",
-        "plugin.log",
-        "Stemhub plugin log",
-        1024 * 1024));
-
-    if (globalFileLogger)
-        juce::Logger::setCurrentLogger(globalFileLogger.get());
-    else
-        juce::Logger::setCurrentLogger(previousLogger);
-}
-
-void uninstallStemhubFileLogger()
-{
-    if (activeLoggerUsers == 0)
-        return;
-
-    if (--activeLoggerUsers == 0)
-    {
-        juce::Logger::setCurrentLogger(previousLogger);
-        previousLogger = nullptr;
-        globalFileLogger.reset();
-    }
-}
-}
-
-StemhubAudioProcessor::StemhubAudioProcessor(std::unique_ptr<IProjectApi> apiClientProvider)
-#ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor(BusesProperties()
-                     #if ! JucePlugin_IsMidiEffect
-                      #if ! JucePlugin_IsSynth
-                       .withInput("Input", juce::AudioChannelSet::stereo(), true)
-                      #endif
-                       .withOutput("Output", juce::AudioChannelSet::stereo(), true)
-                     #endif
-                       )
-#endif
-{
-    installStemhubFileLogger();
-    juce::Logger::writeToLog("StemhubAudioProcessor constructor");
-
-    apiClient = std::move(apiClientProvider);
-    if (apiClient == nullptr)
-        apiClient = std::make_unique<ApiClient>();
-
-    versionControlService.setApiClient(*apiClient);
-}
+#include "application/PluginState.hpp"
+#include "ui/PluginEditor.hpp"
 
 StemhubAudioProcessor::StemhubAudioProcessor()
-    : StemhubAudioProcessor(std::make_unique<ApiClient>())
+    : AudioProcessor(BusesProperties()
+                         .withInput("Input", juce::AudioChannelSet::stereo(), true)
+                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
+      session(std::make_shared<ApiClient>(), SessionStorage::forCurrentUser())
 {
+    stemhub::log::info("Plugin instance created");
+    session.addChangeListener(this);
 }
 
 StemhubAudioProcessor::~StemhubAudioProcessor()
 {
-    juce::Logger::writeToLog("StemhubAudioProcessor destructor");
-    backgroundJobs.invalidateSession();
+    stemhub::log::info("Plugin instance closing");
     cancelPendingUpdate();
-    uninstallStemhubFileLogger();
+    session.removeChangeListener(this);
 }
 
-void StemhubAudioProcessor::enqueueBackgroundTask(std::function<BackgroundJobPayload()> taskFactory)
+const juce::String StemhubAudioProcessor::getName() const
 {
-    backgroundJobs.enqueue(std::move(taskFactory), [this]()
+    return JucePlugin_Name;
+}
+
+bool StemhubAudioProcessor::acceptsMidi() const
+{
+#if JucePlugin_WantsMidiInput
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool StemhubAudioProcessor::producesMidi() const
+{
+#if JucePlugin_ProducesMidiOutput
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool StemhubAudioProcessor::isMidiEffect() const
+{
+#if JucePlugin_IsMidiEffect
+    return true;
+#else
+    return false;
+#endif
+}
+
+double StemhubAudioProcessor::getTailLengthSeconds() const
+{
+    return 0.0;
+}
+
+int StemhubAudioProcessor::getNumPrograms()
+{
+    return 1;
+}
+
+int StemhubAudioProcessor::getCurrentProgram()
+{
+    return 0;
+}
+
+void StemhubAudioProcessor::setCurrentProgram(int index)
+{
+    juce::ignoreUnused(index);
+}
+
+const juce::String StemhubAudioProcessor::getProgramName(int index)
+{
+    juce::ignoreUnused(index);
+    return {};
+}
+
+void StemhubAudioProcessor::changeProgramName(int index, const juce::String& newName)
+{
+    juce::ignoreUnused(index, newName);
+}
+
+void StemhubAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    juce::ignoreUnused(sampleRate, samplesPerBlock);
+}
+
+void StemhubAudioProcessor::releaseResources()
+{
+}
+
+// A pass-through effect: mono or stereo, with as many outputs as inputs.
+bool StemhubAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+{
+    const auto output = layouts.getMainOutputChannelSet();
+    return (output == juce::AudioChannelSet::mono() || output == juce::AudioChannelSet::stereo())
+        && output == layouts.getMainInputChannelSet();
+}
+
+template <typename SampleType>
+static void clearExtraOutputChannels(juce::AudioProcessor& processor, juce::AudioBuffer<SampleType>& buffer)
+{
+    const auto totalNumInputChannels = processor.getTotalNumInputChannels();
+    const auto totalNumOutputChannels = processor.getTotalNumOutputChannels();
+
+    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
+        buffer.clear(i, 0, buffer.getNumSamples());
+}
+
+void StemhubAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    juce::ScopedNoDenormals noDenormals;
+    juce::ignoreUnused(midiMessages);
+    clearExtraOutputChannels(*this, buffer);
+}
+
+void StemhubAudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midiMessages)
+{
+    juce::ScopedNoDenormals noDenormals;
+    juce::ignoreUnused(midiMessages);
+    clearExtraOutputChannels(*this, buffer);
+}
+
+bool StemhubAudioProcessor::hasEditor() const
+{
+    return true;
+}
+
+juce::AudioProcessorEditor* StemhubAudioProcessor::createEditor()
+{
+    return new StemhubAudioProcessorEditor(*this, session);
+}
+
+void StemhubAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
+{
+    ProjectLink link;
     {
-        triggerAsyncUpdate();
-    });
+        const juce::SpinLock::ScopedLockType lock(linkLock);
+        link = linkForHost;
+    }
+
+    destData = stemhub::pluginstate::encode(link);
+}
+
+void StemhubAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
+{
+    auto link = stemhub::pluginstate::decode(data, static_cast<size_t>(juce::jmax(0, sizeInBytes)));
+    {
+        const juce::SpinLock::ScopedLockType lock(linkLock);
+        linkForHost = link;
+        linkFromHost = std::move(link);
+    }
+
+    triggerAsyncUpdate();
+}
+
+void StemhubAudioProcessor::handleAsyncUpdate()
+{
+    std::optional<ProjectLink> link;
+    {
+        const juce::SpinLock::ScopedLockType lock(linkLock);
+        std::swap(link, linkFromHost);
+    }
+
+    if (link.has_value())
+        session.restoreLink(std::move(*link));
+
+    // The session keeps a project that is already open, or takes a restore hand-off instead.
+    updateLinkForHost();
+}
+
+void StemhubAudioProcessor::changeListenerCallback(juce::ChangeBroadcaster* source)
+{
+    juce::ignoreUnused(source);
+    updateLinkForHost();
+}
+
+void StemhubAudioProcessor::updateLinkForHost()
+{
+    const auto& link = session.getState().link;
+    bool didChange = false;
+    {
+        const juce::SpinLock::ScopedLockType lock(linkLock);
+        didChange = linkForHost != link;
+        if (didChange)
+            linkForHost = link;
+    }
+
+    // Marks the DAW project as modified, so the new link is saved with it.
+    if (didChange)
+        updateHostDisplay(ChangeDetails().withNonParameterStateChanged(true));
+}
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new StemhubAudioProcessor();
 }
