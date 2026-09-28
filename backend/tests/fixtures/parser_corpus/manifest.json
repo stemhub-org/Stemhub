@@ -14,8 +14,9 @@
         },
         "mixer_snapshot": {
           "mixer_supported": true,
-          "insert_count": 126,
+          "insert_count": 127,
           "named_inserts_prefix": [
+            "Master",
             "Audio track",
             "Instrument track",
             "Colored",
@@ -38,7 +39,7 @@
         },
         "mixer_snapshot": {
           "mixer_supported": true,
-          "insert_count": 126,
+          "insert_count": 127,
           "named_inserts_prefix": []
         }
       }

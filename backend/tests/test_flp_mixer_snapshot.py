@@ -89,11 +89,6 @@ def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
                 ],
             ),
             FakeInsert(
-                iid=-1,
-                name="Current",
-                slots=[FakeSlot(index=0, name="Ignore me", plugin=FakePlugin())],
-            ),
-            FakeInsert(
                 iid=1,
                 name=None,
                 enabled=False,
@@ -111,7 +106,7 @@ def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
     assert snapshot == MixerProjectSnapshot(
         inserts=(
             MixerInsertSnapshot(
-                iid=1,
+                iid=2,
                 name=None,
                 enabled=False,
                 volume=10000,
@@ -128,7 +123,7 @@ def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
                 ),
             ),
             MixerInsertSnapshot(
-                iid=3,
+                iid=4,
                 name="Drums",
                 enabled=True,
                 volume=12800,
@@ -148,6 +143,49 @@ def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
     )
 
 
+def test_build_mixer_snapshot_keeps_master_insert_and_uses_fl_numbering() -> None:
+    # PyFLP yields Master as iid -1 and FL insert N as iid N - 1.
+    project = FakeProject(
+        mixer=[
+            FakeInsert(
+                iid=-1,
+                name="Master",
+                enabled=True,
+                volume=12800,
+                pan=0,
+                slots=[
+                    FakeSlot(index=0, name="Limiter", internal_name="Fruity Limiter", enabled=True, mix=12800, plugin=FakePlugin()),
+                ],
+            ),
+            FakeInsert(iid=0, name="Audio track"),
+            FakeInsert(iid=None, name="Unindexed"),
+        ]
+    )
+
+    snapshot = build_mixer_snapshot(project)
+
+    assert snapshot.inserts == (
+        MixerInsertSnapshot(
+            iid=0,
+            name="Master",
+            enabled=True,
+            volume=12800,
+            pan=0,
+            slots=(
+                MixerSlotSnapshot(
+                    index=0,
+                    name="Limiter",
+                    internal_name="Fruity Limiter",
+                    enabled=True,
+                    mix=12800,
+                    plugin_key="Fruity Limiter",
+                ),
+            ),
+        ),
+        MixerInsertSnapshot(iid=1, name="Audio track", enabled=None, volume=None, pan=None, slots=()),
+    )
+
+
 def test_load_fl_studio_mixer_snapshot_reads_blob_and_records_hash(tmp_path, monkeypatch) -> None:
     flp_bytes = b"fake flp bytes"
     flp_blob = tmp_path / "project.flp"
@@ -157,7 +195,7 @@ def test_load_fl_studio_mixer_snapshot_reads_blob_and_records_hash(tmp_path, mon
 
     def fake_parse(path: Path):
         parsed_paths.append(Path(path))
-        return FakeProject(mixer=[FakeInsert(iid=0, name="Master")])
+        return FakeProject(mixer=[FakeInsert(iid=-1, name="Master")])
 
     monkeypatch.setattr("stemhub.flp_mixer_snapshot.ensure_pyflp_available", lambda: None)
     monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=fake_parse))
