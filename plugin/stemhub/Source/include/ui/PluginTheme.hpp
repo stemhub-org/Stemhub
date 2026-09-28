@@ -2,6 +2,8 @@
 
 #include <JuceHeader.h>
 
+#include "domain/Status.hpp"
+
 // StemHub identity system 2026: Ink / Paper / Blue, Syne display type over a
 // Plus Jakarta Sans workhorse, hard edges, tracked uppercase meta labels and
 // block "pattern bars" lifted from the step-sequencer motif.
@@ -13,9 +15,11 @@ enum class MessageStatus
     loading,
     success,
     warning,
-    error,
-    disabled
+    error
 };
+
+// How a status of each severity is painted.
+MessageStatus messageStatusFor(Status::Severity severity);
 
 // Visual role of a TextButton, read back by StemhubPluginLookAndFeel when painting.
 enum class ButtonVariant

@@ -7,8 +7,15 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 - `StemhubAudioProcessor` (`plugin/stemhub/Source/src/application/PluginProcessor.cpp`)
   - What the host sees: audio passes through untouched. Owns the session and creates the editor.
 - `StemhubAudioProcessorEditor` (`plugin/stemhub/Source/src/ui/PluginEditor.cpp`)
-  - Owns the views. Shows the session's state and turns clicks and shortcuts into its intents
-    (`requestSignIn`, `requestOpenProject`, `requestPushVersion`, etc.).
+  - Owns the views, and turns clicks into the session's intents (`requestSignIn`,
+    `requestOpenProject`, `requestPushVersion`, etc.). Keys the plugin doesn't use, Cmd/Ctrl+S
+    among them, go to the DAW.
+- `SessionPresenter` (`plugin/stemhub/Source/src/ui/SessionPresenter.cpp`)
+  - Works out what each screen shows from `SessionState`: plain view models, without widgets, so
+    the tests check them. `UiFormat` writes times, sizes and titles the same way everywhere.
+  - The views (`LoginView`, `ProjectSelectionView` with its tiles, `DashboardView` with the
+    `VersionTimeline` and the `VersionDetailCard`) each take their model and change only what
+    differs from what they show.
 - `StemhubSession` (`plugin/stemhub/Source/src/application/StemhubSession.cpp`)
   - The single owner of `SessionState`, used only on the message thread.
   - Starts one background job at a time, applies its result, and tells listeners through its
@@ -20,32 +27,38 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
   - One typed call per endpoint: auth, user, projects, branches, versions, version manifest,
     blob check/upload/download, version creation from a manifest. The HTTP plumbing is private;
     JSON parsing lives in `ApiJson.cpp`. Every failure is an `ApiError` with a kind (network,
-    unauthorized, not found, server, ...).
+    unauthorized, not found, server, ...). `SignedInApi` is the same API with the signed-in
+    user's token on every call; each signed-in job gets one.
 - `SnapshotSync` (`plugin/stemhub/Source/src/application/SnapshotSync.cpp`)
-  - Stateless content-addressed push (upload what the server lacks, then create the version)
-    and restore (download into a new folder, verify every SHA-256).
+  - Stateless content-addressed push (hash the project's files, upload what the server lacks,
+    then create the version) and restore (download into a hidden folder, verify every SHA-256,
+    then rename it to its place).
 - `UseCases` (`plugin/stemhub/Source/src/application/UseCases.cpp`)
   - The background work of each action, as functions from an input built on the message
     thread to a result the session applies.
 - `SnapshotFiles` (`plugin/stemhub/Source/src/application/SnapshotFiles.cpp`)
   - The one rule for which files a save takes: the project file, then the audio and MIDI files
     in its folder and subfolders, without hidden files, `Backup` folders, and copies the plugin
-    restored there. The push and the dashboard's "12 files · 340 MB" count both use it; the
-    editor counts in the background.
-- `SnapshotBundler` (`plugin/stemhub/Source/src/application/SnapshotBundler.cpp`)
-  - Hashes those files and builds the version manifest; validates manifests before a restore
+    restored there (folders holding a `.stemhub-restored` marker). The push and the dashboard's
+    "12 files · 340 MB" count both use it; the editor counts in the background.
+  - Hashes files, reading them in large blocks and stopping when its job is asked to.
+- `stemhub::manifest` (`plugin/stemhub/Source/src/domain/Manifest.cpp`)
+  - The version manifest format in one place: written for a save, and validated before a restore
     (see `docs/content-addressed-storage.md`).
+- `WorkingCopyIndex` (`plugin/stemhub/Source/src/application/WorkingCopyIndex.cpp`)
+  - Which version each local project file holds: written after every save and restore, read when
+    a project opens (see section 11).
 
 ## 2) Data Objects Moving Through The Flow
 
 - `SessionState` holds all of it:
-- Auth/session: `authState`, `uiState`, `operationState`, `accessToken`, `currentUser`
+- Auth/session: `currentUser` and `accessToken` (both set while signed in), `uiState` (the project grid or the dashboard; signed out, the login screen shows), `operationState` (the one job running: signing in, loading, saving, pulling or restoring)
 - `link`: the StemHub project, branch and working file of the DAW project this instance lives in
 - Messages: one `Status` (severity + text) per screen: `authStatus`, `projectsStatus`, `sessionStatus`
 - Project selection: `projects`, `selectedProject`, `branches`, `selectedBranchId`
-- Versioning: `versionHistory`, `selectedVersionId`, `openedVersionId` (the version in the DAW)
-- Filesystem: `pendingProjectFile`, `selectedProjectFile`, working-copy baseline (file, version id, size and modification time recorded by the last save or restore)
-- Background payloads: `AuthRequestResult`, `ProjectActivationJobResult`, `BranchHistoryJobResult`, `PushVersionJobResult`, `RestoreVersionJobResult`
+- Versioning: `versionHistory`, `selectedVersionId`, `openedVersionId` (the version in the DAW), `lastSavedVersionId` (set only when a save creates a version: the editor clears the save note then, and keeps it after a failed or cancelled save)
+- Filesystem: `chosenProjectFile` (picked on the project grid, for the next project opened or created there), `workingFile` (the file the open project saves from and its link names; it may be missing, on a drive that isn't plugged in, and stays until the user picks another), working-copy baseline (file, version id, size and modification time recorded by the last save or restore, read back from the working-copy record when a project opens)
+- Background payloads: `AuthRequestResult`, `ProjectActivationJobResult`, `BranchHistoryJobResult`, `PushVersionJobResult`, `RestoreVersionJobResult`. Each is a `JobOutcome` (an error message, a status for the user, and whether the backend refused the token) plus what the job produced.
 
 ## 3) End-To-End Lifecycle
 
@@ -55,12 +68,19 @@ This document describes the end-to-end runtime flow in the JUCE plugin, from use
 2. Plugin editor is created: the saved token signs the user in, or the user signs in from the
    Login view.
 3. The session fetches user + projects. The linked project opens (its branch and working file);
-   without a link, the UI moves to Project Selection.
-4. User opens an existing project or creates one from a local DAW file.
-5. The session fetches branches and initial version history; UI moves to Dashboard. When the
-   project is opened from the grid and this instance has no local copy (or an unchanged copy of
-   an older version), the latest version is restored into a new folder and opened in the DAW as
-   a project of its own. Unsaved local changes are never replaced.
+   without a link, the UI moves to Project Selection. An instance still without a link takes a
+   hand-off meant for any project only now, since hosts may open the window before handing back
+   the saved link.
+4. User opens an existing project or creates one from a local DAW file. A file chosen on the
+   grid goes with the next project opened or created there; otherwise a project keeps its own
+   file and branch only if it is the one open here or the linked one, and opens without a file
+   otherwise. A project created before a later step fails is still added to the grid.
+5. The session fetches branches and initial version history; UI moves to Dashboard. The
+   working-copy record says which version the local file holds, if this machine saved or
+   restored it for this project and branch. When the project is opened from the grid and this
+   instance has no local copy (or an unchanged copy of an older version), the latest version is
+   restored into a new folder under `Documents/StemHub` and opened in the DAW as a project of its
+   own. Unsaved local changes are never replaced.
 6. User pushes a version:
    - files are hashed and only the ones the server lacks are uploaded,
    - the version is created from the manifest,
@@ -77,29 +97,36 @@ All major actions follow the same async pattern:
 
 1. UI calls a `StemhubSession::request*` intent. While another job runs it is ignored (sign-out
    excepted), and the views disable the controls that would send it.
-2. The session sets the operation state and a progress `Status`, and starts a new request epoch.
-3. It enqueues the use case with an input built on the message thread: token, ids, files.
-4. A worker runs the use case against `IProjectApi` and returns a typed result tagged with the
-   epoch; `BackgroundJobCoordinator` queues it and calls `triggerAsyncUpdate()`.
+2. `start()` sets the operation state and a progress `Status` on the operation's screen, and
+   starts a new request epoch.
+3. It enqueues the use case with an input built on the message thread (ids, files). Signed-in
+   jobs get a `SignedInApi`, the API with the token the session had when the job started.
+4. A worker runs the use case and returns its typed result; the coordinator queues it with the
+   epoch and calls `triggerAsyncUpdate()`.
 5. `handleAsyncUpdate()` runs on the message thread and takes the queued results.
 6. A result is applied only if its epoch is still the latest. Signing out starts a new epoch, so
    whatever was running before is dropped when it finishes.
-7. The session updates `SessionState` and calls `sendChangeMessage()`.
-8. The editor's `refreshSessionUi()` re-renders the active view.
+7. `finish()` applies the one rule every job ends with: the session is idle again; a refused
+   token signs the user out; a failure (or a cancel) shows on the operation's screen. Otherwise
+   the session applies the rest of the result.
+8. The session calls `sendChangeMessage()`. The editor's `refreshSessionUi()` gets the visible
+   screen's model from `SessionPresenter`, and that view updates what changed.
 
 While a job runs it can post progress reports ("Uploading 12 of 40 new files...") through the
 same queue, tagged with its epoch; they replace the progress status until the result arrives.
 
-**Stopping jobs.** Long work checks `isJobCancelled()` between steps: between two files it hashes,
-uploads or downloads, during an upload (JUCE's progress callback) and between blocks of a download.
-It is true once the thread pool asks the job to stop, which happens when:
+**Stopping jobs.** Long work checks `isJobCancelled()` between steps: while it walks the project
+folder, between two files it hashes, uploads or downloads, during an upload (JUCE's progress
+callback) and between blocks of a download. It is true once the thread pool asks the job to stop,
+which happens when:
 
-- the user presses Cancel during a save or restore (`cancelRequest()`): the job ends with
-  "Save cancelled." or "Restore cancelled.", unless it had already finished, and a cancelled
+- the user presses Cancel (`cancelRequest()`): the job ends with "Save cancelled.",
+  "Restore cancelled." or "Sign-in cancelled.", unless it had already finished, and a cancelled
   restore removes its folder;
 - the user signs out: the old session's jobs stop, and their results are dropped anyway;
 - the plugin closes: `shutdown()` asks every job to stop and waits for them, which now takes
-  about as long as the slowest request in flight rather than the whole transfer.
+  about as long as the slowest request in flight rather than the whole transfer. Closing the
+  plugin window does the same for the dashboard's file count.
 
 ## 5) Connect / Sign-In Flow
 
@@ -162,7 +189,7 @@ sequenceDiagram
 - No other save, restore or project load is running.
 - Selected project exists.
 - Selected branch exists.
-- Effective project file exists on disk and changed since the last save or restore.
+- The working file exists on disk and changed since the last save or restore.
 
 ### Data path
 
@@ -170,18 +197,20 @@ sequenceDiagram
    "Save from plugin" and shown as "Untitled snapshot"; the DAW name comes from the file's
    extension.
 2. The session picks the parent version (the working copy's version, else the branch head) and
-   enqueues the job with everything it needs.
-3. `SnapshotBundler::buildManifest(...)` hashes the files `SnapshotFiles::collect` lists; paths
-   are stored relative to the project file's folder.
-4. `stemhub::snapshots::pushSnapshot(...)` calls the backend:
+   enqueues the job with everything it needs. The working copy's version survives a restart of
+   the DAW through the working-copy record, so a collaborator's newer version is never taken
+   for the parent of a file that doesn't contain it.
+3. `stemhub::snapshots::pushSnapshot(...)` hashes the files `SnapshotFiles::collect` lists (paths
+   relative to the project file's folder, checked against the backend limits first), then calls
+   the backend:
    - `POST /projects/{projectId}/blobs/check-missing`
    - `PUT /projects/{projectId}/blobs/{sha256}` for each missing file
    - `POST /branches/{branchId}/versions/from-manifest`
-5. The job fetches `GET /branches/{branchId}/versions/`; the session selects the new version
+4. The job fetches `GET /branches/{branchId}/versions/`; the session selects the new version
    and makes it the parent of the next save.
 
 The dashboard shows "Preparing 3 of 40 files...", then "Uploading 2 of 5 new files...", with a
-Cancel link. A cancel before step 4 creates nothing; once the version is created, the save
+Cancel link. A cancel before the version is created creates nothing; once it is, the save
 stands.
 
 ### Sequence
@@ -192,7 +221,6 @@ sequenceDiagram
     participant E as PluginEditor
     participant P as StemhubSession
     participant W as Push job
-    participant S as SnapshotBundler
     participant V as SnapshotSync
     participant A as ApiClient
 
@@ -200,9 +228,8 @@ sequenceDiagram
     E->>P: requestPushVersion
     P->>P: Check the file changed, set committing, pick the parent
     P->>W: Enqueue the push with its input
-    W->>S: Hash files and build manifest
-    S-->>W: Return manifest and file entries
     W->>V: Push version request
+    V->>V: Collect and hash files, build the manifest
     V->>A: POST blobs check-missing
     V->>A: PUT each missing blob
     V->>A: POST branch versions from-manifest
@@ -260,10 +287,10 @@ sequenceDiagram
 
 - UI layer does not call backend directly; it only talks to the session.
 - The session does not perform HTTP directly; its jobs call the use cases, which use `IProjectApi`.
-- The session and everything under it build without JUCE's GUI and audio modules: the tests
-  link only `juce_events` and `juce_cryptography`.
+- The session and everything under it, and the presenter above it, build without JUCE's GUI and
+  audio modules: the tests link only `juce_events` and `juce_cryptography`.
 - Network layer (`ApiClient`) is replaceable via `IProjectApi` injection (the tests use a fake).
-- Versioning logic (`SnapshotSync`, `SnapshotBundler`) is isolated from view logic and from JUCE widgets.
+- Versioning logic (`SnapshotSync`, `SnapshotFiles`, `stemhub::manifest`) is isolated from view logic and from JUCE widgets.
 - Background execution is centralized (`BackgroundJobCoordinator`) and shared by all request types.
 
 ## 11) What Is Saved Where
@@ -273,12 +300,28 @@ sequenceDiagram
   a copy the host can read from any thread and marks the DAW project as modified when the link
   changes. The version the file holds is never saved: a restored copy carries the state saved
   with an older version.
-- **`<app data>/Stemhub/credentials.json`**: the access token, shared by every instance. Its
-  folder is 0700 and the file 0600 on macOS and Linux. Signing out or a refused token deletes it.
-- **`<app data>/Stemhub/pending-restore.json`**: the restore hand-off. The instance that restores
-  a version writes it (project, branch, restored file, its version, size and modification time)
-  just before asking the DAW to open the copy. The instance the DAW loads with that project
-  takes it, once; an instance without a link takes any. Nobody taking it within 10 minutes
-  means the DAW didn't open the copy, and it is dropped.
-- **`<app data>/Stemhub/working-copy/<project>/<branch>/`**: latest versions restored when a
-  project is opened without a local copy.
+The plugin's own files are in its app data folder (`stemhub::folders::appData()`):
+`~/Library/Application Support/Stemhub` on macOS, `%LOCALAPPDATA%\Stemhub` on Windows (not the
+roaming profile: these files name paths on this machine), `~/.config/Stemhub` on Linux.
+
+- **`credentials.json`**: the access token, shared by every instance. Its folder is 0700 and the
+  file 0600 on macOS and Linux. Signing out or a refused token deletes it.
+- **`pending-restore.json`**: the restore hand-off. The instance that restores a version writes
+  it (project, branch, restored file) just before asking the DAW to open the copy. The instance
+  the DAW loads with that project takes it, once; an instance without a link takes any. Nobody
+  taking it within 10 minutes means the DAW didn't open the copy, and it is dropped.
+- **`working-copies.json`**: the working-copy record. For each project file this machine saved
+  or restored: its project, branch and version, with its size and modification time then. Every
+  instance writes it after a save or a restore (under a lock shared by all processes) and reads
+  it when a project opens, so after a restart a save still builds on the version its file holds,
+  and an unchanged file is still not saved again. It keeps the 1000 files recorded last; a file
+  that is missing stays recorded, since it may be on a drive that isn't plugged in.
+- **`config.json`**: optional settings, such as the API base URL.
+
+Versions restored when a project is opened without a local copy go to
+**`Documents/StemHub/<project>/<workspace>/<name>-<version>/`**, where the user can find and keep
+them. A restored folder holds a `.stemhub-restored` marker.
+
+Earlier versions used `~/Library/Stemhub` on macOS and `%APPDATA%\Stemhub` on Windows. On first
+start the plugin deletes the token and the hand-off left there (so users sign in once), moves
+`config.json`, and leaves projects restored there where they are.

@@ -20,11 +20,6 @@ void warning(const juce::String& message)
     write("WARNING", message);
 }
 
-void error(const juce::String& message)
-{
-    write("ERROR", message);
-}
-
 LogFile::LogFile()
     : fileLogger(juce::FileLogger::createDefaultAppLogger("Stemhub", "plugin.log", "Stemhub plugin log", 1024 * 1024)),
       previousLogger(juce::Logger::getCurrentLogger())

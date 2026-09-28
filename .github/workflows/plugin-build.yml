@@ -89,15 +89,16 @@ jobs:
         run: cmake --build build/plugin --config Release --parallel 4 --target ${{ matrix.plugin_targets }} stemhub_plugin_tests
 
       - name: Run headless plugin tests
+        # Several runs: the tests exercise thread interleavings, so one pass proves little.
+        run: ctest --test-dir build/plugin -C Release --output-on-failure --repeat until-fail:10
+
+      - name: Build and run the plugin tests in Debug
+        # Debug adds JUCE's leak detector and its debug-only checks.
         run: |
-          test_bin="$(find build/plugin/stemhub_plugin_tests_artefacts -type f \( -name 'stemhub_plugin_tests' -o -name 'stemhub_plugin_tests.exe' \) -print -quit)"
-          test -n "$test_bin"
-          echo "Running plugin tests: $test_bin"
-          # Several runs: the tests exercise thread interleavings, so one pass proves little.
-          for run in $(seq 1 10); do
-            "$test_bin" > test-run.log 2>&1 || { cat test-run.log; echo "Run $run failed"; exit 1; }
-          done
-          tail -n 5 test-run.log
+          cmake -S plugin/stemhub -B build/plugin-debug ${{ matrix.cmake_generator }} \
+            -DCMAKE_BUILD_TYPE=Debug -DCOPY_PLUGIN=OFF -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
+          cmake --build build/plugin-debug --config Debug --parallel 4 --target stemhub_plugin_tests
+          ctest --test-dir build/plugin-debug -C Debug --output-on-failure --repeat until-fail:10
 
       - name: Verify plugin artifacts exist
         run: |

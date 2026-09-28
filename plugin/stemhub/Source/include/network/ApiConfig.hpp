@@ -10,7 +10,7 @@ namespace stemhub::api
 //   3. the URL the plugin was built with (CMake option STEMHUB_API_BASE_URL).
 juce::String resolveBaseUrl();
 
-// <app data>/Stemhub/config.json
+// config.json in the plugin's app data folder (stemhub::folders::appData()).
 juce::File getConfigFile();
 
 // The rules of resolveBaseUrl() without reading the environment or the disk.
