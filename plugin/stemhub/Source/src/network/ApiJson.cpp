@@ -1,28 +1,11 @@
+#include "domain/Manifest.hpp"
 #include "network/ApiJson.hpp"
 
 namespace
 {
 ApiError invalidResponse(const juce::String& message)
 {
-    return { ApiError::Kind::invalidResponse, 200, message };
-}
-
-juce::int64 sizeOf(const juce::var& blobRef)
-{
-    return juce::jmax<juce::int64>(0, static_cast<juce::int64>(blobRef.getProperty("size_bytes", 0)));
-}
-
-juce::int64 sumManifestSizes(const juce::var& manifest)
-{
-    if (!manifest.isObject())
-        return 0;
-
-    auto total = sizeOf(manifest.getProperty("project_file", {}));
-    if (const auto* tracks = manifest.getProperty("tracks", {}).getArray())
-        for (const auto& track : *tracks)
-            total += sizeOf(track);
-
-    return total;
+    return { ApiError::Kind::invalidResponse, message };
 }
 
 template <typename Item, typename Parser>
@@ -127,7 +110,7 @@ ApiResult<VersionSummary> parseVersionSummary(const juce::var& value)
     summary.commitMessage = value.getProperty("commit_message", {}).toString();
     summary.sourceDaw = value.getProperty("source_daw", {}).toString();
     summary.sourceProjectFilename = value.getProperty("source_project_filename", {}).toString();
-    summary.totalSizeBytes = sumManifestSizes(value.getProperty("manifest_json", {}));
+    summary.totalSizeBytes = stemhub::manifest::totalSize(value.getProperty("manifest_json", {}));
 
     if (!summary.isValid())
         return ApiResult<VersionSummary>::failure(invalidResponse("Version response is missing required fields."));

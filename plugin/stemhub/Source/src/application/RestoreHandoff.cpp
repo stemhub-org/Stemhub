@@ -20,13 +20,10 @@ std::optional<RestoreHandoff> parse(const juce::var& json)
     if (!juce::File::isAbsolutePath(restoredFilePath))
         return {};
 
-    handoff.copy = { juce::File(restoredFilePath),
-                     json.getProperty("version_id", {}).toString(),
-                     static_cast<juce::int64>(json.getProperty("size_bytes", -1)),
-                     static_cast<juce::int64>(json.getProperty("modified_ms", -1)) };
+    handoff.file = juce::File(restoredFilePath);
     handoff.createdAt = juce::Time(static_cast<juce::int64>(json.getProperty("created_ms", 0)));
 
-    if (handoff.projectId.isEmpty() || !handoff.copy.isSet())
+    if (handoff.projectId.isEmpty())
         return {};
 
     return handoff;
@@ -38,10 +35,7 @@ void write(const juce::File& location, const RestoreHandoff& handoff)
     auto* object = new juce::DynamicObject();
     object->setProperty("project_id", handoff.projectId);
     object->setProperty("branch_id", handoff.branchId);
-    object->setProperty("version_id", handoff.copy.versionId);
-    object->setProperty("restored_file", handoff.copy.file.getFullPathName());
-    object->setProperty("size_bytes", handoff.copy.sizeBytes);
-    object->setProperty("modified_ms", handoff.copy.modTimeMs);
+    object->setProperty("restored_file", handoff.file.getFullPathName());
     object->setProperty("created_ms", handoff.createdAt.toMilliseconds());
 
     if (location.getParentDirectory().createDirectory().wasOk())
@@ -58,7 +52,7 @@ std::optional<RestoreHandoff> take(const juce::File& location, const juce::Strin
         && handoff->createdAt <= now + kClockTolerance
         && now - handoff->createdAt < kMaxAge;
 
-    if (!isRecent || !handoff->copy.file.existsAsFile())
+    if (!isRecent || !handoff->file.existsAsFile())
     {
         location.deleteFile();
         return {};
