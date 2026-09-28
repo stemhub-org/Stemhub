@@ -6,10 +6,11 @@
 
 #include <JuceHeader.h>
 
-#include "application/VersionControlService.hpp"
-#include "network/ApiUtils.hpp"
+#include "domain/Version.hpp"
+#include "domain/Project.hpp"
 
-namespace stemhub::processorhelpers
+// Small pure helpers shared by the session and its use cases.
+namespace stemhub::sessionhelpers
 {
 template <typename ResultType>
 bool hasError(const ResultType& result)
@@ -63,16 +64,6 @@ inline juce::String extractVersionPrefixFromPathPart(const juce::String& value)
     return candidate;
 }
 
-inline bool hasVersionHintInProjectPath(const juce::File& projectFile)
-{
-    if (!projectFile.existsAsFile())
-        return false;
-
-    const auto fileHint = extractVersionPrefixFromPathPart(projectFile.getFileNameWithoutExtension());
-    const auto parentHint = extractVersionPrefixFromPathPart(projectFile.getParentDirectory().getFileName());
-    return fileHint.isNotEmpty() || parentHint.isNotEmpty();
-}
-
 inline juce::String resolveVersionIdFromProjectPath(const juce::File& projectFile,
                                                     const std::vector<VersionSummary>& versions)
 {
@@ -108,16 +99,5 @@ inline juce::String resolveVersionIdFromProjectPath(const juce::File& projectFil
 inline bool hasProjectAndBranchSelected(const std::optional<Project>& project, const juce::String& branchId)
 {
     return project.has_value() && branchId.isNotEmpty();
-}
-
-inline ProjectVersionContext makeProjectVersionContext(const std::optional<Project>& project,
-                                                       const juce::String& branchId,
-                                                       const std::vector<VersionSummary>& versions)
-{
-    ProjectVersionContext context;
-    context.projectId = project ? project->id : juce::String();
-    context.branchId = branchId;
-    context.lastVersionId = versions.empty() ? juce::String() : versions.front().id;
-    return context;
 }
 }

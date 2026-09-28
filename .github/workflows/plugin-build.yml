@@ -3,46 +3,60 @@ name: plugin-build
 on:
   pull_request:
     paths:
-      - "plugin/stemhub/Source/**"
-      - "plugin/stemhub/tests/**"
-      - "plugin/stemhub/Resources/**"
-      - "plugin/stemhub/CMakeLists.txt"
+      - "plugin/stemhub/**"
       - ".github/workflows/plugin-build.yml"
   push:
     branches:
       - main
     paths:
-      - "plugin/stemhub/Source/**"
-      - "plugin/stemhub/tests/**"
-      - "plugin/stemhub/Resources/**"
-      - "plugin/stemhub/CMakeLists.txt"
+      - "plugin/stemhub/**"
       - ".github/workflows/plugin-build.yml"
   workflow_dispatch:
 
+env:
+  # Pinned so every platform and every run builds against the same JUCE.
+  JUCE_VERSION: "9.0.2"
+
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
+  build:
+    name: build-${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+            cmake_generator: "-G Ninja"
+            plugin_targets: stemhub_VST3 stemhub_Standalone
+          - name: macos
+            os: macos-latest
+            cmake_generator: ""
+            plugin_targets: stemhub_VST3 stemhub_AU stemhub_Standalone
+          - name: windows
+            os: windows-latest
+            cmake_generator: ""
+            plugin_targets: stemhub_VST3 stemhub_Standalone
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Fetch JUCE
-        run: git clone --depth 1 https://github.com/juce-framework/JUCE.git build/juce
+      - name: Fetch JUCE ${{ env.JUCE_VERSION }}
+        run: git clone --depth 1 --branch "$JUCE_VERSION" https://github.com/juce-framework/JUCE.git build/juce
 
       - name: Ensure Projucer-generated files are not tracked
         run: |
-          test ! -e plugin/stemhub/Builds/LinuxMakefile/Makefile
-          test ! -e plugin/stemhub/JuceLibraryCode/JuceHeader.h
+          test ! -e plugin/stemhub/Builds
+          test ! -e plugin/stemhub/JuceLibraryCode
 
       - name: Install JUCE Linux dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
-            WEBKIT_PACKAGE="libwebkit2gtk-4.1-dev"
-          else
-            WEBKIT_PACKAGE="libwebkit2gtk-4.0-dev"
-          fi
           sudo apt-get install -y \
             cmake \
             ninja-build \
@@ -53,33 +67,42 @@ jobs:
             ladspa-sdk \
             libcurl4-openssl-dev \
             libfreetype6-dev \
+            libfontconfig1-dev \
             libx11-dev \
             libxcomposite-dev \
             libxcursor-dev \
             libxext-dev \
+            libxi-dev \
             libxinerama-dev \
             libxrandr-dev \
             libxrender-dev \
-            libgtk-3-dev \
-            "$WEBKIT_PACKAGE" \
             libglu1-mesa-dev \
             mesa-common-dev
 
       - name: Configure CMake
-        run: cmake -S plugin/stemhub -B build/plugin-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCOPY_PLUGIN=OFF -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
+        run: >
+          cmake -S plugin/stemhub -B build/plugin ${{ matrix.cmake_generator }}
+          -DCMAKE_BUILD_TYPE=Release -DCOPY_PLUGIN=OFF -DJUCE_DIR="$GITHUB_WORKSPACE/build/juce"
 
       - name: Build plugin and headless plugin tests
-        run: cmake --build build/plugin-linux --target stemhub_VST3 stemhub_plugin_tests --parallel
+        # An explicit job count: without one, make (macOS) starts every compile at once.
+        run: cmake --build build/plugin --config Release --parallel 4 --target ${{ matrix.plugin_targets }} stemhub_plugin_tests
 
       - name: Run headless plugin tests
         run: |
-          test_bin="$(find build/plugin-linux/stemhub_plugin_tests_artefacts -type f -name 'stemhub_plugin_tests' -print -quit)"
+          test_bin="$(find build/plugin/stemhub_plugin_tests_artefacts -type f \( -name 'stemhub_plugin_tests' -o -name 'stemhub_plugin_tests.exe' \) -print -quit)"
           test -n "$test_bin"
           echo "Running plugin tests: $test_bin"
-          "$test_bin"
+          # Several runs: the tests exercise thread interleavings, so one pass proves little.
+          for run in $(seq 1 10); do
+            "$test_bin" > test-run.log 2>&1 || { cat test-run.log; echo "Run $run failed"; exit 1; }
+          done
+          tail -n 5 test-run.log
 
-      - name: Verify VST3 artifact exists
+      - name: Verify plugin artifacts exist
         run: |
-          artifact="$(find build/plugin-linux/stemhub_artefacts/Release/VST3 -maxdepth 1 -type d -name '*.vst3' -print -quit)"
-          test -n "$artifact"
-          echo "Found VST3 artifact at: $artifact"
+          find build/plugin/stemhub_artefacts -maxdepth 3 -name '*.vst3' -print | grep -q .
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            find build/plugin/stemhub_artefacts -maxdepth 3 -name '*.component' -print | grep -q .
+          fi
+          find build/plugin/stemhub_artefacts -maxdepth 3 -path '*/Standalone/*' -print | grep -q .
