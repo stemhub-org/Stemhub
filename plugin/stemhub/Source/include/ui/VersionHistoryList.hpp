@@ -7,10 +7,10 @@
 
 #include "ui/ViewModels.hpp"
 
-// A workspace's history as a timeline, newest first: one row per version, on a rule with a node
-// for each. A click selects a row; so do Return and Space once it has the keyboard focus, and the
-// arrow keys move to the next row. Scrolls when it outgrows its bounds.
-class VersionTimeline : public juce::Component
+// A branch's history, newest first: one row per version, on a rule with a node for each. A click
+// selects a row; so do Return and Space once it has the keyboard focus, and the arrow keys move to
+// the next row. Scrolls when it outgrows its bounds.
+class VersionHistoryList : public juce::Component
 {
 public:
     // The rule sits in a gutter left of every row; the dashboard lines its working-copy row up
@@ -19,8 +19,8 @@ public:
     static constexpr int kRuleX = 9;
     static constexpr int kRowHeight = 50;
 
-    VersionTimeline();
-    ~VersionTimeline() override;
+    VersionHistoryList();
+    ~VersionHistoryList() override;
 
     // Rows are rebuilt only when the versions change; a new selection is shown in place. A
     // selection the list doesn't have falls back to the newest version.

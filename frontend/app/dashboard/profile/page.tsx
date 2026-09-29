@@ -85,7 +85,7 @@ export default function ProfilePage() {
                 });
 
                 if (!userResponse.ok) {
-                    throw new Error("Session expirée");
+                    throw new Error("Sign-in expired");
                 }
 
                 const data = await userResponse.json();
@@ -175,7 +175,7 @@ export default function ProfilePage() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.detail || "Erreur lors de la mise à jour");
+                throw new Error(errorData.detail || "Failed to update profile");
             }
 
             const updatedUser = await response.json();
@@ -204,7 +204,7 @@ export default function ProfilePage() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.detail || "Erreur lors de la mise à jour des styles de production");
+                throw new Error(errorData.detail || "Failed to update production styles");
             }
 
             const updatedUser = await response.json();

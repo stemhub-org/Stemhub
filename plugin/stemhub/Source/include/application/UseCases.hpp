@@ -5,7 +5,7 @@
 
 #include <JuceHeader.h>
 
-#include "application/SnapshotSync.hpp"
+#include "application/VersionTransfer.hpp"
 #include "application/WorkingCopyIndex.hpp"
 #include "domain/Branch.hpp"
 #include "domain/Project.hpp"
@@ -22,7 +22,7 @@
 // work gets the API with the user's token (SignedInApi).
 namespace stemhub::usecases
 {
-using ReportProgress = stemhub::snapshots::ReportProgress;
+using ReportProgress = stemhub::versiontransfer::ReportProgress;
 
 // How a job ended. Each job's result adds what it produced.
 struct JobOutcome
@@ -31,8 +31,8 @@ struct JobOutcome
     juce::String errorMessage;
     // What to tell the user when it didn't fail: a success, or a warning about a later step.
     Status status;
-    // The backend refused the token (HTTP 401): the session is over and the user has to sign in
-    // again.
+    // The backend refused the token (HTTP 401): the sign-in session is over and the user has to
+    // sign in again.
     bool sessionExpired { false };
 
     [[nodiscard]] bool failed() const noexcept { return errorMessage.isNotEmpty(); }
@@ -45,7 +45,7 @@ struct AuthRequestResult : JobOutcome
     std::vector<Project> projects;
     juce::String token;
     // Signed in with the saved token, as when the plugin window opens.
-    bool fromSavedSession { false };
+    bool fromSavedToken { false };
 };
 
 struct SignInInput
@@ -56,13 +56,13 @@ struct SignInInput
 
 AuthRequestResult signIn(const IProjectApi& api, const SignInInput& input);
 
-struct RestoreSessionInput
+struct ResumeSignInInput
 {
     juce::String token;
 };
 
-// Only a refused token counts as an expired session: offline, the token is worth keeping.
-AuthRequestResult restoreSession(const IProjectApi& api, const RestoreSessionInput& input);
+// Only a refused token counts as an expired sign-in session: offline, the token is worth keeping.
+AuthRequestResult resumeSignIn(const IProjectApi& api, const ResumeSignInInput& input);
 
 struct ProjectActivationJobResult : JobOutcome
 {
@@ -74,6 +74,7 @@ struct ProjectActivationJobResult : JobOutcome
     std::vector<VersionSummary> versions;
     juce::String branchId;
     juce::String selectedVersionId;
+    // The working copy the project saves from.
     juce::File projectFile;
     // What projectFile holds, when known.
     WorkingCopyBaseline workingCopy;
@@ -87,15 +88,16 @@ struct OpenProjectInput
     juce::String projectId;
     // Opened when the project still has it; otherwise "main", or the first branch.
     juce::String preferredBranchId;
-    juce::File localProjectFile;
+    // The working copy to save from; it may be missing.
+    juce::File workingFile;
     std::vector<Project> availableProjects;
     // An explicit open from the project grid: restore the latest version when doing so
     // replaces nothing (see planLatestVersion).
     bool restoreLatestIfSafe { false };
-    // Says which version localProjectFile holds, when this machine saved or restored it for
-    // this project and branch. A restored copy is recorded there too.
+    // Says which version workingFile holds, when this machine saved or restored it for this
+    // project and branch. A restored copy is recorded there too.
     WorkingCopyIndex workingCopies;
-    // Where the latest version is restored when there is no local copy.
+    // Where the latest version is restored when there is no working copy.
     juce::File restoredProjectsFolder;
 };
 
@@ -105,22 +107,22 @@ ProjectActivationJobResult openProject(const SignedInApi& api, const OpenProject
 // What opening a project from the grid does about its latest version.
 enum class LatestVersionPlan
 {
-    keepLocalFile,    // nothing is recorded about the local file, so it stays as it is
-    keepLocalChanges, // the local file changed since it was saved or restored: never replaced
-    alreadyLatest,    // the local file is the latest version, unchanged
-    restoreLatest     // no local file, or an unchanged copy of an older version
+    keepWorkingCopy,    // nothing is recorded about the working copy, so it stays as it is
+    keepUnsavedChanges, // the working copy changed since it was saved or restored: never replaced
+    alreadyLatest,      // the working copy is the latest version, unchanged
+    restoreLatest       // no working copy, or an unchanged copy of an older version
 };
 
-// localCopy is what is recorded about the local file, and isUnchanged whether the file still
+// workingCopy is what is recorded about the working copy, and isUnchanged whether the file still
 // matches it (WorkingCopyBaseline::isUnchanged, which reads the disk).
-[[nodiscard]] LatestVersionPlan planLatestVersion(bool hasLocalFile,
-                                                  const WorkingCopyBaseline& localCopy,
+[[nodiscard]] LatestVersionPlan planLatestVersion(bool hasWorkingCopy,
+                                                  const WorkingCopyBaseline& workingCopy,
                                                   bool isUnchanged,
                                                   const juce::String& latestVersionId);
 
 struct CreateProjectInput
 {
-    juce::File localProjectFile;
+    juce::File projectFile;
 };
 
 ProjectActivationJobResult createProject(const SignedInApi& api, const CreateProjectInput& input);
@@ -142,28 +144,28 @@ struct FetchHistoryInput
 
 BranchHistoryJobResult fetchHistory(const SignedInApi& api, const FetchHistoryInput& input);
 
-struct PushVersionJobResult : JobOutcome
+struct SaveVersionJobResult : JobOutcome
 {
-    // The pushed file as the new version, with its size and modification time from before it
+    // The saved file as the new version, with its size and modification time from before it
     // was hashed: if the DAW saves again meanwhile, the next save sees a change.
-    WorkingCopyBaseline pushedCopy;
-    // Branch history fetched right after the push, so the new version shows up at once.
+    WorkingCopyBaseline savedCopy;
+    // Branch history fetched right after the save, so the new version shows up at once.
     std::optional<std::vector<VersionSummary>> refreshedVersions;
 };
 
-struct PushInput
+struct SaveInput
 {
     juce::File projectFile;
     juce::String projectId;
     juce::String branchId;
     juce::String parentVersionId;
-    // Empty gets kDefaultSaveNote.
-    juce::String commitMessage;
+    // Trimmed, and sent only when the user wrote one.
+    juce::String message;
     // The saved file is recorded there with its new version.
     WorkingCopyIndex workingCopies;
 };
 
-PushVersionJobResult pushVersion(const SignedInApi& api, const PushInput& input, const ReportProgress& report = {});
+SaveVersionJobResult saveVersion(const SignedInApi& api, const SaveInput& input, const ReportProgress& report = {});
 
 struct RestoreVersionJobResult : JobOutcome
 {

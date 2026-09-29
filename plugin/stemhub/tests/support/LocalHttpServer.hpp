@@ -17,6 +17,8 @@ public:
     {
         juce::String requestLine;
         juce::String headers;
+        // As much of it as Content-Length announced.
+        juce::String body;
     };
 
     using Handler = std::function<juce::String(const Request&)>;
@@ -57,21 +59,40 @@ private:
                 return;
 
             juce::MemoryOutputStream received;
-            char buffer[1024];
-            while (!received.toString().contains("\r\n\r\n") && connection->waitUntilReady(true, 2000) == 1)
+            const auto readMore = [&connection, &received]
             {
+                char buffer[1024];
+                if (connection->waitUntilReady(true, 2000) != 1)
+                    return false;
+
                 const auto bytesRead = connection->read(buffer, sizeof(buffer), false);
                 if (bytesRead <= 0)
-                    break;
+                    return false;
+
                 received.write(buffer, static_cast<size_t>(bytesRead));
+                return true;
+            };
+
+            while (!received.toString().contains("\r\n\r\n") && readMore())
+            {
             }
 
-            const auto text = received.toString();
-            if (text.isEmpty())
+            const auto head = received.toString().upToFirstOccurrenceOf("\r\n\r\n", false, false);
+            if (head.isEmpty())
                 continue;
 
-            Request request { text.upToFirstOccurrenceOf("\r\n", false, false),
-                              text.fromFirstOccurrenceOf("\r\n", false, false) };
+            // The body follows the blank line, as long as Content-Length says.
+            const auto bodyStart = juce::jmin(head.getNumBytesAsUTF8() + 4, received.getDataSize());
+            const auto bodyLength = static_cast<size_t>(juce::jmax(0, contentLengthOf(head)));
+            while (received.getDataSize() < bodyStart + bodyLength && readMore())
+            {
+            }
+
+            const auto* bodyData = static_cast<const char*>(received.getData()) + bodyStart;
+            const auto bodyBytes = juce::jmin(bodyLength, received.getDataSize() - bodyStart);
+            Request request { head.upToFirstOccurrenceOf("\r\n", false, false),
+                              head.fromFirstOccurrenceOf("\r\n", false, false),
+                              juce::String::fromUTF8(bodyData, static_cast<int>(bodyBytes)) };
             {
                 const std::lock_guard<std::mutex> lock(requestsMutex);
                 requests.push_back(request);
@@ -80,6 +101,17 @@ private:
             const auto response = handler(request);
             connection->write(response.toRawUTF8(), static_cast<int>(response.getNumBytesAsUTF8()));
         }
+    }
+
+    static int contentLengthOf(const juce::String& head)
+    {
+        juce::StringArray lines;
+        lines.addLines(head);
+        for (const auto& line : lines)
+            if (line.startsWithIgnoreCase("Content-Length:"))
+                return line.fromFirstOccurrenceOf(":", false, false).trim().getIntValue();
+
+        return 0;
     }
 
     Handler handler;

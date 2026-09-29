@@ -72,7 +72,7 @@ export default function NewProjectModal({
                                         type="text"
                                         value={name}
                                         onChange={(e) => onNameChange(e.target.value)}
-                                        placeholder="My Awesome Track"
+                                        placeholder="My Awesome Project"
                                         autoFocus
                                     />
                                 </div>

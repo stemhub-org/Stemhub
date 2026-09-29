@@ -17,11 +17,10 @@ export interface Branch {
 // ── Version with author (from summary endpoint) ──
 export interface VersionWithAuthor {
     id: string;
-    commit_message: string | null;
+    message: string | null;
     created_at: string;
     branch_name: string;
     author: OwnerSummary | null;
-    has_artifact: boolean;
     source_daw: string | null;
     source_project_filename: string | null;
 }
@@ -33,9 +32,13 @@ export interface MixerDiffSummary {
     parameter_changes: number;
 }
 
+// `insert_index` uses FL Studio's mixer numbering (Master = 0) and is null for
+// project-level changes such as `project_file_changed`. Known `type` values
+// include `project_file_changed`, `insert_*` and `slot_*` changes (for example
+// `slot_dry_wet_changed`); the UI renders `message` and never branches on it.
 export interface MixerDiffChange {
     type: string;
-    insert_iid: number;
+    insert_index: number | null;
     insert_name: string | null;
     slot_index: number | null;
     before: unknown;
@@ -52,26 +55,18 @@ export interface VersionDiffHistoryEntry {
     changes: MixerDiffChange[];
 }
 
-// ── Track ──
-export interface Track {
+// ── Asset summary (from GET /versions/{id}/assets) ──
+// One audio or MIDI file of a version, besides the project file. Sourced from
+// the version's manifest (spec §7). `id` is "{sha256}:{index}" and `path` is
+// relative to the project folder. `name` is a display name, not the basename:
+// the file name without its extension for manifest v2, the stored name for v1.
+// Use `path` for the file name and folder. `file_type` is derived from the
+// path and is display-only.
+export interface AssetSummary {
     id: string;
-    version_id: string;
-    name: string;
-    file_type: string;
-    storage_path: string | null;
-    created_at: string | null;
-}
-
-// ── Track summary (from GET /versions/{id}/tracks) ──
-// Sourced from Version.manifest_json (CAS, spec §7). `file_type` is derived
-// from the display filename and is display-only.
-export interface TrackSummary {
-    id: string;
+    path: string;
     name: string;
     file_type: string | null;
-    bpm: number | null;
-    key: string | null;
-    duration_seconds: number | null;
     size_bytes: number | null;
 }
 
@@ -117,7 +112,7 @@ export interface DailyActivity {
 
 export interface ActivityStatsResponse {
     daily_activity: DailyActivity[];
-    total_commits: number;
+    total_versions: number;
     total_contributors: number;
 }
 
@@ -126,7 +121,7 @@ export interface ContributorStats {
     user_id: string;
     username: string;
     initials: string;
-    commits: number;
+    versions: number;
 }
 
 export interface TopContributorsResponse {

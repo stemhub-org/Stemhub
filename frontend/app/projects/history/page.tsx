@@ -5,11 +5,11 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import { RepositoryHeader } from "../components/RepositoryHeader";
+import { ProjectHeader } from "../components/ProjectHeader";
 import { ArrowLeft, Loader2, Info } from "lucide-react";
 import { authFetch } from "@/lib/api";
 import type { ProjectSummaryResponse, VersionDiffHistoryEntry } from "@/types/project";
-import { RepositoryBranchBar } from "../components/RepositoryBranchBar";
+import { BranchPicker } from "../components/BranchPicker";
 import { Card } from "@/components/ui/Card";
 
 function formatTimeAgo(dateString: string): string {
@@ -35,20 +35,12 @@ function formatSummaryLine(entry: VersionDiffHistoryEntry): string {
     const parts = [
         `${entry.summary.total_changes} change${entry.summary.total_changes === 1 ? "" : "s"}`,
         `${entry.summary.inserts_changed} insert${entry.summary.inserts_changed === 1 ? "" : "s"}`,
-        `${entry.summary.slots_changed} slot${entry.summary.slots_changed === 1 ? "" : "s"}`,
+        `${entry.summary.slots_changed} effect slot${entry.summary.slots_changed === 1 ? "" : "s"}`,
     ];
     return parts.join(" • ");
 }
 
-function producerFriendlyCopy(text: string): string {
-    return text
-        .replace(/\bBranches\b/g, "Workspaces")
-        .replace(/\bbranches\b/g, "workspaces")
-        .replace(/\bBranch\b/g, "Workspace")
-        .replace(/\bbranch\b/g, "workspace");
-}
-
-function ProjectChangesContent() {
+function ProjectHistoryContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const projectId = searchParams.get("id");
@@ -85,7 +77,7 @@ function ProjectChangesContent() {
                     if (data.branches.length > 0) {
                         const fallbackBranchId = data.branches[0].id;
                         setSelectedBranchId(fallbackBranchId);
-                        router.replace(`/projects/changes?id=${projectId}&branch_id=${fallbackBranchId}`);
+                        router.replace(`/projects/history?id=${projectId}&branch_id=${fallbackBranchId}`);
                         return;
                     }
 
@@ -105,7 +97,7 @@ function ProjectChangesContent() {
                 if (!branchExists && summaryData.branches.length > 0) {
                     const fallbackBranchId = summaryData.branches[0].id;
                     setSelectedBranchId(fallbackBranchId);
-                    router.replace(`/projects/changes?id=${projectId}&branch_id=${fallbackBranchId}`);
+                    router.replace(`/projects/history?id=${projectId}&branch_id=${fallbackBranchId}`);
                     return;
                 }
 
@@ -113,7 +105,7 @@ function ProjectChangesContent() {
                 setSummary(summaryData);
             } catch (err) {
                 if (cancelled) return;
-                setError(err instanceof Error ? err.message : "Failed to load changes");
+                setError(err instanceof Error ? err.message : "Failed to load history");
             } finally {
                 if (!cancelled) {
                     setLoading(false);
@@ -131,7 +123,7 @@ function ProjectChangesContent() {
     const handleBranchChange = (branchId: string) => {
         setSelectedBranchId(branchId);
         if (projectId) {
-            router.replace(`/projects/changes?id=${projectId}&branch_id=${branchId}`);
+            router.replace(`/projects/history?id=${projectId}&branch_id=${branchId}`);
         }
     };
 
@@ -156,7 +148,7 @@ function ProjectChangesContent() {
             className="min-h-screen bg-background text-foreground"
             style={{ "--accent": "#9C57DF" } as React.CSSProperties}
         >
-            <RepositoryHeader />
+            <ProjectHeader />
             <div className="p-6 space-y-6">
                 <Link
                     href={`/projects?id=${projectId}${selectedBranchId ? `&branch_id=${selectedBranchId}` : ""}`}
@@ -173,10 +165,10 @@ function ProjectChangesContent() {
                                     className="pb-1 text-lg font-medium leading-relaxed text-foreground"
                                     style={{ fontFamily: "var(--font-syne)" }}
                                 >
-                                    Changes
+                                    History
                                 </h1>
                                 <p className="text-sm text-foreground/60">
-                                    Each version is automatically compared against its previous version in the active workspace.
+                                    Each version is automatically compared with the version it was saved from, or with the previous version on this branch when that one is gone.
                                 </p>
                             </div>
                             <div className="inline-flex items-center gap-2 rounded-xl border border-accent/20 bg-accent/10 px-3 py-2 text-xs font-medium text-accent">
@@ -185,7 +177,7 @@ function ProjectChangesContent() {
                             </div>
                         </div>
 
-                        <RepositoryBranchBar
+                        <BranchPicker
                             branches={branches}
                             selectedBranchId={selectedBranchId}
                             onBranchChange={handleBranchChange}
@@ -195,15 +187,15 @@ function ProjectChangesContent() {
                     <div className="mb-6 rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-5">
                         {historyEntries.length === 0 ? (
                             <div className="space-y-2">
-                                <h2 className="text-sm font-medium text-foreground">Workspace timeline</h2>
+                                <h2 className="text-sm font-medium text-foreground">Branch history</h2>
                                 <p className="text-sm text-foreground/60">
-                                    This workspace does not have any version history yet.
+                                    This branch does not have any versions yet.
                                 </p>
                             </div>
                         ) : (
                             <div className="space-y-4">
                                 <p className="text-sm text-foreground/60">
-                                    The latest versions are shown first. Each card summarizes mixer changes against the previous version in this lane.
+                                    The newest versions are shown first. Each card summarizes the mixer changes compared with the version before it.
                                 </p>
                             </div>
                         )}
@@ -211,7 +203,7 @@ function ProjectChangesContent() {
 
                     {historyEntries.length === 0 ? (
                         <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-6 text-center">
-                            <p className="text-sm text-foreground/50">No changes yet</p>
+                            <p className="text-sm text-foreground/50">No versions yet</p>
                         </div>
                     ) : (
                         <ul className="flex flex-col gap-3" role="list">
@@ -240,12 +232,9 @@ function ProjectChangesContent() {
                                                         <span className="text-foreground/50">
                                                             {formatTimeAgo(version.created_at)}
                                                         </span>
-                                                        <span className="rounded-md border bg-accent/15 text-accent border-accent/30 px-2.5 py-0.5 text-[10px] font-medium">
-                                                            Saved
-                                                        </span>
                                                     </div>
                                                     <p className="mt-1 text-sm text-foreground/80">
-                                                        {version.commit_message || "No message"}
+                                                        {version.message || "No message"}
                                                     </p>
                                                     <p className="mt-0.5 font-mono text-xs text-foreground/60">
                                                         {version.branch_name}
@@ -260,9 +249,7 @@ function ProjectChangesContent() {
                                                     <div className="mt-3 rounded-xl border border-foreground/[0.08] bg-background/40 p-3">
                                                         {entry.status === "initial" && (
                                                             <p className="text-sm text-foreground/65">
-                                                                {entry.status_message
-                                                                    ? producerFriendlyCopy(entry.status_message)
-                                                                    : "First snapshot in this workspace."}
+                                                                {entry.status_message || "First version on this branch."}
                                                             </p>
                                                         )}
 
@@ -279,7 +266,7 @@ function ProjectChangesContent() {
                                                                         {formatSummaryLine(entry)}
                                                                     </span>
                                                                     <span className="text-foreground/50">
-                                                                        Compared to the previous version in this lane
+                                                                        Compared with the version before it
                                                                     </span>
                                                                 </div>
 
@@ -316,7 +303,7 @@ function ProjectChangesContent() {
     );
 }
 
-export default function ProjectChangesPage() {
+export default function ProjectHistoryPage() {
     return (
         <Suspense
             fallback={
@@ -325,7 +312,7 @@ export default function ProjectChangesPage() {
                 </div>
             }
         >
-            <ProjectChangesContent />
+            <ProjectHistoryContent />
         </Suspense>
     );
 }
