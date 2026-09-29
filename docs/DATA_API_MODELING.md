@@ -225,14 +225,12 @@ Sign-in uses OAuth2 / JWT with an **HttpOnly cookie**; the StemHub plugin sends 
 | Endpoint | Method | Access | Description |
 | :--- | :--- | :--- | :--- |
 | `/branches/{id}/versions/` | `GET` | read | The branch's live versions: its history (clients show it newest first). |
-| `/branches/{id}/versions/from-manifest` | `POST` | read (see note) | **Save**: create a version from a manifest whose blobs are all uploaded. |
+| `/branches/{id}/versions/from-manifest` | `POST` | write | **Save**: create a version from a manifest whose blobs are all uploaded. |
 | `/branches/{id}/versions/compare` | `GET` | read | Mixer diff of two FL Studio versions of the branch: `?base_version_id=…&target_version_id=…`. |
 | `/branches/{id}/versions/diff-history` | `GET` | read | The branch's history, newest first, each version with its mixer diff against the version it was saved from (else the one before it). |
 | `/versions/{id}` | `GET` | read | A version, with its `manifest_json`. |
 | `/versions/{id}/assets` | `GET` | read | The version's **assets** (UI: "Audio & MIDI files"), read from its manifest. |
 | `/versions/{id}` | `DELETE` | owner | Soft-delete a version; each blob its manifest references loses one reference. |
-
-Note: version creation checks read access on the branch; the blob uploads a save depends on need write access.
 
 **Save flow** (details and failure handling in [content-addressed-storage.md](./content-addressed-storage.md)):
 1. The StemHub plugin hashes the project file and its assets and sends the hashes to `POST /projects/{pid}/blobs/check-missing`.
