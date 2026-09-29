@@ -4,8 +4,8 @@
 
 #include "domain/ProjectLink.hpp"
 
-// What the plugin saves in the DAW project: <StemhubState schema="1" projectId=".." branchId=".."
-// workingFile=".."/>. The version the working file holds is not saved: a restored copy carries
+// What the plugin saves in the project file: <StemhubState schema="1" projectId=".." branchId=".."
+// workingFile=".."/>. The version the working copy holds is not saved: a restored copy carries
 // the state saved with an older version, which would name the wrong one.
 namespace stemhub::pluginstate
 {

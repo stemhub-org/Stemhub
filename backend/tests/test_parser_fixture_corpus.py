@@ -8,15 +8,15 @@ from typing import Any
 import pytest
 
 from stemhub.dependency_guard import ensure_pyflp_available
-from stemhub.flp_mixer_snapshot import build_mixer_snapshot
+from stemhub.fl_mixer import parse_fl_mixer
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MANIFEST_PATH = Path(__file__).resolve().parent / "fixtures" / "parser_corpus" / "manifest.json"
+CORPUS_PATH = Path(__file__).resolve().parent / "fixtures" / "parser_corpus" / "corpus.json"
 
 
-def _load_manifest() -> list[dict[str, Any]]:
-    with MANIFEST_PATH.open("r", encoding="utf-8") as handle:
+def _load_corpus() -> list[dict[str, Any]]:
+    with CORPUS_PATH.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     return payload["fixtures"]
 
@@ -32,22 +32,22 @@ def _resolve_exception_type(type_name: str, pyflp_exceptions: Any) -> type[Excep
     raise AssertionError(f"Unsupported fixture exception type: {type_name}")
 
 
-def _assert_mixer_snapshot_expectations(snapshot: Any, mixer_expectations: dict[str, Any]) -> None:
+def _assert_mixer_expectations(mixer: Any, mixer_expectations: dict[str, Any]) -> None:
     if "mixer_supported" in mixer_expectations:
-        assert snapshot.mixer_supported is mixer_expectations["mixer_supported"]
+        assert mixer.mixer_supported is mixer_expectations["mixer_supported"]
     if "insert_count" in mixer_expectations:
-        assert len(snapshot.inserts) == mixer_expectations["insert_count"]
+        assert len(mixer.inserts) == mixer_expectations["insert_count"]
     if "flp_size_bytes" in mixer_expectations:
-        assert snapshot.flp_size_bytes == mixer_expectations["flp_size_bytes"]
+        assert mixer.flp_size_bytes == mixer_expectations["flp_size_bytes"]
     if "flp_sha256" in mixer_expectations:
-        assert snapshot.flp_sha256 == mixer_expectations["flp_sha256"]
+        assert mixer.flp_sha256 == mixer_expectations["flp_sha256"]
     if "named_inserts_prefix" in mixer_expectations:
-        named_inserts = [insert.name for insert in snapshot.inserts if insert.name]
+        named_inserts = [insert.name for insert in mixer.inserts if insert.name]
         prefix = mixer_expectations["named_inserts_prefix"]
         assert named_inserts[: len(prefix)] == prefix
 
 
-FIXTURES = _load_manifest()
+FIXTURES = _load_corpus()
 
 
 @pytest.mark.parametrize("fixture_spec", FIXTURES, ids=[fixture["id"] for fixture in FIXTURES])
@@ -81,9 +81,9 @@ def test_parser_fixture_corpus_matches_expectations(fixture_spec: dict[str, Any]
     if "version" in project_expectations:
         assert str(getattr(project, "version", "")) == project_expectations["version"]
 
-    mixer_expectations = expectations.get("mixer_snapshot")
+    mixer_expectations = expectations.get("mixer")
     if mixer_expectations is None:
         return
 
-    snapshot = build_mixer_snapshot(project)
-    _assert_mixer_snapshot_expectations(snapshot, mixer_expectations)
+    mixer = parse_fl_mixer(project)
+    _assert_mixer_expectations(mixer, mixer_expectations)

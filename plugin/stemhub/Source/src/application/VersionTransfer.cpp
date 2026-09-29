@@ -1,14 +1,14 @@
 #include <map>
 #include <vector>
 
-#include "application/SnapshotFiles.hpp"
-#include "application/SnapshotSync.hpp"
+#include "application/VersionFiles.hpp"
+#include "application/VersionTransfer.hpp"
 #include "domain/Manifest.hpp"
 
 namespace
 {
 namespace manifest = stemhub::manifest;
-using stemhub::snapshots::ReportProgress;
+using stemhub::versiontransfer::ReportProgress;
 
 ApiError withContext(ApiError error, const juce::String& context)
 {
@@ -42,8 +42,8 @@ juce::String toManifestPath(const juce::File& file, const juce::File& root)
     return file.getRelativePathFrom(root).replaceCharacter('\\', '/');
 }
 
-// What a push sends: the manifest, and the local file behind each distinct hash.
-struct Snapshot
+// What an upload sends: the manifest, and the file on this machine behind each distinct hash.
+struct PreparedUpload
 {
     manifest::Manifest manifest;
     std::map<juce::String, juce::File> fileByHash;
@@ -51,12 +51,12 @@ struct Snapshot
 };
 
 // Collects and hashes the project's files. Names and the file count are checked first: hashing a
-// large session takes time.
-ApiResult<Snapshot> buildSnapshot(const juce::File& projectFile, const ReportProgress& report)
+// large project folder takes time.
+ApiResult<PreparedUpload> prepareUpload(const juce::File& projectFile, const ReportProgress& report)
 {
-    using Result = ApiResult<Snapshot>;
+    using Result = ApiResult<PreparedUpload>;
 
-    const auto files = stemhub::snapshotfiles::collect(projectFile);
+    const auto files = stemhub::versionfiles::collect(projectFile);
     if (isJobCancelled())
         return Result::failure(ApiError::cancelled());
     if (files.empty())
@@ -71,20 +71,20 @@ ApiResult<Snapshot> buildSnapshot(const juce::File& projectFile, const ReportPro
             return Result::failure({ ApiError::Kind::invalidRequest, "Can't save \"" + path + "\": rename this file and try again." });
     }
 
-    const auto trackCount = files.size() - 1;
-    if (trackCount > manifest::kMaxTracks)
+    const auto assetCount = files.size() - 1;
+    if (assetCount > manifest::kMaxAssets)
         return Result::failure({ ApiError::Kind::invalidRequest,
-                                 "This project folder has " + juce::String(static_cast<int>(trackCount))
-                                     + " audio files; a version can hold " + juce::String(static_cast<int>(manifest::kMaxTracks))
-                                     + ". Move the ones this project doesn't use out of its folder." });
+                                 "This project folder has " + juce::String(static_cast<int>(assetCount))
+                                     + " audio & MIDI files; a version can hold " + juce::String(static_cast<int>(manifest::kMaxAssets))
+                                     + ". Move the ones the project file doesn't use out of its folder." });
 
-    Snapshot snapshot;
-    snapshot.manifest.sourceDaw = stemhub::snapshotfiles::dawNameFor(projectFile);
+    PreparedUpload upload;
+    upload.manifest.sourceDaw = stemhub::versionfiles::dawNameFor(projectFile);
 
     for (size_t index = 0; index < files.size(); ++index)
     {
         const auto& file = files[index];
-        const auto sha = stemhub::snapshotfiles::sha256OfFile(file);
+        const auto sha = stemhub::versionfiles::sha256OfFile(file);
         if (isJobCancelled())
             return Result::failure(ApiError::cancelled());
         if (sha.isEmpty())
@@ -95,31 +95,31 @@ ApiResult<Snapshot> buildSnapshot(const juce::File& projectFile, const ReportPro
         // collect() lists the project file first.
         const manifest::FileRef ref { sha, file.getSize(), toManifestPath(file, root) };
         if (index == 0)
-            snapshot.manifest.projectFile = ref;
+            upload.manifest.projectFile = ref;
         else
-            snapshot.manifest.tracks.push_back(ref);
+            upload.manifest.assets.push_back(ref);
 
         // Identical files share one blob, so each distinct content is offered and uploaded once.
-        if (snapshot.fileByHash.emplace(sha, file).second)
-            snapshot.distinctHashes.push_back(sha);
+        if (upload.fileByHash.emplace(sha, file).second)
+            upload.distinctHashes.push_back(sha);
     }
 
-    return Result::success(std::move(snapshot));
+    return Result::success(std::move(upload));
 }
 }
 
-namespace stemhub::snapshots
+namespace stemhub::versiontransfer
 {
-ApiResult<VersionSummary> pushSnapshot(const SignedInApi& api, const PushRequest& request, const ReportProgress& report)
+ApiResult<VersionSummary> uploadVersion(const SignedInApi& api, const UploadRequest& request, const ReportProgress& report)
 {
     using Result = ApiResult<VersionSummary>;
     jassert(request.projectId.isNotEmpty() && request.branchId.isNotEmpty());
 
-    const auto snapshot = buildSnapshot(request.projectFile, report);
-    if (!snapshot.ok())
-        return Result::failure(*snapshot.error);
+    const auto prepared = prepareUpload(request.projectFile, report);
+    if (!prepared.ok())
+        return Result::failure(*prepared.error);
 
-    const auto missing = api.checkMissingBlobs(request.projectId, snapshot.value->distinctHashes);
+    const auto missing = api.checkMissingBlobs(request.projectId, prepared.value->distinctHashes);
     if (!missing.ok())
         return Result::failure(withContext(*missing.error, "Failed to check which files StemHub already has"));
 
@@ -129,14 +129,14 @@ ApiResult<VersionSummary> pushSnapshot(const SignedInApi& api, const PushRequest
         if (isJobCancelled())
             return Result::failure(ApiError::cancelled());
 
-        const auto file = snapshot.value->fileByHash.find(missingHashes[index]);
-        if (file == snapshot.value->fileByHash.end())
+        const auto file = prepared.value->fileByHash.find(missingHashes[index]);
+        if (file == prepared.value->fileByHash.end())
             continue;
 
         reportIfWanted(report, "Uploading " + countOf(index, missingHashes.size()) + " new files...");
-        const auto upload = api.uploadBlob(request.projectId, missingHashes[index], file->second);
-        if (!upload.ok())
-            return Result::failure(withContext(*upload.error, "Failed to upload " + file->second.getFileName()));
+        const auto uploaded = api.uploadBlob(request.projectId, missingHashes[index], file->second);
+        if (!uploaded.ok())
+            return Result::failure(withContext(*uploaded.error, "Failed to upload " + file->second.getFileName()));
     }
 
     if (isJobCancelled())
@@ -145,9 +145,9 @@ ApiResult<VersionSummary> pushSnapshot(const SignedInApi& api, const PushRequest
     reportIfWanted(report, "Creating the version...");
 
     CreateVersionRequest createRequest;
-    createRequest.commitMessage = request.commitMessage;
+    createRequest.message = request.message;
     createRequest.parentVersionId = request.parentVersionId;
-    createRequest.manifest = manifest::toJson(snapshot.value->manifest);
+    createRequest.manifest = manifest::toJson(prepared.value->manifest);
 
     auto created = api.createVersionFromManifest(request.branchId, createRequest);
     if (!created.ok())
@@ -156,7 +156,7 @@ ApiResult<VersionSummary> pushSnapshot(const SignedInApi& api, const PushRequest
     return created;
 }
 
-ApiResult<juce::File> restoreSnapshot(const SignedInApi& api, const RestoreRequest& request, const ReportProgress& report)
+ApiResult<juce::File> restoreVersion(const SignedInApi& api, const RestoreRequest& request, const ReportProgress& report)
 {
     using Result = ApiResult<juce::File>;
     jassert(request.projectId.isNotEmpty() && request.versionId.isNotEmpty());
@@ -185,8 +185,8 @@ ApiResult<juce::File> restoreSnapshot(const SignedInApi& api, const RestoreReque
     };
 
     std::vector<const manifest::FileRef*> files { &version.projectFile };
-    for (const auto& track : version.tracks)
-        files.push_back(&track);
+    for (const auto& asset : version.assets)
+        files.push_back(&asset);
 
     for (size_t index = 0; index < files.size(); ++index)
     {
@@ -206,7 +206,7 @@ ApiResult<juce::File> restoreSnapshot(const SignedInApi& api, const RestoreReque
         if (!download.ok())
             return fail(withContext(*download.error, "Failed to download " + file.path));
 
-        const auto sha = stemhub::snapshotfiles::sha256OfFile(destination);
+        const auto sha = stemhub::versionfiles::sha256OfFile(destination);
         if (isJobCancelled())
             return fail(ApiError::cancelled());
 
@@ -216,8 +216,8 @@ ApiResult<juce::File> restoreSnapshot(const SignedInApi& api, const RestoreReque
                             : ApiError { ApiError::Kind::invalidResponse, "The downloaded " + file.path + " doesn't match its checksum." });
     }
 
-    // Marks the copy as a project of its own, which a save of a project around it leaves out.
-    if (!partialFolder.getChildFile(stemhub::snapshotfiles::kRestoredCopyMarker).replaceWithText(request.versionId))
+    // Marks the folder as a restored copy, which a save from a project folder around it leaves out.
+    if (!partialFolder.getChildFile(stemhub::versionfiles::kRestoredCopyMarker).replaceWithText(request.versionId))
         return fail(localFileError("Could not write in " + partialFolder.getFullPathName()));
 
     if (!partialFolder.moveFileTo(folder))

@@ -7,31 +7,31 @@
 
 #include "ui/PluginTheme.hpp"
 #include "ui/VersionDetailCard.hpp"
-#include "ui/VersionTimeline.hpp"
+#include "ui/VersionHistoryList.hpp"
 #include "ui/ViewModels.hpp"
 
-// The open project: its workspace, the working copy with the save note, the history timeline and
-// the selected version's card, with a status bar below.
+// The open project: its branch, the working copy with the message, the branch's history and the
+// selected version's card, with a status bar below.
 class DashboardView : public juce::Component
 {
 public:
     DashboardView();
 
     void show(const DashboardModel& model);
-    // What a save of the working file takes; a negative count while it is being counted.
-    void setSnapshotSize(int fileCount, juce::int64 totalBytes);
-    void setMaxNoteLength(int maxLength) { commitMessageInput.setInputRestrictions(maxLength); }
+    // What a save of the working copy takes; a negative count while it is being counted.
+    void setWorkingCopySize(int fileCount, juce::int64 totalBytes);
+    void setMaxMessageLength(int maxLength) { messageInput.setInputRestrictions(maxLength); }
 
-    [[nodiscard]] juce::String getCommitMessage() const { return commitMessageInput.getText().trim(); }
-    void setCommitMessage(const juce::String& message) { commitMessageInput.setText(message, juce::dontSendNotification); }
-    void clearCommitMessage() { commitMessageInput.clear(); }
+    [[nodiscard]] juce::String getMessage() const { return messageInput.getText().trim(); }
+    void setMessage(const juce::String& message) { messageInput.setText(message, juce::dontSendNotification); }
+    void clearMessage() { messageInput.clear(); }
 
     void paint(juce::Graphics& g) override;
     void resized() override;
 
-    // The Save button, or Return in the note.
+    // The Save button, or Return in the message.
     std::function<void()> onSave;
-    std::function<void()> onSync;
+    std::function<void()> onRefresh;
     std::function<void(const juce::String& branchId)> onBranchChange;
     std::function<void(const juce::String& versionId)> onVersionSelected;
     std::function<void()> onBackToProjects;
@@ -47,7 +47,7 @@ private:
     void applyStatus(const Status& status);
     void setActivity(SessionActivity activity);
     void setWorkingFile(const juce::String& path);
-    // The card follows the timeline's selection.
+    // The card follows the history's selection.
     void updateDetailCard();
     void updateFooterSummary();
 
@@ -56,8 +56,8 @@ private:
     Status shownStatus;
     SessionActivity shownActivity { SessionActivity::idle };
     juce::String workingFilePath;
-    int snapshotFileCount { -1 };
-    juce::int64 snapshotTotalBytes { 0 };
+    int workingCopyFileCount { -1 };
+    juce::int64 workingCopyTotalBytes { 0 };
     juce::Rectangle<int> headerLogoBounds;
     juce::Rectangle<int> branchCaptionBounds;
     juce::Rectangle<int> workingCopyBounds;
@@ -70,11 +70,11 @@ private:
     juce::Label footerStorageLabel;
     juce::ComboBox branchComboBox;
     juce::TextButton backToProjectsButton;
-    juce::TextEditor commitMessageInput;
-    juce::TextButton saveChanges;
-    juce::TextButton syncButton;
+    juce::TextEditor messageInput;
+    juce::TextButton saveButton;
+    juce::TextButton refreshButton;
     juce::TextButton signOutButton;
     juce::TextButton cancelButton { "Cancel" };
-    VersionTimeline timeline;
+    VersionHistoryList historyList;
     VersionDetailCard detailCard;
 };

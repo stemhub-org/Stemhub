@@ -1,6 +1,6 @@
 #include "ui/PluginTheme.hpp"
 #include "ui/UiFormat.hpp"
-#include "StemhubAssets.h"
+#include "StemhubUiResources.h"
 
 #include <array>
 #include <vector>
@@ -9,11 +9,11 @@ namespace stemhub::plugin::theme
 {
 struct BrandTypefaces
 {
-    juce::Typeface::Ptr syneExtraBold = load(StemhubAssets::SyneExtraBold_ttf, StemhubAssets::SyneExtraBold_ttfSize);
-    juce::Typeface::Ptr jakartaRegular = load(StemhubAssets::PlusJakartaSansRegular_ttf, StemhubAssets::PlusJakartaSansRegular_ttfSize);
-    juce::Typeface::Ptr jakartaMedium = load(StemhubAssets::PlusJakartaSansMedium_ttf, StemhubAssets::PlusJakartaSansMedium_ttfSize);
-    juce::Typeface::Ptr jakartaSemiBold = load(StemhubAssets::PlusJakartaSansSemiBold_ttf, StemhubAssets::PlusJakartaSansSemiBold_ttfSize);
-    juce::Typeface::Ptr jakartaBold = load(StemhubAssets::PlusJakartaSansBold_ttf, StemhubAssets::PlusJakartaSansBold_ttfSize);
+    juce::Typeface::Ptr syneExtraBold = load(StemhubUiResources::SyneExtraBold_ttf, StemhubUiResources::SyneExtraBold_ttfSize);
+    juce::Typeface::Ptr jakartaRegular = load(StemhubUiResources::PlusJakartaSansRegular_ttf, StemhubUiResources::PlusJakartaSansRegular_ttfSize);
+    juce::Typeface::Ptr jakartaMedium = load(StemhubUiResources::PlusJakartaSansMedium_ttf, StemhubUiResources::PlusJakartaSansMedium_ttfSize);
+    juce::Typeface::Ptr jakartaSemiBold = load(StemhubUiResources::PlusJakartaSansSemiBold_ttf, StemhubUiResources::PlusJakartaSansSemiBold_ttfSize);
+    juce::Typeface::Ptr jakartaBold = load(StemhubUiResources::PlusJakartaSansBold_ttf, StemhubUiResources::PlusJakartaSansBold_ttfSize);
 
 private:
     static juce::Typeface::Ptr load(const char* data, int size)

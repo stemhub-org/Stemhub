@@ -10,18 +10,22 @@ This backend depends on `PyFLP_v2` through a Git submodule, so StemHub does not 
 
 > **Note:** The backend no longer creates database tables automatically on startup. You must ensure all Alembic migrations are applied before starting the server. `bootstrap-backend.sh` handles this for local development.
 
-## Artifact storage configuration
+## Storage configuration
 
-The backend reads `STEMHUB_STORAGE_PROVIDER` from the environment:
+Uploaded files (the content-addressed blobs of each version's project file and
+assets, and each project's preview) go where `STEMHUB_STORAGE_PROVIDER` says:
 
-- `localfs` (default): artifacts are stored under `STEMHUB_ARTIFACTS_ROOT`.
-- `gcs`: artifacts are stored in Google Cloud Storage.
+- `localfs` (default): stored on disk under `STEMHUB_STORAGE_ROOT` (default
+  `backend/data/artifacts`, a historical directory name kept so existing blobs
+  are still found). The former name `STEMHUB_ARTIFACTS_ROOT` is still read when
+  `STEMHUB_STORAGE_ROOT` is unset, with a deprecation warning in the logs.
+- `gcs`: stored in Google Cloud Storage.
 
 Example settings:
 
 ```bash
 STEMHUB_STORAGE_PROVIDER=localfs
-STEMHUB_ARTIFACTS_ROOT=./backend/data/artifacts
+STEMHUB_STORAGE_ROOT=./backend/data/artifacts
 ```
 
 For Google Cloud Storage:
@@ -53,7 +57,7 @@ python -c "import pyflp; print(pyflp.__version__)"
 
 ## Parser fixture corpus
 
-StemHub keeps a parser validation corpus in `backend/tests/fixtures/parser_corpus/manifest.json`.
+StemHub keeps a parser validation corpus in `backend/tests/fixtures/parser_corpus/corpus.json`.
 
 Run the dedicated harness with:
 
@@ -61,7 +65,7 @@ Run the dedicated harness with:
 .venv/bin/pytest backend/tests/test_parser_fixture_corpus.py
 ```
 
-When adding new roadmap parser work, prefer extending the manifest and its stable expectations instead of relying on ad hoc local project exports. See `backend/tests/fixtures/parser_corpus/README.md` for the fixture format and extension rules.
+When adding new roadmap parser work, prefer extending the corpus and its stable expectations instead of relying on ad hoc local project files. See `backend/tests/fixtures/parser_corpus/README.md` for the fixture format and extension rules.
 
 ## Contributing to `PyFLP_v2`
 

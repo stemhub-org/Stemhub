@@ -5,21 +5,21 @@ import { useRouter } from "next/navigation";
 import { Bell, Sun, User } from "lucide-react";
 import { useTheme } from "next-themes";
 
-const REPO_ACCENT = "#9C57DF";
+const PROJECT_ACCENT = "#9C57DF";
 
-type RepositoryHeaderProps = {
+type ProjectHeaderProps = {
     onToggleSidebar?: () => void;
     sidebarOpen?: boolean;
     userAvatarUrl?: string | null;
     username?: string;
 };
 
-export function RepositoryHeader({
+export function ProjectHeader({
     onToggleSidebar,
     sidebarOpen = false,
     userAvatarUrl,
     username = "Producer",
-}: RepositoryHeaderProps) {
+}: ProjectHeaderProps) {
     const router = useRouter();
     const { resolvedTheme, setTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
@@ -62,7 +62,7 @@ export function RepositoryHeader({
                             className="text-2xl font-medium tracking-tight text-foreground"
                             style={{ fontFamily: "var(--font-syne)" }}
                         >
-                            StemHub<span style={{ color: REPO_ACCENT }}>.</span>
+                            StemHub<span style={{ color: PROJECT_ACCENT }}>.</span>
                         </span>
                     </Link>
                 )}
@@ -76,7 +76,7 @@ export function RepositoryHeader({
                     aria-label="Toggle theme"
                     title={isDark ? "Light mode" : "Dark mode"}
                 >
-                    <Sun size={18} style={{ color: REPO_ACCENT }} />
+                    <Sun size={18} style={{ color: PROJECT_ACCENT }} />
                 </button>
                 <button
                     type="button"
@@ -86,7 +86,7 @@ export function RepositoryHeader({
                     <Bell size={20} />
                     <span
                         className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full border-2 border-background"
-                        style={{ backgroundColor: REPO_ACCENT }}
+                        style={{ backgroundColor: PROJECT_ACCENT }}
                     />
                 </button>
                 <div className="h-8 w-px bg-foreground/10" />
@@ -101,7 +101,7 @@ export function RepositoryHeader({
                         className={`h-10 w-10 rounded-full flex items-center justify-center text-white shadow-sm hover:opacity-90 transition-opacity overflow-hidden border-2 ${
                             isDark ? "border-transparent" : "border-white"
                         }`}
-                        style={!userAvatarUrl ? { background: `linear-gradient(to top right, ${REPO_ACCENT}, #C28CF0)` } : undefined}
+                        style={!userAvatarUrl ? { background: `linear-gradient(to top right, ${PROJECT_ACCENT}, #C28CF0)` } : undefined}
                         title="View profile"
                         aria-label="Open profile"
                     >

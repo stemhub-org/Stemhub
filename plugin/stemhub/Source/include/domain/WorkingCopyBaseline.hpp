@@ -2,8 +2,8 @@
 
 #include <JuceHeader.h>
 
-// The version a local project file holds, plus the file's size and modification time when that
-// was recorded, so the plugin can tell later whether the file changed.
+// The version a working copy holds, plus the file's size and modification time when that was
+// recorded, so the plugin can tell later whether the file changed.
 struct WorkingCopyBaseline
 {
     juce::File file;
@@ -12,7 +12,7 @@ struct WorkingCopyBaseline
     juce::int64 sizeBytes { -1 };
     juce::int64 modTimeMs { -1 };
 
-    // For a file this plugin has just pushed or written.
+    // For a file this plugin has just saved as a version or written.
     static WorkingCopyBaseline recordedNow(const juce::File& projectFile, const juce::String& version)
     {
         return { projectFile, version, projectFile.getSize(), projectFile.getLastModificationTime().toMilliseconds() };

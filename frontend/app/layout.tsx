@@ -23,9 +23,9 @@ const jakarta = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "StemHub — La mémoire de votre musique",
+  title: "StemHub — Your music's memory",
   description:
-    "Le versioning décentralisé pensé pour les producteurs de musique. Chaque session, chaque piste, chaque choix — préservé.",
+    "Decentralized versioning designed for music producers. Every project, every version, every decision — preserved.",
 };
 
 export default function RootLayout({
@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${syne.variable} ${jakarta.variable} antialiased`}
         style={{ fontFamily: "var(--font-jakarta)" }}

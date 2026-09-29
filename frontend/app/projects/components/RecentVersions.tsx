@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Clock, ChevronRight } from "lucide-react";
 import type { VersionWithAuthor } from "@/types/project";
 
-interface RecentChangesProps {
+interface RecentVersionsProps {
     versions: VersionWithAuthor[];
     projectId?: string | null;
     branchId?: string | null;
@@ -29,10 +29,10 @@ function getInitials(username: string): string {
     return username.slice(0, 2).toUpperCase();
 }
 
-export function RecentChanges({ versions, projectId, branchId }: RecentChangesProps) {
-    const changesHref = projectId
-        ? `/projects/changes?id=${projectId}${branchId ? `&branch_id=${branchId}` : ""}`
-        : "/projects/changes";
+export function RecentVersions({ versions, projectId, branchId }: RecentVersionsProps) {
+    const historyHref = projectId
+        ? `/projects/history?id=${projectId}${branchId ? `&branch_id=${branchId}` : ""}`
+        : "/projects/history";
 
     return (
         <div className="flex flex-col gap-4">
@@ -43,16 +43,16 @@ export function RecentChanges({ versions, projectId, branchId }: RecentChangesPr
                         className="pb-1 text-sm font-medium leading-relaxed text-foreground"
                         style={{ fontFamily: "var(--font-syne)" }}
                     >
-                        Recent Changes
+                        Recent Versions
                     </h3>
                     <span className="text-xs text-foreground/50">
                         • {versions.length} recent
                     </span>
                 </div>
                 <Link
-                    href={changesHref}
+                    href={historyHref}
                     className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
-                    aria-label="View all changes"
+                    aria-label="View branch history"
                 >
                     View all
                     <ChevronRight className="size-3.5" aria-hidden />
@@ -60,7 +60,7 @@ export function RecentChanges({ versions, projectId, branchId }: RecentChangesPr
             </div>
             {versions.length === 0 ? (
                 <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-6 text-center">
-                    <p className="text-sm text-foreground/50">No changes yet</p>
+                    <p className="text-sm text-foreground/50">No versions yet</p>
                 </div>
             ) : (
                 <ul className="flex flex-col gap-3" role="list">
@@ -88,12 +88,9 @@ export function RecentChanges({ versions, projectId, branchId }: RecentChangesPr
                                                 <span className="text-foreground/50">
                                                     {formatTimeAgo(version.created_at)}
                                                 </span>
-                                                <span className="rounded-md border bg-accent/15 text-accent border-accent/30 px-2.5 py-0.5 text-[10px] font-medium">
-                                                    Saved
-                                                </span>
                                             </div>
                                             <p className="mt-1 text-sm text-foreground/80">
-                                                {version.commit_message || "No message"}
+                                                {version.message || "No message"}
                                             </p>
                                             <p className="mt-0.5 font-mono text-xs text-foreground/60">
                                                 {version.branch_name}
