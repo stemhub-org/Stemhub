@@ -4,9 +4,9 @@
 
 #include <JuceHeader.h>
 
-// A restored copy the DAW is about to open as a project of its own. The plugin instance that
+// A restored copy the DAW is about to open as a separate project file. The plugin instance that
 // restored it writes this just before asking the DAW to open the file. The instance the DAW then
-// loads with that project takes it, once, and so knows which file it works on; which version the
+// loads with that project file takes it, once, and so knows which file it works on; which version the
 // file holds is in the working-copy record. The restoring instance keeps its own file.
 struct RestoreHandoff
 {

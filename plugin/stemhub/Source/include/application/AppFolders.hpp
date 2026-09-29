@@ -16,6 +16,6 @@ juce::File appData();
 juce::File legacyAppData();
 
 // Where opening a project from the grid restores its latest version: Documents/StemHub, where
-// the user can find the project and keep it.
+// the user can find the restored copy and keep it.
 juce::File restoredProjects();
 }

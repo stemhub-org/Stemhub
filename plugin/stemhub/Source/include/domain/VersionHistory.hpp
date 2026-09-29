@@ -6,7 +6,7 @@
 
 #include "domain/Version.hpp"
 
-// Rules about a workspace's list of versions.
+// Rules about a branch's history: its list of versions.
 namespace stemhub::versionhistory
 {
 // Newest first, as the history shows them.
