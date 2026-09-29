@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient
 from stemhub.auth import get_current_user
 from stemhub.blob_gc import sweep_orphan_blobs
 from stemhub.database import get_db
-from stemhub.models import Blob, Branch, Project, User, Version
+from stemhub.models import Blob, Branch, Collaborator, Project, User, Version
 from stemhub.routers.blobs import router as blobs_router
 from stemhub.routers.versions import router as versions_router
 from stemhub.storage import LocalFilesystemStorageService, get_storage_service
@@ -82,6 +82,7 @@ class FakeSession:
         self.branch = branch
         self.blobs: list[Blob] = []
         self.versions: list[Version] = []
+        self.collaborators: list[Collaborator] = []
         self.commit_calls = 0
 
     # ── SQLAlchemy surface ──
@@ -152,6 +153,13 @@ class _FakeResult:
                         return [(v, s.project.id)]
                 return []
             return [v for v in s.versions if not v.is_deleted]
+        if "from collaborator" in stmt_text:
+            # Access checks ask for the current user's membership, and write
+            # checks also filter on the Admin/Editor roles.
+            rows = [c for c in s.collaborators if c.user_id == s.user.id]
+            if "collaborator.role in" in stmt_text:
+                rows = [c for c in rows if c.role in ("Admin", "Editor")]
+            return rows
         if "from users" in stmt_text or "from user" in stmt_text:
             return [s.user]
         raise NotImplementedError(f"FakeSession does not know how to answer: {stmt_text[:200]}")
@@ -606,6 +614,62 @@ def test_create_version_rejects_an_unsupported_source_daw(tmp_path) -> None:
     assert "FL Studio" in response.text and "Ableton Live" in response.text
     assert session.versions == []
     assert session.blobs[0].ref_count == 0
+
+
+def _session_for_a_non_owner(*, is_public: bool = False, role: str | None = None) -> FakeSession:
+    """A session whose user doesn't own the project: a collaborator with `role`,
+    or a non-member when `role` is None. The project's blobs already exist, as
+    they would once the owner has saved a version."""
+    session = _new_session()
+    session.project.owner_id = uuid.uuid4()
+    session.project.is_public = is_public
+    if role is not None:
+        session.collaborators.append(
+            Collaborator(project_id=session.project.id, user_id=session.user.id, role=role)
+        )
+    _add_blob(session, "1" * 64)
+    _add_blob(session, "2" * 64)
+    return session
+
+
+def _post_v2_version(session: FakeSession, tmp_path):
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    manifest = _manifest_v2("1" * 64, 10, [("2" * 64, 20, "Samples/kick.wav")])
+    return client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"message": "not mine", "manifest": manifest},
+    )
+
+
+def test_a_viewer_cannot_create_a_version(tmp_path) -> None:
+    session = _session_for_a_non_owner(role="Viewer")
+
+    response = _post_v2_version(session, tmp_path)
+
+    # 404, not 403, like every other access check (SPECIFICATION.md §9.3 #6).
+    assert response.status_code == 404, response.text
+    assert session.versions == []
+    assert all(b.ref_count == 0 for b in session.blobs)
+
+
+def test_a_non_member_cannot_create_a_version_on_a_public_project(tmp_path) -> None:
+    session = _session_for_a_non_owner(is_public=True)
+
+    response = _post_v2_version(session, tmp_path)
+
+    assert response.status_code == 404, response.text
+    assert session.versions == []
+    assert all(b.ref_count == 0 for b in session.blobs)
+
+
+def test_an_editor_can_create_a_version(tmp_path) -> None:
+    session = _session_for_a_non_owner(role="Editor")
+
+    response = _post_v2_version(session, tmp_path)
+
+    assert response.status_code == 201, response.text
+    assert len(session.versions) == 1
+    assert all(b.ref_count == 1 for b in session.blobs)
 
 
 def test_create_version_from_manifest_returns_409_when_blobs_missing(tmp_path) -> None:

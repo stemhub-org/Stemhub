@@ -22,6 +22,7 @@ from stemhub.models import Blob, Branch, Project, Version, User
 from stemhub.routers._project_access import (
     get_project_with_owner_access,
     get_project_with_read_access,
+    get_project_with_write_access,
 )
 from stemhub.schemas import (
     AssetSummary,
@@ -46,6 +47,7 @@ async def _get_branch_with_access(
     branch_id: UUID,
     current_user: User,
     db: AsyncSession,
+    require_write: bool = False,
 ) -> Branch:
     result = await db.execute(
         select(Branch).join(Project).where(
@@ -57,9 +59,8 @@ async def _get_branch_with_access(
     branch = result.scalars().first()
     if branch is None:
         raise HTTPException(status_code=404, detail="Branch not found")
-    await get_project_with_read_access(
-        project_id=branch.project_id, current_user=current_user, db=db
-    )
+    check_access = get_project_with_write_access if require_write else get_project_with_read_access
+    await check_access(project_id=branch.project_id, current_user=current_user, db=db)
     return branch
 
 
@@ -205,7 +206,10 @@ async def create_version_from_manifest(
 
     See docs/content-addressed-storage.md.
     """
-    branch = await _get_branch_with_access(branch_id=branch_id, current_user=current_user, db=db)
+    # Saving a version writes to the project: owner, Admin or Editor only.
+    branch = await _get_branch_with_access(
+        branch_id=branch_id, current_user=current_user, db=db, require_write=True
+    )
 
     if payload.parent_version_id is not None:
         parent_result = await db.execute(
