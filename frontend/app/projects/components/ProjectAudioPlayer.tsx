@@ -41,12 +41,12 @@ function WaveformPlaceholder({ progress }: { progress: number }) {
     );
 }
 
-interface RepositoryAudioPlayerProps {
+interface ProjectAudioPlayerProps {
     projectId?: string | null;
     hasPreview?: boolean;
 }
 
-export function RepositoryAudioPlayer({ projectId, hasPreview }: RepositoryAudioPlayerProps) {
+export function ProjectAudioPlayer({ projectId, hasPreview }: ProjectAudioPlayerProps) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
