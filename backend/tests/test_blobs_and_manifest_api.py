@@ -2,8 +2,12 @@
 
 Covers:
 - PUT /projects/{pid}/blobs/{sha256}: idempotent upload, sha256 mismatch → 400.
-- POST /branches/{bid}/versions/from-manifest: 409 on missing blobs, ref_count bump.
-- DELETE /versions/{vid}: ref_count decrement for CAS versions.
+- POST /branches/{bid}/versions/from-manifest: v1 and v2 manifests, 409 on
+  missing blobs, ref_count bump, `message` (and its `commit_message` input
+  alias, and the old plugin placeholder stored as no message), source_daw
+  validation.
+- DELETE /versions/{vid}: ref_count decrement for CAS versions, symmetric with
+  the create-time increment for both manifest versions.
 - blob_gc.sweep_orphan_blobs: deletes ref_count==0 blobs older than grace window.
 """
 from __future__ import annotations
@@ -15,6 +19,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -288,7 +293,9 @@ def test_blob_upload_rejects_sha_mismatch(tmp_path) -> None:
 # ── from-manifest tests ──
 
 
-def _manifest(project_sha: str, project_size: int, track_sha: str, track_size: int) -> dict:
+def _manifest(project_sha: str, project_size: int, asset_sha: str, asset_size: int) -> dict:
+    """A legacy v1 manifest, as plugins before v2 send it: assets under
+    "tracks", paths under "filename"."""
     return {
         "manifest_version": 1,
         "source_daw": "FL Studio",
@@ -300,13 +307,42 @@ def _manifest(project_sha: str, project_size: int, track_sha: str, track_size: i
         },
         "tracks": [
             {
-                "sha256": track_sha,
-                "size_bytes": track_size,
+                "sha256": asset_sha,
+                "size_bytes": asset_size,
                 "filename": "kick.wav",
                 "name": "Kick",
             },
         ],
     }
+
+
+def _manifest_v2(project_sha: str, project_size: int, assets: list[tuple[str, int, str]]) -> dict:
+    return {
+        "manifest_version": 2,
+        "source_daw": "FL Studio",
+        "source_project_filename": "Song.flp",
+        "project_file": {"sha256": project_sha, "size_bytes": project_size, "path": "Song.flp"},
+        "assets": [
+            {"sha256": sha, "size_bytes": size, "path": path}
+            for sha, size, path in assets
+        ],
+    }
+
+
+def _add_blob(session: FakeSession, sha: str, *, ref_count: int = 0) -> Blob:
+    blob = Blob(
+        project_id=session.project.id, sha256=sha, size_bytes=1,
+        storage_uri=f"projects/{session.project.id}/blobs/{sha[:2]}/{sha}", ref_count=ref_count,
+        created_at=datetime.now(timezone.utc),
+    )
+    session.blobs.append(blob)
+    return blob
+
+
+def _new_session() -> FakeSession:
+    user = _user()
+    project = _project(user.id)
+    return FakeSession(user=user, project=project, branch=_branch(project.id))
 
 
 def test_create_version_from_manifest_bumps_ref_count(tmp_path) -> None:
@@ -316,9 +352,9 @@ def test_create_version_from_manifest_bumps_ref_count(tmp_path) -> None:
     session = FakeSession(user=user, project=project, branch=branch)
 
     proj_bytes = b"flp bytes"
-    track_bytes = b"wav bytes"
+    asset_bytes = b"wav bytes"
     proj_sha = hashlib.sha256(proj_bytes).hexdigest()
-    track_sha = hashlib.sha256(track_bytes).hexdigest()
+    asset_sha = hashlib.sha256(asset_bytes).hexdigest()
 
     session.blobs.append(Blob(
         project_id=project.id, sha256=proj_sha, size_bytes=len(proj_bytes),
@@ -326,7 +362,7 @@ def test_create_version_from_manifest_bumps_ref_count(tmp_path) -> None:
         created_at=datetime.now(timezone.utc),
     ))
     session.blobs.append(Blob(
-        project_id=project.id, sha256=track_sha, size_bytes=len(track_bytes),
+        project_id=project.id, sha256=asset_sha, size_bytes=len(asset_bytes),
         storage_uri="y", ref_count=0,
         created_at=datetime.now(timezone.utc),
     ))
@@ -335,17 +371,241 @@ def test_create_version_from_manifest_bumps_ref_count(tmp_path) -> None:
     response = client.post(
         f"/branches/{branch.id}/versions/from-manifest",
         json={
-            "commit_message": "first cut",
-            "manifest": _manifest(proj_sha, len(proj_bytes), track_sha, len(track_bytes)),
+            "message": "first cut",
+            "manifest": _manifest(proj_sha, len(proj_bytes), asset_sha, len(asset_bytes)),
         },
     )
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["source_daw"] == "FL Studio"
     assert body["manifest_version"] == 1
+    assert body["message"] == "first cut"
     # ref_count bumped exactly once per referenced blob
     assert all(b.ref_count == 1 for b in session.blobs)
     assert len(session.versions) == 1
+
+
+def test_create_version_from_a_v2_manifest_stores_it_as_sent(tmp_path) -> None:
+    session = _new_session()
+    project_sha, kick_sha = "1" * 64, "2" * 64
+    _add_blob(session, project_sha)
+    _add_blob(session, kick_sha)
+    manifest = _manifest_v2(project_sha, 10, [(kick_sha, 20, "Samples/kick.wav")])
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"message": "v2 save", "manifest": manifest},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["manifest_version"] == 2
+    assert body["manifest_json"] == manifest
+    assert body["source_daw"] == "FL Studio"
+    assert body["source_project_filename"] == "Song.flp"
+    assert all(b.ref_count == 1 for b in session.blobs)
+
+
+def test_create_version_drops_v1_fields_that_are_never_read(tmp_path) -> None:
+    session = _new_session()
+    project_sha, kick_sha = "1" * 64, "2" * 64
+    _add_blob(session, project_sha)
+    _add_blob(session, kick_sha)
+    manifest = _manifest(project_sha, 10, kick_sha, 20)
+    manifest["mixer_state"] = {"inserts": []}
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"manifest": manifest},
+    )
+
+    assert response.status_code == 201, response.text
+    assert "mixer_state" not in response.json()["manifest_json"]
+
+
+def test_create_version_reads_a_manifest_without_a_version_as_v1(tmp_path) -> None:
+    session = _new_session()
+    project_sha, kick_sha = "1" * 64, "2" * 64
+    _add_blob(session, project_sha)
+    _add_blob(session, kick_sha)
+    manifest = _manifest(project_sha, 10, kick_sha, 20)
+    del manifest["manifest_version"]
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"manifest": manifest},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["manifest_version"] == 1
+
+
+def test_create_version_rejects_an_unknown_manifest_version(tmp_path) -> None:
+    session = _new_session()
+    manifest = _manifest_v2("1" * 64, 10, [])
+    manifest["manifest_version"] = 3
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"manifest": manifest},
+    )
+
+    assert response.status_code == 422
+    assert session.versions == []
+
+
+def test_create_version_rejects_a_v2_manifest_that_also_lists_tracks(tmp_path) -> None:
+    # Otherwise the "tracks" list would be dropped silently and its blobs
+    # neither checked for existence nor ref-counted.
+    session = _new_session()
+    project_sha, kick_sha, snare_sha = "1" * 64, "2" * 64, "3" * 64
+    for sha in (project_sha, kick_sha, snare_sha):
+        _add_blob(session, sha)
+    manifest = _manifest_v2(project_sha, 10, [(kick_sha, 20, "Samples/kick.wav")])
+    manifest["tracks"] = [{"sha256": snare_sha, "size_bytes": 30, "filename": "snare.wav", "name": "Snare"}]
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"manifest": manifest},
+    )
+
+    assert response.status_code == 422
+    assert "tracks" in response.text
+    assert session.versions == []
+    assert all(b.ref_count == 0 for b in session.blobs)
+
+
+def test_create_version_rejects_a_v1_manifest_that_also_lists_assets(tmp_path) -> None:
+    session = _new_session()
+    project_sha, kick_sha, snare_sha = "1" * 64, "2" * 64, "3" * 64
+    for sha in (project_sha, kick_sha, snare_sha):
+        _add_blob(session, sha)
+    manifest = _manifest(project_sha, 10, kick_sha, 20)
+    manifest["assets"] = [{"sha256": snare_sha, "size_bytes": 30, "path": "Samples/snare.wav"}]
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"manifest": manifest},
+    )
+
+    assert response.status_code == 422
+    assert "assets" in response.text
+    assert session.versions == []
+    assert all(b.ref_count == 0 for b in session.blobs)
+
+
+def test_create_version_accepts_commit_message_as_an_alias_of_message(tmp_path) -> None:
+    # Plugins built before the rename still send "commit_message".
+    session = _new_session()
+    project_sha = "1" * 64
+    _add_blob(session, project_sha)
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"commit_message": "old plugin", "manifest": _manifest_v2(project_sha, 10, [])},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["message"] == "old plugin"
+    assert "commit_message" not in body
+    assert session.versions[0].message == "old plugin"
+
+
+def test_create_version_without_a_message_stores_none(tmp_path) -> None:
+    session = _new_session()
+    project_sha = "1" * 64
+    _add_blob(session, project_sha)
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"manifest": _manifest_v2(project_sha, 10, [])},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["message"] is None
+
+
+@pytest.mark.parametrize("message_field", ["message", "commit_message"])
+def test_create_version_stores_the_old_plugin_placeholder_as_no_message(tmp_path, message_field) -> None:
+    # Plugins built before the rename send "Save from plugin" when the user
+    # wrote nothing; stored rows holding it were cleared by migration 316caf0fcfa9.
+    session = _new_session()
+    project_sha = "1" * 64
+    _add_blob(session, project_sha)
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={message_field: "Save from plugin", "manifest": _manifest_v2(project_sha, 10, [])},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["message"] is None
+    assert session.versions[0].message is None
+
+
+@pytest.mark.parametrize("message", ["save from plugin", "Save from plugin!", " Save from plugin"])
+def test_create_version_keeps_messages_that_only_resemble_the_placeholder(tmp_path, message) -> None:
+    # Same exact match as the migration: anything else is the user's own text.
+    session = _new_session()
+    project_sha = "1" * 64
+    _add_blob(session, project_sha)
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"message": message, "manifest": _manifest_v2(project_sha, 10, [])},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["message"] == message
+
+
+def test_create_version_normalizes_source_daw_case_and_spacing(tmp_path) -> None:
+    session = _new_session()
+    project_sha = "1" * 64
+    _add_blob(session, project_sha)
+    manifest = _manifest_v2(project_sha, 10, [])
+    manifest["source_daw"] = "  ableton   LIVE "
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"manifest": manifest},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["source_daw"] == "Ableton Live"
+    assert body["manifest_json"]["source_daw"] == "Ableton Live"
+
+
+def test_create_version_rejects_an_unsupported_source_daw(tmp_path) -> None:
+    session = _new_session()
+    project_sha = "1" * 64
+    _add_blob(session, project_sha)
+    manifest = _manifest_v2(project_sha, 10, [])
+    manifest["source_daw"] = "Logic Pro"
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"manifest": manifest},
+    )
+
+    assert response.status_code == 422
+    assert "FL Studio" in response.text and "Ableton Live" in response.text
+    assert session.versions == []
+    assert session.blobs[0].ref_count == 0
 
 
 def test_create_version_from_manifest_returns_409_when_blobs_missing(tmp_path) -> None:
@@ -355,19 +615,19 @@ def test_create_version_from_manifest_returns_409_when_blobs_missing(tmp_path) -
     session = FakeSession(user=user, project=project, branch=branch)
 
     proj_sha = "a" * 64
-    track_sha = "b" * 64
+    asset_sha = "b" * 64
 
     client = _make_client(session, LocalFilesystemStorageService(tmp_path))
     response = client.post(
         f"/branches/{branch.id}/versions/from-manifest",
         json={
-            "manifest": _manifest(proj_sha, 10, track_sha, 20),
+            "manifest": _manifest(proj_sha, 10, asset_sha, 20),
         },
     )
     assert response.status_code == 409
     detail = response.json()["detail"]
     assert detail["error"] == "missing_blobs"
-    assert set(detail["missing"]) == {proj_sha, track_sha}
+    assert set(detail["missing"]) == {proj_sha, asset_sha}
     assert session.versions == []
 
 
@@ -381,14 +641,14 @@ def test_delete_cas_version_decrements_ref_count(tmp_path) -> None:
     session = FakeSession(user=user, project=project, branch=branch)
 
     proj_sha = "c" * 64
-    track_sha = "d" * 64
+    asset_sha = "d" * 64
     session.blobs.append(Blob(
         project_id=project.id, sha256=proj_sha, size_bytes=1,
         storage_uri="x", ref_count=1,
         created_at=datetime.now(timezone.utc),
     ))
     session.blobs.append(Blob(
-        project_id=project.id, sha256=track_sha, size_bytes=1,
+        project_id=project.id, sha256=asset_sha, size_bytes=1,
         storage_uri="y", ref_count=2,  # referenced by another version too
         created_at=datetime.now(timezone.utc),
     ))
@@ -397,7 +657,7 @@ def test_delete_cas_version_decrements_ref_count(tmp_path) -> None:
         branch_id=branch.id,
         created_at=datetime.now(timezone.utc),
         is_deleted=False,
-        manifest_json=_manifest(proj_sha, 1, track_sha, 1),
+        manifest_json=_manifest(proj_sha, 1, asset_sha, 1),
         manifest_version=1,
     )
     session.versions.append(version)
@@ -407,7 +667,47 @@ def test_delete_cas_version_decrements_ref_count(tmp_path) -> None:
     assert response.status_code == 204
     assert version.is_deleted is True
     assert next(b for b in session.blobs if b.sha256 == proj_sha).ref_count == 0
-    assert next(b for b in session.blobs if b.sha256 == track_sha).ref_count == 1
+    assert next(b for b in session.blobs if b.sha256 == asset_sha).ref_count == 1
+
+
+def test_ref_counts_return_to_their_start_after_creating_and_deleting_v1_and_v2_versions(tmp_path) -> None:
+    """Create-time increments and delete-time decrements go through the same
+    manifest reader, so a v1 and a v2 version created then deleted leave every
+    blob where it started — including a blob shared by both versions and a
+    blob listed twice in one manifest (counted once per version)."""
+    session = _new_session()
+    v1_project, v2_project, shared, doubled = "1" * 64, "2" * 64, "3" * 64, "4" * 64
+    start = {v1_project: 0, v2_project: 3, shared: 1, doubled: 0}
+    for sha, ref_count in start.items():
+        _add_blob(session, sha, ref_count=ref_count)
+
+    client = _make_client(session, LocalFilesystemStorageService(tmp_path))
+    v1_response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={"commit_message": "v1", "manifest": _manifest(v1_project, 1, shared, 1)},
+    )
+    v2_response = client.post(
+        f"/branches/{session.branch.id}/versions/from-manifest",
+        json={
+            "message": "v2",
+            "manifest": _manifest_v2(
+                v2_project,
+                1,
+                [(shared, 1, "Samples/shared.wav"), (doubled, 1, "Samples/a.wav"), (doubled, 1, "Samples/b.wav")],
+            ),
+        },
+    )
+    assert v1_response.status_code == 201, v1_response.text
+    assert v2_response.status_code == 201, v2_response.text
+
+    ref_counts = {b.sha256: b.ref_count for b in session.blobs}
+    assert ref_counts == {v1_project: 1, v2_project: 4, shared: 3, doubled: 1}
+
+    for response in (v1_response, v2_response):
+        delete_response = client.delete(f"/versions/{response.json()['id']}")
+        assert delete_response.status_code == 204
+
+    assert {b.sha256: b.ref_count for b in session.blobs} == start
 
 
 # ── GC sweep ──

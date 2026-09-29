@@ -88,7 +88,7 @@ class Version(Base):
     branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branch.id"), nullable=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     parent_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=True)  # Git-like history
-    commit_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -106,21 +106,22 @@ class Version(Base):
 
 
 class PullRequest(Base):
-    """Proposal to merge one branch into another within the same project.
+    """Proposal to bring one branch into another within the same project.
 
-    Lifecycle: OPEN → MERGED (merge engine, issue #253) or OPEN → CLOSED
-    (closed without merge). Both MERGED and CLOSED are terminal — a closed PR
-    is not reopened, users open a new one (SPECIFICATION.md §7, §19).
+    Lifecycle: OPEN → MERGED (accepted, which promotes the source branch with
+    no content merge, issue #253) or OPEN → CLOSED (closed without accepting).
+    Both MERGED and CLOSED are terminal — a closed PR is not reopened, users
+    open a new one (SPECIFICATION.md §19).
     """
     __tablename__ = "pull_request"
     __table_args__ = (
         # Kept as a plain String + CHECK rather than a native Postgres ENUM so
         # adding a status later is a one-line migration, not an ALTER TYPE.
         CheckConstraint("status IN ('OPEN', 'MERGED', 'CLOSED')", name="ck_pull_request_status"),
-        # Same invariant as the API-level 400: a branch cannot be merged into itself.
+        # Same invariant as the API-level 400: a branch cannot be proposed into itself.
         CheckConstraint("source_branch_id <> target_branch_id", name="ck_pull_request_distinct_branches"),
         # At most one OPEN pull request per ordered (source, target) pair, as on
-        # GitHub. Partial so closed/merged/soft-deleted PRs never block a new one.
+        # GitHub. Partial so CLOSED/MERGED/soft-deleted PRs never block a new one.
         Index(
             "uq_pull_request_open_pair",
             "source_branch_id",
@@ -140,8 +141,8 @@ class PullRequest(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN")  # OPEN, MERGED, CLOSED
     # Head (latest live version) of each branch when the PR was opened. Branch
-    # has no head pointer, so this is the only record of what was proposed; the
-    # merge engine (issue #253) compares target_head against the live head to
+    # has no head pointer, so this is the only record of what was proposed;
+    # accepting (issue #253) compares target_head against the live head to
     # refuse a stale promotion. NULL when the branch had no version yet.
     source_head_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=True)
     target_head_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("version.id"), nullable=True)

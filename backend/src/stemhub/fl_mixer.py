@@ -1,3 +1,8 @@
+"""The FL Studio mixer, read from a project file (.flp) with PyFLP, and its diff.
+
+Inserts use FL Studio's numbering (Master = 0). Effect slots keep their 0-based
+index; user-facing messages show them as FL Studio does (index + 1).
+"""
 from __future__ import annotations
 
 import hashlib
@@ -9,38 +14,40 @@ from stemhub.dependency_guard import ensure_pyflp_available
 from stemhub.storage import StorageService
 
 
-# PyFLP numbers inserts from -1 (Master); snapshots use FL Studio's numbering, where Master is 0.
+# PyFLP numbers inserts from -1 (Master); FlMixer uses FL Studio's numbering, where Master is 0.
 PYFLP_TO_FL_INSERT_OFFSET = 1
-MASTER_INSERT_IID = 0
+MASTER_INSERT_INDEX = 0
 
 
-class MixerSnapshotError(RuntimeError):
-    """Raised when a version artifact cannot produce a valid FL Studio mixer snapshot."""
+class MixerReadError(RuntimeError):
+    """Raised when a version's project file cannot give a valid FL Studio mixer."""
 
 
 @dataclass(frozen=True)
-class MixerSlotSnapshot:
+class FlEffectSlot:
     index: int
     name: str | None
     internal_name: str | None
     enabled: bool | None
-    mix: int | None
-    plugin_key: str | None
+    # Raw PyFLP value (slot "mix"); unit normalization is #170's job.
+    dry_wet: int | None
+    # The third-party or native plugin loaded in the slot.
+    plugin_name: str | None
 
 
 @dataclass(frozen=True)
-class MixerInsertSnapshot:
-    iid: int
+class FlMixerInsert:
+    index: int
     name: str | None
     enabled: bool | None
     volume: int | None
     pan: int | None
-    slots: tuple[MixerSlotSnapshot, ...]
+    slots: tuple[FlEffectSlot, ...]
 
 
 @dataclass(frozen=True)
-class MixerProjectSnapshot:
-    inserts: tuple[MixerInsertSnapshot, ...]
+class FlMixer:
+    inserts: tuple[FlMixerInsert, ...]
     flp_sha256: str | None = None
     flp_size_bytes: int | None = None
     mixer_supported: bool = True
@@ -50,7 +57,8 @@ class MixerProjectSnapshot:
 @dataclass(frozen=True)
 class MixerDiffChange:
     type: str
-    insert_iid: int
+    # None for project-level changes (project_file_changed).
+    insert_index: int | None
     insert_name: str | None
     slot_index: int | None
     before: Any
@@ -72,18 +80,18 @@ class MixerDiffResult:
     changes: tuple[MixerDiffChange, ...]
 
 
-def load_fl_studio_mixer_snapshot(
+def load_fl_mixer(
     *,
     storage_uri: str,
     storage: StorageService,
-) -> MixerProjectSnapshot:
-    """Load a mixer snapshot from a content-addressed .flp blob.
+) -> FlMixer:
+    """Read the mixer of a stored FL Studio project file.
 
-    The manifest_json.project_file blob is the raw .flp — no bundle/zip
-    unpacking needed. See docs/content-addressed-storage.md.
+    The manifest's project file is stored as the raw .flp, so it is parsed
+    as is. See docs/content-addressed-storage.md.
     """
     if not storage_uri:
-        raise MixerSnapshotError("Version has no project-file blob to read.")
+        raise MixerReadError("This version has no project file to read.")
 
     ensure_pyflp_available()
     pyflp = importlib.import_module("pyflp")
@@ -93,7 +101,7 @@ def load_fl_studio_mixer_snapshot(
     try:
         project = pyflp.parse(flp_path)
     except Exception as exc:  # pragma: no cover - parser internals vary by FLP shape
-        return MixerProjectSnapshot(
+        return FlMixer(
             inserts=(),
             flp_sha256=hashlib.sha256(flp_bytes).hexdigest(),
             flp_size_bytes=len(flp_bytes),
@@ -101,30 +109,30 @@ def load_fl_studio_mixer_snapshot(
             parse_error=str(exc),
         )
 
-    return build_mixer_snapshot(
+    return parse_fl_mixer(
         project,
         flp_sha256=hashlib.sha256(flp_bytes).hexdigest(),
         flp_size_bytes=len(flp_bytes),
     )
 
 
-def build_mixer_snapshot(
+def parse_fl_mixer(
     project: Any,
     *,
     flp_sha256: str | None = None,
     flp_size_bytes: int | None = None,
-) -> MixerProjectSnapshot:
-    inserts: list[MixerInsertSnapshot] = []
+) -> FlMixer:
+    inserts: list[FlMixerInsert] = []
 
     for insert in getattr(project, "mixer", []):
         iid = _safe_model_attr(insert, "iid")
         if iid is None:
             continue
 
-        slots = _build_slot_snapshots(insert)
+        slots = _parse_effect_slots(insert)
         inserts.append(
-            MixerInsertSnapshot(
-                iid=int(iid) + PYFLP_TO_FL_INSERT_OFFSET,
+            FlMixerInsert(
+                index=int(iid) + PYFLP_TO_FL_INSERT_OFFSET,
                 name=_normalize_optional_text(_safe_model_attr(insert, "name")),
                 enabled=_coerce_optional_bool(_safe_model_attr(insert, "enabled")),
                 volume=_coerce_optional_int(_safe_model_attr(insert, "volume")),
@@ -133,8 +141,8 @@ def build_mixer_snapshot(
             )
         )
 
-    inserts.sort(key=lambda item: item.iid)
-    return MixerProjectSnapshot(
+    inserts.sort(key=lambda item: item.index)
+    return FlMixer(
         inserts=tuple(inserts),
         flp_sha256=flp_sha256,
         flp_size_bytes=flp_size_bytes,
@@ -142,28 +150,28 @@ def build_mixer_snapshot(
     )
 
 
-def diff_mixer_project_snapshots(
-    base_snapshot: MixerProjectSnapshot,
-    target_snapshot: MixerProjectSnapshot,
+def diff_fl_mixers(
+    base_mixer: FlMixer,
+    target_mixer: FlMixer,
 ) -> MixerDiffResult:
     changes: list[MixerDiffChange] = []
-    base_inserts = {insert.iid: insert for insert in base_snapshot.inserts}
-    target_inserts = {insert.iid: insert for insert in target_snapshot.inserts}
+    base_inserts = {insert.index: insert for insert in base_mixer.inserts}
+    target_inserts = {insert.index: insert for insert in target_mixer.inserts}
 
-    for insert_iid in sorted(set(base_inserts) | set(target_inserts)):
-        base_insert = base_inserts.get(insert_iid)
-        target_insert = target_inserts.get(insert_iid)
+    for insert_index in sorted(set(base_inserts) | set(target_inserts)):
+        base_insert = base_inserts.get(insert_index)
+        target_insert = target_inserts.get(insert_index)
 
         if base_insert is None and target_insert is not None:
             changes.append(
                 MixerDiffChange(
                     type="insert_added",
-                    insert_iid=insert_iid,
+                    insert_index=insert_index,
                     insert_name=target_insert.name,
                     slot_index=None,
                     before=None,
                     after=_serialize_insert(target_insert),
-                    message=f'{_format_insert_label(insert_iid, target_insert.name)} added',
+                    message=f'{_format_insert_label(insert_index, target_insert.name)} added',
                 )
             )
             continue
@@ -172,12 +180,12 @@ def diff_mixer_project_snapshots(
             changes.append(
                 MixerDiffChange(
                     type="insert_removed",
-                    insert_iid=insert_iid,
+                    insert_index=insert_index,
                     insert_name=base_insert.name,
                     slot_index=None,
                     before=_serialize_insert(base_insert),
                     after=None,
-                    message=f'{_format_insert_label(insert_iid, base_insert.name)} removed',
+                    message=f'{_format_insert_label(insert_index, base_insert.name)} removed',
                 )
             )
             continue
@@ -191,13 +199,13 @@ def diff_mixer_project_snapshots(
             changes.append(
                 MixerDiffChange(
                     type="insert_renamed",
-                    insert_iid=insert_iid,
+                    insert_index=insert_index,
                     insert_name=insert_name,
                     slot_index=None,
                     before=base_insert.name,
                     after=target_insert.name,
                     message=(
-                        f'{_format_insert_label(insert_iid, base_insert.name)} renamed: '
+                        f'{_format_insert_label(insert_index, base_insert.name)} renamed: '
                         f'{_format_text_value(base_insert.name)} -> {_format_text_value(target_insert.name)}'
                     ),
                 )
@@ -207,13 +215,13 @@ def diff_mixer_project_snapshots(
             changes.append(
                 MixerDiffChange(
                     type="insert_enabled_changed",
-                    insert_iid=insert_iid,
+                    insert_index=insert_index,
                     insert_name=insert_name,
                     slot_index=None,
                     before=base_insert.enabled,
                     after=target_insert.enabled,
                     message=(
-                        f'{_format_insert_label(insert_iid, insert_name)} enabled changed: '
+                        f'{_format_insert_label(insert_index, insert_name)} enabled changed: '
                         f'{_format_bool_value(base_insert.enabled)} -> {_format_bool_value(target_insert.enabled)}'
                     ),
                 )
@@ -223,13 +231,13 @@ def diff_mixer_project_snapshots(
             changes.append(
                 MixerDiffChange(
                     type="insert_volume_changed",
-                    insert_iid=insert_iid,
+                    insert_index=insert_index,
                     insert_name=insert_name,
                     slot_index=None,
                     before=base_insert.volume,
                     after=target_insert.volume,
                     message=(
-                        f'{_format_insert_label(insert_iid, insert_name)} volume changed: '
+                        f'{_format_insert_label(insert_index, insert_name)} volume changed: '
                         f'{_format_scalar_value(base_insert.volume)} -> {_format_scalar_value(target_insert.volume)}'
                     ),
                 )
@@ -239,23 +247,23 @@ def diff_mixer_project_snapshots(
             changes.append(
                 MixerDiffChange(
                     type="insert_pan_changed",
-                    insert_iid=insert_iid,
+                    insert_index=insert_index,
                     insert_name=insert_name,
                     slot_index=None,
                     before=base_insert.pan,
                     after=target_insert.pan,
                     message=(
-                        f'{_format_insert_label(insert_iid, insert_name)} pan changed: '
+                        f'{_format_insert_label(insert_index, insert_name)} pan changed: '
                         f'{_format_scalar_value(base_insert.pan)} -> {_format_scalar_value(target_insert.pan)}'
                     ),
                 )
             )
 
-        changes.extend(_diff_insert_slots(base_insert, target_insert))
+        changes.extend(_diff_effect_slots(base_insert, target_insert))
 
-    insert_changes = {change.insert_iid for change in changes if change.type.startswith("insert_")}
+    insert_changes = {change.insert_index for change in changes if change.type.startswith("insert_")}
     slot_changes = {
-        (change.insert_iid, change.slot_index)
+        (change.insert_index, change.slot_index)
         for change in changes
         if change.type.startswith("slot_") and change.slot_index is not None
     }
@@ -264,7 +272,7 @@ def diff_mixer_project_snapshots(
         "insert_volume_changed",
         "insert_pan_changed",
         "slot_enabled_changed",
-        "slot_mix_changed",
+        "slot_dry_wet_changed",
     }
 
     summary = MixerDiffSummary(
@@ -276,28 +284,28 @@ def diff_mixer_project_snapshots(
 
     if (
         summary.total_changes == 0
-        and (not base_snapshot.mixer_supported or not target_snapshot.mixer_supported)
-        and base_snapshot.flp_sha256 is not None
-        and target_snapshot.flp_sha256 is not None
-        and base_snapshot.flp_sha256 != target_snapshot.flp_sha256
+        and (not base_mixer.mixer_supported or not target_mixer.mixer_supported)
+        and base_mixer.flp_sha256 is not None
+        and target_mixer.flp_sha256 is not None
+        and base_mixer.flp_sha256 != target_mixer.flp_sha256
     ):
         changes.append(
             MixerDiffChange(
-                type="project_binary_changed",
-                insert_iid=-1,
+                type="project_file_changed",
+                insert_index=None,
                 insert_name=None,
                 slot_index=None,
                 before={
-                    "flp_sha256": base_snapshot.flp_sha256,
-                    "flp_size_bytes": base_snapshot.flp_size_bytes,
+                    "sha256": base_mixer.flp_sha256,
+                    "size_bytes": base_mixer.flp_size_bytes,
                 },
                 after={
-                    "flp_sha256": target_snapshot.flp_sha256,
-                    "flp_size_bytes": target_snapshot.flp_size_bytes,
+                    "sha256": target_mixer.flp_sha256,
+                    "size_bytes": target_mixer.flp_size_bytes,
                 },
                 message=(
-                    "FL Studio project binary changed, but mixer semantic extraction is unavailable "
-                    "for this snapshot format."
+                    "The FL Studio project file changed, but its mixer could not be read, "
+                    "so no mixer diff is available."
                 ),
             )
         )
@@ -311,15 +319,15 @@ def diff_mixer_project_snapshots(
     return MixerDiffResult(summary=summary, changes=tuple(changes))
 
 
-def _build_slot_snapshots(insert: Any) -> tuple[MixerSlotSnapshot, ...]:
-    slots: list[MixerSlotSnapshot] = []
+def _parse_effect_slots(insert: Any) -> tuple[FlEffectSlot, ...]:
+    slots: list[FlEffectSlot] = []
 
     try:
         for slot in insert:
             name = _normalize_optional_text(_safe_model_attr(slot, "name"))
             internal_name = _normalize_optional_text(_safe_model_attr(slot, "internal_name"))
-            plugin_key = _resolve_slot_plugin_key(slot, name=name, internal_name=internal_name)
-            if not any((name, internal_name, plugin_key)):
+            plugin_name = _resolve_slot_plugin_name(slot, name=name, internal_name=internal_name)
+            if not any((name, internal_name, plugin_name)):
                 continue
 
             slot_index = _safe_model_attr(slot, "index")
@@ -327,13 +335,13 @@ def _build_slot_snapshots(insert: Any) -> tuple[MixerSlotSnapshot, ...]:
                 continue
 
             slots.append(
-                MixerSlotSnapshot(
+                FlEffectSlot(
                     index=int(slot_index),
                     name=name,
                     internal_name=internal_name,
                     enabled=_coerce_optional_bool(_safe_model_attr(slot, "enabled")),
-                    mix=_coerce_optional_int(_safe_model_attr(slot, "mix")),
-                    plugin_key=plugin_key,
+                    dry_wet=_coerce_optional_int(_safe_model_attr(slot, "mix")),
+                    plugin_name=plugin_name,
                 )
             )
     except Exception:
@@ -343,9 +351,9 @@ def _build_slot_snapshots(insert: Any) -> tuple[MixerSlotSnapshot, ...]:
     return tuple(slots)
 
 
-def _diff_insert_slots(
-    base_insert: MixerInsertSnapshot,
-    target_insert: MixerInsertSnapshot,
+def _diff_effect_slots(
+    base_insert: FlMixerInsert,
+    target_insert: FlMixerInsert,
 ) -> list[MixerDiffChange]:
     changes: list[MixerDiffChange] = []
     base_slots = {slot.index: slot for slot in base_insert.slots}
@@ -360,14 +368,14 @@ def _diff_insert_slots(
             changes.append(
                 MixerDiffChange(
                     type="slot_added",
-                    insert_iid=target_insert.iid,
+                    insert_index=target_insert.index,
                     insert_name=insert_name,
                     slot_index=slot_index,
                     before=None,
                     after=_serialize_slot(target_slot),
                     message=(
-                        f'{_format_slot_label(target_insert.iid, insert_name, slot_index)} added: '
-                        f'{_format_text_value(target_slot.plugin_key or target_slot.name)}'
+                        f'{_format_slot_label(target_insert.index, insert_name, slot_index)} added: '
+                        f'{_format_text_value(target_slot.plugin_name or target_slot.name)}'
                     ),
                 )
             )
@@ -377,14 +385,14 @@ def _diff_insert_slots(
             changes.append(
                 MixerDiffChange(
                     type="slot_removed",
-                    insert_iid=base_insert.iid,
+                    insert_index=base_insert.index,
                     insert_name=insert_name,
                     slot_index=slot_index,
                     before=_serialize_slot(base_slot),
                     after=None,
                     message=(
-                        f'{_format_slot_label(base_insert.iid, insert_name, slot_index)} removed: '
-                        f'{_format_text_value(base_slot.plugin_key or base_slot.name)}'
+                        f'{_format_slot_label(base_insert.index, insert_name, slot_index)} removed: '
+                        f'{_format_text_value(base_slot.plugin_name or base_slot.name)}'
                     ),
                 )
             )
@@ -393,18 +401,18 @@ def _diff_insert_slots(
         if base_slot is None or target_slot is None:
             continue
 
-        if base_slot.plugin_key != target_slot.plugin_key:
+        if base_slot.plugin_name != target_slot.plugin_name:
             changes.append(
                 MixerDiffChange(
                     type="slot_plugin_changed",
-                    insert_iid=target_insert.iid,
+                    insert_index=target_insert.index,
                     insert_name=insert_name,
                     slot_index=slot_index,
-                    before=base_slot.plugin_key,
-                    after=target_slot.plugin_key,
+                    before=base_slot.plugin_name,
+                    after=target_slot.plugin_name,
                     message=(
-                        f'{_format_slot_label(target_insert.iid, insert_name, slot_index)} plugin changed: '
-                        f'{_format_text_value(base_slot.plugin_key)} -> {_format_text_value(target_slot.plugin_key)}'
+                        f'{_format_slot_label(target_insert.index, insert_name, slot_index)} plugin changed: '
+                        f'{_format_text_value(base_slot.plugin_name)} -> {_format_text_value(target_slot.plugin_name)}'
                     ),
                 )
             )
@@ -413,30 +421,30 @@ def _diff_insert_slots(
             changes.append(
                 MixerDiffChange(
                     type="slot_enabled_changed",
-                    insert_iid=target_insert.iid,
+                    insert_index=target_insert.index,
                     insert_name=insert_name,
                     slot_index=slot_index,
                     before=base_slot.enabled,
                     after=target_slot.enabled,
                     message=(
-                        f'{_format_slot_label(target_insert.iid, insert_name, slot_index)} enabled changed: '
+                        f'{_format_slot_label(target_insert.index, insert_name, slot_index)} enabled changed: '
                         f'{_format_bool_value(base_slot.enabled)} -> {_format_bool_value(target_slot.enabled)}'
                     ),
                 )
             )
 
-        if base_slot.mix != target_slot.mix:
+        if base_slot.dry_wet != target_slot.dry_wet:
             changes.append(
                 MixerDiffChange(
-                    type="slot_mix_changed",
-                    insert_iid=target_insert.iid,
+                    type="slot_dry_wet_changed",
+                    insert_index=target_insert.index,
                     insert_name=insert_name,
                     slot_index=slot_index,
-                    before=base_slot.mix,
-                    after=target_slot.mix,
+                    before=base_slot.dry_wet,
+                    after=target_slot.dry_wet,
                     message=(
-                        f'{_format_slot_label(target_insert.iid, insert_name, slot_index)} mix changed: '
-                        f'{_format_scalar_value(base_slot.mix)} -> {_format_scalar_value(target_slot.mix)}'
+                        f'{_format_slot_label(target_insert.index, insert_name, slot_index)} dry/wet changed: '
+                        f'{_format_scalar_value(base_slot.dry_wet)} -> {_format_scalar_value(target_slot.dry_wet)}'
                     ),
                 )
             )
@@ -444,7 +452,7 @@ def _diff_insert_slots(
     return changes
 
 
-def _resolve_slot_plugin_key(
+def _resolve_slot_plugin_name(
     slot: Any,
     *,
     name: str | None,
@@ -490,9 +498,9 @@ def _coerce_optional_bool(value: Any) -> bool | None:
     return bool(value)
 
 
-def _serialize_insert(insert: MixerInsertSnapshot) -> dict[str, Any]:
+def _serialize_insert(insert: FlMixerInsert) -> dict[str, Any]:
     return {
-        "iid": insert.iid,
+        "index": insert.index,
         "name": insert.name,
         "enabled": insert.enabled,
         "volume": insert.volume,
@@ -501,26 +509,27 @@ def _serialize_insert(insert: MixerInsertSnapshot) -> dict[str, Any]:
     }
 
 
-def _serialize_slot(slot: MixerSlotSnapshot) -> dict[str, Any]:
+def _serialize_slot(slot: FlEffectSlot) -> dict[str, Any]:
     return {
         "index": slot.index,
         "name": slot.name,
         "internal_name": slot.internal_name,
         "enabled": slot.enabled,
-        "mix": slot.mix,
-        "plugin_key": slot.plugin_key,
+        "dry_wet": slot.dry_wet,
+        "plugin_name": slot.plugin_name,
     }
 
 
-def _format_insert_label(insert_iid: int, insert_name: str | None) -> str:
-    label = "Master" if insert_iid == MASTER_INSERT_IID else f"Insert {insert_iid}"
+def _format_insert_label(insert_index: int, insert_name: str | None) -> str:
+    label = "Master" if insert_index == MASTER_INSERT_INDEX else f"Insert {insert_index}"
     if insert_name and insert_name != label:
         return f'{label} "{insert_name}"'
     return label
 
 
-def _format_slot_label(insert_iid: int, insert_name: str | None, slot_index: int) -> str:
-    return f"{_format_insert_label(insert_iid, insert_name)} slot {slot_index}"
+def _format_slot_label(insert_index: int, insert_name: str | None, slot_index: int) -> str:
+    # FL Studio shows effect slots from 1; slot_index is 0-based.
+    return f"{_format_insert_label(insert_index, insert_name)} effect slot {slot_index + 1}"
 
 
 def _format_text_value(value: str | None) -> str:
@@ -539,5 +548,3 @@ def _format_scalar_value(value: int | None) -> str:
     if value is None:
         return "None"
     return str(value)
-
-

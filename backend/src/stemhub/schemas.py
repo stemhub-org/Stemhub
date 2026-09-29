@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import AliasChoices, BaseModel, Discriminator, EmailStr, Field, Tag, field_validator, model_validator
 
 # ── User Schemas ──
 
@@ -124,7 +124,7 @@ class VersionResponse(BaseModel):
     id: UUID
     branch_id: UUID
     created_by: Optional[UUID] = None
-    commit_message: Optional[str] = None
+    message: Optional[str] = None
     parent_version_id: Optional[UUID] = None
     source_daw: Optional[str] = None
     source_project_filename: Optional[str] = None
@@ -138,46 +138,145 @@ class VersionResponse(BaseModel):
         from_attributes = True
 
 
-# ── Content-Addressed Manifest (v1) ──
+# ── Content-Addressed Manifest (v1 and v2) ──
 #
-# See docs/content-addressed-storage.md. Every blob reference is a hex
+# See docs/content-addressed-storage.md. Every file reference is a hex
 # SHA-256 that must already exist in the project's blob table (uploaded
 # via PUT /projects/{pid}/blobs/{sha256}) before a version can reference it.
+# The plugin writes v2; v1 is still accepted from older plugins. Stored
+# manifests are read back through stemhub.manifests, never through these models.
 
 _SHA256_HEX_RE = "^[0-9a-f]{64}$"
+MAX_MANIFEST_ASSETS = 500
+MAX_MANIFEST_PATH_LENGTH = 255
+
+# The DAWs a version can come from, spelled as stored and shown.
+SUPPORTED_SOURCE_DAWS = ("FL Studio", "Ableton Live")
+_SOURCE_DAW_BY_KEY = {name.casefold(): name for name in SUPPORTED_SOURCE_DAWS}
 
 
-class ManifestBlobRef(BaseModel):
+def normalize_source_daw(value: Optional[str]) -> Optional[str]:
+    """Map a DAW name to its supported spelling, ignoring case and extra spaces.
+
+    Blank means unknown (None). Applied on write only: stored rows are never rewritten.
+    """
+    if value is None:
+        return None
+    key = " ".join(value.split()).casefold()
+    if not key:
+        return None
+    if key not in _SOURCE_DAW_BY_KEY:
+        raise ValueError(f"source_daw must be one of: {', '.join(SUPPORTED_SOURCE_DAWS)}")
+    return _SOURCE_DAW_BY_KEY[key]
+
+
+class _VersionManifestBase(BaseModel):
+    source_daw: Optional[str] = Field(default=None, max_length=50)
+    source_project_filename: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("source_daw")
+    @classmethod
+    def _supported_source_daw(cls, value: Optional[str]) -> Optional[str]:
+        return normalize_source_daw(value)
+
+
+def _reject_other_asset_list(data: Any, *, manifest_version: int, asset_list: str, other_asset_list: str) -> Any:
+    # Other unknown keys are dropped, but a dropped asset list would let its files
+    # skip the existence check and ref counting, so it is refused instead.
+    if isinstance(data, dict) and other_asset_list in data:
+        raise ValueError(
+            f"A v{manifest_version} manifest lists its assets under "
+            f"'{asset_list}', not '{other_asset_list}'."
+        )
+    return data
+
+
+class ManifestFileRefV1(BaseModel):
+    """Legacy v1 file entry: the path is under ``filename``."""
+
     sha256: str = Field(pattern=_SHA256_HEX_RE)
     size_bytes: int = Field(ge=0)
-    filename: str = Field(min_length=1, max_length=255)
+    filename: str = Field(min_length=1, max_length=MAX_MANIFEST_PATH_LENGTH)
 
 
-class ManifestTrack(ManifestBlobRef):
+class ManifestAssetV1(ManifestFileRefV1):
+    """Legacy v1 asset entry, listed under ``tracks``. bpm/key/duration were never filled."""
+
     name: str = Field(min_length=1, max_length=255)
     bpm: Optional[int] = Field(default=None, ge=1, le=1000)
     key: Optional[str] = Field(default=None, max_length=10)
     duration_seconds: Optional[int] = Field(default=None, ge=0)
 
 
-class VersionManifestV1(BaseModel):
-    manifest_version: Literal[1] = 1
-    source_daw: Optional[str] = Field(default=None, max_length=50)
-    source_project_filename: Optional[str] = Field(default=None, max_length=255)
-    project_file: ManifestBlobRef
-    tracks: list[ManifestTrack] = Field(default_factory=list, max_length=500)
-    mixer_state: Optional[dict[str, Any]] = None
+class VersionManifestV1(_VersionManifestBase):
+    """Legacy manifest, still accepted from plugins built before v2."""
 
-    def all_blob_shas(self) -> set[str]:
-        shas = {self.project_file.sha256}
-        shas.update(t.sha256 for t in self.tracks)
-        return shas
+    manifest_version: Literal[1] = 1
+    project_file: ManifestFileRefV1
+    tracks: list[ManifestAssetV1] = Field(default_factory=list, max_length=MAX_MANIFEST_ASSETS)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_v2_asset_list(cls, data: Any) -> Any:
+        return _reject_other_asset_list(data, manifest_version=1, asset_list="tracks", other_asset_list="assets")
+
+
+class ManifestFileRef(BaseModel):
+    """A v2 file entry: the project file or one asset, by path in the project folder."""
+
+    sha256: str = Field(pattern=_SHA256_HEX_RE)
+    size_bytes: int = Field(ge=0)
+    path: str = Field(min_length=1, max_length=MAX_MANIFEST_PATH_LENGTH)
+
+
+class VersionManifestV2(_VersionManifestBase):
+    manifest_version: Literal[2] = 2
+    project_file: ManifestFileRef
+    assets: list[ManifestFileRef] = Field(default_factory=list, max_length=MAX_MANIFEST_ASSETS)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_v1_asset_list(cls, data: Any) -> Any:
+        return _reject_other_asset_list(data, manifest_version=2, asset_list="assets", other_asset_list="tracks")
+
+
+def _manifest_version_tag(value: Any) -> Optional[str]:
+    # manifest_version defaulted to 1 before v2, so older clients may omit it.
+    if isinstance(value, dict):
+        return str(value.get("manifest_version", 1))
+    manifest_version = getattr(value, "manifest_version", None)
+    return None if manifest_version is None else str(manifest_version)
+
+
+VersionManifest = Annotated[
+    Union[
+        Annotated[VersionManifestV1, Tag("1")],
+        Annotated[VersionManifestV2, Tag("2")],
+    ],
+    Discriminator(_manifest_version_tag),
+]
+
+
+# What plugins built before the rename sent when the user wrote no message.
+# Migration 316caf0fcfa9 cleared the stored rows holding it.
+LEGACY_PLUGIN_PLACEHOLDER_MESSAGE = "Save from plugin"
 
 
 class VersionFromManifestCreate(BaseModel):
-    commit_message: Optional[str] = Field(default=None, max_length=500)
+    # "commit_message" is still read so plugins built before the rename keep working.
+    message: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        validation_alias=AliasChoices("message", "commit_message"),
+    )
     parent_version_id: Optional[UUID] = None
-    manifest: VersionManifestV1
+    manifest: VersionManifest
+
+    @field_validator("message")
+    @classmethod
+    def _placeholder_means_no_message(cls, value: Optional[str]) -> Optional[str]:
+        # Exact match, like the migration: anything else is the user's own text.
+        return None if value == LEGACY_PLUGIN_PLACEHOLDER_MESSAGE else value
 
 
 # ── Collaborator Schemas ──
@@ -205,14 +304,14 @@ class DailyActivity(BaseModel):
 
 class ActivityStatsResponse(BaseModel):
     daily_activity: list[DailyActivity]
-    total_commits: int
+    total_versions: int
     total_contributors: int
 
 class ContributorStats(BaseModel):
     user_id: UUID
     username: str
     initials: str
-    commits: int
+    versions: int
 
 class TopContributorsResponse(BaseModel):
     contributors: list[ContributorStats]
@@ -228,7 +327,7 @@ class OwnerSummary(BaseModel):
 
 class VersionWithAuthor(BaseModel):
     id: UUID
-    commit_message: Optional[str] = None
+    message: Optional[str] = None
     created_at: datetime
     branch_name: str
     author: Optional[OwnerSummary] = None
@@ -245,7 +344,8 @@ class MixerDiffSummary(BaseModel):
 
 class MixerDiffChange(BaseModel):
     type: str
-    insert_iid: int
+    # FL Studio numbering (Master = 0); None for project-level changes (project_file_changed).
+    insert_index: Optional[int] = None
     insert_name: Optional[str] = None
     slot_index: Optional[int] = None
     before: Any = None
@@ -267,24 +367,25 @@ class VersionDiffHistoryEntry(BaseModel):
     changes: list[MixerDiffChange] = []
 
 
-class TrackSummary(BaseModel):
-    """A single stem/track surfaced for the repository overview UI.
+class AssetSummary(BaseModel):
+    """One audio or MIDI file of a version (UI: "Audio & MIDI files").
 
-    Sourced from `Version.manifest_json["tracks"]` (content-addressed
-    manifest, spec §7). A version with no manifest yields an empty list —
-    callers should treat that as "no per-track data available", not an error.
+    Read from the version's manifest (spec §7) through stemhub.manifests, in
+    either manifest version. A version with no manifest yields an empty list;
+    callers should treat that as "no file list available", not an error.
 
-    `file_type` is derived from the display filename and is display-only per
-    spec §7 (filenames are not authoritative); nothing downstream should
-    trust it for MIME dispatch or storage decisions.
+    `id` is "{sha256}:{position in the stored asset list}", counting skipped
+    malformed entries: two assets may hold the same bytes. `name` is the file
+    name without its extension, taken from `path` (v1 entries keep their stored
+    `name`), and `file_type` comes from `path`. Both are display-only per
+    spec §7 (filenames are not authoritative); nothing downstream should trust
+    them for MIME dispatch or storage decisions.
     """
 
     id: str
+    path: str
     name: str
     file_type: Optional[str] = None
-    bpm: Optional[int] = None
-    key: Optional[str] = None
-    duration_seconds: Optional[int] = None
     size_bytes: Optional[int] = None
 
 
@@ -329,7 +430,7 @@ class ExploreProjectResponse(BaseModel):
     category: str
     tags: Optional[list[str]] = None
     like_count: int = 0
-    bpm: Optional[int] = None
+    tempo_bpm: Optional[float] = None
     key: Optional[str] = None
     created_at: datetime
     owner: OwnerSummary
