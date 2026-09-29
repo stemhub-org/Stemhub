@@ -1,0 +1,192 @@
+{
+  "schema": "stemhub.project-model",
+  "schema_version": "0.1.0",
+  "generator": {"name": "stemhub-fl", "version": "0.1.0", "pyflp": "54d2b96"},
+  "source": {"daw": "fl_studio", "daw_version": "24.1.2.4430", "ppq": 96},
+  "project": {"title": "Basic beat", "artists": null, "genre": "Hip hop"},
+  "tempo_bpm": 90.0,
+  "time_signature": {"numerator": 4, "denominator": 4},
+  "instruments": [
+    {
+      "id": "instrument:0",
+      "kind": "sampler",
+      "name": "Kick",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {"fader": 0.78125, "db": null},
+      "pan": 0.0,
+      "insert": {"status": "known", "insert_id": "insert:1"},
+      "sample": {"location": "project", "asset_path": "Samples/Drums/Kick 01.wav"},
+      "plugin": null,
+      "extensions": {"fl_studio": {"channel_iid": 0}}
+    },
+    {
+      "id": "instrument:1",
+      "kind": "plugin",
+      "name": "Bass",
+      "color": "#8C5A9E",
+      "enabled": true,
+      "volume": {"fader": 0.78125, "db": null},
+      "pan": -0.25,
+      "insert": {"status": "known", "insert_id": "insert:0"},
+      "sample": null,
+      "plugin": {
+        "format": "fl_native",
+        "name": "3x Osc",
+        "vendor": "Image-Line",
+        "plugin_id": null,
+        "state": {"sha256": "8444076124966966325ff63437878e025d6131d403203c89c5a90b1e6dd2a136", "size_bytes": 364}
+      },
+      "extensions": {"fl_studio": {"channel_iid": 1}}
+    }
+  ],
+  "audio_sources": [
+    {
+      "id": "audio:2",
+      "name": "Vocal chop",
+      "sample": {"location": "project", "asset_path": "Samples/Recorded/Vocal chop.wav"},
+      "insert": {"status": "known", "insert_id": "insert:0"},
+      "extensions": {"fl_studio": {"channel_iid": 2}}
+    }
+  ],
+  "patterns": [
+    {
+      "id": "pattern:1",
+      "name": "Drums",
+      "length_ticks": 384,
+      "notes": [
+        {"instrument_id": "instrument:0", "pitch": 60, "start_ticks": 0, "length_ticks": 48, "velocity": 0.78125, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 0}}},
+        {"instrument_id": "instrument:0", "pitch": 60, "start_ticks": 96, "length_ticks": 48, "velocity": 0.78125, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 1}}},
+        {"instrument_id": "instrument:0", "pitch": 60, "start_ticks": 192, "length_ticks": 48, "velocity": 0.78125, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 2}}},
+        {"instrument_id": "instrument:0", "pitch": 60, "start_ticks": 288, "length_ticks": 48, "velocity": 0.78125, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 3}}}
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "pattern:2",
+      "name": "Bassline",
+      "length_ticks": 768,
+      "notes": [
+        {"instrument_id": "instrument:1", "pitch": 36, "start_ticks": 0, "length_ticks": 180, "velocity": 0.78125, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 0}}},
+        {"instrument_id": "instrument:1", "pitch": 36, "start_ticks": 192, "length_ticks": 84, "velocity": 0.625, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 1}}},
+        {"instrument_id": "instrument:1", "pitch": 43, "start_ticks": 288, "length_ticks": 84, "velocity": 0.625, "pan": 0.0, "fine_pitch_cents": -20, "extensions": {"fl_studio": {"ordinal": 2}}},
+        {"instrument_id": "instrument:1", "pitch": 41, "start_ticks": 384, "length_ticks": 360, "velocity": 0.78125, "pan": 0.125, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 3}}}
+      ],
+      "extensions": {}
+    }
+  ],
+  "arrangements": [
+    {
+      "id": "arrangement:0",
+      "name": "Arrangement",
+      "markers": [
+        {"position_ticks": 0, "name": "Intro", "extensions": {}},
+        {"position_ticks": 768, "name": "Hook", "extensions": {}}
+      ],
+      "tracks": [
+        {
+          "id": "track:1",
+          "number": 1,
+          "name": "Drums",
+          "enabled": true,
+          "clips": [
+            {"kind": "pattern", "source_id": "pattern:1", "start_ticks": 0, "length_ticks": 384, "offset_start_ticks": null, "offset_end_ticks": null, "muted": false, "extensions": {"fl_studio": {"ordinal": 0}}},
+            {"kind": "pattern", "source_id": "pattern:1", "start_ticks": 384, "length_ticks": 384, "offset_start_ticks": null, "offset_end_ticks": null, "muted": false, "extensions": {"fl_studio": {"ordinal": 1}}},
+            {"kind": "audio", "source_id": "audio:2", "start_ticks": 768, "length_ticks": 192, "offset_start_ticks": 48, "offset_end_ticks": 240, "muted": false, "extensions": {"fl_studio": {"ordinal": 3}}}
+          ],
+          "extensions": {}
+        },
+        {
+          "id": "track:2",
+          "number": 2,
+          "name": "Bass",
+          "enabled": true,
+          "clips": [
+            {"kind": "pattern", "source_id": "pattern:2", "start_ticks": 0, "length_ticks": 768, "offset_start_ticks": null, "offset_end_ticks": null, "muted": false, "extensions": {"fl_studio": {"ordinal": 2}}},
+            {"kind": "automation", "source_id": "automation:3", "start_ticks": 0, "length_ticks": 1536, "offset_start_ticks": null, "offset_end_ticks": null, "muted": false, "extensions": {"fl_studio": {"ordinal": 4}}}
+          ],
+          "extensions": {}
+        }
+      ],
+      "extensions": {}
+    }
+  ],
+  "current_arrangement_id": "arrangement:0",
+  "mixer": {
+    "inserts": [
+      {
+        "id": "insert:0",
+        "number": 0,
+        "name": "Master",
+        "enabled": true,
+        "volume": {"fader": 1.0, "db": null},
+        "pan": 0.0,
+        "stereo_separation": 0.0,
+        "sends": [],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:1",
+        "number": 1,
+        "name": "Drums",
+        "enabled": true,
+        "volume": {"fader": 0.9, "db": null},
+        "pan": 0.0,
+        "stereo_separation": 0.0,
+        "sends": [
+          {"to_insert_id": "insert:0", "level": 1.0},
+          {"to_insert_id": "insert:2", "level": 0.25}
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:2",
+        "number": 2,
+        "name": "Reverb",
+        "enabled": true,
+        "volume": {"fader": 1.0, "db": null},
+        "pan": 0.0,
+        "stereo_separation": 0.25,
+        "sends": [
+          {"to_insert_id": "insert:0", "level": 1.0}
+        ],
+        "effect_slots": [
+          {
+            "index": 0,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity Reeverb 2",
+              "vendor": "Image-Line",
+              "plugin_id": null,
+              "state": {"sha256": "6f98bba38a225859df59aa1fb1f473d77015bd10b141d76125c6872c266a9483", "size_bytes": 312}
+            },
+            "extensions": {}
+          }
+        ],
+        "extensions": {}
+      }
+    ],
+    "extensions": {}
+  },
+  "automation": [
+    {
+      "id": "automation:3",
+      "name": "Master Volume",
+      "target": {"kind": "insert", "insert_id": "insert:0", "parameter": "volume"},
+      "points": [
+        {"position_ticks": 0, "value": 0.0, "tension": 0.0},
+        {"position_ticks": 1536, "value": 0.8, "tension": 0.0}
+      ],
+      "extensions": {"fl_studio": {"channel_iid": 3}}
+    }
+  ],
+  "unsupported": [
+    {"path": "/instruments", "reason": "A layer channel was left out: schema 0.1.0 has no layer instruments."}
+  ],
+  "warnings": [],
+  "extensions": {"fl_studio": {}}
+}
