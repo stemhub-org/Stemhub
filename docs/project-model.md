@@ -180,3 +180,42 @@ PYTHONPATH=backend/src python -m stemhub.project_model validate model.json
 ```
 
 A test fails when the committed file differs from the generated one, and every example document must validate against the committed file (with `jsonschema`) and the models. Pydantic is held to one minor version in `backend/pyproject.toml` because a new minor can change the generated schema.
+
+## Raw FLP events
+
+`stemhub.project_model.flp_events` reads an FL Studio project file as its raw events and writes them back unchanged. The FL reader and writer (#153) build on it.
+
+An FLP file is a 22-byte header (`FLhd`, format, channel count, PPQ, then `FLdt` and the data size) followed by events: one id byte and a payload. Ids 0–63 carry 1 byte, 64–127 2 bytes, 128–191 4 bytes, and 192–255 a LEB128 length then that many bytes (text and data). One exception so far: event 172 (`0xAC`) carries 3 bytes (`01 01 00`) although its id is in the 4-byte range. FL 25.2.3 and later write it just before the text event 192 `FL Studio <version>`; no earlier file seen holds it and neither PyFLP nor FLPEdit names it, so it is read as 3 bytes whatever the version. Reading it as 4 bytes, as PyFLP does, loses the thread and drops the tempo event (156) of every FL 25.2.3+ file. All size rules sit in one table, `PAYLOAD_SIZE_RULES`, so a later exception is one more row.
+
+- `parse(data)` gives an `FlpFile(header, events)` of frozen `Event(id, payload)`; `serialize(file)` writes it back. `serialize(parse(data)) == data` for every file `parse` accepts, including a length prefix written longer than needed. Values aren't judged (a PPQ of 0 still reads). `parse(data, max_events=n)` refuses a file of more than `n` events (the largest file seen has about 20 000).
+- Anything that breaks the structure (truncated, wrong sizes, bad magic, more events than `max_events`) raises `FlpFormatError`, whose message gives offsets and event ids only, never payload text. `serialize` refuses an event whose size FL would read differently.
+- `check_structure(file)` lists signs that a file which parses was read out of step, as warnings (ids, indexes and offsets only): no version event (199), or a `0xAC` not followed by the text event 192 naming the version of event 199. Every file seen has none; after a warning, the events that follow can't be trusted.
+- `fl_version(file)` reads event 199; `decode_text(event, version)` decodes a text event (UTF-16LE from FL 11.5 on, trailing NULs stripped, never raising); `event_offsets`, `diff_events` help compare files.
+
+### Scrubbing
+
+`scrub_report(file)` returns a copy without the personal data FL adds to a project file, with every event's id and size unchanged, and lists each event it changed and why; `scrub(file)` returns the copy only.
+
+- The licensee (200) becomes zeros, which FL reads as no licensee.
+- In every text and data event but the structured ones (below), the user name of a user-folder path (`/Users/<name>/`, `/home/<name>/`, `C:\Users\<name>\`, `Documents and Settings`) becomes as many `x`, in the same encoding. Shared folders (`Shared`, `Public`, `Default`) stay.
+- The licensee is unscrambled (`licensee_names`, PyFLP's algorithm) and searched, ignoring case. A licensee ending in digits is always searched whole. Every licensee seen is a name followed by 6 to 8 digits, so the name without its digits is searched too, but only when it has at least 5 characters (`MIN_SEARCHED_NAME_CHARS`): a shorter one, such as `Lee`, matches unrelated names and bytes. A licensee without digits is only that name, under the same rule. When the name is too short, the report says so in `notes` (without the name) and the text may still hold it. The algorithm reads only letters and digits right (a space reads as `k`), so a licensee holding anything else may not be found where it is written normally.
+- A text event holding a searched name becomes empty (zeros), whole. In other data events (a plugin's state, say), only the name's bytes become `x`, as single-byte text or UTF-16LE; the size never changes.
+- Structured data events are never changed. These are the data events PyFLP defines as a list of fixed-size numeric items or a fixed numeric struct, with sizes that match on every local file and no text (`STRUCTURED_DATA_EVENTS`): channel delay (209), plugin wrapper (212), channel parameters (215), playlist selection (217), channel envelope and LFO (218), channel levels (219), channel polyphony (221), pattern controllers (223), notes (224), mixer parameters (225), remote controller (227), channel tracking (228), channel level adjustments (229), playlist items (233), channel automation (234), insert routing (235), insert flags (236), timestamps (237) and track data (238). A name or user-folder path found in one is numbers that happen to spell it: the event is listed in `to_review` with its index, id and reason instead of being replaced.
+
+What scrubbing doesn't touch is the project's own text: the title, artists, comments and URL are kept and listed in the report (`to_review`) to read before sharing, and channel, pattern, insert, plugin and sample names are kept as they are. They can name people too. Scrub every project file before committing it as a fixture (spec §11), then read what the report lists and a `dump` of the copy: the repository, the fork and the mirror are public.
+
+### Command line
+
+```bash
+PYTHONPATH=backend/src python -m stemhub.project_model flp dump song.flp
+PYTHONPATH=backend/src python -m stemhub.project_model flp diff a.flp b.flp --ignore 237,167
+PYTHONPATH=backend/src python -m stemhub.project_model flp scrub song.flp -o fixture.flp [--force]
+```
+
+- `dump` lists every event (index, offset, id, size, value).
+- `diff` lists the events that differ and exits 1 if any (237, the save timestamp, changes on every save; 167 on FL's first "Save new version"). It compares the events as stored: when two versions of an event differ past what their lines show (a hex value is cut at 32 bytes, a text at 120 characters), it prints the first differing byte and the bytes around it, and it says when an event differs only in data the output hides.
+- `scrub` writes the scrubbed copy and prints the report: each changed event and why, the events to read by hand (the project's own text, and the structured data events that matched), then the notes, such as a name too short to search. It never writes over its input (the same path, a link to it, or its name in another case on a case-insensitive disk), and replaces an existing output only with `--force`, whole, through a temporary file.
+
+Unless `--show-private` is given, output shows every event scrubbed and hides the licensee and the data folder path (200, 202), and any structured data event that matched a name or a user-folder path. `check_structure` warnings go to stderr.
+
+`backend/tests/test_flp_events.py` checks the tokenizer on the committed fixtures, a synthetic FL 25 file and fuzzed input; `test_flp_scrub.py` checks scrubbing and `test_flp_cli.py` the command line, with helpers shared in `flp_helpers.py`. `STEMHUB_EXTENDED_CORPUS=<folder>[:<folder>…]` adds every `*.flp` under those folders, such as Image-Line's demo songs or your own FL Studio saves, which are never committed.
