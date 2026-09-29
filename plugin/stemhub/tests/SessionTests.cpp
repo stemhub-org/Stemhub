@@ -15,13 +15,13 @@ public:
 
     void runTest() override
     {
-        beginTest("An invalid saved session is forgotten and the login screen stays");
+        beginTest("An invalid saved sign-in is forgotten and the login screen stays");
         {
             TestContext context;
-            context.api->cachedSessionIsValid = false;
+            context.api->savedTokenIsValid = false;
             context.storage.credentials->saveToken("expired-token");
 
-            context.session.requestRestoreSavedSession();
+            context.session.requestResumeSignIn();
             expect(waitUntil(context.session, [&context] { return isOnLoginScreen(context.session); }),
                    "an invalid saved token should end on the login screen: " + describe(context.session));
             expect(context.state().authStatus.text.containsIgnoreCase("sign in again"), describe(context.session));
@@ -51,7 +51,7 @@ public:
             signIn(context.session);
         }
 
-        beginTest("A DAW project reopens its linked project, branch and file");
+        beginTest("A project file reopens its linked project, branch and file");
         {
             TestContext context;
             const auto project = makeProject("project-1", "Song");
@@ -66,26 +66,26 @@ public:
             context.storage.credentials->saveToken("valid-token");
 
             context.session.restoreLink({ project.id, branchAlt.id, projectFile });
-            restoreSavedSession(context.session);
+            resumeSignIn(context.session);
             expect(context.state().uiState == UIState::dashboard, describe(context.session));
             expect(context.state().selectedProject.has_value() && context.state().selectedProject->id == project.id,
                    describe(context.session));
             expect(context.state().selectedBranchId == branchAlt.id, "the linked branch is opened, not main");
-            expect(context.state().workingFile == projectFile, "the linked file is the working file");
+            expect(context.state().workingFile == projectFile, "the linked file is the working copy");
             expect(context.openedFiles.isEmpty(), "reopening the link opens nothing in the DAW");
         }
 
-        beginTest("A DAW project linked to a project that is gone shows the project grid");
+        beginTest("A project file linked to a project that is gone shows the project grid");
         {
             TestContext context;
             context.api->projects = { makeProject("project-2", "Project Two") };
             context.storage.credentials->saveToken("valid-token");
 
             context.session.restoreLink({ "missing-project", "branch-1", context.environment.root.getChildFile("song.flp") });
-            restoreSavedSession(context.session);
+            resumeSignIn(context.session);
             expect(context.state().uiState == UIState::projectSelection, describe(context.session));
             expect(context.state().projectsStatus.severity == Status::Severity::warning
-                       && context.state().projectsStatus.text.contains("no longer open"),
+                       && context.state().projectsStatus.text.contains("This project file is linked to a StemHub project you can no longer open"),
                    describe(context.session));
             expect(!context.state().selectedProject.has_value(), "no project is selected");
             expect(context.state().link.projectId == "missing-project", "the link stays until another project is opened");
@@ -101,11 +101,11 @@ public:
 
             const auto unpluggedFile = context.environment.root.getChildFile("External drive").getChildFile("song.flp");
             context.session.restoreLink({ project.id, "branch-1", unpluggedFile });
-            restoreSavedSession(context.session);
+            resumeSignIn(context.session);
             expect(context.state().uiState == UIState::dashboard, describe(context.session));
             expect(context.state().workingFile == unpluggedFile && !context.state().workingFile.existsAsFile(),
-                   "it stays the working file, with nothing to save from until it is back");
-            expect(context.state().link.workingFile == unpluggedFile, "the DAW project stays linked to it");
+                   "it stays the working copy, with nothing to save from until it is back");
+            expect(context.state().link.workingFile == unpluggedFile, "the project file stays linked to it");
         }
 
         beginTest("A linked project that fails to open leaves the session usable");
@@ -113,15 +113,15 @@ public:
             TestContext context;
             const auto project = makeProject("project-1", "Project");
             context.api->projects = { project };
-            context.api->branchErrors[project.id] = "Failed to load workspaces.";
+            context.api->branchErrors[project.id] = "Failed to load branches.";
             context.storage.credentials->saveToken("valid-token");
 
             context.session.restoreLink({ project.id, {}, {} });
-            restoreSavedSession(context.session);
+            resumeSignIn(context.session);
             expect(context.state().uiState == UIState::projectSelection && context.state().projectsStatus.isError(),
                    "the failure should leave the grid usable: " + describe(context.session));
             expect(!context.state().selectedProject.has_value(), "no project is selected");
-            expect(context.state().projectsStatus.text.containsIgnoreCase("Failed to load workspaces"), describe(context.session));
+            expect(context.state().projectsStatus.text.containsIgnoreCase("Failed to load branches"), describe(context.session));
         }
 
         beginTest("Each plugin instance keeps its own project, and signing out keeps the link");
@@ -139,9 +139,9 @@ public:
             signIn(context.session);
             openProject(context.session, projectA.id, fileA);
 
-            // A second DAW project with the plugin: the saved token signs it in, with no link.
+            // A second project file with the plugin: the saved token signs it in, with no link.
             auto second = context.makeInstance();
-            restoreSavedSession(*second);
+            resumeSignIn(*second);
             expect(second->getState().uiState == UIState::projectSelection, describe(*second));
             openProject(*second, projectB.id, fileB);
 
@@ -150,7 +150,7 @@ public:
 
             context.session.signOut();
             expect(second->getState().isSignedIn(), "the other instance stays signed in");
-            expect(context.state().link.projectId == projectA.id, "the DAW project keeps its link");
+            expect(context.state().link.projectId == projectA.id, "the project file keeps its link");
 
             signIn(context.session);
             expect(context.state().selectedProject.has_value() && context.state().selectedProject->id == projectA.id
@@ -191,7 +191,7 @@ public:
             context.session.requestSelectBranch(branchMain.id);
             context.session.requestRefreshVersionHistory();
             context.session.requestOpenProject(projectB.id);
-            expect(context.state().operationState == OperationState::pulling, describe(context.session));
+            expect(context.state().operationState == OperationState::loadingHistory, describe(context.session));
 
             historyGate->release();
             expect(waitUntil(context.session, [&context] { return context.isIdle(); }), "the branch switch should finish");
@@ -218,7 +218,7 @@ public:
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(projectA.id, gate);
-            context.session.requestPushVersion("from A");
+            context.session.requestSaveVersion("from A");
             expectEntered(*gate, "the save");
 
             context.session.signOut();
@@ -252,7 +252,7 @@ public:
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(project.id, gate);
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expectEntered(*gate, "the save");
             context.session.signOut();
             gate->release();
@@ -331,20 +331,20 @@ public:
             context.api->rejectToken = true;
             context.session.requestRefreshVersionHistory();
             expect(waitUntil(context.session, [&context] { return isOnLoginScreen(context.session); }),
-                   "a 401 should end the session, back on the login screen: " + describe(context.session));
+                   "a 401 should end the sign-in session, back on the login screen: " + describe(context.session));
             expect(context.state().authStatus.text.contains("expired"), describe(context.session));
             expect(!context.state().selectedProject.has_value() && context.state().accessToken.isEmpty(), "the session is cleared");
             expect(context.storage.credentials->loadToken().isEmpty(), "the refused token is forgotten");
         }
 
-        beginTest("Being offline at startup keeps the saved session");
+        beginTest("Being offline at startup keeps the saved sign-in");
         {
             TestContext context;
             context.api->projects = { makeProject("project-1", "Song") };
             context.api->offline = true;
             context.storage.credentials->saveToken("valid-token");
 
-            context.session.requestRestoreSavedSession();
+            context.session.requestResumeSignIn();
             expect(waitUntil(context.session, [&context] { return isOnLoginScreen(context.session); }),
                    "an unreachable server should be reported: " + describe(context.session));
             expect(context.state().authStatus.isError() && context.state().authStatus.text.contains("Can't reach StemHub"),
@@ -352,7 +352,7 @@ public:
             expect(context.storage.credentials->loadToken() == "valid-token", "the saved token is kept");
 
             context.api->offline = false;
-            context.session.requestRestoreSavedSession();
+            context.session.requestResumeSignIn();
             expect(waitUntil(context.session, [&context] { return context.state().isSignedIn(); }),
                    "the next attempt signs in: " + describe(context.session));
         }
@@ -375,9 +375,9 @@ public:
             expect(context.state().projects.size() == 2,
                    "the grid keeps its projects and shows the new one: " + juce::String(static_cast<int>(context.state().projects.size())));
 
-            // The project is created, but its workspaces can't be loaded.
+            // The project is created, but its branches can't be loaded.
             context.api->failProjectList = false;
-            context.api->branchErrors["created-2"] = "Failed to load workspaces.";
+            context.api->branchErrors["created-2"] = "Failed to load branches.";
             context.session.showProjectSelection();
             context.session.chooseProjectFile(projectFile);
             context.session.requestCreateProject();
@@ -405,7 +405,7 @@ public:
             openProject(context.session, projectA.id, fileA);
             // Saving A, the user picks its file from another folder, as the save dialog lets them.
             context.session.setWorkingFile(movedFileA);
-            context.session.requestPushVersion("from A");
+            context.session.requestSaveVersion("from A");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().workingCopy.isSet(); }),
                    describe(context.session));
 
@@ -416,8 +416,8 @@ public:
                 return context.isIdle() && context.state().selectedProject.has_value() && context.state().selectedProject->id == projectB.id;
             }), describe(context.session));
             expect(context.state().workingFile == juce::File(),
-                   "B has no local file yet: " + context.state().workingFile.getFullPathName());
-            expect(context.state().link.workingFile == juce::File(), "the DAW project isn't linked to A's file");
+                   "B has no working copy yet: " + context.state().workingFile.getFullPathName());
+            expect(context.state().link.workingFile == juce::File(), "the project file isn't linked to A's file");
             expect(!context.state().workingCopy.isSet(), "B doesn't take A's version as its base");
         }
 
@@ -434,7 +434,7 @@ public:
             context.storage.credentials->saveToken("valid-token");
 
             context.session.restoreLink({ project.id, branchAlt.id, projectFile });
-            restoreSavedSession(context.session);
+            resumeSignIn(context.session);
             expect(context.state().selectedBranchId == branchAlt.id, describe(context.session));
 
             context.session.showProjectSelection();

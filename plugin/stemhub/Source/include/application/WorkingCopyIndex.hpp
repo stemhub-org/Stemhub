@@ -6,10 +6,10 @@
 
 #include "domain/WorkingCopyBaseline.hpp"
 
-// Which version each DAW project file on this machine holds, as far as the plugin knows. A file
+// Which version each project file on this machine holds, as far as the plugin knows. A file
 // is recorded when the plugin saves it as a version or restores a version into it, with its size
 // and modification time then. The record outlives the plugin instance: when the DAW reopens the
-// project, the next save still builds on the version the file came from, and an unchanged file is
+// project file, the next save still builds on the version the file came from, and an unchanged file is
 // still known to be unchanged.
 //
 // One JSON file shared by every instance on the machine, so any thread may call it: writes are

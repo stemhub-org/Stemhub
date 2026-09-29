@@ -11,9 +11,10 @@
 
 struct CreateVersionRequest
 {
-    juce::String commitMessage;
+    // Empty when the user wrote none: the version then has no message.
+    juce::String message;
     juce::String parentVersionId;
-    juce::var manifest; // VersionManifestV1, see docs/content-addressed-storage.md
+    juce::var manifest; // manifest v2 (see domain/Manifest.hpp and docs/content-addressed-storage.md)
 };
 
 // The StemHub backend: one typed call per endpoint. Calls are const and keep no state, so jobs

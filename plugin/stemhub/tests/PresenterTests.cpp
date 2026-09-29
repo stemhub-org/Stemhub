@@ -71,7 +71,8 @@ public:
             state.selectedProject = makeProject("p1", "Night Bus");
             state.branches = { makeBranch("b1", "p1", "main"), makeBranch("b2", "p1", "drums") };
             state.selectedBranchId = "b2";
-            state.versionHistory = { makeVersion("v3", "b2", kDefaultSaveNote),
+            // Earlier plugins saved "Save from plugin" when the user wrote nothing.
+            state.versionHistory = { makeVersion("v3", "b2", "Save from plugin"),
                                      makeVersion("v2", "b2", "First sketch"),
                                      makeVersion("v1", "b2", "   ") };
             state.selectedVersionId = "v2";
@@ -86,13 +87,13 @@ public:
             expect(dashboard.branches.size() == 2 && dashboard.branches[1].name == "drums" && dashboard.selectedBranchId == "b2");
             expect(dashboard.versions.size() == 3 && dashboard.selectedVersionId == "v2");
             expect(dashboard.versions[0].isUntitled && dashboard.versions[2].isUntitled,
-                   "the default note and a blank one are no titles");
+                   "the message earlier plugins saved and a blank one are no titles");
             expect(!dashboard.versions[1].isUntitled && dashboard.versions[1].isOpenInDaw && !dashboard.versions[0].isOpenInDaw,
                    "only the version in the DAW is marked");
             expect(dashboard.versions[1].createdAt == juce::Time::fromISO8601("2026-03-18T10:00:00Z"), "times are read");
             expect(dashboard.workingFilePath == state.workingFile.getFullPathName());
             expect(presenter.present(state, { {}, false }).dashboard.workingFilePath.isEmpty(),
-                   "a working file that isn't there isn't shown");
+                   "a working copy that isn't there isn't shown");
         }
 
         beginTest("Each job shows as the activity the views wait on");
@@ -100,29 +101,29 @@ public:
             expect(SessionPresenter::activityFor(OperationState::idle) == SessionActivity::idle);
             expect(SessionPresenter::activityFor(OperationState::signingIn) == SessionActivity::loading);
             expect(SessionPresenter::activityFor(OperationState::loadingProjects) == SessionActivity::loading);
-            expect(SessionPresenter::activityFor(OperationState::pulling) == SessionActivity::loading);
-            expect(SessionPresenter::activityFor(OperationState::committing) == SessionActivity::saving);
+            expect(SessionPresenter::activityFor(OperationState::loadingHistory) == SessionActivity::loading);
+            expect(SessionPresenter::activityFor(OperationState::saving) == SessionActivity::saving);
             expect(SessionPresenter::activityFor(OperationState::restoring) == SessionActivity::restoring);
         }
 
-        beginTest("Only a save that created a version spends the note");
+        beginTest("Only a save that created a version spends the message");
         {
             auto state = signedInState();
             state.uiState = UIState::dashboard;
             state.lastSavedVersionId = "v1";
 
             SessionPresenter presenter("v1");
-            expect(!presenter.present(state, {}).noteWasSaved, "a save from before the window opened");
+            expect(!presenter.present(state, {}).messageWasSaved, "a save from before the window opened");
 
-            state.sessionStatus = Status::warning("Save cancelled.");
-            expect(!presenter.present(state, {}).noteWasSaved, "a cancelled save keeps it");
+            state.dashboardStatus = Status::warning("Save cancelled.");
+            expect(!presenter.present(state, {}).messageWasSaved, "a cancelled save keeps it");
 
             state.lastSavedVersionId = "v2";
-            expect(presenter.present(state, {}).noteWasSaved, "a new version spends it");
-            expect(!presenter.present(state, {}).noteWasSaved, "once");
+            expect(presenter.present(state, {}).messageWasSaved, "a new version spends it");
+            expect(!presenter.present(state, {}).messageWasSaved, "once");
 
             state = {};
-            expect(!presenter.present(state, {}).noteWasSaved, "signing out spends nothing");
+            expect(!presenter.present(state, {}).messageWasSaved, "signing out spends nothing");
         }
 
         beginTest("Values are written the same way everywhere");
@@ -142,19 +143,18 @@ public:
             expect(uiformat::slug(" ?! ").isEmpty());
 
             VersionListItem untitled;
-            untitled.message = kDefaultSaveNote;
             untitled.isUntitled = true;
             VersionListItem titled;
             titled.message = "  Drums  ";
-            expect(uiformat::versionTitle(untitled) == "Untitled snapshot" && uiformat::versionTitle(titled) == "Drums");
+            expect(uiformat::versionTitle(untitled) == "Untitled version" && uiformat::versionTitle(titled) == "Drums");
 
-            expect(uiformat::snapshotSummary(false, 3, 100) == "No local file");
-            expect(uiformat::snapshotSummary(true, -1, 0) == "Counting files" + uiformat::ellipsis());
-            expect(uiformat::snapshotSummary(true, 1, 1024) == "1 file" + uiformat::metaSeparator() + juce::File::descriptionOfSizeInBytes(1024));
-            expect(uiformat::snapshotSummary(true, 3, 2048).startsWith("3 files"));
+            expect(uiformat::workingCopySummary(false, 3, 100) == "No working copy");
+            expect(uiformat::workingCopySummary(true, -1, 0) == "Counting files" + uiformat::ellipsis());
+            expect(uiformat::workingCopySummary(true, 1, 1024) == "1 file" + uiformat::metaSeparator() + juce::File::descriptionOfSizeInBytes(1024));
+            expect(uiformat::workingCopySummary(true, 3, 2048).startsWith("3 files"));
 
-            expect(uiformat::statusChipText(Status::Severity::progress) == "Syncing");
-            expect(uiformat::statusChipText(Status::Severity::success) == "Synced");
+            expect(uiformat::statusChipText(Status::Severity::progress) == "Working" + uiformat::ellipsis());
+            expect(uiformat::statusChipText(Status::Severity::success) == "Done");
             expect(uiformat::statusChipText(Status::Severity::warning) == "Attention");
             expect(uiformat::statusChipText(Status::Severity::error) == "Error");
             expect(uiformat::statusChipText(Status::Severity::info) == "Ready");

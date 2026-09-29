@@ -2,7 +2,7 @@
 
 #include "ui/PluginTheme.hpp"
 #include "ui/UiFormat.hpp"
-#include "ui/VersionTimeline.hpp"
+#include "ui/VersionHistoryList.hpp"
 
 namespace
 {
@@ -12,7 +12,7 @@ using Theme = theme::PluginTheme;
 }
 
 //==============================================================================
-class VersionTimeline::Row final : public juce::Component
+class VersionHistoryList::Row final : public juce::Component
 {
 public:
     // A placeholder row says the history is empty.
@@ -21,7 +21,7 @@ public:
     {
         if (placeholder)
         {
-            setTitle("No snapshots yet");
+            setTitle("No versions yet");
             return;
         }
 
@@ -91,10 +91,10 @@ public:
             auto text = area.withSizeKeepingCentre(area.getWidth(), 36);
             g.setColour(Theme::kForegroundSubtle);
             g.setFont(theme::headingFont(13.5f));
-            g.drawText("No snapshots yet", text.removeFromTop(20), juce::Justification::centredLeft, true);
+            g.drawText("No versions yet", text.removeFromTop(20), juce::Justification::centredLeft, true);
             g.setColour(Theme::kForegroundTertiary);
             g.setFont(theme::bodyFont(11.5f));
-            g.drawText("Your first save starts this timeline.", text, juce::Justification::centredLeft, true);
+            g.drawText("Your first save starts this history.", text, juce::Justification::centredLeft, true);
             return;
         }
 
@@ -177,7 +177,7 @@ public:
 private:
     void pick()
     {
-        // Copied first: picking may rebuild the timeline, and delete this row with its callback.
+        // Copied first: picking may rebuild the list, and delete this row with its callback.
         if (auto callback = onPick; !placeholder && callback != nullptr)
             callback(version.id);
     }
@@ -191,7 +191,7 @@ private:
 };
 
 //==============================================================================
-VersionTimeline::VersionTimeline()
+VersionHistoryList::VersionHistoryList()
 {
     addAndMakeVisible(viewport);
     viewport.setViewedComponent(&content, false);
@@ -202,9 +202,9 @@ VersionTimeline::VersionTimeline()
     rebuildRows();
 }
 
-VersionTimeline::~VersionTimeline() = default;
+VersionHistoryList::~VersionHistoryList() = default;
 
-void VersionTimeline::setVersions(const std::vector<VersionListItem>& versionItems, const juce::String& selectedVersionId)
+void VersionHistoryList::setVersions(const std::vector<VersionListItem>& versionItems, const juce::String& selectedVersionId)
 {
     const auto isListed = std::any_of(versionItems.begin(), versionItems.end(), [&selectedVersionId](const auto& version)
     {
@@ -224,13 +224,13 @@ void VersionTimeline::setVersions(const std::vector<VersionListItem>& versionIte
     }
 }
 
-void VersionTimeline::resized()
+void VersionHistoryList::resized()
 {
     viewport.setBounds(getLocalBounds());
     layoutRows();
 }
 
-void VersionTimeline::rebuildRows()
+void VersionHistoryList::rebuildRows()
 {
     rows.clear(true);
 
@@ -257,7 +257,7 @@ void VersionTimeline::rebuildRows()
     layoutRows();
 }
 
-void VersionTimeline::layoutRows()
+void VersionHistoryList::layoutRows()
 {
     const auto listHeight = rows.size() * kRowHeight;
     const auto needsScroll = listHeight > viewport.getHeight();
@@ -273,7 +273,7 @@ void VersionTimeline::layoutRows()
     content.setSize(rowWidth, y);
 }
 
-void VersionTimeline::select(const juce::String& versionId, const bool byUser)
+void VersionHistoryList::select(const juce::String& versionId, const bool byUser)
 {
     const auto changed = versionId != selectedId;
     selectedId = versionId;
@@ -285,7 +285,7 @@ void VersionTimeline::select(const juce::String& versionId, const bool byUser)
         onSelect(selectedId);
 }
 
-void VersionTimeline::step(const int index, const int stepBy)
+void VersionHistoryList::step(const int index, const int stepBy)
 {
     const auto target = juce::jlimit(0, static_cast<int>(versions.size()) - 1, index + stepBy);
     if (target == index)
@@ -297,7 +297,7 @@ void VersionTimeline::step(const int index, const int stepBy)
     select(row->getVersionId(), true);
 }
 
-void VersionTimeline::scrollToShow(const int index)
+void VersionHistoryList::scrollToShow(const int index)
 {
     const auto rowTop = index * kRowHeight;
     const auto viewTop = viewport.getViewPositionY();

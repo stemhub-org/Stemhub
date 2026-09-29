@@ -22,21 +22,23 @@ const char* toString(OperationState state)
         case OperationState::idle: return "idle";
         case OperationState::signingIn: return "signingIn";
         case OperationState::loadingProjects: return "loadingProjects";
-        case OperationState::committing: return "committing";
-        case OperationState::pulling: return "pulling";
+        case OperationState::saving: return "saving";
+        case OperationState::loadingHistory: return "loadingHistory";
         case OperationState::restoring: return "restoring";
     }
 
     return "unknown";
 }
 
-juce::var makeBlobRef(const juce::String& filename, const juce::String& sha)
+// Manifest v1 named each file's path "filename" and gave assets a "name"; v2 has "path" only.
+juce::var makeFileRef(const juce::String& path, const juce::String& sha, const int manifestVersion, const bool isAsset)
 {
     auto* object = new juce::DynamicObject();
     object->setProperty("sha256", sha);
     object->setProperty("size_bytes", 1);
-    object->setProperty("filename", filename);
-    object->setProperty("name", filename);
+    object->setProperty(manifestVersion == 1 ? "filename" : "path", path);
+    if (manifestVersion == 1 && isAsset)
+        object->setProperty("name", path);
     return juce::var(object);
 }
 }
@@ -58,12 +60,12 @@ Branch makeBranch(const juce::String& id, const juce::String& projectId, const j
     return branch;
 }
 
-VersionSummary makeVersion(const juce::String& id, const juce::String& branchId, const juce::String& commit)
+VersionSummary makeVersion(const juce::String& id, const juce::String& branchId, const juce::String& message)
 {
     VersionSummary version;
     version.id = id;
     version.branchId = branchId;
-    version.commitMessage = commit;
+    version.message = message;
     version.createdAt = "2026-03-18T10:00:00Z";
     return version;
 }
@@ -76,7 +78,7 @@ juce::String describe(const StemhubSession& session)
         + ", op=" + juce::String(toString(state.operationState))
         + ", authStatus=" + state.authStatus.text
         + ", projectsStatus=" + state.projectsStatus.text
-        + ", sessionStatus=" + state.sessionStatus.text
+        + ", dashboardStatus=" + state.dashboardStatus.text
         + ", selectedProject=" + (state.selectedProject.has_value() ? state.selectedProject->id : "<none>")
         + ", selectedBranch=" + state.selectedBranchId
         + ", selectedVersion=" + state.selectedVersionId;
@@ -119,16 +121,17 @@ void simulateDawSave(const juce::File& projectFile, const juce::String& extraCon
 
 juce::var makeManifest(const juce::String& projectPath,
                        const juce::String& projectSha,
-                       const std::vector<std::pair<juce::String, juce::String>>& tracks)
+                       const std::vector<std::pair<juce::String, juce::String>>& assets,
+                       const int manifestVersion)
 {
-    juce::Array<juce::var> trackArray;
-    for (const auto& [path, sha] : tracks)
-        trackArray.add(makeBlobRef(path, sha));
+    juce::Array<juce::var> assetArray;
+    for (const auto& [path, sha] : assets)
+        assetArray.add(makeFileRef(path, sha, manifestVersion, true));
 
     auto* manifest = new juce::DynamicObject();
-    manifest->setProperty("manifest_version", 1);
-    manifest->setProperty("project_file", makeBlobRef(projectPath, projectSha));
-    manifest->setProperty("tracks", trackArray);
+    manifest->setProperty("manifest_version", manifestVersion);
+    manifest->setProperty("project_file", makeFileRef(projectPath, projectSha, manifestVersion, false));
+    manifest->setProperty(manifestVersion == 1 ? "tracks" : "assets", assetArray);
     return juce::var(manifest);
 }
 }

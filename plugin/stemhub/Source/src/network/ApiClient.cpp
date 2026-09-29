@@ -177,7 +177,7 @@ ApiResult<Project> ApiClient::createProject(const juce::String& name, const juce
 
 ApiResult<std::vector<Branch>> ApiClient::fetchBranches(const juce::String& projectId, const juce::String& accessToken) const
 {
-    return parseResponse(requestJson("GET", "/projects/" + projectId + "/branches/", {}, accessToken, "Failed to load workspaces."),
+    return parseResponse(requestJson("GET", "/projects/" + projectId + "/branches/", {}, accessToken, "Failed to load branches."),
                          json::parseBranches);
 }
 
@@ -248,8 +248,8 @@ ApiResult<VersionSummary> ApiClient::createVersionFromManifest(const juce::Strin
                                                                const juce::String& accessToken) const
 {
     auto* body = new juce::DynamicObject();
-    if (request.commitMessage.isNotEmpty())
-        body->setProperty("commit_message", request.commitMessage);
+    if (request.message.isNotEmpty())
+        body->setProperty("message", request.message);
     if (request.parentVersionId.isNotEmpty())
         body->setProperty("parent_version_id", request.parentVersionId);
     body->setProperty("manifest", request.manifest);

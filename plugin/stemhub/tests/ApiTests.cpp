@@ -22,12 +22,29 @@ public:
             namespace json = stemhub::api::json;
 
             const auto versions = json::parseVersions(juce::JSON::parse(R"([{
-                "id": "v1", "branch_id": "b1", "created_at": "2026-03-18T10:00:00Z", "commit_message": "first",
-                "manifest_json": { "project_file": { "size_bytes": 10 }, "tracks": [ { "size_bytes": 5 }, { "size_bytes": 7 } ] }
+                "id": "v1", "branch_id": "b1", "created_at": "2026-03-18T10:00:00Z", "message": "first",
+                "manifest_json": { "manifest_version": 2, "project_file": { "size_bytes": 10 },
+                                   "assets": [ { "size_bytes": 5 }, { "size_bytes": 7 } ] }
             }])"));
             expect(versions.ok() && versions.value->size() == 1, "a version list parses");
             if (versions.ok())
+            {
+                expect(versions.value->front().message == "first", "the version's message is read");
                 expect(versions.value->front().totalSizeBytes == 22, "the size is summed from the manifest");
+            }
+
+            const auto olderBackend = json::parseVersionSummary(juce::JSON::parse(R"({
+                "id": "v1", "branch_id": "b1", "commit_message": "from an older backend",
+                "manifest_json": { "manifest_version": 1, "project_file": { "size_bytes": 10 }, "tracks": [ { "size_bytes": 5 } ] }
+            })"));
+            expect(olderBackend.ok() && olderBackend.value->message == "from an older backend",
+                   "a backend that still says commit_message is understood");
+            expect(olderBackend.ok() && olderBackend.value->totalSizeBytes == 15, "and so is a v1 manifest's size");
+
+            const auto withoutMessage = json::parseVersionSummary(juce::JSON::parse(R"({
+                "id": "v1", "branch_id": "b1", "message": null, "commit_message": "stale"
+            })"));
+            expect(withoutMessage.ok() && withoutMessage.value->message.isEmpty(), "a null message means none");
 
             expect(!json::parseVersions(juce::JSON::parse(R"({"id": "v1"})")).ok(), "an object is not a list");
             const auto missingFields = json::parseProject(juce::JSON::parse(R"({"id": "p1"})"));
@@ -103,6 +120,44 @@ public:
                 expect(requests[1].requestLine == "GET " + storagePath + " HTTP/1.1",
                        "the presigned URL is requested as-is: " + requests[1].requestLine);
                 expect(!requests[1].headers.containsIgnoreCase("authorization"), "the token never reaches storage");
+            }
+        }
+
+        beginTest("A new version is sent with its message, and without one when the user wrote none");
+        {
+            LocalHttpServer server([](const LocalHttpServer::Request& request)
+            {
+                juce::ignoreUnused(request);
+                const juce::String body = R"({"id": "v1", "branch_id": "b1"})";
+                return "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: "
+                     + juce::String(static_cast<int>(body.getNumBytesAsUTF8())) + "\r\nConnection: close\r\n\r\n" + body;
+            });
+
+            ApiClient client(server.getBaseUrl());
+            CreateVersionRequest request;
+            request.message = "Drums";
+            request.parentVersionId = "v0";
+            request.manifest = makeManifest("song.flp", juce::String::repeatedString("a", 64), {});
+            expect(client.createVersionFromManifest("b1", request, "secret-token").ok(), "the version is created");
+
+            request.message.clear();
+            expect(client.createVersionFromManifest("b1", request, "secret-token").ok(), "and one without a message");
+
+            const auto requests = server.getRequests();
+            expect(requests.size() == 2, "two requests");
+            if (requests.size() == 2)
+            {
+                expect(requests[0].requestLine.startsWith("POST /branches/b1/versions/from-manifest"), requests[0].requestLine);
+                const auto withMessage = juce::JSON::parse(requests[0].body);
+                expect(withMessage.getProperty("message", {}).toString() == "Drums", "the message goes as \"message\": " + requests[0].body);
+                expect(!withMessage.hasProperty("commit_message"), "not as commit_message");
+                expect(withMessage.getProperty("parent_version_id", {}).toString() == "v0");
+                expect(static_cast<int>(withMessage.getProperty("manifest", {}).getProperty("manifest_version", 0)) == 2,
+                       "with the manifest as written");
+
+                const auto withoutMessage = juce::JSON::parse(requests[1].body);
+                expect(withoutMessage.isObject() && !withoutMessage.hasProperty("message") && !withoutMessage.hasProperty("commit_message"),
+                       "no message, no placeholder: " + requests[1].body);
             }
         }
 

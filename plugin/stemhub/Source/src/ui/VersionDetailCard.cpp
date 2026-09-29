@@ -17,7 +17,7 @@ constexpr int kRestoreButtonHeight = 40;
 VersionDetailCard::VersionDetailCard()
 {
     addChildComponent(restoreHintLabel);
-    restoreHintLabel.setText("Opens in your DAW as a new copy. Your project stays as it is.",
+    restoreHintLabel.setText("Opens in your DAW as a separate copy. Your project file stays as it is.",
                              juce::dontSendNotification);
     restoreHintLabel.setFont(theme::bodyFont(11.5f));
     restoreHintLabel.setColour(juce::Label::textColourId, Theme::kInkSubtle);
@@ -117,7 +117,7 @@ void VersionDetailCard::paint(juce::Graphics& g)
         card.removeFromTop(18);
         g.setColour(Theme::kInkSubtle);
         g.setFont(theme::bodyFont(12.5f));
-        g.drawFittedText("Write what changed, then Save snapshot to start this branch's history.",
+        g.drawFittedText("Write what changed, then Save version to start this branch's history.",
                          card.removeFromTop(54), juce::Justification::topLeft, 3, 1.0f);
         return;
     }

@@ -107,7 +107,8 @@ ApiResult<VersionSummary> parseVersionSummary(const juce::var& value)
     summary.branchId = value.getProperty("branch_id", {}).toString();
     summary.parentVersionId = value.getProperty("parent_version_id", {}).toString();
     summary.createdAt = value.getProperty("created_at", {}).toString();
-    summary.commitMessage = value.getProperty("commit_message", {}).toString();
+    // Backends from before the "message" field call it commit_message.
+    summary.message = value.getProperty(value.hasProperty("message") ? "message" : "commit_message", {}).toString();
     summary.sourceDaw = value.getProperty("source_daw", {}).toString();
     summary.sourceProjectFilename = value.getProperty("source_project_filename", {}).toString();
     summary.totalSizeBytes = stemhub::manifest::totalSize(value.getProperty("manifest_json", {}));
@@ -120,12 +121,12 @@ ApiResult<VersionSummary> parseVersionSummary(const juce::var& value)
 
 ApiResult<std::vector<Project>> parseProjects(const juce::var& value)
 {
-    return parseList<Project>(value, parseProject, "Projects");
+    return parseList<Project>(value, parseProject, "Project list");
 }
 
 ApiResult<std::vector<Branch>> parseBranches(const juce::var& value)
 {
-    return parseList<Branch>(value, parseBranch, "Branches");
+    return parseList<Branch>(value, parseBranch, "Branch list");
 }
 
 ApiResult<std::vector<VersionSummary>> parseVersions(const juce::var& value)

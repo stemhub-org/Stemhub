@@ -9,7 +9,7 @@
 
 // The plugin as the host sees it. Audio passes through untouched; everything StemHub does lives
 // in the session, which the editor drives. The processor saves the session's project link in the
-// DAW project and hands it back when the project loads.
+// project file and hands it back when the project file loads.
 class StemhubAudioProcessor final : public juce::AudioProcessor,
                                     private juce::ChangeListener,
                                     private juce::AsyncUpdater

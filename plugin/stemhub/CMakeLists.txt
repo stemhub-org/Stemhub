@@ -30,10 +30,10 @@ set(STEMHUB_CORE_SOURCES
     Source/src/application/RestoreFolders.cpp
     Source/src/application/RestoreHandoff.cpp
     Source/src/application/SessionStorage.cpp
-    Source/src/application/SnapshotFiles.cpp
-    Source/src/application/SnapshotSync.cpp
     Source/src/application/StemhubSession.cpp
     Source/src/application/UseCases.cpp
+    Source/src/application/VersionFiles.cpp
+    Source/src/application/VersionTransfer.cpp
     Source/src/application/WorkingCopyIndex.cpp
     Source/src/domain/Manifest.cpp
     Source/src/domain/VersionHistory.cpp
@@ -56,7 +56,7 @@ set(STEMHUB_PLUGIN_SOURCES
     Source/src/ui/ProjectSelectionView.cpp
     Source/src/ui/ProjectTiles.cpp
     Source/src/ui/VersionDetailCard.cpp
-    Source/src/ui/VersionTimeline.cpp)
+    Source/src/ui/VersionHistoryList.cpp)
 
 # Settings every StemHub target shares. JUCE compiles its modules into each target that links
 # them, so the core is shared as a source list: a static library would build JUCE twice.
@@ -104,9 +104,9 @@ juce_add_plugin(stemhub
 juce_generate_juce_header(stemhub)
 
 # Brand typefaces (SIL OFL 1.1, see Resources/fonts/OFL-*.txt), embedded so the UI renders identically in every DAW.
-juce_add_binary_data(stemhub_assets
-    HEADER_NAME StemhubAssets.h
-    NAMESPACE StemhubAssets
+juce_add_binary_data(stemhub_ui_resources
+    HEADER_NAME StemhubUiResources.h
+    NAMESPACE StemhubUiResources
     SOURCES
         Resources/fonts/Syne-ExtraBold.ttf
         Resources/fonts/PlusJakartaSans-Regular.ttf
@@ -117,7 +117,7 @@ juce_add_binary_data(stemhub_assets
 target_sources(stemhub PRIVATE ${STEMHUB_CORE_SOURCES} ${STEMHUB_PRESENTATION_SOURCES} ${STEMHUB_PLUGIN_SOURCES})
 stemhub_configure_target(stemhub)
 target_compile_definitions(stemhub PRIVATE JUCE_WEB_BROWSER=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-target_link_libraries(stemhub PRIVATE stemhub_assets juce::juce_audio_utils)
+target_link_libraries(stemhub PRIVATE stemhub_ui_resources juce::juce_audio_utils)
 
 set(STEMHUB_TEST_SOURCES
     tests/Main.cpp
@@ -127,7 +127,7 @@ set(STEMHUB_TEST_SOURCES
     tests/SaveRestoreTests.cpp
     tests/PresenterTests.cpp
     tests/SessionTests.cpp
-    tests/SnapshotTests.cpp)
+    tests/VersionFilesTests.cpp)
 
 juce_add_console_app(stemhub_plugin_tests NEEDS_CURL TRUE)
 

@@ -2,8 +2,8 @@
 
 #include <JuceHeader.h>
 
-// Where the signed-in user's token is kept between plugin sessions. Every plugin instance on the
-// machine shares it; each keeps its own session once signed in.
+// Where the signed-in user's token is kept between two uses of the plugin. Every plugin instance on
+// the machine shares it; each keeps its own sign-in session once signed in.
 class CredentialStore
 {
 public:

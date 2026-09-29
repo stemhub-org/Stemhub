@@ -35,7 +35,7 @@ public:
         juce::String id;
         juce::String branchId;
         juce::String parentVersionId;
-        juce::String commitMessage;
+        juce::String message;
     };
 
     ApiResult<LoginResponse> login(const juce::String& email, const juce::String& password) const override
@@ -57,7 +57,7 @@ public:
             return ApiResult<User>::failure(ApiError::cancelled());
         if (offline)
             return ApiResult<User>::failure({ ApiError::Kind::network, "Can't reach StemHub." });
-        if (rejectToken || !cachedSessionIsValid)
+        if (rejectToken || !savedTokenIsValid)
             return fail<User>(401, "Could not validate credentials");
 
         return ApiResult<User>::success({ "user-1", "user@example.com", "stemhub" });
@@ -211,11 +211,11 @@ public:
         version.id = juce::String::toHexString(number).paddedLeft('0', 8) + "-0000-4000-8000-000000000000";
         version.branchId = branchId;
         version.parentVersionId = request.parentVersionId;
-        version.commitMessage = request.commitMessage;
+        version.message = request.message;
         version.createdAt = "2026-03-19T10:00:" + juce::String(number).paddedLeft('0', 2) + "Z";
         version.sourceProjectFilename = request.manifest.getProperty("source_project_filename", {}).toString();
 
-        createdVersions.push_back({ version.id, branchId, version.parentVersionId, version.commitMessage });
+        createdVersions.push_back({ version.id, branchId, version.parentVersionId, version.message });
         manifestsByVersion[version.id] = juce::JSON::toString(request.manifest);
         branchVersions[branchId].push_back(version);
         return ApiResult<VersionSummary>::success(version);
@@ -252,12 +252,14 @@ public:
     }
 
     // Stores a version made of (relative path, content) files, the first being the project
-    // file, as if another collaborator had saved it. Returns its id.
+    // file, as if another collaborator had saved it: with manifest v2 as the plugin writes it now,
+    // or v1 as earlier plugins did. Returns its id.
     juce::String addVersion(const juce::String& branchId,
-                            const juce::String& commitMessage,
-                            const std::vector<std::pair<juce::String, juce::String>>& files)
+                            const juce::String& message,
+                            const std::vector<std::pair<juce::String, juce::String>>& files,
+                            const int manifestVersion = 2)
     {
-        juce::Array<juce::var> tracks;
+        juce::Array<juce::var> assets;
         juce::var projectFileRef;
 
         for (size_t index = 0; index < files.size(); ++index)
@@ -273,7 +275,7 @@ public:
             auto* ref = new juce::DynamicObject();
             ref->setProperty("sha256", sha);
             ref->setProperty("size_bytes", static_cast<juce::int64>(data.getSize()));
-            ref->setProperty("filename", path);
+            ref->setProperty(manifestVersion == 1 ? "filename" : "path", path);
 
             if (index == 0)
             {
@@ -281,19 +283,20 @@ public:
             }
             else
             {
-                ref->setProperty("name", path);
-                tracks.add(juce::var(ref));
+                if (manifestVersion == 1)
+                    ref->setProperty("name", path);
+                assets.add(juce::var(ref));
             }
         }
 
         auto* manifest = new juce::DynamicObject();
-        manifest->setProperty("manifest_version", 1);
+        manifest->setProperty("manifest_version", manifestVersion);
         manifest->setProperty("source_project_filename", files.front().first.fromLastOccurrenceOf("/", false, false));
         manifest->setProperty("project_file", projectFileRef);
-        manifest->setProperty("tracks", tracks);
+        manifest->setProperty(manifestVersion == 1 ? "tracks" : "assets", assets);
 
         CreateVersionRequest request;
-        request.commitMessage = commitMessage;
+        request.message = message;
         request.manifest = juce::var(manifest);
         return createVersionFromManifest(branchId, request, "token").value->id;
     }
@@ -330,7 +333,7 @@ public:
     }
 
     // Configuration: written by the test thread while no job is running.
-    bool cachedSessionIsValid { true };
+    bool savedTokenIsValid { true };
     std::vector<Project> projects;
     std::map<juce::String, std::vector<Branch>> projectBranches;
     // Also appended to by createVersionFromManifest, under the mutex.

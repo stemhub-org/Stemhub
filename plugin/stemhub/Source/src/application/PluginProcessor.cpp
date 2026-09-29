@@ -171,7 +171,7 @@ void StemhubAudioProcessor::updateLinkForHost()
             linkForHost = link;
     }
 
-    // Marks the DAW project as modified, so the new link is saved with it.
+    // Marks the project file as modified, so the new link is saved with it.
     if (didChange)
         updateHostDisplay(ChangeDetails().withNonParameterStateChanged(true));
 }
