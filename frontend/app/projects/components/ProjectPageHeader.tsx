@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Heart } from "lucide-react";
 import { AudioUploadButton } from "./AudioUploadButton";
 
-interface RepositoryPageHeaderProps {
+interface ProjectPageHeaderProps {
     ownerUsername: string;
     projectName: string;
     branchName: string;
@@ -14,14 +14,14 @@ interface RepositoryPageHeaderProps {
     onUploadSuccess?: () => void;
 }
 
-export function RepositoryPageHeader({
+export function ProjectPageHeader({
     ownerUsername,
     projectName,
     branchName,
     description,
     projectId,
     onUploadSuccess,
-}: RepositoryPageHeaderProps) {
+}: ProjectPageHeaderProps) {
     const [isFavorite, setIsFavorite] = useState(false);
 
     return (
