@@ -1,5 +1,7 @@
+import functools
 import hashlib
 import json
+import logging
 import os
 import tempfile
 from abc import ABC, abstractmethod
@@ -12,6 +14,12 @@ try:
     from google.cloud import storage as _gcs_storage
 except ImportError:  # pragma: no cover - exercised via integration/configuration tests
     _gcs_storage = None
+
+logger = logging.getLogger(__name__)
+
+STORAGE_ROOT_ENV = "STEMHUB_STORAGE_ROOT"
+# Deprecated name of STORAGE_ROOT_ENV, still read as a fallback.
+LEGACY_STORAGE_ROOT_ENV = "STEMHUB_ARTIFACTS_ROOT"
 
 
 class StorageError(Exception):
@@ -27,7 +35,7 @@ class StorageConfigurationError(StorageError):
 
 
 @dataclass(frozen=True)
-class StoredArtifact:
+class StoredObject:
     path: str
     size_bytes: int
     checksum_sha256: str
@@ -97,7 +105,7 @@ class StorageService(ABC):
         project_id: UUID,
         filename: str,
         source: BinaryIO,
-    ) -> StoredArtifact:
+    ) -> StoredObject:
         raise NotImplementedError
 
     @abstractmethod
@@ -120,8 +128,8 @@ class StorageService(ABC):
         *,
         project_id: UUID,
         source: BinaryIO,
-    ) -> StoredArtifact:
-        """Store a blob and return its SHA-256, size, and storage_uri (StoredArtifact.path)."""
+    ) -> StoredObject:
+        """Store a blob and return its SHA-256, size, and storage_uri (StoredObject.path)."""
         raise NotImplementedError
 
     @abstractmethod
@@ -180,7 +188,7 @@ class GCSStorageService(StorageService):
         project_id: UUID,
         filename: str,
         source: BinaryIO,
-    ) -> StoredArtifact:
+    ) -> StoredObject:
         safe_filename = _safe_filename(filename, "preview.wav")
         prefix = self._build_project_preview_prefix(project_id)
         object_path = f"{prefix}/{safe_filename}"
@@ -197,7 +205,7 @@ class GCSStorageService(StorageService):
         finally:
             tmp_path.unlink(missing_ok=True)
 
-        return StoredArtifact(
+        return StoredObject(
             path=self._to_reference_path(object_path),
             size_bytes=size_bytes,
             checksum_sha256=checksum_sha256,
@@ -241,7 +249,7 @@ class GCSStorageService(StorageService):
         *,
         project_id: UUID,
         source: BinaryIO,
-    ) -> StoredArtifact:
+    ) -> StoredObject:
         _rewind_if_possible(source)
         tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
         try:
@@ -255,7 +263,7 @@ class GCSStorageService(StorageService):
         finally:
             tmp_path.unlink(missing_ok=True)
 
-        return StoredArtifact(
+        return StoredObject(
             path=self._to_reference_path(blob_path),
             size_bytes=size_bytes,
             checksum_sha256=checksum_sha256,
@@ -271,7 +279,7 @@ class GCSStorageService(StorageService):
             os.close(temp_handle)
             temp_file = Path(temp_path)
             if not gcs_blob.exists():
-                raise StorageNotFoundError("Blob not found")
+                raise StorageNotFoundError("Stored file not found")
             gcs_blob.download_to_filename(str(temp_file))
             return temp_file
         except StorageNotFoundError:
@@ -327,7 +335,7 @@ class LocalFilesystemStorageService(StorageService):
         project_id: UUID,
         filename: str,
         source: BinaryIO,
-    ) -> StoredArtifact:
+    ) -> StoredObject:
         safe_filename = _safe_filename(filename, "preview.wav")
         relative_dir = Path("projects") / str(project_id) / "preview"
         preview_dir = self.root / relative_dir
@@ -339,7 +347,7 @@ class LocalFilesystemStorageService(StorageService):
         _rewind_if_possible(source)
         size_bytes, checksum_sha256 = _write_stream_and_hash(source, destination)
 
-        return StoredArtifact(
+        return StoredObject(
             path=(relative_dir / safe_filename).as_posix(),
             size_bytes=size_bytes,
             checksum_sha256=checksum_sha256,
@@ -379,7 +387,7 @@ class LocalFilesystemStorageService(StorageService):
         *,
         project_id: UUID,
         source: BinaryIO,
-    ) -> StoredArtifact:
+    ) -> StoredObject:
         _rewind_if_possible(source)
         tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
         try:
@@ -394,7 +402,7 @@ class LocalFilesystemStorageService(StorageService):
             tmp_path.unlink(missing_ok=True)
             raise
 
-        return StoredArtifact(
+        return StoredObject(
             path=relative_path.as_posix(),
             size_bytes=size_bytes,
             checksum_sha256=checksum_sha256,
@@ -405,10 +413,10 @@ class LocalFilesystemStorageService(StorageService):
         try:
             candidate.relative_to(self.root)
         except ValueError as exc:
-            raise StorageNotFoundError("Blob path is outside of the storage root") from exc
+            raise StorageNotFoundError("Stored file path is outside of the storage root") from exc
 
         if not candidate.is_file():
-            raise StorageNotFoundError("Blob not found")
+            raise StorageNotFoundError("Stored file not found")
 
         return candidate
 
@@ -427,17 +435,40 @@ class LocalFilesystemStorageService(StorageService):
         return Path("projects") / str(project_id) / "blobs" / sha256[:2] / sha256
 
 
-def _default_artifact_root() -> Path:
+def _default_storage_root() -> Path:
+    # Historical directory name, kept so blobs already stored there are still found.
     backend_root = Path(__file__).resolve().parents[2]
     return backend_root / "data" / "artifacts"
+
+
+def _local_storage_root() -> Path:
+    configured = os.getenv(STORAGE_ROOT_ENV, "").strip()
+    if configured:
+        return Path(configured)
+
+    legacy = os.getenv(LEGACY_STORAGE_ROOT_ENV, "").strip()
+    if legacy:
+        _warn_that_the_legacy_root_env_is_deprecated()
+        return Path(legacy)
+
+    return _default_storage_root()
+
+
+@functools.cache
+def _warn_that_the_legacy_root_env_is_deprecated() -> None:
+    # Once per process: get_storage_service runs on every request.
+    logger.warning(
+        "%s is deprecated and will stop being read; rename it to %s.",
+        LEGACY_STORAGE_ROOT_ENV,
+        STORAGE_ROOT_ENV,
+    )
 
 
 def get_storage_service() -> StorageService:
     provider = os.getenv("STEMHUB_STORAGE_PROVIDER", "localfs").strip().lower()
 
     if provider == "localfs":
-        artifact_root = Path(os.getenv("STEMHUB_ARTIFACTS_ROOT", str(_default_artifact_root())))
-        return LocalFilesystemStorageService(artifact_root)
+        return LocalFilesystemStorageService(_local_storage_root())
 
     if provider == "gcs":
         return GCSStorageService(
