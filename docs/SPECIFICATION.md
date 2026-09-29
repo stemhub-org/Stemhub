@@ -2,7 +2,7 @@
 
 > **Status:** Living document — canonical reference for the whole EIP year (2026 → 2027).
 > **Owner:** Erwan (Project Leader).
-> **Last updated:** 2026-09-16.
+> **Last updated:** 2026-09-29.
 > **Scope:** This document consolidates the vision, scope, requirements, success criteria, and ways of working. It links to the detailed technical docs rather than duplicating them.
 
 ---
@@ -11,8 +11,9 @@
 
 - Any team member should be able to open this file and understand **what** we're building, **why**, **for whom**, and **how we know we're done**.
 - Section headings are stable. When something changes, edit in place and add a line to the **Change Log** at the bottom.
-- Deep-dive topics (data model, CAS design, plugin data flow, roadmap, costs) live in dedicated docs — this file links to them but does not duplicate their content.
+- Deep-dive topics (data model, CAS design, StemHub plugin data flow, roadmap, costs) live in dedicated docs — this file links to them but does not duplicate their content.
 - Items marked **TBD** are decisions we haven't taken yet. They must be resolved by the milestone noted next to them.
+- Words for StemHub's concepts (project file, asset, version, branch, save, restore, insert…) follow the **Glossary** in [§19](#19--glossary). Code, UI and docs use the same terms.
 
 ---
 
@@ -50,18 +51,18 @@ Version history and teamwork for music, so no one ever loses a good idea again.
 Creativity shouldn't be held back by lost files, messy exports, or distance. StemHub exists to give music producers the same safety net and collaboration tools that transformed software and design, so they can experiment freely, never lose an idea, and create together from anywhere.
 
 ### What StemHub is NOT
-- **Not a DAW.** StemHub does not make, edit, or play music. It lives inside FL Studio, Ableton, and others as a plugin and stays out of the creative process.
+- **Not a DAW.** StemHub does not make, edit, or play music. It lives inside FL Studio, Ableton, and others as the StemHub plugin and stays out of the creative process.
 - **Not a streaming or distribution platform.** Portfolios and playback exist so producers can show and review work, not to publish releases to listeners or compete with Spotify, SoundCloud, or DistroKid.
-- **Not an AI music generator.** Explicitly excluded (backlog US-100) for legal and copyright reasons. This is a trust signal for producers worried about their stems being used for training.
-- **Not a real-time co-editing tool (for now).** Collaboration works through push/pull and reviews (Git-style), not Google-Docs-style simultaneous editing. Deferred to v2 (backlog US-99).
+- **Not an AI music generator.** Explicitly excluded (backlog US-100) for legal and copyright reasons. This is a trust signal for producers worried about their music being used for training.
+- **Not a real-time co-editing tool (for now).** Collaboration works through saved versions, restores and reviews (Git-style), not Google-Docs-style simultaneous editing. Deferred to v2 (backlog US-99).
 - **Not a generic cloud drive or file transfer service.** It versions music projects specifically. It is not a Dropbox or WeTransfer replacement for arbitrary files.
 - **Not a rights or royalty management tool.** StemHub does not handle contracts, splits, or copyright registration, even though it records who contributed what.
 - **Not a mixing or mastering service.** No audio processing, no effects, no automated mastering.
 
 ### Top 3 differentiators
-1. **Runs inside the DAW producers already use.** BandLab's versioning only covers projects made in BandLab. Drive, Dropbox, and WeTransfer don't understand music projects at all. StemHub is a plugin for FL Studio and Ableton, so professionals keep their tools and get versioning where they work (US-05). This is the strongest edge against BandLab.
-2. **Understands music projects, not just files.** Drive and Dropbox see an `.flp` as an opaque blob: they can restore the whole thing but can't tell you what changed. StemHub parses project files (via `PyFLP_v2`), so it can show track-level changes, restore a single bassline (Mabé's use case), and send only new audio (Laura's use case). A 2 GB WeTransfer upload becomes a light push.
-3. **A true review workflow for collaboration.** WeTransfer is one-way. Drive and Dropbox cause overwrite conflicts. StemHub brings branches, "musical pull requests," timestamped comments (v1.1), and track locking, so collaborators propose changes and the owner decides what goes in. BandLab lets people fork and edit but has no structured propose-review-merge step — which matters for professional teams and labels (the Studio plan).
+1. **Runs inside the DAW producers already use.** BandLab's versioning only covers projects made in BandLab. Drive, Dropbox, and WeTransfer don't understand music projects at all. The StemHub plugin runs inside FL Studio and Ableton, so professionals keep their tools and get versioning where they work (US-05). This is the strongest edge against BandLab.
+2. **Understands music projects, not just files.** Drive and Dropbox see an `.flp` as an opaque blob: they can restore the whole thing but can't tell you what changed. StemHub parses project files (via `PyFLP_v2`), so it can show track-level changes, restore a single bassline (Mabé's use case), and send only new audio (Laura's use case). A 2 GB WeTransfer upload becomes a light save.
+3. **A true review workflow for collaboration.** WeTransfer is one-way. Drive and Dropbox cause overwrite conflicts. StemHub brings branches, "musical pull requests," timestamped comments (v1.1), and track locking, so collaborators propose changes and the owner decides what goes in. BandLab lets people fork and edit but has no structured propose-review-accept step — which matters for professional teams and labels (the Studio plan).
 
 Full feature-by-feature comparison against Splice, Git/GitHub, Dropbox/Drive, and Sessionwire: [COMPARATIVE_BENCHMARK.md](./COMPARATIVE_BENCHMARK.md).
 
@@ -73,19 +74,19 @@ Full feature-by-feature comparison against Splice, Git/GitHub, Dropbox/Drive, an
 
 The MVP is the smallest system that lets a producer keep their music safe, collaborate with someone else, and see what changed — end-to-end, on the production environment.
 
-1. **Account and access.** Sign up and log in on the web, sign in with the same account in the plugin. JWT / HttpOnly cookie + Google OAuth on a deployed server (not localhost).
-2. **Create a project from the DAW.** In FL Studio, open the plugin, select the `.flp`, create the project.
-3. **Push a version.** Commit message → save → snapshot bundled, uploaded, encrypted on GCS, appears in history.
-4. **See history in both places.** Same version list in the plugin and on the web dashboard, with author, date, message, and an audio preview on the web (hear a version without opening the DAW).
+1. **Account and access.** Sign up and log in on the web, sign in with the same account in the StemHub plugin. JWT / HttpOnly cookie + Google OAuth on a deployed server (not localhost).
+2. **Create a project from the DAW.** In FL Studio, open the StemHub plugin, select the `.flp`, create the project.
+3. **Save a version.** Message → Save → files uploaded, encrypted on GCS, appears in history.
+4. **See history in both places.** Same version list in the StemHub plugin and on the web dashboard, with author, date, message, and an audio preview on the web (hear a version without opening the DAW).
 5. **Restore a previous version into the DAW.** Not just download a file — actually reopen the chosen version in FL Studio. This is Mabé's use case and blocks the demo if missing.
-6. **Branches.** Create a branch, push to it, switch back to main.
-7. **Two-person collaboration.** Invite a second user; they pull, add something, push; the owner sees the new version attributed to the collaborator and can comment on it.
+6. **Branches.** Create a branch, save to it, switch back to main.
+7. **Two-person collaboration.** Invite a second user; they restore the latest version, add something, save; the owner sees the new version attributed to the collaborator and can comment on it.
 8. **A basic "what changed" summary.** Using `PyFLP_v2`, show tracks and channels added, removed, or renamed between two versions. Simple, but it proves we understand music projects rather than storing files.
 
 ### DAW support
 - **MVP:** FL Studio only, VST3 build.
 - **Ableton:** stretch goal — added only if FL Studio work finishes with real slack, otherwise deferred.
-- **Format at MVP:** full session bundles (project file + all referenced audio).
+- **Format at MVP:** the project file plus all its audio & MIDI assets, stored content-addressed.
 
 ### Platform / plugin format
 - **VST3** only for MVP — supported by all target hosts on both macOS and Windows.
@@ -108,19 +109,19 @@ Priorities for the MVP shipping to the Greenlight jury. Reviewed at every mentor
 
 | Feature | Priority | Rationale |
 |---|---|---|
-| Push / commit | **Must** | Core of the product; already implemented in the plugin. |
-| Pull (restore into DAW) | **Must** | Must actually reopen the version, not just refresh the history list. |
-| Branches (create, switch, push) | **Must** | Proves safe experimentation. Includes "accept PR" as branch promotion. |
-| In-DAW plugin UI | **Must** | Main differentiator vs BandLab, Drive, Dropbox. |
+| Save a version | **Must** | Core of the product; already implemented in the StemHub plugin. |
+| Restore into DAW | **Must** | Must actually reopen the version, not just refresh the history list. |
+| Branches (create, switch, save to) | **Must** | Proves safe experimentation. Includes "accept PR" as branch promotion. |
+| StemHub plugin UI in the DAW | **Must** | Main differentiator vs BandLab, Drive, Dropbox. |
 | Web history browser | **Must** | Lets the jury and collaborators see versions without opening a DAW. |
 | Collaborator invites | **Must** | Without a second user, StemHub looks like a backup tool. |
-| Comments on a version | **Must** | Simple, per-version. Timestamped in-track comments deferred to v1.1. |
+| Comments on a version | **Must** | Simple, per-version. Timestamped comments deferred to v1.1. |
 | Diff view (text summary) | **Must** | Track adds/removes/renames via `PyFLP_v2`. Visual/audio diff is a Could. |
 | Web waveform preview | **Must** | Hearing a version without the DAW is part of the demo. Cheap with Wavesurfer.js. |
 | Pull requests | **Should** | In scope for M2 (before the jury). "Accept PR" = branch promotion. Automatic merge stays Won't. |
 | MFA (TOTP) | **Should** | First security feature after the core loop; ship before the beta if time allows. |
 | Notifications (in-app) | **Should** | Email & push notifications are Could. |
-| Offline mode | **Could** | MVP shows a "connection lost" state. Queued sync comes later. |
+| Offline mode | **Could** | MVP shows a "connection lost" state. Queued saves come later. |
 | Explore / discover page | **Could** | Endpoints exist, but the page uses mock data. Hide until content is real. |
 | Public projects | **Could** | Requires licensing metadata and privacy controls first. |
 | Licensing metadata | **Could** | Prerequisite for public projects and forks. |
@@ -139,9 +140,9 @@ Four detailed personas live in [PERSONAS_USE_CASES.md](./PERSONAS_USE_CASES.md).
 | Tom Beats | Young producer, FL Studio & Ableton | "Save As" version chaos | Branch-based experimentation |
 | Frank Bass | Session bassist | Lost takes in `.zip` archives | Restore a specific old track |
 | Mabé | Bedroom beatmaker | Overwrites & disk anxiety | Restore a deleted bassline |
-| Laura | Sound designer | Heavy exports for remote collab | Push-only-what-changed collaboration |
+| Laura | Sound designer | Heavy exports for remote collab | Upload-only-what-changed collaboration |
 
-**Primary MVP persona:** **Tom Beats** — chosen because his workflow exercises every core MVP feature (project creation, branches, push, restore, collaboration).
+**Primary MVP persona:** **Tom Beats** — chosen because his workflow exercises every core MVP feature (project creation, branches, save, restore, collaboration).
 
 ---
 
@@ -154,10 +155,10 @@ Success at the jury means real producers use the core loop and come back — not
 | KPI | Target |
 |---|---|
 | Beta testers recruited | 20 |
-| Beta testers activated (≥1 push) | 15 |
-| Weekly active testers (≥1 push/week for 4 consecutive weeks) | ≥10 |
-| Onboarding time (signup → first push) | <10 minutes |
-| Total versions pushed | ≥200 |
+| Beta testers activated (≥1 saved version) | 15 |
+| Weekly active testers (≥1 saved version/week for 4 consecutive weeks) | ≥10 |
+| Onboarding time (signup → first saved version) | <10 minutes |
+| Total versions saved | ≥200 |
 | Restores performed by testers | ≥20 (validates "never lose an idea") |
 | Projects with ≥2 contributors | ≥10 (validates collaboration, not just backup) |
 | Versions lost or corrupted | **0 (hard requirement)** |
@@ -173,44 +174,44 @@ Reference project sizes for perf measurement:
 | Size | Description |
 |---|---|
 | Small | Project file only, <5 MB |
-| Medium | ~200 MB with samples |
+| Medium | ~200 MB with its samples and recordings |
 | Large | ~1 GB |
 
 Measured on a fixed **20 Mbps upload** connection.
 
 **Latency:**
-- Small project: push and restore complete in <5 s at p95.
+- Small project: save and restore complete in <5 s at p95.
 - Medium & large: StemHub adds <5 s beyond raw transfer time; uploads are resumable.
-- History refresh in plugin: <1 s.
+- History refresh in the StemHub plugin: <1 s.
 - Non-upload backend endpoints: <300 ms p95.
 
-**Plugin (real-time safety):**
+**StemHub plugin (real-time safety):**
 - No work on the audio thread (no allocations, no locks, no network calls).
 - <100 MB memory at idle.
-- Streaming push (memory does not grow with project size).
+- Streaming upload (memory does not grow with project size).
 - Passes `pluginval --strictness-level 5 --rtcheck`.
 - Never causes audio dropouts or DAW freezes.
 
 **Service:**
 - 99% monthly uptime during beta, 99.9% during demo week.
-- ≥98% push success rate; every failure surfaced to the user.
-- RTO 2 h; RPO 24 h (no loss of pushed artifacts).
-- Login, push, history, restore covered by automated tests in CI.
+- ≥98% save success rate; every failure surfaced to the user.
+- RTO 2 h; RPO 24 h (no loss of stored files once a version is saved).
+- Login, save, history, restore covered by automated tests in CI.
 
 **Delivery-blocking engineering task:** move uploads from "through the Python server" to **signed URLs directly to storage** (GCS presigned PUT). Required to hit the large-project latency budget.
 
 ### 5.3 Beta outcome interpretation
 
 **Success** (all of):
-- ≥10 testers still pushing weekly at end without being chased.
+- ≥10 testers still saving versions weekly at end without being chased.
 - 0 testers lost a version or had data leaked.
 - ≥5 real two-person collaborations happened.
 - ≥50% of testers who restored a version say it saved them real work.
 - The 5-minute demo runs on the production environment.
 
 **Partial / fixable:**
-- Testers activate but don't return → onboarding or plugin friction.
-- Push too slow on large projects → known engineering path (signed URLs, resumable uploads, compression).
+- Testers activate but don't return → onboarding or StemHub plugin friction.
+- Saving too slow on large projects → known engineering path (signed URLs, resumable uploads, compression).
 
 **Failure signals** (require repositioning or major rework):
 - Any tester loses work because of StemHub → **all new features paused until fixed.**
@@ -229,7 +230,7 @@ Full detail lives in [TECHNICAL_CONTEXT.md](./TECHNICAL_CONTEXT.md) and [plugin-
 ### Components
 - **Backend** — FastAPI + Python 3.10+, async SQLAlchemy 2.0, Alembic migrations, JWT + Google OAuth2, pluggable storage layer.
 - **Frontend** — Next.js 16 App Router (React 19), TypeScript, Tailwind CSS, shadcn/ui, `next-themes`, Wavesurfer.js.
-- **Plugin** — JUCE C++17 VST3, state-machine driven UI, background job coordinator, dependency-injected API client, session cache.
+- **StemHub plugin** — JUCE C++17 VST3, state-machine driven UI, background job coordinator, dependency-injected API client, saved sign-in (credential store).
 - **Database** — PostgreSQL (relational; Git-like history requires strict FK integrity).
 - **Object storage** — Google Cloud Storage (production), local filesystem (dev). AES-256 at rest.
 - **Auth** — JWT with HttpOnly cookies, Google OAuth2, optional TOTP (post-MVP).
@@ -237,7 +238,7 @@ Full detail lives in [TECHNICAL_CONTEXT.md](./TECHNICAL_CONTEXT.md) and [plugin-
 ### Cross-cutting patterns (from CLAUDE.md)
 - **Backend:** async-first, dependency injection, soft deletes (`is_deleted` + `deleted_at`), Pydantic validation at boundaries.
 - **Frontend:** centralized `authFetch` for all API calls (token + error handling), App Router file-based routing, theme provider.
-- **Plugin:** one session object owning the state (`UIState`, `OperationState`), background jobs tagged with a request epoch and ended by one rule, `ChangeBroadcaster` for editor updates, `IProjectApi` for testability.
+- **StemHub plugin:** one `StemhubSession` owning the state (`UIState`, `OperationState`), background jobs tagged with a request epoch and ended by one rule, `ChangeBroadcaster` for editor updates, `IProjectApi` for testability.
 
 ### Standards
 - **Accessibility:** WCAG 2.1 AA for the web app.
@@ -251,22 +252,22 @@ Full detail lives in [TECHNICAL_CONTEXT.md](./TECHNICAL_CONTEXT.md) and [plugin-
 Full detail:
 - **Data model & API:** [DATA_API_MODELING.md](./DATA_API_MODELING.md).
 - **Content-addressed storage design:** [content-addressed-storage.md](./content-addressed-storage.md).
-- **Plugin request lifecycle:** [plugin-data-flow.md](./plugin-data-flow.md).
+- **StemHub plugin request lifecycle:** [plugin-data-flow.md](./plugin-data-flow.md).
 
 ### Core entities
 
 ```
 User → Project → Branch → Version (parent_version_id → Version)
-                                  → Track
 Project → Collaborator → User
 Project → Blob (sha256, ref_count) — content-addressed, project-scoped
+Version.manifest_json → Blob (project file + assets, by sha256)
 ```
 
 Key design decisions:
 - **Version chain** via self-referential `parent_version_id` (Git-like).
 - **Content-addressed storage** at blob level, **project-scoped** (not global) — global dedupe was rejected because of the privacy oracle attack.
 - **Reference counting** on blobs, with eager decrement and a periodic GC sweep as safety net.
-- **Manifests** (JSONB) reference blobs by SHA-256; filenames inside the manifest are display-only.
+- **Manifests** (JSONB) list a version's project file and assets and reference their blobs by SHA-256; the paths inside a manifest only say where each file goes in the project folder, never where its bytes are stored.
 - **Uploads:** MVP goes through FastAPI; **before the jury**, move to signed direct-to-GCS URLs to hit the latency budget.
 
 ---
@@ -277,10 +278,10 @@ Resolutions to open questions raised during spec review:
 
 | Question | Decision |
 |---|---|
-| Which file formats at MVP? | Full session bundles (project file + all referenced audio). |
-| Max project size at MVP? | **2 GB per push** (new data per push). Applies across Free and Studio tiers; pricing page updated accordingly. |
+| Which file formats at MVP? | The project file plus all its audio & MIDI assets, stored content-addressed. |
+| Max project size at MVP? | **2 GB per save** (new data per save). Applies across Free and Studio tiers; pricing page updated accordingly. |
 | Pull requests? | Promoted from Could to **Should** — in scope for M2 (before the jury). "Promote branch to main" is renamed **"accept PR."** Automatic merge remains **Won't** for this school year. |
-| Concurrent push to same branch head? | **Optimistic concurrency.** When two users push to the same branch head at the same time, exactly one succeeds. The other receives a conflict, saves to a new branch, and both versions exist with correct content. |
+| Concurrent saves to the same branch head? | **Optimistic concurrency.** When two users save onto the same branch head at the same time, exactly one succeeds. The other receives a conflict, saves to a new branch, and both versions exist with correct content. |
 | Merge strategy for the school year | No 3-way merge. Branch promotion + PR review only. |
 
 ---
@@ -293,41 +294,41 @@ Resolutions to open questions raised during spec review:
 |---|---|---|
 | Backend | 80% | pytest + coverage; enforced in CI. |
 | Frontend | 80% | Component + integration + Playwright. |
-| Plugin (non-UI: state machines, session cache, API client, snapshot bundler) | 60% | Lower than global rule; DSP/UI is harder to test. |
-| Plugin (UI) | No coverage target | Validated by `pluginval --strictness 5 --rtcheck` + manual QA checklist. |
+| StemHub plugin (non-UI: `StemhubSession` state, saved sign-in, API client, version upload & restore) | 60% | Lower than global rule; DSP/UI is harder to test. |
+| StemHub plugin (UI) | No coverage target | Validated by `pluginval --strictness 5 --rtcheck` + manual QA checklist. |
 
 ### 9.2 Testing strategy
 
-Hybrid approach: **automate the core loop at every layer possible; keep manual QA only for running the plugin inside a real DAW.**
+Hybrid approach: **automate the core loop at every layer possible; keep manual QA only for running the StemHub plugin inside a real DAW.**
 
-**Backbone — API-level E2E in pytest** against the real Docker Compose stack (PostgreSQL + localfs). Walks the full demo flow: signup → create project → branch → push real `.flp` → fetch history → compare versions → restore with checksum verification → invite second user → comment. Checksum verification on every download backs the "zero lost versions" KPI.
+**Backbone — API-level E2E in pytest** against the real Docker Compose stack (PostgreSQL + localfs). Walks the full demo flow: signup → create project → branch → save a real `.flp` → fetch history → compare versions → restore with checksum verification → invite second user → comment. Checksum verification on every download backs the "zero lost versions" KPI.
 
 **Web — Playwright** (chosen over Cypress because it handles multiple users in one test — required for collaboration flows). Limited to 4–5 key specs with data seeded through the API.
 
-**Plugin — headless C++ test harness** that drives the processor directly against the backend (sign in, push, refresh, restore). Plus unit tests with a fake `IProjectApi` for error cases. `pluginval --strictness-level 5` runs in CI to catch crashes and audio-thread issues.
+**StemHub plugin — headless C++ test harness** that drives the processor directly against the backend (sign in, save, refresh, restore). Plus unit tests with a fake `IProjectApi` for error cases. `pluginval --strictness-level 5` runs in CI to catch crashes and audio-thread issues.
 
-**Cross-surface** — one test pushes from the plugin harness and confirms the version appears on the web.
+**Cross-surface** — one test saves a version from the StemHub plugin harness and confirms it appears on the web.
 
-**Manual QA checklist** (FL Studio can't be automated) — run on Windows and Mac before each beta release and before the jury: load, sign in, push, restore, branch switch, no audio dropouts. Plus a rehearsal of the 5-minute demo.
+**Manual QA checklist** (FL Studio can't be automated) — run on Windows and Mac before each beta release and before the jury: load, sign in, save, restore, branch switch, no audio dropouts. Plus a rehearsal of the 5-minute demo.
 
-**Priority order:** API E2E → pluginval + plugin harness → Playwright (once web screens stabilize).
+**Priority order:** API E2E → pluginval + StemHub plugin harness → Playwright (once web screens stabilize).
 
 ### 9.3 Mandatory E2E scenarios
 
 **Happy paths:**
-1. **Signup → create project → push → restore.** New user signs up, creates a project from a real `.flp`, pushes v1, pushes v2, restores v1, gets byte-identical content (checksum match). Run at API level and through the plugin harness.
-2. **Branch → push → switch back.** Create a branch, push to it, switch to main, confirm main's history and latest version are unchanged. Guards against versions leaking between branches.
-3. **Collaboration round-trip.** User A invites User B; B accepts, restores A's latest, pushes a change; A sees B's version attributed to B and can comment. Run at API level and in Playwright with two browser contexts.
-4. **Plugin push → web shows it.** Cross-surface: a version pushed from the plugin harness appears on the web history page with correct message, author, audio preview.
-5. **Compare two versions.** Push two fixture `.flp` files with a known difference (a track added); the change summary reports exactly that.
+1. **Signup → create project → save → restore.** New user signs up, creates a project from a real `.flp`, saves v1, saves v2, restores v1, gets byte-identical content (checksum match). Run at API level and through the StemHub plugin harness.
+2. **Branch → save → switch back.** Create a branch, save to it, switch to main, confirm main's history and latest version are unchanged. Guards against versions leaking between branches.
+3. **Collaboration round-trip.** User A invites User B; B accepts, restores A's latest, saves a change; A sees B's version attributed to B and can comment. Run at API level and in Playwright with two browser contexts.
+4. **StemHub plugin save → web shows it.** Cross-surface: a version saved from the StemHub plugin harness appears on the web history page with correct message, author, audio preview.
+5. **Compare two versions.** Save two fixture `.flp` files with a known difference (a track added); the change summary reports exactly that.
 
 **Failure and safety flows:**
 
-6. **Access control.** A non-collaborator gets 404 when trying to read, download, push to, or comment on someone else's project — including by guessing IDs. Given the pitch about leaked demos, this matters as much as the happy path.
-7. **Interrupted push.** Push is two steps (create version record, then upload artifact). Simulate upload failing after step 1; check that no broken version is left in history (or that it's clearly marked failed and not restorable). Otherwise a network drop creates exactly the "lost version" our beta criteria call a failure.
-8. **Expired or invalid session.** An expired token during a push produces a clear "sign in again" state in the plugin; nothing gets half-saved.
-9. **Removed collaborator.** After A removes B, B can no longer pull, push, or see the project.
-10. **Project deletion.** Deleting a project removes it from history, blocks downloads, deletes stored artifacts. Backs the GDPR "right to erasure" commitment.
+6. **Access control.** A non-collaborator gets 404 when trying to read, download, save to, or comment on someone else's project — including by guessing IDs. Given the pitch about leaked demos, this matters as much as the happy path.
+7. **Interrupted save.** A save uploads the files the server doesn't have yet, then creates the version from its manifest. Simulate the upload failing partway; check that no broken version is left in history (or that it's clearly marked failed and not restorable). Otherwise a network drop creates exactly the "lost version" our beta criteria call a failure.
+8. **Expired or invalid sign-in session.** An expired token during a save produces a clear "sign in again" state in the StemHub plugin; nothing gets half-saved.
+9. **Removed collaborator.** After A removes B, B can no longer restore, save to, or see the project.
+10. **Project deletion.** Deleting a project removes it from history, blocks downloads, deletes its stored files (blobs). Backs the GDPR "right to erasure" commitment.
 
 ### 9.4 Definition of Done
 
@@ -364,7 +365,7 @@ A feature is **Done** when:
 - **No canary releases** at MVP — not worth the complexity yet.
 
 ### 10.4 Plugin distribution to beta testers
-- **macOS:** signed & notarized (Apple Developer account is a hard requirement — unsigned plugins block real users on macOS).
+- **macOS:** the StemHub plugin is signed & notarized (Apple Developer account is a hard requirement — unsigned plugins block real users on macOS).
 - **Windows:** unsigned for the beta — SmartScreen warnings are annoying but not blocking. Windows signing certificate is post-beta.
 
 ---
@@ -374,7 +375,7 @@ A feature is **Done** when:
 ### 11.1 Data residency & GDPR promise
 All user data — project files, database, backups, logs — is stored and processed in a **single EU Google Cloud region**. Not strictly required by GDPR, but a core trust promise to producers.
 
-Project files are treated as **personal data**: they can contain usernames, sample paths, and voice recordings.
+Project files and their assets are treated as **personal data**: they can contain usernames, sample paths, and voice recordings.
 
 ### 11.2 Privacy policy commitments (kept separate from ToS)
 - EU storage with a published list of sub-processors.
@@ -426,7 +427,7 @@ Further detail: [DEPLOYMENT_RESILIENCE.md](./DEPLOYMENT_RESILIENCE.md), [RISK_MA
 | **JB** | Engineer + Community co-lead | Frontend, community |
 | **Dryss** | Engineer | Frontend |
 | **Hubert** | Engineer | Backend + Frontend |
-| **Gabin** | Engineer | Frontend + Plugin |
+| **Gabin** | Engineer | Frontend + StemHub plugin |
 
 ### 12.2 Decision-making
 - **Architectural decisions are made by Erwan.** The team can and should discuss and propose alternatives; Erwan validates.
@@ -479,8 +480,8 @@ Every PR requires review from at least one other team member before merge. Merge
 - Secondary: Splice (music-industry familiarity), Figma (collaboration mental model).
 
 ### 14.3 Surface priority
-- **Web app and plugin are almost equal in importance.**
-- **Plugin:** producing (create, push, restore, branch).
+- **Web app and StemHub plugin are almost equal in importance.**
+- **StemHub plugin:** producing (create, save, restore, branch).
 - **Web app:** collaboration, project overview, history browsing, comments, PRs.
 
 ### 14.4 Accessibility
@@ -521,7 +522,7 @@ Full detail: [COST_AND_REVENUE.md](./COST_AND_REVENUE.md).
 | Pro | $19/mo | 200 GB | Open-source projects, pull requests, analytics |
 | Studio | $49/mo | 1 TB | Teams, advanced permissions, priority support |
 
-> Pricing page must reflect the **2 GB per-push cap** at all tiers (see [§8](#8--open-technical-decisions)).
+> Pricing page must reflect the **2 GB per-save cap** at all tiers (see [§8](#8--open-technical-decisions)).
 
 ### 16.2 Unit economics
 - **Cost per user at scale:** ~$0.23/mo (stable from 1K → 10K users).
@@ -539,7 +540,7 @@ Full Gantt + Epitech deliverables table: [ROADMAP.md](./ROADMAP.md).
 |---|---|---|
 | **M1** | Sep–Oct 2026 | Canonical JSON schema + PR base |
 | **M2** | Nov–Dec 2026 | Merge engine + Web PR diff |
-| **M3** | Jan–Feb 2027 | Cloudflare R2 (or GCS) + plugin packaging |
+| **M3** | Jan–Feb 2027 | Cloudflare R2 (or GCS) + StemHub plugin packaging |
 | **M4** | Mar–May 2027 | Beta support + hotfixes |
 | **M5** | May–Jun 2027 | Consolidation + optimizations |
 
@@ -561,9 +562,9 @@ Top risks specific to this specification:
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| A tester loses a version because of StemHub | **Catastrophic** for trust and jury narrative | Zero-loss is a **hard product KPI**; all new work pauses if it happens. Checksum verification on every download. Interrupted-push safety test. |
-| Plugin causes audio dropouts in FL Studio | Trust-breaking for producers | Real-time-safety rules enforced (`pluginval --rtcheck` in CI). No allocations / locks / I/O on audio thread. |
-| Signed URLs migration not done in time for large-project targets | Push latency KPI misses at demo | Prioritize the migration by end of M3 (Feb 2027). Fall back on smaller demo fixtures if late. |
+| A tester loses a version because of StemHub | **Catastrophic** for trust and jury narrative | Zero-loss is a **hard product KPI**; all new work pauses if it happens. Checksum verification on every download. Interrupted-save safety test. |
+| StemHub plugin causes audio dropouts in FL Studio | Trust-breaking for producers | Real-time-safety rules enforced (`pluginval --rtcheck` in CI). No allocations / locks / I/O on audio thread. |
+| Signed URLs migration not done in time for large-project targets | Save latency KPI misses at demo | Prioritize the migration by end of M3 (Feb 2027). Fall back on smaller demo fixtures if late. |
 | Ableton MVP support attempted but not finished | Scope creep threatens FL Studio quality | Ableton is a **stretch goal only**. FL Studio quality never traded for Ableton coverage. |
 | Visual identity locked late | Blocks Figma v1 (Dec 2026 deliverable) | **Hard deadline: end of November 2026** for identity decisions. |
 | Legal review of privacy policy / content policy is late | Blocks beta launch (March 2027) | Legal review must complete **before beta**, target end of February 2027. |
@@ -573,21 +574,80 @@ Top risks specific to this specification:
 
 ## 19 — Glossary
 
-| Term | Definition |
-|---|---|
-| **Version / Commit** | An immutable snapshot of a project at a point in time. |
-| **Branch** | A named line of versions (e.g. `main`, `feature-fast-tempo`). |
-| **Push** | Upload a new version to a branch. |
-| **Pull / Restore** | Download a version and reopen it in the DAW. |
-| **PR (Pull Request)** | A proposal to promote a branch's changes into another branch, subject to owner review. |
-| **Accept PR** | The MVP mechanism for merging a branch (renamed from "promote branch to main"). No automatic 3-way merge. |
-| **Manifest** | JSON document describing a version's contents by SHA-256 reference. |
-| **Blob** | A content-addressed unit of storage (one file, one SHA-256). Project-scoped. |
-| **CAS** | Content-Addressed Storage. See [content-addressed-storage.md](./content-addressed-storage.md). |
-| **RTO / RPO** | Recovery Time Objective / Recovery Point Objective. |
-| **SUS** | System Usability Scale — standardized 10-question usability survey. |
-| **pluginval** | Reference validator for VST3 plugins; strictness 5 + `--rtcheck` is mandatory. |
-| **APVTS** | JUCE `AudioProcessorValueTreeState` — thread-safe parameter management. |
+These are the words for StemHub's concepts, everywhere: code identifiers, UI copy, API fields, comments, tests and docs. UI labels that differ from the term are given in parentheses.
+
+The **Replaces** column lists the words not to use for that concept. It doesn't ban a word in its own meaning: a recording *take*, the Git *merge* of our own code, a *session* musician, a musical *note*. Code that mirrors FL Studio or PyFLP (the FL mixer reader, for example) may keep FL's names, and code that reads the legacy manifest v1 keeps its field names (`tracks`, `filename`).
+
+### 19.1 Project and files
+
+| Term | Meaning | In FL Studio / Ableton Live | Replaces |
+|---|---|---|---|
+| **Project** | StemHub's container for one piece of music: its branches, versions and collaborators. | — | repository, repo, song |
+| **Project file** | The DAW document itself. | FL: the `.flp`. Ableton: the Live Set (`.als`). | DAW file, project binary, `flp` (in DAW-neutral code), session |
+| **Project folder** | The folder holding the project file. A save collects the assets in it and its subfolders. | FL: the folder of the `.flp`. Ableton: the Project folder that "Collect All and Save" fills. | session bundle, bundle |
+| **Asset** (UI: "Audio & MIDI files") | Any audio or MIDI file of the project besides the project file: samples, recordings, MIDI files. | FL: the samples and recordings its channels and audio clips play. Ableton: the files under the Project's `Samples/` folder. | track, stem, "the other files", sample (meaning all files) |
+| **Stem** | A rendered audio file of one part of the mix, usually a group of related tracks (drums, bass, vocals), with its effects printed, exported full length from the song's start so that all stems played together rebuild the mix. In StemHub terms it is the rendered output of one insert or group track. StemHub doesn't produce stems yet (a future "stem export"); a stem a producer exported into the project folder is just an asset to StemHub. | FL: Export with "Split mixer tracks" (one file per insert). Ableton: Export Audio/Video with Rendered Track "All Individual Tracks" (one file per track, group tracks included). | "stems" for raw project files: samples, recordings and MIDI are not stems |
+| **Mixdown** | A rendered audio file of the full mix: the whole song in one stereo file. | FL: Export of the song through the Master. Ableton: Export Audio/Video of the Main track (Master before Live 12). | stems (for the full mix), master (for the file) |
+| **Manifest** (UI: file list) | The JSON list of a version's project file and assets, each by SHA-256, size and path in the project folder. Format in [content-addressed-storage.md](./content-addressed-storage.md). | — | snapshot_manifest, bundle, artifact |
+| **Blob** | Stored bytes, addressed by their SHA-256: one per unique file per project (project-scoped). Internal; users never see the word. | — | artifact |
+| **CAS** | Content-Addressed Storage: each unique file stored once per project as a blob, and versions refer to blobs through their manifest. See [content-addressed-storage.md](./content-addressed-storage.md). | — | — |
+| **Project model** | The future DAW-neutral JSON of a project's musical content (#170). | — | mixer_state, mixer snapshot |
+
+### 19.2 Versions and collaboration
+
+| Term | Meaning | In FL Studio / Ableton Live | Replaces |
+|---|---|---|---|
+| **Version** | An immutable saved state of a project on a branch: its manifest, message, author, date and parent version. | — (FL's "Save new version" writes another file instead) | commit, snapshot, change, take, "Saved" |
+| **Branch** | A named line of versions (e.g. `main`, `feature-fast-tempo`). | — | workspace, lane, take, timeline |
+| **History** | A branch's versions, newest first. | — | changes (meaning versions), timeline |
+| **Head** | A branch's newest version. | — | — |
+| **Save** (a version) | The StemHub plugin action that creates a version on the open branch from the working copy. | Not the DAW's own save (Ctrl/Cmd+S), which only writes the project file. | commit, push (in UI), sync, "save snapshot" |
+| **Message** | The text a version is saved with. | — | commit message (in UI), save note, note |
+| **Restore** | Download a version and open it in the DAW as a separate copy, in a new folder. The working copy is never overwritten. | — | pull, checkout, roll back, sync |
+| **Refresh** | Reload a branch's history. Moves no files. | — | sync, pull |
+| **Working copy** | The local project file the StemHub plugin saves from. | — | local file, local copy, working file (in UI) |
+| **Diff** / **Change** | A comparison of two versions / one typed difference in it (e.g. an insert's volume changed). | — | "changes" meaning versions |
+| **Pull request (PR)** | A proposal to bring one branch into another, subject to owner review. Its status is `OPEN`, the only non-terminal state, until it is accepted (`MERGED`) or closed without being accepted (`CLOSED`). `MERGED` and `CLOSED` are terminal: a closed PR is never reopened, users open a new one. | — | — |
+| **Accept PR** | The MVP way to take a pull request: branch promotion (renamed from "promote branch to main"). No content merge and no automatic 3-way merge (see [§8](#8--open-technical-decisions)). | — | merge, smart merge |
+| **Preview** | A mixdown uploaded to StemHub so people can listen on the web without the DAW (one per project today). | — | stems, export |
+| **Download** | Fetch stored files from StemHub, unchanged. | — | export, quick export, pull |
+| **Export** / **Render** (bounce) | Produce new files from the project, as every DAW uses the word: render audio (a mixdown or stems) or, post-MVP, a project for another DAW ("cross-DAW export", [§2](#2--scope--mvp)). Always makes something new, never a plain download. | FL: Export. Ableton: Export Audio/Video. | export (meaning a download) |
+
+### 19.3 Music terms (inside the project file)
+
+DAW-neutral names for what a project file contains. The FL mixer diff uses them today and the project model (#170) will use them throughout; #170 also normalizes the units.
+
+| Term | Meaning | In FL Studio / Ableton Live | Replaces |
+|---|---|---|---|
+| **Instrument** | A sound source that plays notes: a synth or a sampler. | FL: a channel of the Channel Rack. Ableton: an instrument device on a MIDI track. | channel (in DAW-neutral code) |
+| **Pattern** | A block of notes that can be placed in the arrangement. | FL: a pattern. Ableton: the nearest equivalent is a MIDI clip. | — |
+| **Note** | One musical note: pitch, start, length, velocity. | FL: a Piano roll note. Ableton: a MIDI note. | — (a version's text is its *message*, never a note) |
+| **Arrangement** | The song laid out over time. | FL: the Playlist. Ableton: the Arrangement View. | playlist, timeline (in DAW-neutral code) |
+| **Track** | One lane of the arrangement. Never an audio file (asset), a mixer insert or a whole song. | FL: a Playlist track. Ableton: a track (audio, MIDI, group or return). | mixer track (that is an insert) |
+| **Clip** | A region placed on a track: audio, notes or automation. | FL: a pattern, audio or automation clip in the Playlist. Ableton: a clip. | — |
+| **Mixer** | Where the signals are balanced, processed and routed. | FL: the Mixer. Ableton: the Mixer section. | — |
+| **Insert** | One mixer channel, with its volume, pan, effect slots and sends. Numbered as in FL Studio. | FL: a mixer track (Insert 1, 2, …). Ableton: a track's mixer strip. | mixer track, channel strip |
+| **Master insert** | Insert 0, where every insert is summed. | FL: the Master mixer track. Ableton: the Main track (Master before Live 12). | — |
+| **Effect slot** | One place for an effect on an insert. Shown numbered from 1, as FL Studio shows it (index + 1). | FL: a mixer track's effect slot (10 per insert). Ableton: a device in a track's device chain. | slot (bare, in UI) |
+| **Send** | Part of an insert's signal sent to another insert. | FL: a route with a send level. Ableton: a Send to a return track. | route |
+| **Dry/wet** | How much of an effect slot's processed signal is heard. | FL: an effect slot's mix knob. Ableton: a device's Dry/Wet. | mix (for this value) |
+| **Tempo** | Speed in beats per minute (API field `tempo_bpm`). | Both: tempo. | bpm (as a project field name) |
+| **Key** | The musical key of a project or asset. | — | "key" for anything else (an effect's identifier is its `plugin_name`) |
+| **Time signature** | Beats per bar and beat unit (e.g. 4/4). | Both: time signature. | — |
+| **Volume** | An insert's or track's level, in dB once #170 normalizes units. | — | — |
+| **Pan** | Stereo position, from −1 (left) to +1 (right) once #170 normalizes units. | — | — |
+| **Automation** | A parameter's change over time. | FL: an automation clip. Ableton: an automation envelope. | — |
+
+### 19.4 Product and operations
+
+| Term | Meaning | Replaces |
+|---|---|---|
+| **StemHub plugin** | Our VST3, running inside the DAW. A bare **plugin** is a native or third-party instrument or effect inside the project. Hosts list the StemHub plugin under its product name "Stemhub Session", kept so hosts don't rescan. | bare "plugin" (for ours), "Stemhub Session" |
+| **Sign-in session** | How long a sign-in stays valid. | bare "session", "restore session" |
+| **RTO / RPO** | Recovery Time Objective / Recovery Point Objective. | — |
+| **SUS** | System Usability Scale — standardized 10-question usability survey. | — |
+| **pluginval** | Reference validator for VST3 plugins; strictness 5 + `--rtcheck` is mandatory. | — |
+| **APVTS** | JUCE `AudioProcessorValueTreeState` — thread-safe parameter management. | — |
 
 ---
 
@@ -596,3 +656,4 @@ Top risks specific to this specification:
 | Date | Author | Change |
 |---|---|---|
 | 2026-09-16 | Erwan (via Claude) | Initial consolidated specification. |
+| 2026-09-29 | Erwan | Vocabulary cleanup: §19 rewritten as the project-wide glossary (project file, asset, stem, mixdown, version, branch, save, restore, refresh, insert… with FL Studio / Ableton equivalents and the words each replaces); its pull request row also writes down the status rule the backend already enforces (`OPEN` until `MERGED` or `CLOSED`, both terminal). Wording elsewhere aligned to it (push/commit → save, pull → restore, session bundles → project file plus audio & MIDI assets stored content-addressed, Track entity removed from §7). Milestone deliverables (§17.1) are unchanged; only M3's "plugin" now reads "StemHub plugin". No decision, priority, KPI or commitment changed. |
