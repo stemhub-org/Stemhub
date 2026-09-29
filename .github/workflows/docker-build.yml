@@ -123,7 +123,7 @@ jobs:
       GOOGLE_CLIENT_ID: ci
       GOOGLE_CLIENT_SECRET: ci
       STEMHUB_STORAGE_PROVIDER: local
-      STEMHUB_ARTIFACTS_ROOT: /tmp/artifacts
+      STEMHUB_STORAGE_ROOT: /tmp/storage
       STEMHUB_GCS_BUCKET: ci
       STEMHUB_GCS_PROJECT: ci
       STEMHUB_GCS_CREDENTIALS_JSON: "{}"

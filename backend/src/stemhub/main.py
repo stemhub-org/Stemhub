@@ -60,6 +60,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The web app names downloaded previews from this header.
+    expose_headers=["Content-Disposition"],
 )
 app.add_middleware(RequestIdMiddleware)
 

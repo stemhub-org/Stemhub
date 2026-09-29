@@ -12,7 +12,7 @@
           "tempo": 69.42,
           "version": "20.8.4.2576"
         },
-        "mixer_snapshot": {
+        "mixer": {
           "mixer_supported": true,
           "insert_count": 127,
           "named_inserts_prefix": [
@@ -37,7 +37,7 @@
           "tempo": 140.0,
           "version": "20.8.4.2576"
         },
-        "mixer_snapshot": {
+        "mixer": {
           "mixer_supported": true,
           "insert_count": 127,
           "named_inserts_prefix": []
