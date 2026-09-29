@@ -55,7 +55,7 @@ void NewProjectTile::paint(juce::Graphics& g)
     {
         g.setColour(Theme::kInkSubtle);
         g.setFont(theme::bodyFont(12.5f));
-        g.drawFittedText("Turn the DAW project you are working on into a StemHub project.",
+        g.drawFittedText("Turn the project file you are working on into a StemHub project.",
                          content, juce::Justification::topLeft, 3, 1.0f);
 
         const auto metaRow = bounds.reduced(kPadding).removeFromBottom(16);

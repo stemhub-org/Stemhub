@@ -4,16 +4,18 @@
 
 #include <JuceHeader.h>
 
-// Which files a save takes. The push and the dashboard's count both use this one rule.
-namespace stemhub::snapshotfiles
+// Which files a save takes: the project file and its assets. The upload and the dashboard's count
+// both use this one rule.
+namespace stemhub::versionfiles
 {
-// Marks a folder this plugin restored a version into: a project of its own, which a save of the
-// project around it leaves out. Being a dot-file, it is never saved itself.
+// Marks a folder this plugin restored a version into: a separate copy, which a save from a project
+// folder around it leaves out. Being a dot-file, it is never saved itself.
 inline constexpr const char* kRestoredCopyMarker = ".stemhub-restored";
 
-// The project file first, then the audio and MIDI files in its folder and subfolders, sorted by
-// path. Left out: hidden files and dot-files, "Backup" folders, and copies this plugin restored
-// there (folders with a kRestoredCopyMarker). Empty when the job running it is asked to stop.
+// The project file first, then its assets (the audio and MIDI files in its folder and
+// subfolders), sorted by path. Left out: hidden files and dot-files, "Backup" folders, and copies
+// this plugin restored there (folders with a kRestoredCopyMarker). Empty when the job running it
+// is asked to stop.
 std::vector<juce::File> collect(const juce::File& projectFile);
 
 // What a save of projectFile takes, for the dashboard.
@@ -31,7 +33,7 @@ Summary summarize(const juce::File& projectFile);
 // running it is asked to stop partway.
 [[nodiscard]] juce::String sha256OfFile(const juce::File& file);
 
-// The DAW project files the plugin works with, for a file chooser: "*.flp;*.als".
+// The project files the plugin works with, for a file chooser: "*.flp;*.als".
 [[nodiscard]] juce::String projectFilePattern();
 
 // "FL Studio" for .flp, "Ableton Live" for .als, empty otherwise.

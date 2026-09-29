@@ -2,22 +2,22 @@
 #include <array>
 #include <map>
 
-#include "application/SnapshotFiles.hpp"
+#include "application/VersionFiles.hpp"
 #include "network/ApiTypes.hpp"
 
-namespace stemhub::snapshotfiles
+namespace stemhub::versionfiles
 {
 namespace
 {
 constexpr std::array<const char*, 9> kAssetExtensions { "wav", "mp3", "flac", "ogg", "aiff", "aif", "m4a", "mid", "midi" };
 
-struct DawFileType
+struct ProjectFileType
 {
     const char* extension;
     const char* dawName;
 };
 
-constexpr std::array<DawFileType, 2> kDawFileTypes { { { "flp", "FL Studio" }, { "als", "Ableton Live" } } };
+constexpr std::array<ProjectFileType, 2> kProjectFileTypes { { { "flp", "FL Studio" }, { "als", "Ableton Live" } } };
 
 // Dot-files are left out on every system, not only where the OS hides them: macOS writes
 // "._kick.wav" companions onto drives that Windows then sees as ordinary files.
@@ -162,7 +162,7 @@ juce::String sha256OfFile(const juce::File& file)
 juce::String projectFilePattern()
 {
     juce::StringArray patterns;
-    for (const auto& type : kDawFileTypes)
+    for (const auto& type : kProjectFileTypes)
         patterns.add("*." + juce::String(type.extension));
 
     return patterns.joinIntoString(";");
@@ -170,7 +170,7 @@ juce::String projectFilePattern()
 
 juce::String dawNameFor(const juce::File& projectFile)
 {
-    for (const auto& type : kDawFileTypes)
+    for (const auto& type : kProjectFileTypes)
         if (projectFile.hasFileExtension(type.extension))
             return type.dawName;
 

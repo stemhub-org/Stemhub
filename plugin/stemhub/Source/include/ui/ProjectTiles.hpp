@@ -18,8 +18,8 @@ public:
     int span { 1 };
 };
 
-// Creates a project from a DAW file: shows the file, or asks for one. Its buttons belong to the
-// grid, which lays them out over the tile.
+// Creates a project from a project file: shows the file, or asks for one. Its buttons belong to
+// the grid, which lays them out over the tile.
 class NewProjectTile final : public GridTile
 {
 public:
