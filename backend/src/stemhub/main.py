@@ -12,6 +12,7 @@ from .routers.collaborators import router as collaborators_router
 from .routers.community import router as community_router
 from .routers.explore import router as explore_router
 from .routers.projects import router as projects_router
+from .routers.project_models import router as project_models_router
 from .routers.pull_requests import router as pull_requests_router
 from .routers.stats import router as stats_router
 from .routers.versions import router as versions_router
@@ -76,6 +77,7 @@ app.include_router(explore_router)
 app.include_router(community_router)
 app.include_router(blobs_router)
 app.include_router(pull_requests_router)
+app.include_router(project_models_router)
 
 
 @app.get("/")
