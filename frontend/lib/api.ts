@@ -21,7 +21,7 @@ export async function authFetch<T>(path: string, init?: RequestInit): Promise<T>
         if (res.status === 401 && typeof window !== "undefined") {
             // Token is expired or invalid, redirect to login
             window.location.href = "/login";
-            throw new Error("Session expired. Please log in again.");
+            throw new Error("Your sign-in has expired. Please sign in again.");
         }
 
         const errorData = await res.json().catch(() => ({}));

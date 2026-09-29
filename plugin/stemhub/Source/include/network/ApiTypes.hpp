@@ -10,7 +10,7 @@ struct ApiError
     enum class Kind
     {
         network,         // no response: offline, DNS, timeout
-        unauthorized,    // 401: the session token is missing, invalid or expired
+        unauthorized,    // 401: the sign-in token is missing, invalid or expired
         forbidden,       // 403
         notFound,        // 404
         conflict,        // 409

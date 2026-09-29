@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { GitBranch, ChevronDown, Trash2, Plus } from "lucide-react";
 import type { Branch } from "@/types/project";
 
-interface RepositoryBranchBarProps {
+interface BranchPickerProps {
     branches: Branch[];
     selectedBranchId: string;
     onBranchChange: (branchId: string) => void;
@@ -13,14 +13,14 @@ interface RepositoryBranchBarProps {
     onCreate?: (branchName: string) => Promise<void>;
 }
 
-export function RepositoryBranchBar({
+export function BranchPicker({
     branches,
     selectedBranchId,
     onBranchChange,
     isOwner,
     onDelete,
     onCreate,
-}: RepositoryBranchBarProps) {
+}: BranchPickerProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const [newBranchName, setNewBranchName] = useState("");
@@ -50,7 +50,7 @@ export function RepositoryBranchBar({
                     className="flex items-center gap-2 rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-background-tertiary"
                     aria-expanded={isOpen}
                     aria-haspopup="listbox"
-                    aria-label="Sélectionner la version"
+                    aria-label="Select branch"
                 >
                     <GitBranch className="size-4 text-foreground/60" aria-hidden />
                     <span>{selectedBranchName}</span>
@@ -82,12 +82,12 @@ export function RepositoryBranchBar({
                                         type="button"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if (onDelete && window.confirm(`Are you sure you want to delete version '${branch.name}'?`)) {
+                                            if (onDelete && window.confirm(`Are you sure you want to delete branch '${branch.name}'?`)) {
                                                 onDelete(branch.id);
                                             }
                                         }}
                                         className="px-3 py-2 text-foreground/40 hover:text-red-500 transition-colors"
-                                        title="Delete Workspace"
+                                        title="Delete Branch"
                                     >
                                         <Trash2 className="size-4" />
                                     </button>
@@ -119,7 +119,7 @@ export function RepositoryBranchBar({
                                             type="text"
                                             value={newBranchName}
                                             onChange={e => setNewBranchName(e.target.value)}
-                                            placeholder="New version name..."
+                                            placeholder="New branch name..."
                                             className="w-full bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
                                             disabled={isSubmitting}
                                             autoFocus
@@ -152,7 +152,7 @@ export function RepositoryBranchBar({
                                         className="flex w-full items-center gap-2 px-2 py-2 text-left text-sm font-medium text-accent/90 transition-colors hover:text-accent hover:bg-accent/10 rounded"
                                     >
                                         <Plus className="size-4 shrink-0" />
-                                        Create new version
+                                        Create new branch
                                     </button>
                                 )}
                             </li>
@@ -163,7 +163,7 @@ export function RepositoryBranchBar({
             <div className="flex items-center gap-2 text-sm text-foreground/70">
                 <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden />
                 <span>
-                    {branches.length} {branches.length === 1 ? "Version" : "Versions"}
+                    {branches.length} {branches.length === 1 ? "Branch" : "Branches"}
                 </span>
             </div>
         </div>

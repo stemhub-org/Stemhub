@@ -4,12 +4,15 @@ import sys
 import types
 from pathlib import Path
 
-from stemhub.flp_mixer_snapshot import (
-    MixerInsertSnapshot,
-    MixerProjectSnapshot,
-    MixerSlotSnapshot,
-    build_mixer_snapshot,
-    load_fl_studio_mixer_snapshot,
+import pytest
+
+from stemhub.fl_mixer import (
+    FlEffectSlot,
+    FlMixer,
+    FlMixerInsert,
+    MixerReadError,
+    load_fl_mixer,
+    parse_fl_mixer,
 )
 
 
@@ -18,6 +21,8 @@ class FakePlugin:
 
 
 class FakeSlot:
+    """Mimics a PyFLP mixer slot (PyFLP's attribute names, e.g. ``mix``)."""
+
     def __init__(
         self,
         *,
@@ -37,6 +42,8 @@ class FakeSlot:
 
 
 class FakeInsert:
+    """Mimics a PyFLP mixer insert (PyFLP numbering: Master is iid -1)."""
+
     def __init__(
         self,
         *,
@@ -74,7 +81,7 @@ class FakeStorage:
         return self.blob_file
 
 
-def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
+def test_parse_fl_mixer_normalizes_inserts_and_effect_slots() -> None:
     project = FakeProject(
         mixer=[
             FakeInsert(
@@ -89,11 +96,6 @@ def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
                 ],
             ),
             FakeInsert(
-                iid=-1,
-                name="Current",
-                slots=[FakeSlot(index=0, name="Ignore me", plugin=FakePlugin())],
-            ),
-            FakeInsert(
                 iid=1,
                 name=None,
                 enabled=False,
@@ -106,41 +108,41 @@ def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
         ]
     )
 
-    snapshot = build_mixer_snapshot(project)
+    mixer = parse_fl_mixer(project)
 
-    assert snapshot == MixerProjectSnapshot(
+    assert mixer == FlMixer(
         inserts=(
-            MixerInsertSnapshot(
-                iid=1,
+            FlMixerInsert(
+                index=2,
                 name=None,
                 enabled=False,
                 volume=10000,
                 pan=0,
                 slots=(
-                    MixerSlotSnapshot(
+                    FlEffectSlot(
                         index=2,
                         name="Valhalla",
                         internal_name="Fruity Wrapper",
                         enabled=True,
-                        mix=3200,
-                        plugin_key="Valhalla",
+                        dry_wet=3200,
+                        plugin_name="Valhalla",
                     ),
                 ),
             ),
-            MixerInsertSnapshot(
-                iid=3,
+            FlMixerInsert(
+                index=4,
                 name="Drums",
                 enabled=True,
                 volume=12800,
                 pan=-120,
                 slots=(
-                    MixerSlotSnapshot(
+                    FlEffectSlot(
                         index=1,
                         name="Soft Clipper",
                         internal_name="Fruity Soft Clipper",
                         enabled=True,
-                        mix=6400,
-                        plugin_key="Fruity Soft Clipper",
+                        dry_wet=6400,
+                        plugin_name="Fruity Soft Clipper",
                     ),
                 ),
             ),
@@ -148,7 +150,50 @@ def test_build_mixer_snapshot_normalizes_inserts_and_slots() -> None:
     )
 
 
-def test_load_fl_studio_mixer_snapshot_reads_blob_and_records_hash(tmp_path, monkeypatch) -> None:
+def test_parse_fl_mixer_keeps_master_insert_and_uses_fl_numbering() -> None:
+    # PyFLP yields Master as iid -1 and FL insert N as iid N - 1.
+    project = FakeProject(
+        mixer=[
+            FakeInsert(
+                iid=-1,
+                name="Master",
+                enabled=True,
+                volume=12800,
+                pan=0,
+                slots=[
+                    FakeSlot(index=0, name="Limiter", internal_name="Fruity Limiter", enabled=True, mix=12800, plugin=FakePlugin()),
+                ],
+            ),
+            FakeInsert(iid=0, name="Audio track"),
+            FakeInsert(iid=None, name="Unindexed"),
+        ]
+    )
+
+    mixer = parse_fl_mixer(project)
+
+    assert mixer.inserts == (
+        FlMixerInsert(
+            index=0,
+            name="Master",
+            enabled=True,
+            volume=12800,
+            pan=0,
+            slots=(
+                FlEffectSlot(
+                    index=0,
+                    name="Limiter",
+                    internal_name="Fruity Limiter",
+                    enabled=True,
+                    dry_wet=12800,
+                    plugin_name="Fruity Limiter",
+                ),
+            ),
+        ),
+        FlMixerInsert(index=1, name="Audio track", enabled=None, volume=None, pan=None, slots=()),
+    )
+
+
+def test_load_fl_mixer_reads_project_file_and_records_hash(tmp_path, monkeypatch) -> None:
     flp_bytes = b"fake flp bytes"
     flp_blob = tmp_path / "project.flp"
     flp_blob.write_bytes(flp_bytes)
@@ -157,27 +202,27 @@ def test_load_fl_studio_mixer_snapshot_reads_blob_and_records_hash(tmp_path, mon
 
     def fake_parse(path: Path):
         parsed_paths.append(Path(path))
-        return FakeProject(mixer=[FakeInsert(iid=0, name="Master")])
+        return FakeProject(mixer=[FakeInsert(iid=-1, name="Master")])
 
-    monkeypatch.setattr("stemhub.flp_mixer_snapshot.ensure_pyflp_available", lambda: None)
+    monkeypatch.setattr("stemhub.fl_mixer.ensure_pyflp_available", lambda: None)
     monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=fake_parse))
 
     storage = FakeStorage(flp_blob)
-    snapshot = load_fl_studio_mixer_snapshot(
+    mixer = load_fl_mixer(
         storage_uri="projects/demo/blobs/00/deadbeef",
         storage=storage,
     )
 
-    assert snapshot.inserts == (
-        MixerInsertSnapshot(iid=0, name="Master", enabled=None, volume=None, pan=None, slots=()),
+    assert mixer.inserts == (
+        FlMixerInsert(index=0, name="Master", enabled=None, volume=None, pan=None, slots=()),
     )
-    assert snapshot.flp_size_bytes == len(flp_bytes)
-    assert snapshot.flp_sha256 is not None
-    assert snapshot.mixer_supported is True
+    assert mixer.flp_size_bytes == len(flp_bytes)
+    assert mixer.flp_sha256 is not None
+    assert mixer.mixer_supported is True
     assert parsed_paths == [flp_blob]
 
 
-def test_load_fl_studio_mixer_snapshot_falls_back_to_binary_snapshot_on_parser_failure(tmp_path, monkeypatch) -> None:
+def test_load_fl_mixer_keeps_the_project_file_hash_when_the_parser_fails(tmp_path, monkeypatch) -> None:
     flp_bytes = b"fake flp bytes"
     flp_blob = tmp_path / "project.flp"
     flp_blob.write_bytes(flp_bytes)
@@ -186,16 +231,26 @@ def test_load_fl_studio_mixer_snapshot_falls_back_to_binary_snapshot_on_parser_f
         del path
         raise RuntimeError("low-level parser crash")
 
-    monkeypatch.setattr("stemhub.flp_mixer_snapshot.ensure_pyflp_available", lambda: None)
+    monkeypatch.setattr("stemhub.fl_mixer.ensure_pyflp_available", lambda: None)
     monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=fake_parse))
 
-    snapshot = load_fl_studio_mixer_snapshot(
+    mixer = load_fl_mixer(
         storage_uri="projects/demo/blobs/00/deadbeef",
         storage=FakeStorage(flp_blob),
     )
 
-    assert snapshot.inserts == ()
-    assert snapshot.flp_size_bytes == len(flp_bytes)
-    assert snapshot.flp_sha256 is not None
-    assert snapshot.mixer_supported is False
-    assert snapshot.parse_error == "low-level parser crash"
+    assert mixer.inserts == ()
+    assert mixer.flp_size_bytes == len(flp_bytes)
+    assert mixer.flp_sha256 is not None
+    assert mixer.mixer_supported is False
+    assert mixer.parse_error == "low-level parser crash"
+
+
+def test_load_fl_mixer_error_for_a_missing_project_file_does_not_mention_blobs() -> None:
+    with pytest.raises(MixerReadError) as excinfo:
+        load_fl_mixer(storage_uri="", storage=FakeStorage(Path("unused")))
+
+    message = str(excinfo.value).lower()
+    assert "project file" in message
+    assert "blob" not in message
+    assert "snapshot" not in message

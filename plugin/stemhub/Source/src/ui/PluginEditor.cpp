@@ -38,22 +38,22 @@ StemhubAudioProcessorEditor::StemhubAudioProcessorEditor(juce::AudioProcessor& o
     projectSelectionView.onCreateProject = [this] { createProject(); };
     projectSelectionView.onSignOut = [this] { signOut(); };
     dashboardView.onSave = [this] { save(); };
-    dashboardView.onSync = [this] { sync(); };
+    dashboardView.onRefresh = [this] { refresh(); };
     dashboardView.onBranchChange = [this](const juce::String& branchId) { session.requestSelectBranch(branchId); };
     dashboardView.onVersionSelected = [this](const juce::String& versionId) { session.setSelectedVersionId(versionId); };
     dashboardView.onBackToProjects = [this] { session.showProjectSelection(); };
     dashboardView.onSignOut = [this] { signOut(); };
     dashboardView.onRestore = [this](const juce::String& versionId) { restore(versionId); };
     dashboardView.onCancel = [this] { session.cancelRequest(); };
-    dashboardView.setMaxNoteLength(kMaxSaveNoteLength);
+    dashboardView.setMaxMessageLength(kMaxMessageLength);
 
-    session.requestRestoreSavedSession();
+    session.requestResumeSignIn();
     refreshSessionUi();
 }
 
 StemhubAudioProcessorEditor::~StemhubAudioProcessorEditor()
 {
-    snapshotCounter.shutdown();
+    workingCopyCounter.shutdown();
     cancelPendingUpdate();
     session.removeChangeListener(this);
     setLookAndFeel(nullptr);
@@ -78,9 +78,9 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
 
     const auto model = presenter.present(state, files);
 
-    if (model.noteWasSaved)
+    if (model.messageWasSaved)
     {
-        dashboardView.clearCommitMessage();
+        dashboardView.clearMessage();
         countedProjectFile = juce::File();
     }
 
@@ -101,29 +101,29 @@ void StemhubAudioProcessorEditor::refreshSessionUi()
 
         case Screen::dashboard:
             dashboardView.show(model.dashboard);
-            countSnapshot(model.dashboard.workingFilePath);
+            countWorkingCopy(model.dashboard.workingFilePath);
             break;
     }
 }
 
-void StemhubAudioProcessorEditor::countSnapshot(const juce::String& workingFilePath)
+void StemhubAudioProcessorEditor::countWorkingCopy(const juce::String& workingFilePath)
 {
     const auto projectFile = workingFilePath.isNotEmpty() ? juce::File(workingFilePath) : juce::File();
     if (projectFile == countedProjectFile)
         return;
 
     countedProjectFile = projectFile;
-    dashboardView.setSnapshotSize(-1, 0);
+    dashboardView.setWorkingCopySize(-1, 0);
     if (projectFile != juce::File())
-        snapshotCounter.enqueue([projectFile](const auto&) { return stemhub::snapshotfiles::summarize(projectFile); });
+        workingCopyCounter.enqueue([projectFile](const auto&) { return stemhub::versionfiles::summarize(projectFile); });
 }
 
 void StemhubAudioProcessorEditor::handleAsyncUpdate()
 {
     // An older count for the same file is simply replaced by the newer one after it.
-    for (const auto& summary : snapshotCounter.takeResults())
+    for (const auto& summary : workingCopyCounter.takeResults())
         if (summary.projectFile == countedProjectFile)
-            dashboardView.setSnapshotSize(summary.fileCount, summary.totalBytes);
+            dashboardView.setWorkingCopySize(summary.fileCount, summary.totalBytes);
 }
 
 void StemhubAudioProcessorEditor::signIn()
@@ -148,7 +148,7 @@ void StemhubAudioProcessorEditor::signOut()
 
 void StemhubAudioProcessorEditor::chooseProjectFile()
 {
-    launchProjectFileChooser("Select a DAW project file", session.getProjectFileForGrid(), [this](const juce::File& file)
+    launchProjectFileChooser("Select a project file", session.getProjectFileForGrid(), [this](const juce::File& file)
     {
         session.chooseProjectFile(file);
     });
@@ -167,8 +167,8 @@ void StemhubAudioProcessorEditor::createProject()
 
 void StemhubAudioProcessorEditor::save()
 {
-    const auto note = dashboardView.getCommitMessage();
-    dashboardView.setCommitMessage(note);
+    const auto message = dashboardView.getMessage();
+    dashboardView.setMessage(message);
 
     if (!session.getState().hasOpenProject())
     {
@@ -179,18 +179,18 @@ void StemhubAudioProcessorEditor::save()
     const auto& workingFile = session.getState().workingFile;
     if (!workingFile.existsAsFile())
     {
-        launchProjectFileChooser("Select a DAW project file before saving", workingFile, [this, note](const juce::File& file)
+        launchProjectFileChooser("Select a project file before saving", workingFile, [this, message](const juce::File& file)
         {
             session.setWorkingFile(file);
-            session.requestPushVersion(note);
+            session.requestSaveVersion(message);
         });
         return;
     }
 
-    session.requestPushVersion(note);
+    session.requestSaveVersion(message);
 }
 
-void StemhubAudioProcessorEditor::sync()
+void StemhubAudioProcessorEditor::refresh()
 {
     // Files may have been added in the DAW since the last count.
     countedProjectFile = juce::File();
@@ -217,8 +217,8 @@ void StemhubAudioProcessorEditor::restore(const juce::String& versionId)
                                          .withTitle("Restore version")
                                          .withMessage("The version is downloaded into a new folder in\n"
                                                       + folder.getFullPathName()
-                                                      + "\n\nIt then opens in your DAW as a project of its own. "
-                                                        "The project you have open stays as it is.")
+                                                      + "\n\nIt then opens in your DAW as a separate copy. "
+                                                        "The project file you have open stays as it is.")
                                          .withButton("Restore")
                                          .withButton("Cancel")
                                          .withAssociatedComponent(editor),
@@ -233,11 +233,11 @@ void StemhubAudioProcessorEditor::restore(const juce::String& versionId)
                                      });
     };
 
-    // Next to the working file, when its folder is there.
+    // Next to the working copy, when its folder is there.
     const auto restoreFolder = session.getState().workingFile.getParentDirectory();
     if (!restoreFolder.isDirectory())
     {
-        launchProjectFolderChooser("Select where to restore version snapshot", [versionId, confirmAndRestore](const juce::File& folder)
+        launchProjectFolderChooser("Select where to restore this version", [versionId, confirmAndRestore](const juce::File& folder)
         {
             confirmAndRestore(folder, versionId);
         });
@@ -251,7 +251,7 @@ void StemhubAudioProcessorEditor::launchProjectFileChooser(const juce::String& t
                                                            const juce::File& initialFile,
                                                            std::function<void(const juce::File&)> onFileChosen)
 {
-    fileChooser = std::make_unique<juce::FileChooser>(title, initialFile, stemhub::snapshotfiles::projectFilePattern());
+    fileChooser = std::make_unique<juce::FileChooser>(title, initialFile, stemhub::versionfiles::projectFilePattern());
 
     constexpr auto chooserFlags = juce::FileBrowserComponent::openMode
         | juce::FileBrowserComponent::canSelectFiles;

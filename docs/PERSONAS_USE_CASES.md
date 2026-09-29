@@ -18,9 +18,9 @@ This documentation details the target user profiles and the concrete problems St
 1. He creates a `feature-fast-tempo` branch.
 2. He makes his changes on this branch.
 3. When he fixes the piano, he does so on the `main` branch.
-4. He Merges the fix into the `feature-fast-tempo` branch.
+4. He merges the fix into the `feature-fast-tempo` branch (a content merge: post-MVP, see [SPECIFICATION.md §2](./SPECIFICATION.md#2--scope--mvp); at MVP a pull request is accepted by branch promotion).
 
-**Result**: Both versions coexist. The piano is fixed everywhere instantly. The client accesses both versions via a single web link without multiple exports.
+**Result**: Both branches coexist. The piano is fixed everywhere instantly. The client hears both via a single web link, without Tom exporting each one.
 
 ---
 
@@ -31,7 +31,7 @@ This documentation details the target user profiles and the concrete problems St
 - **Activity**: Records for large scale projects remotely.
 - **Tools**: Records his instruments via Ableton.
 - **Goal**: Expand professional network.
-- **Pain Point**: His regular changes get lost in a forest of `.zip` files; he forgets his old bass lines.
+- **Pain Point**: His successive versions get lost in a forest of `.zip` files; he forgets his old bass lines.
 
 ### Use Case: Recovering Lost Tracks
 **User Story**: As Frank Bass, I want to retrieve my old bass lines lost between `.zip` files so I don't waste time in my disorganized archives.
@@ -61,7 +61,7 @@ This documentation details the target user profiles and the concrete problems St
 1. Mabé regrets a bass deleted two days ago.
 2. He checks the visual history in the application.
 3. He selects "Bassline V1" and clicks "Restore".
-4. The project synchronizes and restores the track instantly.
+4. StemHub restores the track instantly.
 
 **Priority (MoSCoW)**: **Must Have (M)**. Vital to avoid data loss and storage-related stress.
 
@@ -76,13 +76,13 @@ This documentation details the target user profiles and the concrete problems St
 - **Motivation**: Control and security. She hates opening a heavy project just to verify a modification.
 
 ### Use Case: Contribution Workflow (Collaboration)
-**The Challenge**: Laura (in Brussels) needs to lay down vocals on a production coming from London (15 tracks to send back in raw WAV).
+**The Challenge**: Laura (in Brussels) needs to lay down vocals on a production coming from London (15 recorded tracks to render and send back as raw WAV files).
 
 **The Classic Problem**: Having to export 15 tracks one by one, verify the start point (0:00), create a 2GB ZIP, and wait 1 hour for it to upload to WeTransfer. Confusion guaranteed at the slightest phrase modification.
 
 **The StemHub Solution**:
 1. Laura records her vocals normally in her DAW.
-2. She clicks "Push". StemHub intelligently detects that only new audio tracks have been added.
-3. The system sends only this data, compressed without loss.
+2. She clicks "Save" in the StemHub plugin. StemHub detects that only her new vocal recordings are new files.
+3. The system uploads only those files, compressed without loss.
 
-**Result**: The producer in London receives a notification. He clicks "Pull". Laura's vocals appear instantly in his session, perfectly aligned on the grid. No manual export required.
+**Result**: The producer in London receives a notification. He restores her version: it opens in his DAW with Laura's vocals, perfectly aligned on the grid. No manual export required.

@@ -2,13 +2,13 @@
 
 #include <JuceHeader.h>
 
-// The StemHub project a DAW project belongs to. Each plugin instance saves it in its DAW project
-// (see application/PluginState.hpp), so two DAW projects never share one.
+// The StemHub project a project file belongs to. Each plugin instance saves it in its project file
+// (see application/PluginState.hpp), so two project files never share one.
 struct ProjectLink
 {
     juce::String projectId;
     juce::String branchId;
-    // The DAW project file that saves push. It may have moved since.
+    // The working copy: the project file saves upload. It may have moved since.
     juce::File workingFile;
 
     [[nodiscard]] bool isSet() const noexcept { return projectId.isNotEmpty(); }
