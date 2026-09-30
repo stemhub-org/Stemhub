@@ -1,6 +1,6 @@
 """What the FLP tests share: event ids, synthetic files, the local corpora, assertions.
 
-test_flp_events.py, test_flp_scrub.py and test_flp_cli.py import it as a
+The test_flp_*.py files and test_parser_regressions.py import it as a
 top-level module: backend/tests has no __init__.py, so pytest puts the folder
 on sys.path when it imports them (its default "prepend" import mode), from
 the repository root as from backend/.
@@ -22,6 +22,10 @@ MULTI_CHANNEL = FIXTURES_DIR / "patterns" / "multi-channel.flp"
 CORRUPTED_DIR = FIXTURES_DIR / "corrupted"
 VALID_FIXTURES = [pytest.param(REFERENCE, id="FL 20.8.4"), pytest.param(MULTI_CHANNEL, id="multi-channel")]
 
+SLOT_INDEX = 98
+INSERT_COUNT = 103
+INSERT_OUTPUT = 147
+INSERT_INPUT = 154
 TEMPO = 156
 NEW_IN_25_2_3 = 0xAC
 FL_STUDIO_TEXT = 192
@@ -30,14 +34,17 @@ COMMENTS = 195
 SAMPLE_PATH = 196
 FL_VERSION = 199
 LICENSEE = 200
+PLUGIN_INTERNAL_NAME = 201
 DATA_PATH = 202
 CHANNEL_NAME = 203
+PLUGIN_NAME = CHANNEL_NAME  # one event names a channel and the plugin of an effect slot
 INSERT_NAME = 204
 ARTISTS = 207
 PLUGIN_DATA = 213
 NOTES = 224
 MIXER_PARAMS = 225
 PLAYLIST = 233
+INSERT_FLAGS = 236
 TIMESTAMP = 237
 TRACK_DATA = 238
 TRACK_NAME = 239
