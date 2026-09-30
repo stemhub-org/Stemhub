@@ -1,0 +1,21 @@
+{
+  "schema": "stemhub.project-model",
+  "schema_version": "0.1.0",
+  "generator": {"name": "stemhub-fl", "version": "0.1.0", "pyflp": null},
+  "source": {"daw": "fl_studio", "daw_version": null, "ppq": 96},
+  "project": {"title": null, "artists": null, "genre": null},
+  "tempo_bpm": 140.0,
+  "time_signature": {"numerator": 4, "denominator": 4},
+  "instruments": [],
+  "audio_sources": [],
+  "patterns": [],
+  "arrangements": [
+    {"id": "arrangement:0", "name": "Arrangement", "markers": [], "tracks": [], "extensions": {}}
+  ],
+  "current_arrangement_id": "arrangement:0",
+  "mixer": {"inserts": [], "extensions": {}},
+  "automation": [],
+  "unsupported": [],
+  "warnings": [],
+  "extensions": {}
+}
