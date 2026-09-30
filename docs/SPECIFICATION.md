@@ -591,7 +591,7 @@ The **Replaces** column lists the words not to use for that concept. It doesn't 
 | **Manifest** (UI: file list) | The JSON list of a version's project file and assets, each by SHA-256, size and path in the project folder. Format in [content-addressed-storage.md](./content-addressed-storage.md). | — | snapshot_manifest, bundle, artifact |
 | **Blob** | Stored bytes, addressed by their SHA-256: one per unique file per project (project-scoped). Internal; users never see the word. | — | artifact |
 | **CAS** | Content-Addressed Storage: each unique file stored once per project as a blob, and versions refer to blobs through their manifest. See [content-addressed-storage.md](./content-addressed-storage.md). | — | — |
-| **Project model** | The future DAW-neutral JSON of a project's musical content (#170). | — | mixer_state, mixer snapshot |
+| **Project model** | The DAW-neutral JSON of a project's musical content (#170), schema 0.1.0. Format: [project-model.md](./project-model.md). | — | mixer_state, mixer snapshot |
 
 ### 19.2 Versions and collaboration
 
@@ -634,8 +634,8 @@ DAW-neutral names for what a project file contains. The FL mixer diff uses them 
 | **Tempo** | Speed in beats per minute (API field `tempo_bpm`). | Both: tempo. | bpm (as a project field name) |
 | **Key** | The musical key of a project or asset. | — | "key" for anything else (an effect's identifier is its `plugin_name`) |
 | **Time signature** | Beats per bar and beat unit (e.g. 4/4). | Both: time signature. | — |
-| **Volume** | An insert's or track's level, in dB once #170 normalizes units. | — | — |
-| **Pan** | Stereo position, from −1 (left) to +1 (right) once #170 normalizes units. | — | — |
+| **Volume** | An insert's or instrument's level. The project model stores the fader position (`fader`, where FL's 100% is 1.0) and leaves `db` empty until the dB curve is calibrated (M2). | — | — |
+| **Pan** | Stereo position, from −1 (left) to +1 (right). | — | — |
 | **Automation** | A parameter's change over time. | FL: an automation clip. Ableton: an automation envelope. | — |
 
 ### 19.4 Product and operations
@@ -657,3 +657,4 @@ DAW-neutral names for what a project file contains. The FL mixer diff uses them 
 |---|---|---|
 | 2026-09-16 | Erwan (via Claude) | Initial consolidated specification. |
 | 2026-09-29 | Erwan | Vocabulary cleanup: §19 rewritten as the project-wide glossary (project file, asset, stem, mixdown, version, branch, save, restore, refresh, insert… with FL Studio / Ableton equivalents and the words each replaces); its pull request row also writes down the status rule the backend already enforces (`OPEN` until `MERGED` or `CLOSED`, both terminal). Wording elsewhere aligned to it (push/commit → save, pull → restore, session bundles → project file plus audio & MIDI assets stored content-addressed, Track entity removed from §7). Milestone deliverables (§17.1) are unchanged; only M3's "plugin" now reads "StemHub plugin". No decision, priority, KPI or commitment changed. |
+| 2026-09-29 | Erwan | Project model schema 0.1.0 (#170): the §19 Project model row links its format ([project-model.md](./project-model.md)); Volume is stored as a fader position with dB left empty until calibrated (M2), Pan as −1…+1. No decision, priority, KPI or commitment changed. |
