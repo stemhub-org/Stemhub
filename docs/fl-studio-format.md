@@ -21,7 +21,7 @@ The version boundary written "FL ≥ 24.2" below means "after 24.1.0.4212 and no
 | 128–191 | 4 bytes |
 | 192–255 | LEB128 varint length, then that many bytes |
 
-**Exception (confirmed): event 172 (0xAC) carries 3 bytes** (`01 01 00`) in files saved by FL ≥ 25.2.3, although its id is in the 4-byte range. It is always followed by text event 192 `FL Studio <version>`. Reading it as 4 bytes (PyFLP, FLPEdit) swallows the next event's id; the stream usually falls back into step and ends at the right length, so nothing fails, but the tempo event is lost. StemHub's tokenizer is `backend/src/stemhub/project_model/flp_events.py`.
+**Exception (confirmed): event 172 (0xAC) carries 3 bytes** (`01 01 00`) in files saved by FL ≥ 25.2.3, although its id is in the 4-byte range. It is always followed by text event 192 `FL Studio <version>`. Reading it as 4 bytes swallows the next event's id; the stream usually falls back into step and ends at the right length, so nothing fails, but the tempo event is lost. Upstream PyFLP and FLPEdit read it that way. The `stemhub-org/PyFLP_v2` fork reads 3 bytes since #269, and StemHub pins that fork (`backend/vendor/PyFLP_v2`, `PYFLP_COMMIT`), so FL ≥ 25.2.3 projects keep their tempo. StemHub's own tokenizer is `backend/src/stemhub/project_model/flp_events.py`.
 
 `check_structure` in `flp_events.py` warns when a 0xAC is not followed by the `FL Studio <version>` text event, and [project-model.md](./project-model.md#scrubbing) says what scrubbing removes before a file is shared.
 
@@ -80,7 +80,7 @@ The 80-byte item is the 60-byte item plus 20 bytes (f32 0.0 at +60, f64 1.0 at +
 | +24, +28 | Start and end offsets: int32 ticks for pattern clips (−1 = full length); float32 for channel clips (−1.0 = unset; unit probably milliseconds) |
 | +32 u32 | Unique item id, increasing (60- and 80-byte items) |
 
-PyFLP guesses the size from `len % 60`, which misreads every FL ≥ 24.2 playlist.
+Upstream PyFLP guesses the size from `len % 60`, which misreads every FL ≥ 24.2 playlist; the pinned fork takes the size from the FL version (#269).
 
 Track data (event 238, one per track, 500 per arrangement) is 61 bytes in FL 12.9, 66 bytes in FL 20.8.4–24.1 and 70 bytes from FL 24.2 (confirmed); the 4 extra bytes are zero in every file. Fields (likely): +0 track number, +4 color, +8 icon, +12 enabled, +13 height (f32), +46 grouped, +47 locked.
 
@@ -88,9 +88,9 @@ Time markers: position = `raw & 0xFFFFFF`, action = `raw >> 24` (0x08 = time sig
 
 ## Mixer
 
-**Inserts are a contiguous list of blocks** (confirmed): Master first, then inserts 1…N−2, then the "current" insert last. An insert's number is its block position; no event stores it. FL ≤ 24.1 always stores 127 blocks; FL ≥ 24.2 stores N blocks, with N in event 103 (18 in the empty template).
+**Inserts are a contiguous list of blocks** (confirmed): Master first, then inserts 1…N−2, then the "current" insert last. An insert's number is its block position; no event stores it. FL 12.9 to 24.1 always stores 127 blocks (older versions store fewer); FL ≥ 24.2 stores N blocks, with N in event 103 (18 in the empty template).
 
-Each block: `[149 color] 42 [95 icon] [204 name] 236 flags`, then 10 effect slots, each as its plugin events **followed by** event 98 (the slot index ends the slot), then `[235 routing] 165 166 49 154 147`. 42 = 1 when the block has a color; 49 is always 0; 165 and 166 are usually 3 and 1 (meanings unknown; 49, 165 and 166 are new in FL ≥ 24.2).
+Each block: `[149 color] 42 [95 icon] [204 name] 236 flags`, then 10 effect slots, each as its plugin events **followed by** event 98 (the slot index ends the slot), then `[235 routing] 165 166 49 154 147`. 42 = 1 when the block has a color; 49 is always 0; 165 and 166 are usually 3 and 1 (meanings unknown). Older files lack some of these: 165 and 166 exist from FL 20.99, 42 from FL 21.0, and only 49 is new in FL ≥ 24.2 (with 103 and 169 of the project and 104, 50, 51 and 170 of the channels). An FL 20.8.4 block is `[149] [95] [204] 236`, its slots, then `[235] 154 147`.
 
 Insert flags (event 236, bytes 4–7): 0x04 effects enabled, 0x08 enabled, 0x40 docked middle (0x4c is the default); Master and current use 0x0c (confirmed).
 
@@ -100,12 +100,14 @@ Routing (event 235): one bool per destination insert. FL ≤ 24.1 stores 127 ent
 
 | FL version | Insert | Current insert |
 |---|---|---|
-| ≤ 24.1 | `key − 128` | key 254 |
+| ≤ 24.1 | `key − 128` | keyed by its position like the others: `128 + position`, so 254 only with 127 blocks |
 | ≥ 24.2 | `key − 448` | key 949 |
+
+The ≥ 24.2 layout applies when event 103 is stored, which is how the pinned PyFLP chooses it.
 
 One global item has key 256 in both (meaning unknown). Per insert (group 31): parameter 0 = slot enabled, 1 = slot dry/wet (0–12800), 192 = volume (12800 = 100%), 193 = pan, 194 = stereo separation, 208–226 = EQ. Send levels: FL ≤ 24.1 uses group 31 and parameter `64 + destination`; FL ≥ 24.2 uses group 32 and parameter = destination insert (confirmed). Send items seem to exist only for non-default levels (likely).
 
-PyFLP reads the insert as `key & 0x7F` (wrong for FL ≥ 24.2), groups an effect slot with the next slot's plugin, and fails on slot enabled and dry/wet; the fixes are in the `stemhub-org/PyFLP_v2` fork (#269).
+Upstream PyFLP reads the insert as `key & 0x7F` (wrong for FL ≥ 24.2), groups an effect slot with the next slot's plugin, and gives no slot enabled or dry/wet. These were fixed in the `stemhub-org/PyFLP_v2` fork (#269), which StemHub pins (`backend/vendor/PyFLP_v2`, `PYFLP_COMMIT`): each effect slot holds its own plugin, slot enabled and dry/wet are read, and insert volume and pan are read in FL ≥ 24.2 files. The fork also reads an insert's sends from the routing flags and their levels, and a channel's insert from event 104. `backend/tests/test_parser_regressions.py` fails if a parser without these fixes is pinned.
 
 ## Still to confirm with one-change test projects
 
