@@ -6,8 +6,8 @@ VersionListItem toVersionListItem(const VersionSummary& version, const juce::Str
 {
     VersionListItem item;
     item.id = version.id;
-    item.message = version.commitMessage;
-    item.isUntitled = version.commitMessage.trim().isEmpty() || version.commitMessage.trim() == kDefaultSaveNote;
+    item.message = version.message;
+    item.isUntitled = version.message.trim().isEmpty() || version.message.trim() == kLegacyUntitledMessage;
     if (version.createdAt.isNotEmpty())
     {
         const auto parsed = juce::Time::fromISO8601(version.createdAt);
@@ -31,7 +31,7 @@ ProjectGridModel presentGrid(const SessionState& state, const SessionPresenter::
     grid.selectedProjectId = state.selectedProject.has_value() ? state.selectedProject->id : juce::String();
     grid.status = !state.projectsStatus.isEmpty() ? state.projectsStatus
                 : state.projects.empty()          ? Status::warning("No StemHub projects available for this account.")
-                                                  : Status::info("Open an existing project, or choose a local file to create one.");
+                                                  : Status::info("Open an existing project, or choose a project file to create one.");
     grid.accountName = state.currentUser.has_value() ? state.currentUser->username : juce::String();
     grid.newProjectFilePath = files.newProjectFile != juce::File() ? files.newProjectFile.getFullPathName() : juce::String();
     grid.activity = SessionPresenter::activityFor(state.operationState);
@@ -53,7 +53,7 @@ DashboardModel presentDashboard(const SessionState& state, const SessionPresente
         dashboard.versions.push_back(toVersionListItem(version, state.openedVersionId));
     dashboard.selectedVersionId = state.selectedVersionId;
 
-    dashboard.status = state.sessionStatus;
+    dashboard.status = state.dashboardStatus;
     dashboard.activity = SessionPresenter::activityFor(state.operationState);
     dashboard.workingFilePath = files.workingFileExists ? state.workingFile.getFullPathName() : juce::String();
     return dashboard;
@@ -69,9 +69,9 @@ SessionModel SessionPresenter::present(const SessionState& state, const FileFact
 {
     SessionModel model;
 
-    // Only a save that created a version spends the note: a failed or cancelled one keeps it for
-    // the retry.
-    model.noteWasSaved = state.lastSavedVersionId.isNotEmpty() && state.lastSavedVersionId != lastSeenSavedVersionId;
+    // Only a save that created a version spends the message: a failed or cancelled one keeps it
+    // for the retry.
+    model.messageWasSaved = state.lastSavedVersionId.isNotEmpty() && state.lastSavedVersionId != lastSeenSavedVersionId;
     lastSeenSavedVersionId = state.lastSavedVersionId;
 
     if (!state.isSignedIn())
@@ -100,10 +100,10 @@ SessionActivity SessionPresenter::activityFor(const OperationState operation) no
     {
         case OperationState::signingIn:
         case OperationState::loadingProjects:
-        case OperationState::pulling:    return SessionActivity::loading;
-        case OperationState::committing: return SessionActivity::saving;
-        case OperationState::restoring:  return SessionActivity::restoring;
-        case OperationState::idle:       break;
+        case OperationState::loadingHistory: return SessionActivity::loading;
+        case OperationState::saving:         return SessionActivity::saving;
+        case OperationState::restoring:      return SessionActivity::restoring;
+        case OperationState::idle:           break;
     }
 
     return SessionActivity::idle;

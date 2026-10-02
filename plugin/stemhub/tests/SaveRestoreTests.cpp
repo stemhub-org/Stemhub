@@ -28,29 +28,29 @@ public:
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(project.id, gate);
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expectEntered(*gate, "the save");
-            expect(waitUntil(context.session, [&context] { return context.state().sessionStatus.text == "Preparing 2 of 2 files..."; }),
+            expect(waitUntil(context.session, [&context] { return context.state().dashboardStatus.text == "Preparing 2 of 2 files..."; }),
                    "the save says how far it got: " + describe(context.session));
 
             context.session.cancelRequest();
-            expect(context.state().sessionStatus.text == "Cancelling..." && context.session.isBusy(),
+            expect(context.state().dashboardStatus.text == "Cancelling..." && context.session.isBusy(),
                    "it stops at its next step: " + describe(context.session));
 
             gate->release();
             expect(waitUntil(context.session, [&context] { return context.isIdle(); }), describe(context.session));
-            expect(context.state().sessionStatus.severity == Status::Severity::warning
-                       && context.state().sessionStatus.text == "Save cancelled.",
+            expect(context.state().dashboardStatus.severity == Status::Severity::warning
+                       && context.state().dashboardStatus.text == "Save cancelled.",
                    describe(context.session));
             expect(context.api->getCreatedVersions().empty(), "no version is created");
             expect(context.state().versionHistory.empty() && !context.state().workingCopy.isSet(), "nothing changed");
-            expect(context.state().lastSavedVersionId.isEmpty(), "no saved version, so the note is kept for the retry");
+            expect(context.state().lastSavedVersionId.isEmpty(), "no saved version, so the message is kept for the retry");
 
-            context.session.requestPushVersion("again");
+            context.session.requestSaveVersion("again");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    "the next save works: " + describe(context.session));
             expect(context.state().lastSavedVersionId == context.api->getCreatedVersions().front().id,
-                   "the saved version is announced, which clears the note");
+                   "the saved version is announced, which clears the message");
         }
 
         beginTest("A cancelled restore leaves nothing behind");
@@ -73,13 +73,13 @@ public:
             expect(restoresFolder.createDirectory().wasOk());
             context.session.requestRestoreVersion(versionId, restoresFolder);
             expectEntered(*gate, "the download");
-            expect(waitUntil(context.session, [&context] { return context.state().sessionStatus.text == "Downloading 1 of 2 files..."; }),
+            expect(waitUntil(context.session, [&context] { return context.state().dashboardStatus.text == "Downloading 1 of 2 files..."; }),
                    describe(context.session));
 
             context.session.cancelRequest();
             gate->release();
             expect(waitUntil(context.session, [&context] { return context.isIdle(); }), describe(context.session));
-            expect(context.state().sessionStatus.text == "Restore cancelled.", describe(context.session));
+            expect(context.state().dashboardStatus.text == "Restore cancelled.", describe(context.session));
 
             juce::Array<juce::File> leftovers;
             restoresFolder.findChildFiles(leftovers, juce::File::findFilesAndDirectories, true);
@@ -105,11 +105,11 @@ public:
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
 
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    "first save should land in the history: " + describe(context.session));
             const auto firstVersionId = context.api->getCreatedVersions().at(0).id;
-            expect(context.state().sessionStatus.severity == Status::Severity::success, describe(context.session));
+            expect(context.state().dashboardStatus.severity == Status::Severity::success, describe(context.session));
             expect(context.state().selectedVersionId == firstVersionId, "the saved version should be selected");
             expect(context.state().openedVersionId == firstVersionId, "the saved version is the one in the DAW");
 
@@ -135,20 +135,21 @@ public:
             auto restoredInstance = context.makeInstance();
             restoredInstance->restoreLink({ project.id, branch.id, projectFile });
             expect(!context.handoffFile().exists(), "the hand-off is taken once");
-            restoreSavedSession(*restoredInstance);
+            resumeSignIn(*restoredInstance);
             const auto& restoredState = restoredInstance->getState();
-            expect(restoredState.workingFile == restoredFile, "the copy is that instance's working file: " + describe(*restoredInstance));
-            expect(restoredState.link.workingFile == restoredFile, "and what its DAW project will be saved with");
+            expect(restoredState.workingFile == restoredFile, "the copy is that instance's working copy: " + describe(*restoredInstance));
+            expect(restoredState.link.workingFile == restoredFile, "and what its project file will be saved with");
             expect(restoredState.openedVersionId == firstVersionId, "the restored version is the one in the DAW");
 
-            restoredInstance->requestPushVersion("nothing new");
-            expect(restoredState.sessionStatus.severity == Status::Severity::warning
-                       && restoredState.sessionStatus.text.contains("No changes"),
+            restoredInstance->requestSaveVersion("nothing new");
+            expect(restoredState.dashboardStatus.severity == Status::Severity::warning
+                       && restoredState.dashboardStatus.text.contains("No changes")
+                       && restoredState.dashboardStatus.text.contains("Save the project file in your DAW first."),
                    "an unchanged copy is not saved again: " + describe(*restoredInstance));
 
             // Saving the copy chains from the restored version.
             simulateDawSave(restoredFile, " edit 1");
-            restoredInstance->requestPushVersion("second");
+            restoredInstance->requestSaveVersion("second");
             expect(waitUntil(*restoredInstance, [&restoredInstance] { return !restoredInstance->isBusy()
                                                                             && restoredInstance->getState().versionHistory.size() == 2; }),
                    "second save should land in the history: " + describe(*restoredInstance));
@@ -162,12 +163,12 @@ public:
             // Nothing changed on disk: no new version, even after a refresh of the same branch.
             restoredInstance->requestRefreshVersionHistory();
             expect(waitUntil(*restoredInstance, [&restoredInstance] { return !restoredInstance->isBusy(); }), "refresh should finish");
-            restoredInstance->requestPushVersion("no changes");
-            expect(restoredState.sessionStatus.text.contains("No changes"), describe(*restoredInstance));
+            restoredInstance->requestSaveVersion("no changes");
+            expect(restoredState.dashboardStatus.text.contains("No changes"), describe(*restoredInstance));
             expect(context.api->getCreatedVersions().size() == 2, "no version is created for an unchanged file");
 
             simulateDawSave(restoredFile, " edit 2");
-            restoredInstance->requestPushVersion("third");
+            restoredInstance->requestSaveVersion("third");
             expect(waitUntil(*restoredInstance, [&restoredInstance] { return !restoredInstance->isBusy()
                                                                             && restoredInstance->getState().versionHistory.size() == 3; }),
                    "third save should land in the history: " + describe(*restoredInstance));
@@ -200,7 +201,7 @@ public:
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
 
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    describe(context.session));
             const auto firstVersionId = context.state().workingCopy.versionId;
@@ -212,19 +213,81 @@ public:
             expect(context.openedFiles.getFirst().isAChildOf(folder), context.openedFiles.getFirst().getFullPathName());
 
             simulateDawSave(projectFile, " edit");
-            context.session.requestPushVersion("second");
+            context.session.requestSaveVersion("second");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 2; }),
                    describe(context.session));
 
             const auto manifest = context.api->fetchVersionManifest(context.state().workingCopy.versionId, "token");
             expect(manifest.ok(), "the second version has a manifest");
-            juce::StringArray trackPaths;
+            juce::StringArray assetPaths;
             if (manifest.ok())
-                if (const auto* tracks = manifest.value->getProperty("tracks", {}).getArray())
-                    for (const auto& track : *tracks)
-                        trackPaths.add(track.getProperty("filename", {}).toString());
+                if (const auto* assets = manifest.value->getProperty("assets", {}).getArray())
+                    for (const auto& asset : *assets)
+                        assetPaths.add(asset.getProperty("path", {}).toString());
 
-            expect(trackPaths.joinIntoString(", ") == "kick.wav", "only the project's own audio: " + trackPaths.joinIntoString(", "));
+            expect(assetPaths.joinIntoString(", ") == "kick.wav", "only the project's own assets: " + assetPaths.joinIntoString(", "));
+        }
+
+        beginTest("A save without a message sends none, in manifest v2");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { makeBranch("branch-1", project.id, "main") };
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("flp"));
+            expect(context.environment.root.getChildFile("Drums/kick.mid").create().wasOk()
+                   && context.environment.root.getChildFile("Drums/kick.mid").replaceWithText("midi"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+
+            context.session.requestSaveVersion("   ");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
+                   describe(context.session));
+
+            const auto created = context.api->getCreatedVersions();
+            expect(created.size() == 1 && created.front().message.isEmpty(),
+                   "no placeholder stands in for the message: " + (created.empty() ? juce::String() : created.front().message));
+
+            const auto manifest = context.api->fetchVersionManifest(context.state().workingCopy.versionId, "token");
+            expect(manifest.ok() && static_cast<int>(manifest.value->getProperty("manifest_version", 0)) == 2,
+                   "the plugin writes manifest v2");
+            if (manifest.ok())
+            {
+                expect(manifest.value->getProperty("project_file", {}).getProperty("path", {}).toString() == "song.flp");
+                const auto* assets = manifest.value->getProperty("assets", {}).getArray();
+                expect(assets != nullptr && assets->size() == 1
+                           && assets->getReference(0).getProperty("path", {}).toString() == "Drums/kick.mid",
+                       "MIDI files are assets too");
+            }
+        }
+
+        beginTest("A version saved by an earlier plugin, in manifest v1, still restores");
+        {
+            TestContext context;
+            const auto project = makeProject("project-1", "Song");
+            const auto branch = makeBranch("branch-1", project.id, "main");
+            context.api->projects = { project };
+            context.api->projectBranches[project.id] = { branch };
+            const auto versionId = context.api->addVersion(branch.id, "Save from plugin",
+                                                           { { "song.flp", "flp v1" }, { "Drums/kick.wav", "kick" } }, 1);
+
+            const auto projectFile = context.environment.root.getChildFile("song.flp");
+            expect(projectFile.replaceWithText("mine"));
+            signIn(context.session);
+            openProject(context.session, project.id, projectFile);
+
+            const auto restoresFolder = context.environment.root.getChildFile("restores");
+            expect(restoresFolder.createDirectory().wasOk());
+            context.session.requestRestoreVersion(versionId, restoresFolder);
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.openedFiles.size() == 1; }),
+                   "the restore should finish: " + describe(context.session));
+
+            const auto restoredFile = context.openedFiles.getFirst();
+            expect(restoredFile.loadFileAsString() == "flp v1", restoredFile.getFullPathName());
+            expect(restoredFile.getParentDirectory().getChildFile("Drums/kick.wav").loadFileAsString() == "kick",
+                   "its tracks come back as the assets");
         }
 
         beginTest("Only one save runs at a time, and the project stays open meanwhile");
@@ -241,19 +304,19 @@ public:
 
             auto gate = std::make_shared<BlockingGate>();
             context.api->setCheckMissingGate(project.id, gate);
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expectEntered(*gate, "the first save");
-            context.session.requestPushVersion("second");
+            context.session.requestSaveVersion("second");
             context.session.requestRefreshVersionHistory();
             context.session.showProjectSelection();
-            expect(context.state().operationState == OperationState::committing
+            expect(context.state().operationState == OperationState::saving
                        && context.state().uiState == UIState::dashboard,
                    "nothing else starts while saving: " + describe(context.session));
 
             gate->release();
             expect(waitUntil(context.session, [&context] { return context.isIdle(); }), "save should finish");
             const auto created = context.api->getCreatedVersions();
-            expect(created.size() == 1 && created.front().commitMessage == "first", "the second save request is ignored");
+            expect(created.size() == 1 && created.front().message == "first", "the second save request is ignored");
 
             context.session.showProjectSelection();
             expect(context.state().uiState == UIState::projectSelection, "back to the grid once the save is done");
@@ -269,21 +332,21 @@ public:
             const WorkingCopyBaseline latestCopy { file, "version-2", 10, 1000 };
             const WorkingCopyBaseline unrecorded { file, "version-1" };
 
-            expect(planLatestVersion(false, {}, false, "version-2") == LatestVersionPlan::restoreLatest, "no local file");
-            expect(planLatestVersion(true, {}, false, "version-2") == LatestVersionPlan::keepLocalFile,
+            expect(planLatestVersion(false, {}, false, "version-2") == LatestVersionPlan::restoreLatest, "no working copy");
+            expect(planLatestVersion(true, {}, false, "version-2") == LatestVersionPlan::keepWorkingCopy,
                    "a file nothing is recorded about stays");
-            expect(planLatestVersion(true, unrecorded, true, "version-2") == LatestVersionPlan::keepLocalFile,
+            expect(planLatestVersion(true, unrecorded, true, "version-2") == LatestVersionPlan::keepWorkingCopy,
                    "a version without its size and time vouches for nothing");
-            expect(planLatestVersion(true, olderCopy, false, "version-2") == LatestVersionPlan::keepLocalChanges,
+            expect(planLatestVersion(true, olderCopy, false, "version-2") == LatestVersionPlan::keepUnsavedChanges,
                    "unsaved changes are never replaced");
-            expect(planLatestVersion(true, latestCopy, false, "version-2") == LatestVersionPlan::keepLocalChanges,
+            expect(planLatestVersion(true, latestCopy, false, "version-2") == LatestVersionPlan::keepUnsavedChanges,
                    "not even on the latest version");
             expect(planLatestVersion(true, latestCopy, true, "version-2") == LatestVersionPlan::alreadyLatest);
             expect(planLatestVersion(true, olderCopy, true, "version-2") == LatestVersionPlan::restoreLatest,
                    "an unchanged older copy is brought up to date");
         }
 
-        beginTest("Opening a project without a local copy restores its latest version");
+        beginTest("Opening a project without a working copy restores its latest version");
         {
             TestContext context;
             const auto project = makeProject("project-1", "Song");
@@ -300,7 +363,7 @@ public:
 
             const auto restoredFile = context.openedFiles.getFirst();
             expect(restoredFile == context.restoredProjectsFolder().getChildFile("Song/main/song-" + versionId.substring(0, 8) + "/song.flp"),
-                   "it goes to <project>/<workspace>/<name>-<version>: " + restoredFile.getFullPathName());
+                   "it goes to <project>/<branch>/<name>-<version>: " + restoredFile.getFullPathName());
             expect(restoredFile.getParentDirectory().getChildFile("Samples/kick.wav").loadFileAsString() == "kick");
             expect(context.state().selectedProject.has_value() && context.state().workingFile == juce::File(),
                    "this instance had no copy of its own and still has none");
@@ -312,7 +375,7 @@ public:
             restoredInstance->restoreLink({});
             restoredInstance->restoreLink({});
             expect(restoredInstance->getState().link.workingFile == restoredFile, "the hand-off is taken and kept");
-            restoreSavedSession(*restoredInstance);
+            resumeSignIn(*restoredInstance);
             const auto& restoredState = restoredInstance->getState();
             expect(restoredState.selectedProject.has_value() && restoredState.selectedProject->id == project.id,
                    "the instance takes the hand-off: " + describe(*restoredInstance));
@@ -320,7 +383,7 @@ public:
             expect(restoredState.openedVersionId == versionId, "the restored version is the one in the DAW");
         }
 
-        beginTest("Opening a project never replaces unsaved local changes");
+        beginTest("Opening a project never replaces unsaved changes");
         {
             TestContext context;
             const auto project = makeProject("project-1", "Song");
@@ -332,7 +395,7 @@ public:
             expect(projectFile.replaceWithText("flp v1"));
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    "the first version should be saved: " + describe(context.session));
 
@@ -344,10 +407,10 @@ public:
             context.session.requestOpenProject(project.id, true);
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 2; }),
                    "the project should reopen: " + describe(context.session));
-            expect(context.state().workingFile == projectFile, "the edited copy stays the working file");
+            expect(context.state().workingFile == projectFile, "the edited copy stays the working copy");
             expect(projectFile.loadFileAsString() == "flp v1 my edit", "the edited copy is untouched");
-            expect(context.state().sessionStatus.severity == Status::Severity::warning
-                       && context.state().sessionStatus.text.contains("not saved"),
+            expect(context.state().dashboardStatus.severity == Status::Severity::warning
+                       && context.state().dashboardStatus.text.contains("not saved"),
                    describe(context.session));
             expect(context.openedFiles.isEmpty() && !context.handoffFile().exists(), "nothing is restored or opened");
         }
@@ -364,7 +427,7 @@ public:
             expect(projectFile.replaceWithText("flp v1"));
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    "the first version should be saved: " + describe(context.session));
             const auto firstVersionId = context.state().workingCopy.versionId;
@@ -383,7 +446,7 @@ public:
 
             auto newerInstance = context.makeInstance();
             newerInstance->restoreLink({ project.id, branch.id, projectFile });
-            restoreSavedSession(*newerInstance);
+            resumeSignIn(*newerInstance);
             expect(newerInstance->getState().workingFile == newerCopy, describe(*newerInstance));
             expect(newerInstance->getState().openedVersionId == newerVersionId);
         }
@@ -409,8 +472,8 @@ public:
 
             const auto restoredFile = context.openedFiles.getFirst();
             expect(restoredFile.loadFileAsString() == "flp v1", restoredFile.getFullPathName());
-            expect(context.state().sessionStatus.severity == Status::Severity::warning
-                       && context.state().sessionStatus.text.contains(restoredFile.getFullPathName()),
+            expect(context.state().dashboardStatus.severity == Status::Severity::warning
+                       && context.state().dashboardStatus.text.contains(restoredFile.getFullPathName()),
                    "the user is told where the restored project is: " + describe(context.session));
             expect(context.state().workingFile == projectFile, "this instance keeps its own file");
             expect(context.handoffFile().existsAsFile(), "the copy waits for the user to open it");
@@ -418,12 +481,12 @@ public:
             // Opened by hand, with no link saved in it: the instance picks the copy up when its
             // window opens.
             auto openedByHand = context.makeInstance();
-            restoreSavedSession(*openedByHand);
+            resumeSignIn(*openedByHand);
             expect(openedByHand->getState().workingFile == restoredFile, describe(*openedByHand));
             expect(openedByHand->getState().workingCopy.versionId == versionId, "it knows which version the copy holds");
         }
 
-        beginTest("After the DAW reopens a project, a save builds on the version its file was saved as");
+        beginTest("After the DAW reopens a project file, a save builds on the version its file was saved as");
         {
             TestContext context;
             const auto project = makeProject("project-1", "Song");
@@ -435,33 +498,33 @@ public:
             expect(projectFile.replaceWithText("flp v1"));
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    describe(context.session));
             const auto savedVersionId = context.state().workingCopy.versionId;
 
-            // A collaborator saves while the DAW is closed; then the DAW reopens the project, with
-            // a new plugin instance and the link saved in the project.
+            // A collaborator saves while the DAW is closed; then the DAW reopens the project file,
+            // with a new plugin instance and the link saved in it.
             context.api->addVersion(branch.id, "from a collaborator", { { "song.flp", "theirs" } });
             auto reopened = context.makeInstance();
             reopened->restoreLink({ project.id, branch.id, projectFile });
-            restoreSavedSession(*reopened);
+            resumeSignIn(*reopened);
             const auto& reopenedState = reopened->getState();
             expect(reopenedState.workingCopy.versionId == savedVersionId && reopenedState.openedVersionId == savedVersionId,
                    "it knows which version the file holds: " + describe(*reopened));
 
-            reopened->requestPushVersion("nothing new");
-            expect(reopenedState.sessionStatus.text.contains("No changes"), "an unchanged file isn't saved again: " + describe(*reopened));
+            reopened->requestSaveVersion("nothing new");
+            expect(reopenedState.dashboardStatus.text.contains("No changes"), "an unchanged file isn't saved again: " + describe(*reopened));
 
             simulateDawSave(projectFile, " edit");
-            reopened->requestPushVersion("second");
+            reopened->requestSaveVersion("second");
             expect(waitUntil(*reopened, [&context, &reopened] { return !reopened->isBusy() && context.api->getCreatedVersions().size() == 3; }),
                    describe(*reopened));
             expect(context.api->getCreatedVersions().back().parentVersionId == savedVersionId,
                    "the parent is the version the file came from, not the collaborator's newer one");
         }
 
-        beginTest("What a file holds only counts for the project and workspace it was saved to");
+        beginTest("What a file holds only counts for the project and branch it was saved to");
         {
             TestContext context;
             const auto project = makeProject("project-1", "Song");
@@ -476,7 +539,7 @@ public:
             expect(projectFile.replaceWithText("flp v1"));
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().versionHistory.size() == 1; }),
                    describe(context.session));
 
@@ -485,7 +548,7 @@ public:
             {
                 auto instance = context.makeInstance();
                 instance->restoreLink(link);
-                restoreSavedSession(*instance);
+                resumeSignIn(*instance);
                 const auto& state = instance->getState();
                 expect(state.selectedProject.has_value() && state.selectedProject->id == link.projectId
                            && state.selectedBranchId == link.branchId && state.workingFile == projectFile,
@@ -512,14 +575,14 @@ public:
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
 
-            context.session.requestPushVersion("first");
+            context.session.requestSaveVersion("first");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.api->getCreatedVersions().size() == 1; }),
                    "first save: " + describe(context.session));
             const auto kickSha = sha256Of(juce::MemoryBlock("kick", 4));
             expect(context.api->getUploadCount(kickSha) == 1, "two identical files are one upload");
 
             simulateDawSave(projectFile, " edit");
-            context.session.requestPushVersion("second");
+            context.session.requestSaveVersion("second");
             expect(waitUntil(context.session, [&context] { return context.isIdle() && context.api->getCreatedVersions().size() == 2; }),
                    "second save: " + describe(context.session));
             expect(context.api->getUploadCount(kickSha) == 1, "files the server has are not uploaded again");
@@ -537,20 +600,22 @@ public:
             signIn(context.session);
             openProject(context.session, project.id, projectFile);
 
-            context.session.requestPushVersion(juce::String::repeatedString("n", 501));
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
-                   "a long note should fail: " + describe(context.session));
-            expect(context.state().sessionStatus.text.contains("500 characters"), describe(context.session));
+            context.session.requestSaveVersion(juce::String::repeatedString("n", 501));
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().dashboardStatus.isError(); }),
+                   "a long message should fail: " + describe(context.session));
+            expect(context.state().dashboardStatus.text.contains("500 characters"), describe(context.session));
 
             for (int index = 0; index < 501; ++index)
-                expect(context.environment.root.getChildFile("stem" + juce::String(index) + ".wav").replaceWithText(juce::String(index)));
+                expect(context.environment.root.getChildFile("loop" + juce::String(index) + ".wav").replaceWithText(juce::String(index)));
 
-            context.session.requestPushVersion("too many files");
+            context.session.requestSaveVersion("too many files");
             expect(waitUntil(context.session, [&context]
             {
-                return context.isIdle() && context.state().sessionStatus.text.contains("can hold 500");
-            }), "501 audio files should fail: " + describe(context.session));
-            expect(context.state().sessionStatus.isError(), describe(context.session));
+                return context.isIdle() && context.state().dashboardStatus.text.contains("can hold 500");
+            }), "501 audio & MIDI files should fail: " + describe(context.session));
+            expect(context.state().dashboardStatus.isError(), describe(context.session));
+            expect(context.state().dashboardStatus.text.contains("Move the ones the project file doesn't use out of its folder."),
+                   describe(context.session));
             expect(context.api->getCreatedVersions().empty() && context.api->getUploadCount(sha256Of(juce::MemoryBlock("0", 1))) == 0,
                    "nothing is uploaded");
         }
@@ -573,23 +638,23 @@ public:
             const auto restoresFolder = context.environment.root.getChildFile("restores");
             expect(restoresFolder.createDirectory().wasOk());
             context.session.requestRestoreVersion(versionId, restoresFolder);
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().dashboardStatus.isError(); }),
                    "the restore should fail: " + describe(context.session));
-            expect(context.state().sessionStatus.text.contains("checksum"), describe(context.session));
+            expect(context.state().dashboardStatus.text.contains("checksum"), describe(context.session));
 
             juce::Array<juce::File> leftovers;
             restoresFolder.findChildFiles(leftovers, juce::File::findFilesAndDirectories, true);
             expect(leftovers.isEmpty(), "the half-restored folder is removed");
-            expect(context.state().workingFile == projectFile, "the working file doesn't change");
+            expect(context.state().workingFile == projectFile, "the working copy doesn't change");
             expect(context.openedFiles.isEmpty() && !context.handoffFile().exists(), "nothing is handed to the DAW");
 
             // A connection that drops midway is not a corrupt file.
             context.api->corruptDownloads = false;
             context.api->truncateDownloads = true;
             context.session.requestRestoreVersion(versionId, restoresFolder);
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().dashboardStatus.isError(); }),
                    "the restore should fail: " + describe(context.session));
-            expect(context.state().sessionStatus.text.contains("stopped early"), describe(context.session));
+            expect(context.state().dashboardStatus.text.contains("stopped early"), describe(context.session));
             leftovers.clear();
             restoresFolder.findChildFiles(leftovers, juce::File::findFilesAndDirectories, true);
             expect(leftovers.isEmpty(), "nothing is left behind either");
@@ -653,10 +718,10 @@ public:
                    describe(context.session));
             const auto restoredFile = context.openedFiles.getFirst();
 
-            // The DAW opens the copy and shows the plugin window, which was open when the project was
-            // saved, before it hands the new instance its saved state.
+            // The DAW opens the copy and shows the plugin window, which was open when the project file
+            // was saved, before it hands the new instance its saved state.
             auto restoredInstance = context.makeInstance();
-            restoredInstance->requestRestoreSavedSession();
+            restoredInstance->requestResumeSignIn();
             restoredInstance->restoreLink({ project.id, branch.id, projectFile });
             expect(waitUntil(*restoredInstance, [&restoredInstance]
             {
@@ -680,18 +745,18 @@ public:
 
             // What ApiClient reports when the server gives no detail.
             context.api->createVersionError = "Failed to create the version.";
-            context.session.requestPushVersion("first");
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
+            context.session.requestSaveVersion("first");
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().dashboardStatus.isError(); }),
                    describe(context.session));
-            expect(context.state().sessionStatus.text == "Failed to create the version.", context.state().sessionStatus.text);
+            expect(context.state().dashboardStatus.text == "Failed to create the version.", context.state().dashboardStatus.text);
 
             // A version deleted since the history was loaded.
             context.session.requestRestoreVersion("deleted-version", context.environment.root);
-            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().sessionStatus.isError(); }),
+            expect(waitUntil(context.session, [&context] { return context.isIdle() && context.state().dashboardStatus.isError(); }),
                    describe(context.session));
-            expect(context.state().sessionStatus.text.contains("Version not found")
-                       && !context.state().sessionStatus.text.contains("file list"),
-                   context.state().sessionStatus.text);
+            expect(context.state().dashboardStatus.text.contains("Version not found")
+                       && !context.state().dashboardStatus.text.contains("file list"),
+                   context.state().dashboardStatus.text);
         }
     }
 };

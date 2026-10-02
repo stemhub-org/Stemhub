@@ -23,8 +23,8 @@ OperationWords wordsFor(const OperationState operation)
     {
         case OperationState::signingIn:       return { "Signing in", "Sign-in cancelled." };
         case OperationState::loadingProjects: return { "Opening the project", "Cancelled." };
-        case OperationState::pulling:         return { "Loading the history", "Cancelled." };
-        case OperationState::committing:      return { "Saving a version", "Save cancelled." };
+        case OperationState::loadingHistory:  return { "Loading the history", "Cancelled." };
+        case OperationState::saving:          return { "Saving a version", "Save cancelled." };
         case OperationState::restoring:       return { "Restoring a version", "Restore cancelled." };
         case OperationState::idle:            break;
     }
@@ -130,7 +130,7 @@ bool StemhubSession::finish(const JobOutcome& outcome)
 
 void StemhubSession::refuse(Status reason)
 {
-    state.sessionStatus = std::move(reason);
+    state.dashboardStatus = std::move(reason);
     changed();
 }
 
@@ -165,7 +165,7 @@ int StemhubSession::applyFinishedJobs()
 bool StemhubSession::applyResult(TaggedPayload tagged)
 {
     // The one staleness rule: a result counts only if nothing was requested after it. Checked
-    // per result, as applying one can start a request or end the session.
+    // per result, as applying one can start a request or end the sign-in session.
     if (!isCurrent(tagged.requestEpoch))
         return false;
 
@@ -200,7 +200,7 @@ Status& StemhubSession::statusOfCurrentScreen() noexcept
     if (state.operationState == OperationState::loadingProjects)
         return state.projectsStatus;
 
-    return state.sessionStatus;
+    return state.dashboardStatus;
 }
 
 //==============================================================================
@@ -220,30 +220,30 @@ void StemhubSession::requestSignIn(const juce::String& email, const juce::String
           });
 }
 
-void StemhubSession::requestRestoreSavedSession()
+void StemhubSession::requestResumeSignIn()
 {
     JUCE_ASSERT_MESSAGE_THREAD
-    if (didAttemptSavedSessionRestore)
+    if (didAttemptResumeSignIn)
         return;
 
-    didAttemptSavedSessionRestore = true;
+    didAttemptResumeSignIn = true;
 
     const auto savedToken = storage.credentials->loadToken();
     if (savedToken.isEmpty() || state.isSignedIn() || isBusy())
         return;
 
-    start(OperationState::signingIn, "Restoring your session...",
-          [input = usecases::RestoreSessionInput { savedToken }](const IProjectApi& backend, const auto&) -> JobPayload
+    start(OperationState::signingIn, "Signing you back in...",
+          [input = usecases::ResumeSignInInput { savedToken }](const IProjectApi& backend, const auto&) -> JobPayload
           {
-              return usecases::restoreSession(backend, input);
+              return usecases::resumeSignIn(backend, input);
           });
 }
 
 void StemhubSession::apply(AuthRequestResult result)
 {
     // Offline, or with the server down, the saved token stays, and reopening the plugin tries again.
-    if (result.fromSavedSession && result.failed() && !result.sessionExpired)
-        didAttemptSavedSessionRestore = false;
+    if (result.fromSavedToken && result.failed() && !result.sessionExpired)
+        didAttemptResumeSignIn = false;
 
     if (!finish(result))
         return;
@@ -256,7 +256,7 @@ void StemhubSession::apply(AuthRequestResult result)
     state.projectsStatus = std::move(result.status);
     storage.credentials->saveToken(state.accessToken);
 
-    // A DAW project saved without a link (never linked, or by an earlier version): if the DAW has
+    // A project file saved without a link (never linked, or by an earlier version): if the DAW has
     // just opened a restored copy, this instance is the one it was restored for. Only taken now:
     // the plugin window can open before the host hands back the saved link, and a restored copy's
     // own link names its project.
@@ -269,8 +269,8 @@ void StemhubSession::apply(AuthRequestResult result)
 void StemhubSession::signOut()
 {
     JUCE_ASSERT_MESSAGE_THREAD
-    // Whatever is still running belongs to the old session: it is asked to stop, and its result
-    // will be dropped.
+    // Whatever is still running belongs to the old sign-in session: it is asked to stop, and its
+    // result will be dropped.
     jobs.stopRunningJobs();
     beginRequest();
     storage.credentials->clear();
@@ -289,7 +289,7 @@ void StemhubSession::expireSession()
 {
     stemhub::log::info("StemHub refused the token: signed out.");
     signOut();
-    state.authStatus = Status::warning("Your session expired. Sign in again.");
+    state.authStatus = Status::warning("Your sign-in session expired. Sign in again.");
 }
 
 void StemhubSession::restoreLink(ProjectLink savedLink)
@@ -330,7 +330,7 @@ void StemhubSession::openLinkedProject()
     });
     if (!isListed)
     {
-        state.projectsStatus = Status::warning("This DAW project is linked to a StemHub project you can no longer open. "
+        state.projectsStatus = Status::warning("This project file is linked to a StemHub project you can no longer open. "
                                                "Choose another project.");
         return;
     }
@@ -339,7 +339,7 @@ void StemhubSession::openLinkedProject()
     input.projectId = state.link.projectId;
     input.preferredBranchId = state.link.branchId;
     // Passed even when it is missing (a drive not plugged in), so the link keeps the path.
-    input.localProjectFile = state.link.workingFile;
+    input.workingFile = state.link.workingFile;
     input.availableProjects = state.projects;
     input.workingCopies = storage.workingCopies;
     input.restoredProjectsFolder = storage.restoredProjectsFolder;
@@ -377,10 +377,10 @@ void StemhubSession::requestOpenProject(juce::String projectId, const bool resto
     input.preferredBranchId = isOpenHere ? state.selectedBranchId
                             : isLinked   ? state.link.branchId
                                          : juce::String();
-    input.localProjectFile = state.chosenProjectFile != juce::File() ? state.chosenProjectFile
-                           : isOpenHere                              ? state.workingFile
-                           : isLinked                                ? state.link.workingFile
-                                                                     : juce::File();
+    input.workingFile = state.chosenProjectFile != juce::File() ? state.chosenProjectFile
+                      : isOpenHere                              ? state.workingFile
+                      : isLinked                                ? state.link.workingFile
+                                                                : juce::File();
     input.availableProjects = state.projects;
     input.restoreLatestIfSafe = restoreLatestIfSafe;
     input.workingCopies = storage.workingCopies;
@@ -432,12 +432,12 @@ void StemhubSession::apply(ProjectActivationJobResult result)
     state.selectedVersionId = std::move(result.selectedVersionId);
     enterProject(*result.selectedProject, std::move(result.branchId), std::move(result.projectFile));
     state.workingCopy = std::move(result.workingCopy);
-    // The DAW has the working file open; it holds a known version only while the file is unchanged.
+    // The DAW has the working copy open; it holds a known version only while the file is unchanged.
     state.openedVersionId = state.workingCopy.isUnchanged() ? state.workingCopy.versionId : juce::String();
-    state.sessionStatus = std::move(result.status);
+    state.dashboardStatus = std::move(result.status);
 
     // Only a copy that was just restored is opened in the DAW. A file the user linked is usually
-    // the project the DAW already has open, and reopening it would reload the session.
+    // the project the DAW already has open, and reopening it would reload the project.
     if (result.restoredCopy.isSet())
         handOverRestoredCopy(result.restoredCopy);
 }
@@ -450,7 +450,7 @@ void StemhubSession::requestSelectBranch(juce::String branchId)
 
     if (!state.selectedProject.has_value())
     {
-        refuse(Status::error("Choose a project before selecting a workspace."));
+        refuse(Status::error("Choose a project before selecting a branch."));
         return;
     }
 
@@ -461,7 +461,7 @@ void StemhubSession::requestSelectBranch(juce::String branchId)
 
     if (branchIt == state.branches.end())
     {
-        refuse(Status::error("Selected workspace is no longer available."));
+        refuse(Status::error("The selected branch is no longer available."));
         return;
     }
 
@@ -469,7 +469,7 @@ void StemhubSession::requestSelectBranch(juce::String branchId)
     input.branchId = std::move(branchId);
     input.branchName = branchIt->name;
 
-    start(OperationState::pulling, "Loading workspace history...",
+    start(OperationState::loadingHistory, "Loading branch history...",
           asSignedIn([input](const SignedInApi& backend, const auto&) -> JobPayload
           {
               return usecases::fetchHistory(backend, input);
@@ -484,7 +484,7 @@ void StemhubSession::requestRefreshVersionHistory()
 
     if (!state.hasOpenProject())
     {
-        refuse(Status::error("Choose a project and workspace before refreshing history."));
+        refuse(Status::error("Choose a project and branch before refreshing history."));
         return;
     }
 
@@ -495,7 +495,7 @@ void StemhubSession::requestRefreshVersionHistory()
     input.branchName = branch != nullptr ? branch->name : juce::String();
     input.preferredVersionId = state.selectedVersionId;
 
-    start(OperationState::pulling, "Refreshing version history...",
+    start(OperationState::loadingHistory, "Refreshing version history...",
           asSignedIn([input](const SignedInApi& backend, const auto&) -> JobPayload
           {
               return usecases::fetchHistory(backend, input);
@@ -515,13 +515,13 @@ void StemhubSession::apply(BranchHistoryJobResult result)
     state.selectedBranchId = std::move(result.branchId);
     state.versionHistory = std::move(result.versions);
     state.selectedVersionId = std::move(result.selectedVersionId);
-    state.sessionStatus = std::move(result.status);
+    state.dashboardStatus = std::move(result.status);
 }
 
 //==============================================================================
 // Saving and restoring
 
-void StemhubSession::requestPushVersion(juce::String commitMessage)
+void StemhubSession::requestSaveVersion(juce::String message)
 {
     JUCE_ASSERT_MESSAGE_THREAD
     if (isBusy())
@@ -530,26 +530,26 @@ void StemhubSession::requestPushVersion(juce::String commitMessage)
     if (hasCleanWorkingCopy())
     {
         refuse(Status::warning("No changes to save: the project file is the same as the last saved "
-                               "or restored version. Save the project in your DAW first."));
+                               "or restored version. Save the project file in your DAW first."));
         return;
     }
 
-    usecases::PushInput input;
+    usecases::SaveInput input;
     input.projectFile = state.workingFile;
     input.projectId = state.selectedProject.has_value() ? state.selectedProject->id : juce::String();
     input.branchId = state.selectedBranchId;
     input.parentVersionId = getParentVersionForNextSave();
-    input.commitMessage = std::move(commitMessage);
+    input.message = std::move(message);
     input.workingCopies = storage.workingCopies;
 
-    start(OperationState::committing, "Saving version...",
+    start(OperationState::saving, "Saving version...",
           asSignedIn([input](const SignedInApi& backend, const ReportProgress& report) -> JobPayload
           {
-              return usecases::pushVersion(backend, input, report);
+              return usecases::saveVersion(backend, input, report);
           }));
 }
 
-void StemhubSession::apply(PushVersionJobResult result)
+void StemhubSession::apply(SaveVersionJobResult result)
 {
     if (!finish(result))
         return;
@@ -557,17 +557,17 @@ void StemhubSession::apply(PushVersionJobResult result)
     if (result.refreshedVersions.has_value())
         state.versionHistory = std::move(*result.refreshedVersions);
 
-    if (result.pushedCopy.isSet())
+    if (result.savedCopy.isSet())
     {
-        // The pushed file now holds the new version: it is the next save's parent, and what the
+        // The saved file now holds the new version: it is the next save's parent, and what the
         // "no changes" check compares against.
-        state.workingCopy = result.pushedCopy;
+        state.workingCopy = result.savedCopy;
         state.selectedVersionId = state.workingCopy.versionId;
         state.openedVersionId = state.workingCopy.versionId;
         state.lastSavedVersionId = state.workingCopy.versionId;
     }
 
-    state.sessionStatus = std::move(result.status);
+    state.dashboardStatus = std::move(result.status);
 }
 
 void StemhubSession::requestRestoreVersion(const juce::String& versionId, const juce::File& projectFolder)
@@ -616,20 +616,20 @@ void StemhubSession::apply(RestoreVersionJobResult result)
         return;
 
     state.selectedVersionId = result.restoredCopy.versionId;
-    state.sessionStatus = std::move(result.status);
+    state.dashboardStatus = std::move(result.status);
     handOverRestoredCopy(result.restoredCopy);
 }
 
 void StemhubSession::handOverRestoredCopy(const WorkingCopyBaseline& restoredCopy)
 {
-    // The DAW opens the copy as a project of its own, and the instance loaded with it takes over
-    // from there. This instance stays with the file of the DAW project it lives in.
+    // The DAW opens the copy as a separate project file, and the instance loaded with it takes over
+    // from there. This instance stays with the project file it lives in.
     stemhub::handoff::write(storage.restoreHandoffFile,
                             { state.selectedProject->id, state.selectedBranchId, restoredCopy.file, juce::Time::getCurrentTime() });
 
     if (!openFileHandler(restoredCopy.file))
-        state.sessionStatus = Status::warning("Restored to " + restoredCopy.file.getFullPathName()
-                                              + ", but it could not be opened automatically. Open it from your DAW.");
+        state.dashboardStatus = Status::warning("Restored to " + restoredCopy.file.getFullPathName()
+                                                + ", but it could not be opened automatically. Open it from your DAW.");
 }
 
 //==============================================================================
@@ -670,7 +670,7 @@ juce::File StemhubSession::getProjectFileForGrid() const
 
 bool StemhubSession::isWriteOperationInProgress() const noexcept
 {
-    return state.operationState == OperationState::committing
+    return state.operationState == OperationState::saving
         || state.operationState == OperationState::restoring;
 }
 

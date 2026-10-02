@@ -387,7 +387,7 @@ void ProjectSelectionView::updateNewProjectControls()
     {
         theme::stylePrimaryButton(createProjectButton);
         createProjectButton.setButtonText("Create project  +");
-        createProjectButton.setTooltip("Create a StemHub project from this DAW file.");
+        createProjectButton.setTooltip("Create a StemHub project from this project file.");
         createProjectButton.setVisible(true);
 
         theme::styleLinkButton(chooseProjectFileButton, Theme::kInkSubtle, Theme::kInk);
@@ -403,12 +403,12 @@ void ProjectSelectionView::updateNewProjectControls()
         chooseProjectFileButton.setColour(juce::TextButton::buttonColourId, Theme::kInk);
         chooseProjectFileButton.setColour(juce::TextButton::textColourOffId, Theme::kPaper);
         chooseProjectFileButton.setColour(juce::TextButton::textColourOnId, Theme::kPaper);
-        chooseProjectFileButton.setButtonText("Choose DAW file  " + theme::arrowRight());
+        chooseProjectFileButton.setButtonText("Choose project file  " + theme::arrowRight());
         chooseProjectFileButton.getProperties().set("underlined", false);
         chooseProjectFileButton.getProperties().set("stemhubAlignLeft", false);
     }
 
-    chooseProjectFileButton.setTooltip("Pick the .flp or .als file this project should track.");
+    chooseProjectFileButton.setTooltip("Pick the .flp or .als project file to save versions from.");
     layoutProjectGrid();
 }
 

@@ -8,9 +8,9 @@ Covers:
 - GET /pull-requests/{id}: get by id, 404 without project access.
 - POST /pull-requests/{id}/close: OPEN → CLOSED with closed_at/closed_by; non-OPEN → 409.
 
-CLOSED is terminal (SPECIFICATION.md §7, §19): a closed PR is not reopened,
-users open a new one. The merge engine (issue #253) is out of scope: there is
-no /merge endpoint here.
+CLOSED is terminal (SPECIFICATION.md §19): a closed PR is not reopened,
+users open a new one. Accepting a pull request (OPEN → MERGED, issue #253) is
+out of scope: there is no endpoint for it here.
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def _version(branch_id: uuid.UUID, *, created_at: datetime, is_deleted: bool = F
     return Version(
         id=uuid.uuid4(),
         branch_id=branch_id,
-        commit_message="v",
+        message="v",
         created_at=created_at,
         is_deleted=is_deleted,
     )
@@ -283,8 +283,8 @@ def test_create_pull_request_returns_open_pr() -> None:
 
 
 def test_create_pull_request_captures_branch_heads() -> None:
-    """The head of each branch (latest live version) is snapshotted at open time
-    so the merge engine can later detect that the target moved (issue #253)."""
+    """The head of each branch (latest live version) is recorded at open time
+    so accepting the pull request can later detect that the target moved (issue #253)."""
     session, project, main, feature = _owned_project_session()
     old = datetime(2026, 1, 1, tzinfo=timezone.utc)
     new = datetime(2026, 2, 1, tzinfo=timezone.utc)
@@ -375,7 +375,7 @@ def test_create_pull_request_rejects_same_source_and_target() -> None:
         json={
             "source_branch_id": str(main.id),
             "target_branch_id": str(main.id),
-            "title": "Self merge",
+            "title": "Into itself",
         },
     )
 

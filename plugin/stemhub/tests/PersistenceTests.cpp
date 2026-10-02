@@ -24,7 +24,7 @@ public:
 
     void runTest() override
     {
-        beginTest("The link saved in the DAW project reads back, and bad data is ignored");
+        beginTest("The link saved in the project file reads back, and bad data is ignored");
         {
             namespace pluginstate = stemhub::pluginstate;
 
@@ -62,7 +62,7 @@ public:
                    "another project's instance leaves it");
             const auto taken = handoff::take(location, "project-1", now + juce::RelativeTime::minutes(9));
             expect(taken.has_value() && taken->branchId == "branch-1" && taken->file == copy,
-                   "its instance gets the copy and its workspace");
+                   "its instance gets the copy and its branch");
             expect(!location.exists() && !handoff::take(location, "project-1", now).has_value(), "it is taken once");
 
             handoff::write(location, written);

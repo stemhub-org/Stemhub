@@ -49,7 +49,7 @@ juce::String timestamp(const juce::Time time, const bool withYear)
 
 juce::String versionTitle(const VersionListItem& version)
 {
-    return version.isUntitled ? juce::String("Untitled snapshot") : version.message.trim();
+    return version.isUntitled ? juce::String("Untitled version") : version.message.trim();
 }
 
 juce::String slug(const juce::String& text)
@@ -74,10 +74,10 @@ juce::String slug(const juce::String& text)
     return result.trimCharactersAtStart("-").trimCharactersAtEnd("-");
 }
 
-juce::String snapshotSummary(const bool hasWorkingFile, const int fileCount, const juce::int64 totalBytes)
+juce::String workingCopySummary(const bool hasWorkingCopy, const int fileCount, const juce::int64 totalBytes)
 {
-    if (!hasWorkingFile)
-        return "No local file";
+    if (!hasWorkingCopy)
+        return "No working copy";
 
     if (fileCount < 0)
         return "Counting files" + ellipsis();
@@ -90,8 +90,8 @@ juce::String statusChipText(const Status::Severity severity)
 {
     switch (severity)
     {
-        case Status::Severity::progress: return "Syncing";
-        case Status::Severity::success:  return "Synced";
+        case Status::Severity::progress: return "Working" + ellipsis();
+        case Status::Severity::success:  return "Done";
         case Status::Severity::warning:  return "Attention";
         case Status::Severity::error:    return "Error";
         case Status::Severity::info:     break;

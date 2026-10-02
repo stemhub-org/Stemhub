@@ -9,8 +9,8 @@
 #include "ui/ProjectTiles.hpp"
 #include "ui/ViewModels.hpp"
 
-// The project grid: the account's projects, a tile to create one from a DAW file, a search box
-// and filters. Tiles are rebuilt only when the list or the filter changes.
+// The project grid: the account's projects, a tile to create one from a project file, a search
+// box and filters. Tiles are rebuilt only when the list or the filter changes.
 class ProjectSelectionView : public juce::Component
 {
 public:

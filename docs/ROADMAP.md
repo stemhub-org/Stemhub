@@ -42,7 +42,7 @@ gantt
     section Developpements Tech
     M1 - Schema JSON Canonique et Base PR       :t1, 2026-09-01, 2026-10-31
     M2 - Moteur de Merge et Web PR Diff         :t2, 2026-11-01, 2026-12-31
-    M3 - Cloudflare R2 et Packaging Plugin      :t3, 2027-01-01, 2027-02-28
+    M3 - Cloudflare R2 et Packaging Plugin StemHub :t3, 2027-01-01, 2027-02-28
     M4 - Support Beta et Hotfixes               :t4, 2027-03-01, 2027-05-15
     M5 - Consolidation et Optimisations         :t5, 2027-05-15, 2027-06-30
 ```

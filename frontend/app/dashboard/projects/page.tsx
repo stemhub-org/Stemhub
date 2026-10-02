@@ -4,7 +4,7 @@ import type React from "react";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { Heart, GitBranch, Clock, Activity, Folder, Search, Plus, User, Loader2 } from "lucide-react";
+import { Heart, History, Clock, Activity, Folder, Search, Plus, User, Loader2 } from "lucide-react";
 import { authFetch } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/Button";
@@ -257,7 +257,7 @@ export default function DashboardProjectsPage() {
                                                         {formatDate(project.created_at)}
                                                     </span>
                                                     <span className="inline-flex items-center gap-1">
-                                                        <GitBranch className="size-3.5" aria-hidden />
+                                                        <History className="size-3.5" aria-hidden />
                                                         0 versions
                                                     </span>
                                                     <span className="inline-flex items-center gap-1">
