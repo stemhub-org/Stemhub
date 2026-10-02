@@ -13,16 +13,16 @@
 #include "network/ApiClient.hpp"
 #include "network/SignedInApi.hpp"
 
-// The signed-in user's session: the single owner of SessionState, and the only thing the editor
-// talks to. User intents start background jobs (see UseCases.hpp) whose results come back on the
-// message thread. Listeners hear about every change through the ChangeBroadcaster, which merges
-// bursts into one callback.
+// One plugin instance's StemHub side: the sign-in session and the project open here. The single
+// owner of SessionState, and the only thing the editor talks to. User intents start background
+// jobs (see UseCases.hpp) whose results come back on the message thread. Listeners hear about
+// every change through the ChangeBroadcaster, which merges bursts into one callback.
 //
 // One job at a time: an intent that would start a job is ignored while the session is busy, and
 // only the latest request's result is applied, so signing out drops whatever was still running.
 //
-// Each plugin instance has its own session, linked to the StemHub project of the DAW project it
-// lives in (SessionState::link). The processor saves that link in the DAW project.
+// Each plugin instance has its own session, linked to the StemHub project of the project file it
+// lives in (SessionState::link). The processor saves that link in the project file.
 //
 // Everything public runs on the message thread.
 class StemhubSession : public juce::ChangeBroadcaster,
@@ -42,35 +42,35 @@ public:
     // Save and restore write files and versions; the user can't leave the project while one runs.
     [[nodiscard]] bool isWriteOperationInProgress() const noexcept;
     // The file the project grid offers to create a project from: the one chosen there, else the
-    // open project's working file; empty when neither exists.
+    // open project's working copy; empty when neither exists.
     [[nodiscard]] juce::File getProjectFileForGrid() const;
 
     // ── Intents ──
     void requestSignIn(const juce::String& email, const juce::String& password);
-    // Signs in with the saved token, once per session unless the server couldn't be reached.
-    // Once signed in, the linked project opens.
-    void requestRestoreSavedSession();
-    // Keeps the link, so signing in again reopens this DAW project's StemHub project.
+    // Signs in with the saved token, once per plugin instance unless the server couldn't be
+    // reached. Once signed in, the linked project opens.
+    void requestResumeSignIn();
+    // Keeps the link, so signing in again reopens this project file's StemHub project.
     void signOut();
-    // The link saved in the DAW project, as the host hands it back, ignored once a project is
+    // The link saved in the project file, as the host hands it back, ignored once a project is
     // open here. A restore hand-off waiting for that project (for any project, when there is no
     // link) is taken now: the DAW is opening that restored copy.
     void restoreLink(ProjectLink savedLink);
-    // A DAW project file picked on the project grid: the next project opened or created there
-    // works on it.
+    // A project file picked on the project grid: the next project opened or created there works
+    // on it.
     void chooseProjectFile(const juce::File& file);
     // Opens with the file chosen on the grid, else the file the project already has here (its
-    // working file, or the one this DAW project is linked to), on the branch it was on.
+    // working copy, or the one this project file is linked to), on the branch it was on.
     // restoreLatestIfSafe: an explicit open from the project grid. When this instance has no
-    // local copy of the project, or an unchanged one behind the branch head, the latest version
-    // is restored into a new folder and opened in the DAW. Unsaved local changes are never replaced.
+    // working copy of the project, or an unchanged one behind the branch head, the latest version
+    // is restored into a new folder and opened in the DAW. Unsaved changes are never replaced.
     void requestOpenProject(juce::String projectId, bool restoreLatestIfSafe = false);
     // Creates a StemHub project from getProjectFileForGrid().
     void requestCreateProject();
     void requestSelectBranch(juce::String branchId);
     void requestRefreshVersionHistory();
     // Uploads only the files the server doesn't have yet. See docs/content-addressed-storage.md.
-    void requestPushVersion(juce::String commitMessage);
+    void requestSaveVersion(juce::String message);
     // Downloads the version's files into a new folder inside destinationFolder, verifying SHA-256.
     void requestRestoreVersion(const juce::String& versionId, const juce::File& destinationFolder);
     // Stops the job in progress at its next step (between two files, or during a transfer). It
@@ -95,7 +95,7 @@ private:
     using AuthRequestResult = stemhub::usecases::AuthRequestResult;
     using ProjectActivationJobResult = stemhub::usecases::ProjectActivationJobResult;
     using BranchHistoryJobResult = stemhub::usecases::BranchHistoryJobResult;
-    using PushVersionJobResult = stemhub::usecases::PushVersionJobResult;
+    using SaveVersionJobResult = stemhub::usecases::SaveVersionJobResult;
     using RestoreVersionJobResult = stemhub::usecases::RestoreVersionJobResult;
     using ReportProgress = stemhub::usecases::ReportProgress;
 
@@ -108,7 +108,7 @@ private:
     using JobPayload = std::variant<AuthRequestResult,
                                     ProjectActivationJobResult,
                                     BranchHistoryJobResult,
-                                    PushVersionJobResult,
+                                    SaveVersionJobResult,
                                     RestoreVersionJobResult,
                                     ProgressReport>;
 
@@ -144,8 +144,8 @@ private:
     // job, given the API with the signed-in user's token.
     [[nodiscard]] Job asSignedIn(SignedInJob job) const;
     // The one rule for how a job ends: the session is idle again; a refused token ends the
-    // session; a failure, or a cancel, is shown on the screen of the job's operation. True when
-    // the rest of the result is to be applied.
+    // sign-in session; a failure, or a cancel, is shown on the screen of the job's operation. True
+    // when the rest of the result is to be applied.
     bool finish(const JobOutcome& outcome);
     // Refuses an intent without starting a job, saying why on the dashboard.
     void refuse(Status reason);
@@ -155,13 +155,13 @@ private:
     void apply(AuthRequestResult result);
     void apply(ProjectActivationJobResult result);
     void apply(BranchHistoryJobResult result);
-    void apply(PushVersionJobResult result);
+    void apply(SaveVersionJobResult result);
     void apply(RestoreVersionJobResult result);
     void apply(ProgressReport report);
     // Where the current operation reports: the login screen, the project grid or the dashboard.
     [[nodiscard]] Status& statusOfCurrentScreen() noexcept;
 
-    // Keeps the link: it belongs to the DAW project, not to whoever is signed in.
+    // Keeps the link: it belongs to the project file, not to whoever is signed in.
     void resetState();
     void openLinkedProject();
     void takeRestoreHandoff(const juce::String& projectId);
@@ -171,11 +171,12 @@ private:
     void expireSession();
     void enterProject(Project project, juce::String branchId, juce::File workingFile);
     void clearWorkingCopy();
-    // The working file still holds the version last saved or restored into it.
+    // The working copy still holds the version last saved or restored into it.
     [[nodiscard]] bool hasCleanWorkingCopy() const;
-    // The version the next save of the working file builds on: the one it holds, else the branch head.
+    // The version the next save of the working copy builds on: the one it holds, else the branch
+    // head.
     [[nodiscard]] juce::String getParentVersionForNextSave() const;
-    // Once a project is open here, it is what the DAW project is linked to.
+    // Once a project is open here, it is what the project file is linked to.
     void refreshLink();
     void changed()
     {
@@ -191,7 +192,7 @@ private:
     uint64_t currentRequestEpoch { 0 };
     // Set by cancelRequest() until the next request: what the cancelled job's failure shows.
     juce::String cancelledMessage;
-    bool didAttemptSavedSessionRestore { false };
+    bool didAttemptResumeSignIn { false };
     std::function<bool(const juce::File&)> openFileHandler;
 
     // Declared last so it is destroyed first: its workers must stop before anything they use goes away.

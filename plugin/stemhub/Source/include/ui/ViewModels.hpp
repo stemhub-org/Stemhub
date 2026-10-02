@@ -59,7 +59,7 @@ struct ProjectGridModel
     // The grid's own message, or a hint about what to do next.
     Status status;
     juce::String accountName;
-    // The DAW file a new project would be created from; empty when there is none.
+    // The project file a new project would be created from; empty when there is none.
     juce::String newProjectFilePath;
     SessionActivity activity { SessionActivity::idle };
 };
@@ -73,12 +73,12 @@ struct BranchListItem
     bool operator!=(const BranchListItem& other) const { return !(*this == other); }
 };
 
-// One saved version as the history timeline and detail card show it.
+// One saved version as the history list and detail card show it.
 struct VersionListItem
 {
     juce::String id;
     juce::String message;
-    // Saved without a note of its own.
+    // Saved without a message of its own.
     bool isUntitled { false };
     juce::Time createdAt;
     juce::String sourceDaw;
@@ -107,7 +107,7 @@ struct DashboardModel
     juce::String selectedVersionId;
     Status status;
     SessionActivity activity { SessionActivity::idle };
-    // The working file, when it is there; empty otherwise.
+    // The working copy, when it is there; empty otherwise.
     juce::String workingFilePath;
 };
 
@@ -118,6 +118,7 @@ struct SessionModel
     LoginModel login;
     ProjectGridModel grid;
     DashboardModel dashboard;
-    // A save has just created a version: its note is spent, and what the next save takes changed.
-    bool noteWasSaved { false };
+    // A save has just created a version: its message is spent, and what the next save takes
+    // changed.
+    bool messageWasSaved { false };
 };

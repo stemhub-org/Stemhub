@@ -46,8 +46,8 @@ DashboardView::DashboardView()
     footerStorageLabel.setBorderSize({});
 
     addAndMakeVisible(branchComboBox);
-    branchComboBox.setTextWhenNothingSelected("Workspace");
-    branchComboBox.setTitle("Workspace");
+    branchComboBox.setTextWhenNothingSelected("Branch");
+    branchComboBox.setTitle("Branch");
     theme::styleComboBox(branchComboBox);
     branchComboBox.onChange = [this]
     {
@@ -61,22 +61,22 @@ DashboardView::DashboardView()
     theme::styleGhostButton(backToProjectsButton);
     backToProjectsButton.onClick = [this] { invokeIfBound(onBackToProjects); };
 
-    addAndMakeVisible(commitMessageInput);
-    theme::styleTextInput(commitMessageInput, "What changed? (optional)");
-    commitMessageInput.setTitle("Save note");
-    commitMessageInput.onReturnKey = [this] { invokeIfBound(onSave); };
+    addAndMakeVisible(messageInput);
+    theme::styleTextInput(messageInput, "What changed? (optional)");
+    messageInput.setTitle("Message");
+    messageInput.onReturnKey = [this] { invokeIfBound(onSave); };
 
-    addAndMakeVisible(saveChanges);
-    saveChanges.setButtonText("Save snapshot");
-    theme::stylePrimaryButton(saveChanges);
-    saveChanges.setTooltip("Save the working copy as a new version.");
-    saveChanges.onClick = [this] { invokeIfBound(onSave); };
+    addAndMakeVisible(saveButton);
+    saveButton.setButtonText("Save version");
+    theme::stylePrimaryButton(saveButton);
+    saveButton.setTooltip("Save the working copy as a new version.");
+    saveButton.onClick = [this] { invokeIfBound(onSave); };
 
-    addAndMakeVisible(syncButton);
-    syncButton.setButtonText("Sync");
-    theme::styleGhostButton(syncButton);
-    syncButton.setTooltip("Fetch the latest history for this branch.");
-    syncButton.onClick = [this] { invokeIfBound(onSync); };
+    addAndMakeVisible(refreshButton);
+    refreshButton.setButtonText("Refresh");
+    theme::styleGhostButton(refreshButton);
+    refreshButton.setTooltip("Reload this branch's history.");
+    refreshButton.onClick = [this] { invokeIfBound(onRefresh); };
 
     addAndMakeVisible(signOutButton);
     signOutButton.setButtonText("Sign out");
@@ -89,8 +89,8 @@ DashboardView::DashboardView()
     cancelButton.setTooltip("Stop the save or restore in progress.");
     cancelButton.onClick = [this] { invokeIfBound(onCancel); };
 
-    addAndMakeVisible(timeline);
-    timeline.onSelect = [this](const juce::String& versionId)
+    addAndMakeVisible(historyList);
+    historyList.onSelect = [this](const juce::String& versionId)
     {
         updateDetailCard();
         if (onVersionSelected != nullptr)
@@ -101,7 +101,7 @@ DashboardView::DashboardView()
     detailCard.onRestore = [this]
     {
         if (onRestore != nullptr)
-            onRestore(timeline.getSelectedVersionId());
+            onRestore(historyList.getSelectedVersionId());
     };
 
     applyStatus(shownStatus);
@@ -113,7 +113,7 @@ void DashboardView::show(const DashboardModel& model)
 {
     setProjectName(model.projectName);
     setBranches(model.branches, model.selectedBranchId);
-    timeline.setVersions(model.versions, model.selectedVersionId);
+    historyList.setVersions(model.versions, model.selectedVersionId);
     updateDetailCard();
     setStatus(model.status);
     setActivity(model.activity);
@@ -151,7 +151,7 @@ void DashboardView::setBranches(const std::vector<BranchListItem>& branchItems, 
                       : selected != branches.end() ? static_cast<int>(selected - branches.begin()) + 1
                                                      : 1;
     branchComboBox.setSelectedId(itemId, juce::dontSendNotification);
-    branchComboBox.setTooltip(selected != branches.end() ? selected->name : juce::String("Workspace not selected"));
+    branchComboBox.setTooltip(selected != branches.end() ? selected->name : juce::String("No branch selected"));
 }
 
 void DashboardView::setStatus(const Status& status)
@@ -186,17 +186,17 @@ void DashboardView::setActivity(const SessionActivity activity)
     const auto isSaving = activity == SessionActivity::saving;
     const auto isRestoring = activity == SessionActivity::restoring;
 
-    saveChanges.setEnabled(isIdle);
-    theme::setButtonBusy(saveChanges, isSaving);
-    saveChanges.setButtonText(isSaving ? "Saving..." : "Save snapshot");
+    saveButton.setEnabled(isIdle);
+    theme::setButtonBusy(saveButton, isSaving);
+    saveButton.setButtonText(isSaving ? "Saving..." : "Save version");
 
     detailCard.setActivity(activity);
-    syncButton.setEnabled(isIdle);
+    refreshButton.setEnabled(isIdle);
     branchComboBox.setEnabled(isIdle);
 
-    // A save or restore belongs to this project, and a save to the note being typed.
+    // A save or restore belongs to this project, and a save to the message being typed.
     backToProjectsButton.setEnabled(!isSaving && !isRestoring);
-    commitMessageInput.setEnabled(!isSaving && !isRestoring);
+    messageInput.setEnabled(!isSaving && !isRestoring);
     cancelButton.setVisible(isSaving || isRestoring);
 }
 
@@ -210,21 +210,21 @@ void DashboardView::setWorkingFile(const juce::String& path)
     repaint();
 }
 
-void DashboardView::setSnapshotSize(const int fileCount, const juce::int64 totalBytes)
+void DashboardView::setWorkingCopySize(const int fileCount, const juce::int64 totalBytes)
 {
-    if (fileCount == snapshotFileCount && totalBytes == snapshotTotalBytes)
+    if (fileCount == workingCopyFileCount && totalBytes == workingCopyTotalBytes)
         return;
 
-    snapshotFileCount = fileCount;
-    snapshotTotalBytes = totalBytes;
+    workingCopyFileCount = fileCount;
+    workingCopyTotalBytes = totalBytes;
     updateFooterSummary();
     repaint();
 }
 
 void DashboardView::updateDetailCard()
 {
-    const auto& versions = timeline.getVersions();
-    const auto& selectedId = timeline.getSelectedVersionId();
+    const auto& versions = historyList.getVersions();
+    const auto& selectedId = historyList.getSelectedVersionId();
     const auto selected = std::find_if(versions.begin(), versions.end(), [&selectedId](const VersionListItem& version)
     {
         return version.id == selectedId;
@@ -246,7 +246,7 @@ void DashboardView::updateFooterSummary()
     const auto slug = uiformat::slug(headerProjectLabel.getText());
     footerCloudLabel.setText("stemhub.io/" + (slug.isNotEmpty() ? slug : juce::String("project")), juce::dontSendNotification);
 
-    footerStorageLabel.setText(uiformat::snapshotSummary(workingFilePath.isNotEmpty(), snapshotFileCount, snapshotTotalBytes)
+    footerStorageLabel.setText(uiformat::workingCopySummary(workingFilePath.isNotEmpty(), workingCopyFileCount, workingCopyTotalBytes)
                                    .toUpperCase(),
                                juce::dontSendNotification);
     footerStorageLabel.setTooltip(workingFilePath);
@@ -264,24 +264,24 @@ void DashboardView::paint(juce::Graphics& g)
 
     theme::paintMetaText(g, "Branch", branchCaptionBounds, Theme::kForegroundSubtle);
 
-    // Working copy: the head of the timeline, not yet saved.
-    const auto ruleX = workingCopyBounds.getX() + VersionTimeline::kRuleX;
-    auto content = workingCopyBounds.withTrimmedLeft(VersionTimeline::kGutter);
+    // Working copy: above the history's newest version, not yet saved.
+    const auto ruleX = workingCopyBounds.getX() + VersionHistoryList::kRuleX;
+    auto content = workingCopyBounds.withTrimmedLeft(VersionHistoryList::kGutter);
     auto metaRow = content.removeFromTop(16);
     const juce::Rectangle<float> node { static_cast<float>(ruleX) + 0.5f - 6.0f,
                                         static_cast<float>(metaRow.getCentreY()) - 6.0f, 12.0f, 12.0f };
 
     g.setColour(Theme::kSurfaceBorder);
     g.fillRect(static_cast<float>(ruleX), node.getBottom(), 1.0f,
-               static_cast<float>(timeline.getY() - static_cast<int>(node.getBottom())));
+               static_cast<float>(historyList.getY() - static_cast<int>(node.getBottom())));
     g.setColour(Theme::kBackground);
     g.fillRect(node);
     g.setColour(Theme::kAccent);
     g.drawRect(node, 1.5f);
 
-    auto fileText = workingFilePath.isNotEmpty() ? juce::File(workingFilePath).getFileName() : juce::String("No local file yet");
-    if (workingFilePath.isNotEmpty() && snapshotFileCount > 1)
-        fileText += uiformat::metaSeparator() + juce::String(snapshotFileCount) + " files";
+    auto fileText = workingFilePath.isNotEmpty() ? juce::File(workingFilePath).getFileName() : juce::String("No working copy yet");
+    if (workingFilePath.isNotEmpty() && workingCopyFileCount > 1)
+        fileText += uiformat::metaSeparator() + juce::String(workingCopyFileCount) + " files";
 
     const auto metaWidth = static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(theme::labelFont(10.0f),
                                                                                            "WORKING COPY"))) + 2;
@@ -331,17 +331,20 @@ void DashboardView::resized()
     const auto captionWidth = static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(theme::labelFont(10.0f),
                                                                                                 "BRANCH"))) + 12;
     branchCaptionBounds = historyHeader.removeFromLeft(captionWidth);
-    syncButton.setBounds(historyHeader.removeFromRight(64));
+    // Ghost buttons draw their text uppercase, inside a 10 px margin on each side.
+    const auto refreshWidth = static_cast<int>(std::ceil(juce::GlyphArrangement::getStringWidth(theme::labelFont(11.0f),
+                                                                                                refreshButton.getButtonText().toUpperCase()))) + 24;
+    refreshButton.setBounds(historyHeader.removeFromRight(refreshWidth));
     historyHeader.removeFromRight(8);
     branchComboBox.setBounds(historyHeader.removeFromLeft(juce::jmin(170, historyHeader.getWidth())));
 
     area.removeFromTop(16);
     workingCopyBounds = area.removeFromTop(16 + 8 + 38);
-    auto controls = workingCopyBounds.withTrimmedLeft(VersionTimeline::kGutter).withTrimmedTop(16 + 8);
-    saveChanges.setBounds(controls.removeFromRight(128));
+    auto controls = workingCopyBounds.withTrimmedLeft(VersionHistoryList::kGutter).withTrimmedTop(16 + 8);
+    saveButton.setBounds(controls.removeFromRight(128));
     controls.removeFromRight(8);
-    commitMessageInput.setBounds(controls);
+    messageInput.setBounds(controls);
 
     area.removeFromTop(12);
-    timeline.setBounds(area);
+    historyList.setBounds(area);
 }

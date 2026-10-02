@@ -7,19 +7,22 @@ import {
   useTransform,
   type MotionValue,
 } from "framer-motion";
-import { GitBranch, GitCommit, GitMerge } from "lucide-react";
+import { GitBranch, GitCommit, GitPullRequest } from "lucide-react";
 
+// A save in the StemHub plugin, then the same version in the branch history on
+// the web. Status and diff lines follow the plugin's and the backend's wording
+// (dry/wet values are FL Studio's raw values).
 const terminalLines = [
-  { prefix: "$", text: "stemhub status", color: "text-foreground/80" },
-  { prefix: ">", text: 'Track "Kick" updated…', color: "text-accent" },
-  { prefix: ">", text: '"Synth Lead" added in V2', color: "text-accent" },
-  { prefix: ">", text: "Mix bus compressed — gain +2dB", color: "text-foreground/50" },
-  { prefix: "$", text: "stemhub commit -m 'Late-night session'", color: "text-foreground/80" },
-  { prefix: ">", text: "Commit #a7f3d2 saved.", color: "text-green-500" },
-  { prefix: "$", text: "stemhub diff v1..v2", color: "text-foreground/80" },
-  { prefix: "+", text: "Synth Lead — 808 pattern changed", color: "text-green-500" },
-  { prefix: "-", text: "Hi-hat roll removed", color: "text-red-400" },
-  { prefix: ">", text: "3 files changed, 1 added", color: "text-foreground/50" },
+  { prefix: "▸", text: "StemHub plugin • Late Night.flp • branch main", color: "text-foreground/80" },
+  { prefix: ">", text: 'Message: "Late-night idea"', color: "text-accent" },
+  { prefix: ">", text: "Uploading 2 of 2 new files...", color: "text-foreground/50" },
+  { prefix: ">", text: "Version saved successfully.", color: "text-green-500" },
+  { prefix: "▸", text: 'Branch history • "Late-night idea" • just now', color: "text-foreground/80" },
+  { prefix: ">", text: "Compared with the version it was saved from", color: "text-foreground/50" },
+  { prefix: "+", text: 'Insert 3 "Lead" effect slot 2 added: "Reverb"', color: "text-green-500" },
+  { prefix: "-", text: 'Insert 5 "Hats" effect slot 1 removed: "Delay"', color: "text-red-400" },
+  { prefix: "~", text: 'Insert 2 "Drum Bus" effect slot 1 dry/wet changed: 12800 -> 6400', color: "text-accent" },
+  { prefix: ">", text: "3 changes • 3 inserts • 3 effect slots", color: "text-foreground/50" },
 ];
 
 function useMotionValueState(value: MotionValue<number>): number {
@@ -127,9 +130,9 @@ export default function DiffSection() {
             className="max-w-2xl text-[clamp(2rem,5vw,4.5rem)] font-extralight leading-[1.1] tracking-tight"
             style={{ fontFamily: "var(--font-syne)" }}
           >
-            Every change,
+            Every mixer change,
             <br />
-            <span className="gradient-text">capturé.</span>
+            <span className="gradient-text">captured.</span>
           </h2>
         </motion.div>
 
@@ -150,7 +153,7 @@ export default function DiffSection() {
                 <div className="h-2.5 w-2.5 rounded-full bg-accent/30" />
                 <div className="h-2.5 w-2.5 rounded-full bg-accent/30" />
                 <span className="ml-3 font-mono text-xs text-accent/70">
-                  stemhub — terminal
+                  StemHub plugin → branch history
                 </span>
               </div>
 
@@ -169,7 +172,7 @@ export default function DiffSection() {
             >
               <GitBranch size={20} strokeWidth={1.5} className="mb-3 text-accent" />
               <p className="text-sm font-light text-accent/90" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Unlimited versions
+                Unlimited branches
               </p>
               <p className="mt-1 text-xs text-accent/70" style={{ fontFamily: "var(--font-jakarta)" }}>
                 Explore without risk
@@ -182,10 +185,10 @@ export default function DiffSection() {
             >
               <GitCommit size={20} strokeWidth={1.5} className="mb-3 text-accent" />
               <p className="text-sm font-light text-accent/90" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Granular commits
+                Every save is a version
               </p>
               <p className="mt-1 text-xs text-accent/70" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Track by track
+                With a message to find it later
               </p>
             </motion.div>
 
@@ -193,12 +196,12 @@ export default function DiffSection() {
               className="absolute top-80 right-12 rounded-2xl border border-accent/20 bg-accent/15 dark:bg-background-tertiary/60 p-6 backdrop-blur-sm"
               style={{ y: floatY3 }}
             >
-              <GitMerge size={20} strokeWidth={1.5} className="mb-3 text-accent" />
+              <GitPullRequest size={20} strokeWidth={1.5} className="mb-3 text-accent" />
               <p className="text-sm font-light text-accent/90" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Smart merges
+                Pull requests
               </p>
               <p className="mt-1 text-xs text-accent/70" style={{ fontFamily: "var(--font-jakarta)" }}>
-                Merge your sessions
+                Review a branch, then accept it
               </p>
             </motion.div>
           </div>

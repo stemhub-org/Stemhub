@@ -79,7 +79,7 @@ export default function Hero() {
       >
         Decentralized versioning designed for producers.
         <br className="hidden sm:block" />
-        Every session, every track, every decision — preserved.
+        Every project, every version, every decision — preserved.
       </motion.p>
 
       {/* CTA Button */}
