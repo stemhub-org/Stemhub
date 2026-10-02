@@ -15,6 +15,7 @@
         "mixer": {
           "mixer_supported": true,
           "insert_count": 127,
+          "effect_slot_count": 10,
           "named_inserts_prefix": [
             "Master",
             "Audio track",
@@ -40,6 +41,7 @@
         "mixer": {
           "mixer_supported": true,
           "insert_count": 127,
+          "effect_slot_count": 0,
           "named_inserts_prefix": []
         }
       }

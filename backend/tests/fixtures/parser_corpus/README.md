@@ -14,6 +14,12 @@ Raw FLP fixtures live under `backend/tests/fixtures/parser_corpus/assets/fl_stud
 They were seeded from the vendored `PyFLP_v2` corpus so StemHub starts from
 known-good parser samples while owning its own test inputs.
 
+The corpus holds no FL Studio 2024 or 2025 project: those would carry personal
+data or Image-Line content. What the pinned parser must read in such files
+(event 172, the stored insert count, mixer parameters keyed from 448) is pinned
+on synthetic files in `backend/tests/test_parser_regressions.py`, next to the
+effect slots of the FL 20.8.4 reference project.
+
 ## Adding a fixture
 
 1. Add the `.flp` project file under `assets/fl_studio/`.
@@ -31,5 +37,5 @@ known-good parser samples while owning its own test inputs.
 - `kind`: currently only `fl_studio_project`
 - `expectations.parse`: `success` or `error`
 - `expectations.project`: optional project-level assertions for successful parses
-- `expectations.mixer`: optional assertions on the mixer StemHub reads from the project file (`fl_mixer.parse_fl_mixer`)
+- `expectations.mixer`: optional assertions on the mixer StemHub reads from the project file (`fl_mixer.parse_fl_mixer`): `mixer_supported`, `insert_count`, `effect_slot_count` (the loaded effect slots of all inserts), `named_inserts_prefix`, `flp_sha256`, `flp_size_bytes`
 - `expectations.error`: expected exception type and message substring for invalid fixtures
