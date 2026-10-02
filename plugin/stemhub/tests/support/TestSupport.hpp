@@ -16,7 +16,7 @@ namespace stemhub::test
 {
 Project makeProject(const juce::String& id, const juce::String& name);
 Branch makeBranch(const juce::String& id, const juce::String& projectId, const juce::String& name);
-VersionSummary makeVersion(const juce::String& id, const juce::String& branchId, const juce::String& commit);
+VersionSummary makeVersion(const juce::String& id, const juce::String& branchId, const juce::String& message);
 
 // The session's state on one line, for failure messages.
 juce::String describe(const StemhubSession& session);
@@ -27,13 +27,15 @@ bool waitUntil(StemhubSession& session, const std::function<bool()>& predicate, 
 // Waits for the running jobs to hand back this many results, whether applied or dropped.
 bool waitForResults(StemhubSession& session, int count, int timeoutMs = kWaitTimeoutMs);
 
-// Appends to a file and moves its modification time forward, like a DAW saving the project.
+// Appends to a file and moves its modification time forward, like a DAW saving the project file.
 void simulateDawSave(const juce::File& projectFile, const juce::String& extraContent);
 
-// A version manifest with a project file and tracks, each a (relative path, SHA-256) pair.
+// A version manifest with a project file and assets, each a (relative path, SHA-256) pair, in
+// the format manifestVersion names: 2 as the plugin writes it now, 1 as earlier plugins did.
 juce::var makeManifest(const juce::String& projectPath,
                        const juce::String& projectSha,
-                       const std::vector<std::pair<juce::String, juce::String>>& tracks);
+                       const std::vector<std::pair<juce::String, juce::String>>& assets,
+                       int manifestVersion = 2);
 
 // Everything on disk a test touches, removed afterwards.
 struct TestEnvironment
@@ -115,11 +117,11 @@ protected:
     }
 
     // With the saved token, as when the plugin window opens.
-    void restoreSavedSession(StemhubSession& session)
+    void resumeSignIn(StemhubSession& session)
     {
-        session.requestRestoreSavedSession();
+        session.requestResumeSignIn();
         expect(waitUntil(session, [&session] { return session.getState().isSignedIn() && !session.isBusy(); }),
-               "the saved session should restore: " + describe(session));
+               "the saved sign-in should resume: " + describe(session));
     }
 
     // Signed out, with nothing running: the login screen.
@@ -128,7 +130,7 @@ protected:
         return !session.getState().isSignedIn() && !session.isBusy();
     }
 
-    // With projectFile as its working file, as when the file is chosen on the grid first.
+    // With projectFile as its working copy, as when the file is chosen on the grid first.
     void openProject(StemhubSession& session, const juce::String& projectId, const juce::File& projectFile)
     {
         if (projectFile != juce::File())

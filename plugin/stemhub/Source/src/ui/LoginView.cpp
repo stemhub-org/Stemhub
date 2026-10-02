@@ -35,7 +35,7 @@ LoginLayout computeLayout(const int width, const int height)
 
 juce::StringArray heroLines()
 {
-    return { "OPEN", "THE", "SESSION." };
+    return { "OPEN", "THE", "PROJECT." };
 }
 
 void styleFieldLabel(juce::Label& label, const juce::String& text)
@@ -59,7 +59,7 @@ LoginView::LoginView()
     titleLabel.setBorderSize({});
 
     addAndMakeVisible(subtitleLabel);
-    subtitleLabel.setText("Sign in to sync your music projects.", juce::dontSendNotification);
+    subtitleLabel.setText("Sign in to version your music projects.", juce::dontSendNotification);
     subtitleLabel.setFont(theme::bodyFont(13.0f));
     subtitleLabel.setColour(juce::Label::textColourId, Theme::kInkSubtle);
     subtitleLabel.setJustificationType(juce::Justification::centredLeft);
@@ -152,7 +152,7 @@ void LoginView::paint(juce::Graphics& g)
 
     const auto layout = computeLayout(getWidth(), getHeight());
 
-    theme::paintMetaText(g, "StemHub / Session", layout.metaRow, Theme::kForeground);
+    theme::paintMetaText(g, "StemHub plugin", layout.metaRow, Theme::kForeground);
     theme::paintMetaText(g, "Version control for music", layout.metaRow, Theme::kForegroundSubtle,
                          juce::Justification::centredRight);
     g.setColour(Theme::kSurfaceBorder);
@@ -183,7 +183,7 @@ void LoginView::paint(juce::Graphics& g)
             baseline += lineStep;
     }
 
-    const auto tagText = "Save " + theme::middleDot() + " Sync " + theme::middleDot() + " Restore";
+    const auto tagText = "Save " + theme::middleDot() + " Refresh " + theme::middleDot() + " Restore";
     const auto tagWidth = juce::GlyphArrangement::getStringWidth(theme::labelFont(9.5f), tagText.toUpperCase()) + 20.0f;
     theme::paintTag(g, tagText,
                     { static_cast<float>(hero.getX()), baseline + 22.0f, tagWidth, 22.0f },
@@ -199,7 +199,7 @@ void LoginView::paint(juce::Graphics& g)
     footer.removeFromTop(16);
     g.setColour(Theme::kForegroundSubtle);
     g.setFont(theme::bodyFont(13.0f));
-    g.drawFittedText("Version every idea without leaving your DAW. Save snapshots, switch branches and pass the session on.",
+    g.drawFittedText("Version every idea without leaving your DAW. Save versions, switch branches and pass the project on.",
                      footer, juce::Justification::topLeft, 3, 1.0f);
 
     // Sign-in card: a Paper block colliding with the Ink field.
