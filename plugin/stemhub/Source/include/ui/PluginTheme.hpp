@@ -4,7 +4,7 @@
 
 #include "domain/Status.hpp"
 
-// StemHub identity system 2026: Ink / Paper / Blue, Syne display type over a
+// StemHub identity system 2026: Ink / Paper / Lime, Syne display type over a
 // Plus Jakarta Sans workhorse, hard edges, tracked uppercase meta labels and
 // block "pattern bars" lifted from the step-sequencer motif.
 namespace stemhub::plugin::theme
@@ -33,7 +33,7 @@ enum class ButtonVariant
 
 struct PluginTheme
 {
-    // Brand palette (Blue is kAccent below)
+    // Brand palette (Lime is kAccent below)
     inline static const juce::Colour kInk { 0xff0a0a0a };
     inline static const juce::Colour kPaper { 0xfff2efe6 };
     inline static const juce::Colour kSignal { 0xffff5a36 };
@@ -56,9 +56,10 @@ struct PluginTheme
     inline static const juce::Colour kInkSubtle { 0xff5c5a55 };
 
     // Signals
-    inline static const juce::Colour kAccent { 0xff00b8ff };
-    inline static const juce::Colour kAccentHover { 0xff4dceff };
-    inline static const juce::Colour kAccentPressed { 0xff0096d1 };
+    // Lime is for Ink surfaces: Ink on Lime is AAA, Lime on Paper is display only.
+    inline static const juce::Colour kAccent { 0xffc8ff00 };
+    inline static const juce::Colour kAccentHover { 0xffd9ff4d };
+    inline static const juce::Colour kAccentPressed { 0xffa4d100 };
     inline static const juce::Colour kWarning { 0xffffb020 };
     inline static const juce::Colour kError { 0xffff5a36 };
 };
@@ -147,7 +148,7 @@ void styleButton(juce::TextButton& button, ButtonVariant variant);
 void stylePrimaryButton(juce::TextButton& button);
 void styleSecondaryButton(juce::TextButton& button);
 void styleGhostButton(juce::TextButton& button);
-// Underlined text tab; the selected tab is Paper with a Blue rule.
+// Underlined text tab; the selected tab is Paper with a Lime rule.
 void styleTabButton(juce::TextButton& button, bool selected);
 void styleLinkButton(juce::TextButton& button, juce::Colour colour, juce::Colour hoverColour);
 // Keeps a primary button painted as active while disabled (e.g. "Signing in...").
