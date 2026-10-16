@@ -7,30 +7,30 @@ const steps = [
   {
     number: "01",
     icon: Download,
-    title: "Install the plugin",
+    title: "Install the StemHub plugin",
     description:
-      "Add StemHub to FL Studio or Ableton in one click. No setup required.",
+      "Add the StemHub plugin to FL Studio or Ableton Live in one click. No setup required.",
   },
   {
     number: "02",
     icon: GitCommit,
-    title: "Commit your sessions",
+    title: "Save versions",
     description:
-      "Every change is captured automatically. Name your versions, annotate your choices.",
+      "Save a version of your project from the StemHub plugin. Add a message to remember your choices.",
   },
   {
     number: "03",
     icon: GitBranch,
-    title: "Create versions",
+    title: "Create branches",
     description:
-      "Try new mixes without touching the original. Compare, roll back, and merge.",
+      "Try new ideas without touching the original. Compare versions, restore any of them, and open a pull request.",
   },
   {
     number: "04",
     icon: Share2,
     title: "Collaborate",
     description:
-      "Share a version with your team or clients. Everyone works on their own take.",
+      "Share a project with your team or clients. Everyone works on their own branch.",
   },
 ];
 
