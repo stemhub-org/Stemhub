@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Download, FileAudio, Loader2 } from "lucide-react";
-import { authFetch } from "@/lib/api";
+import { apiFetchResponse } from "@/lib/api";
 import { previewFilename, saveBlob } from "@/lib/download";
 import { useToast } from "@/components/ToastProvider";
 
@@ -20,7 +20,7 @@ export function PreviewDownload({ projectId, projectName, hasPreview }: PreviewD
         if (!projectId || !hasPreview || isDownloading) return;
         setIsDownloading(true);
         try {
-            const response = await authFetch<Response>(`/projects/${projectId}/preview`);
+            const response = await apiFetchResponse(`/projects/${projectId}/preview`);
             const blob = await response.blob();
             const filename = previewFilename(
                 response.headers.get("content-disposition"),

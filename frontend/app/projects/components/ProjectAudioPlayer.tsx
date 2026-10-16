@@ -2,7 +2,7 @@
 
 import { Play, Pause } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
-import { authFetch } from "@/lib/api";
+import { apiFetchResponse } from "@/lib/api";
 
 function WaveformPlaceholder({ progress }: { progress: number }) {
     const bars = [
@@ -66,7 +66,7 @@ export function ProjectAudioPlayer({ projectId, hasPreview }: ProjectAudioPlayer
         
         async function loadAudio() {
             try {
-                const response = await authFetch<Response>(`/projects/${projectId}/preview`);
+                const response = await apiFetchResponse(`/projects/${projectId}/preview`);
                 const blob = await response.blob();
                 objectUrl = URL.createObjectURL(blob);
                 setAudioUrl(objectUrl);
