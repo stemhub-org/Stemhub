@@ -22,44 +22,44 @@ interface Feature {
 const features: Feature[] = [
   {
     icon: GitBranch,
-    title: "Audio versions",
+    title: "Branches",
     description:
-      "Create alternate takes of your tracks without ever touching the original. Experiment freely, merge the best.",
+      "Try another idea on a branch without ever touching the original. Experiment freely, then open a pull request to bring the best one in.",
     size: "large",
   },
   {
     icon: History,
-    title: "Full timeline",
+    title: "Full history",
     description:
-      "Navigate the history of every track. Restore any state in a single click.",
+      "Browse every version of your project. Restore any of them into your DAW as a separate copy.",
     size: "default",
   },
   {
     icon: Shield,
     title: "End‑to‑end encryption",
     description:
-      "Your stems never leave your control. End‑to‑end encryption by default.",
+      "Your projects never leave your control. End‑to‑end encryption by default.",
     size: "default",
   },
   {
     icon: Layers,
-    title: "Track‑by‑track diff",
+    title: "Mixer diff",
     description:
-      "Compare two versions and see exactly what changed — track by track, effect by effect.",
+      "Each version shows what changed in the FL Studio mixer since the version it was saved from — insert by insert, effect slot by effect slot.",
     size: "default",
   },
   {
     icon: Users,
     title: "Real‑time collaboration",
     description:
-      "Share a version with your team. Everyone works on their take, then you merge the best.",
+      "Invite your team to a project. Everyone works on their own branch, then opens a pull request for you to accept.",
     size: "default",
   },
   {
     icon: Zap,
-    title: "Plugin natif",
+    title: "StemHub plugin",
     description:
-      "Intégré directement dans FL Studio et Ableton. Commitez sans quitter votre DAW. Zéro friction.",
+      "Runs right inside FL Studio and Ableton Live. Save versions without leaving your DAW. Zero friction.",
     size: "large",
   },
 ];

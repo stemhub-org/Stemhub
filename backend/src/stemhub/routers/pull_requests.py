@@ -1,10 +1,10 @@
 """Pull-request lifecycle endpoints (issue #250).
 
-A pull request proposes merging a source branch into a target branch of the
+A pull request proposes bringing a source branch into a target branch of the
 same project. This router covers the data model and the OPEN → CLOSED
-transition; the merge engine (OPEN → MERGED) is issue #253. Both MERGED and
-CLOSED are terminal — a closed PR is not reopened, users open a new one
-(SPECIFICATION.md §7, §19).
+transition; accepting (OPEN → MERGED, a promotion with no content merge) is
+issue #253. Both MERGED and CLOSED are terminal — a closed PR is not
+reopened, users open a new one (SPECIFICATION.md §19).
 
 Access control: creating and closing require write access (owner or
 Admin/Editor collaborator); listing and reading require read access. Both
@@ -171,9 +171,9 @@ async def close_pull_request(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Close a pull request without merging (OPEN → CLOSED).
+    """Close a pull request without accepting it (OPEN → CLOSED).
 
-    Not to be confused with the future ``/merge`` endpoint (issue #253).
+    Not to be confused with accepting it (issue #253).
     """
     pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
     await get_project_with_write_access(project_id=pull_request.project_id, current_user=current_user, db=db)

@@ -145,7 +145,7 @@ async def run_blob_gc(
 
     Deletes blobs where ref_count == 0 and older than the grace window.
     See docs/content-addressed-storage.md. Intended to be invoked by an
-    external scheduler; also usable ad-hoc from an admin session.
+    external scheduler; also usable ad hoc by a signed-in admin.
     """
     result = await sweep_orphan_blobs(
         db=db,

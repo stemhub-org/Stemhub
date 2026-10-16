@@ -26,7 +26,7 @@ This page outlines StemHub's infrastructure costs across three scenarios, consid
 
 ## 1,000 Users
 
-**Assumptions:** 5 projects/user on average, ~250 MB per project, 30 commits/month.
+**Assumptions:** 5 projects/user on average, ~250 MB per project, 30 saved versions/month.
 
 | Category | Service | Monthly Cost |
 |----------|---------|-------------|
@@ -38,7 +38,7 @@ This page outlines StemHub's infrastructure costs across three scenarios, consid
 | Auth | Custom Implementation | $0 |
 | Monitoring | Sentry + Google Cloud Monitoring | $30 |
 | Email | SendGrid Starter | $10 |
-| Backup | Automated snapshots | $5 |
+| Backup | Automated database backups | $5 |
 | Misc | Bandwidth, domain | $15 |
 
 **Total: ~$190/month — $2,280/year**
@@ -48,7 +48,7 @@ This page outlines StemHub's infrastructure costs across three scenarios, consid
 
 ## 10,000 Users
 
-**Assumptions:** 8 projects/user on average, ~300 MB per project (with FLAC compression applied), 40 commits/month.
+**Assumptions:** 8 projects/user on average, ~300 MB per project (with FLAC compression applied), 40 saved versions/month.
 
 | Category | Service | Monthly Cost |
 |----------|---------|-------------|

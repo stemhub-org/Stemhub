@@ -13,7 +13,7 @@ const plans = [
       "3 projects",
       "500 MB storage",
       "30‑day history",
-      "FL Studio & Ableton plugin",
+      "StemHub plugin for FL Studio & Ableton Live",
     ],
     cta: "Start for free",
     highlighted: false,
@@ -26,7 +26,7 @@ const plans = [
       "Unlimited projects",
       "50 GB storage",
       "Unlimited history",
-      "Versions & merges",
+      "Branches & pull requests",
       "Collaboration (up to 5 members)",
       "Priority support",
     ],
@@ -106,7 +106,7 @@ export default function Pricing() {
                     className="mb-6 inline-block rounded-full bg-foreground/10 px-3 py-1 text-xs font-light text-foreground"
                     style={{ fontFamily: "var(--font-jakarta)" }}
                   >
-                    Populaire
+                    Popular
                   </span>
                 )}
 

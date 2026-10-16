@@ -10,18 +10,22 @@ This backend depends on `PyFLP_v2` through a Git submodule, so StemHub does not 
 
 > **Note:** The backend no longer creates database tables automatically on startup. You must ensure all Alembic migrations are applied before starting the server. `bootstrap-backend.sh` handles this for local development.
 
-## Artifact storage configuration
+## Storage configuration
 
-The backend reads `STEMHUB_STORAGE_PROVIDER` from the environment:
+Uploaded files (the content-addressed blobs of each version's project file and
+assets, and each project's preview) go where `STEMHUB_STORAGE_PROVIDER` says:
 
-- `localfs` (default): artifacts are stored under `STEMHUB_ARTIFACTS_ROOT`.
-- `gcs`: artifacts are stored in Google Cloud Storage.
+- `localfs` (default): stored on disk under `STEMHUB_STORAGE_ROOT` (default
+  `backend/data/artifacts`, a historical directory name kept so existing blobs
+  are still found). The former name `STEMHUB_ARTIFACTS_ROOT` is still read when
+  `STEMHUB_STORAGE_ROOT` is unset, with a deprecation warning in the logs.
+- `gcs`: stored in Google Cloud Storage.
 
 Example settings:
 
 ```bash
 STEMHUB_STORAGE_PROVIDER=localfs
-STEMHUB_ARTIFACTS_ROOT=./backend/data/artifacts
+STEMHUB_STORAGE_ROOT=./backend/data/artifacts
 ```
 
 For Google Cloud Storage:
@@ -48,12 +52,26 @@ pip install -e backend
 ## Verify dependency wiring
 
 ```bash
-python -c "import pyflp; print(pyflp.__version__)"
+python -c "import pyflp; print(pyflp.__file__)"
 ```
+
+## How the parser is pinned
+
+The parser version is the commit of the `backend/vendor/PyFLP_v2` submodule,
+never a branch of the fork:
+
+- Local setups and CI install PyFLP from the submodule.
+- The Docker image copies the submodule into the build and installs it
+  (non-editable), so a CI or `docker compose` build needs the submodule checked
+  out (`git submodule update --init --recursive`), and the image must be
+  rebuilt after a bump.
+- `src/stemhub/parser_version.py` records the full commit as `PYFLP_COMMIT`.
+  Bump it together with the submodule pointer:
+  `tests/test_parser_version.py` fails while they differ.
 
 ## Parser fixture corpus
 
-StemHub keeps a parser validation corpus in `backend/tests/fixtures/parser_corpus/manifest.json`.
+StemHub keeps a parser validation corpus in `backend/tests/fixtures/parser_corpus/corpus.json`.
 
 Run the dedicated harness with:
 
@@ -61,21 +79,23 @@ Run the dedicated harness with:
 .venv/bin/pytest backend/tests/test_parser_fixture_corpus.py
 ```
 
-When adding new roadmap parser work, prefer extending the manifest and its stable expectations instead of relying on ad hoc local project exports. See `backend/tests/fixtures/parser_corpus/README.md` for the fixture format and extension rules.
+When adding new roadmap parser work, prefer extending the corpus and its stable expectations instead of relying on ad hoc local project files. See `backend/tests/fixtures/parser_corpus/README.md` for the fixture format and extension rules.
 
 ## Contributing to `PyFLP_v2`
 
 1. Work inside `backend/vendor/PyFLP_v2` on a branch.
 2. Push your branch and open a PR in `stemhub-org/PyFLP_v2`.
-3. After merge, update the submodule pointer in StemHub:
+3. After merge, update the submodule pointer in StemHub, and set
+   `PYFLP_COMMIT` in `backend/src/stemhub/parser_version.py` to the output of
+   `git -C backend/vendor/PyFLP_v2 rev-parse HEAD`:
 
 ```bash
 git submodule update --remote -- backend/vendor/PyFLP_v2
-git add backend/vendor/PyFLP_v2 .gitmodules
+git add backend/vendor/PyFLP_v2 .gitmodules backend/src/stemhub/parser_version.py
 git commit -m "chore: bump PyFLP_v2 submodule"
 ```
 
-The StemHub workflow `sync-pyflp-submodule.yml` can also open this PR automatically when upstream pushes trigger repository dispatch.
+The StemHub workflow `sync-pyflp-submodule.yml` can also open this PR automatically (against `dev`, with `PYFLP_COMMIT` updated) when upstream pushes trigger repository dispatch.
 
 ## Docker
 

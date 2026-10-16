@@ -1,0 +1,101 @@
+{
+  "schema": "stemhub.project-model",
+  "schema_version": "0.1.0",
+  "generator": {"name": "stemhub-fl", "version": "0.1.0", "pyflp": "54d2b96"},
+  "source": {"daw": "fl_studio", "daw_version": "25.2.3.5012", "ppq": 96},
+  "project": {"title": null, "artists": null, "genre": null},
+  "tempo_bpm": null,
+  "time_signature": {"numerator": 4, "denominator": 4},
+  "instruments": [
+    {
+      "id": "instrument:0",
+      "kind": "sampler",
+      "name": "Grv Kick",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {"fader": 0.78125, "db": null},
+      "pan": 0.0,
+      "insert": {"status": "unknown"},
+      "sample": {"location": "factory", "path": "%FLStudioFactoryData%/Data/Patches/Packs/Drums/Kicks/Grv Kick.wav"},
+      "plugin": null,
+      "extensions": {}
+    },
+    {
+      "id": "instrument:1",
+      "kind": "sampler",
+      "name": "Snare",
+      "color": "#5C656A",
+      "enabled": false,
+      "volume": {"fader": 0.5, "db": null},
+      "pan": 0.5,
+      "insert": {"status": "unknown"},
+      "sample": {"location": "external", "file_name": "snare_tight.wav"},
+      "plugin": null,
+      "extensions": {}
+    }
+  ],
+  "audio_sources": [],
+  "patterns": [
+    {
+      "id": "pattern:1",
+      "name": "Beat \ufffd",
+      "length_ticks": 384,
+      "notes": [
+        {"instrument_id": "instrument:0", "pitch": 60, "start_ticks": 0, "length_ticks": 24, "velocity": 0.78125, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 0}}},
+        {"instrument_id": "instrument:1", "pitch": 60, "start_ticks": 96, "length_ticks": 24, "velocity": 1.0, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 1}}},
+        {"instrument_id": "instrument:0", "pitch": 60, "start_ticks": 192, "length_ticks": 24, "velocity": 0.78125, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 2}}},
+        {"instrument_id": "instrument:1", "pitch": 60, "start_ticks": 288, "length_ticks": 24, "velocity": 1.0, "pan": 0.0, "fine_pitch_cents": 0, "extensions": {"fl_studio": {"ordinal": 3}}}
+      ],
+      "extensions": {}
+    }
+  ],
+  "arrangements": [
+    {
+      "id": "arrangement:0",
+      "name": "Arrangement",
+      "markers": [],
+      "tracks": [
+        {
+          "id": "track:1",
+          "number": 1,
+          "name": "",
+          "enabled": true,
+          "clips": [
+            {"kind": "pattern", "source_id": "pattern:1", "start_ticks": 0, "length_ticks": 384, "offset_start_ticks": null, "offset_end_ticks": null, "muted": false, "extensions": {"fl_studio": {"ordinal": 0}}},
+            {"kind": "pattern", "source_id": "pattern:1", "start_ticks": 384, "length_ticks": 384, "offset_start_ticks": null, "offset_end_ticks": null, "muted": true, "extensions": {"fl_studio": {"ordinal": 1}}}
+          ],
+          "extensions": {}
+        }
+      ],
+      "extensions": {}
+    }
+  ],
+  "current_arrangement_id": "arrangement:0",
+  "mixer": {
+    "inserts": [
+      {
+        "id": "insert:0",
+        "number": 0,
+        "name": "Master",
+        "enabled": true,
+        "volume": {"fader": 1.0, "db": null},
+        "pan": 0.0,
+        "stereo_separation": 0.0,
+        "sends": [],
+        "effect_slots": [],
+        "extensions": {}
+      }
+    ],
+    "extensions": {}
+  },
+  "automation": [],
+  "unsupported": [
+    {"path": "/tempo_bpm", "reason": "This project file stores no tempo event."},
+    {"path": "/instruments/0/insert", "reason": "FL Studio 24.2 and later store instrument routing in an event this reader does not decode yet."},
+    {"path": "/instruments/1/insert", "reason": "FL Studio 24.2 and later store instrument routing in an event this reader does not decode yet."}
+  ],
+  "warnings": [
+    {"path": "/patterns/0/name", "message": "The pattern name was not valid UTF-16 and was replaced."}
+  ],
+  "extensions": {}
+}

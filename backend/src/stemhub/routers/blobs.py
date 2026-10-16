@@ -146,7 +146,7 @@ async def download_blob(
     )
     blob = result.scalar_one_or_none()
     if blob is None:
-        raise HTTPException(status_code=404, detail="Blob not found")
+        raise HTTPException(status_code=404, detail="File not found")
 
     # Backends that support presigned URLs (e.g. GCS) return one and we
     # redirect the client to it — bytes never flow through the API server.

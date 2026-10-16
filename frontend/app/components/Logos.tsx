@@ -23,7 +23,7 @@ export default function Logos() {
           viewport={{ once: true }}
           transition={{ duration: 0.8 }}
         >
-          Compatible avec vos outils
+          Works with your tools
         </motion.p>
 
         <motion.div
