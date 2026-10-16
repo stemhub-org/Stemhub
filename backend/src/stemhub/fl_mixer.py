@@ -7,11 +7,14 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 from stemhub.dependency_guard import ensure_pyflp_available
 from stemhub.storage import StorageService
+
+logger = logging.getLogger(__name__)
 
 
 # PyFLP numbers inserts from -1 (Master); FlMixer uses FL Studio's numbering, where Master is 0.
@@ -344,7 +347,13 @@ def _parse_effect_slots(insert: Any) -> tuple[FlEffectSlot, ...]:
                     plugin_name=plugin_name,
                 )
             )
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "mixer insert slot extraction stopped early: iid=%s slots_collected=%d error=%s",
+            _safe_model_attr(insert, "iid"),
+            len(slots),
+            exc,
+        )
         return tuple(slots)
 
     slots.sort(key=lambda item: item.index)
