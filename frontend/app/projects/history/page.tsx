@@ -4,13 +4,14 @@ import type React from "react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { ProjectHeader } from "../components/ProjectHeader";
 import { ArrowLeft, Loader2, Info } from "lucide-react";
-import { authFetch } from "@/lib/api";
-import type { ProjectSummaryResponse, VersionDiffHistoryEntry } from "@/types/project";
+import { useBranchDiffHistory, useProjectSummary } from "@/lib/queries";
+import type { VersionDiffHistoryEntry } from "@/types/project";
 import { BranchPicker } from "../components/BranchPicker";
 import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 function formatTimeAgo(dateString: string): string {
     const now = new Date();
@@ -40,94 +41,40 @@ function formatSummaryLine(entry: VersionDiffHistoryEntry): string {
     return parts.join(" • ");
 }
 
+function FullPageError({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+    return (
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+            <ErrorState title="Couldn't load the history" error={error} onRetry={onRetry} className="max-w-md" />
+        </div>
+    );
+}
+
 function ProjectHistoryContent() {
-    const router = useRouter();
     const searchParams = useSearchParams();
     const projectId = searchParams.get("id");
-    const branchIdFromQuery = searchParams.get("branch_id") || "";
+    if (!projectId) return <FullPageError error={new Error("No project ID provided.")} />;
+    return <ProjectHistory projectId={projectId} requestedBranchId={searchParams.get("branch_id") || null} />;
+}
 
-    const [summary, setSummary] = useState<ProjectSummaryResponse | null>(null);
-    const [historyEntries, setHistoryEntries] = useState<VersionDiffHistoryEntry[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [selectedBranchId, setSelectedBranchId] = useState(branchIdFromQuery);
+function ProjectHistory({ projectId, requestedBranchId }: { projectId: string; requestedBranchId: string | null }) {
+    const router = useRouter();
+    const summaryQuery = useProjectSummary(projectId, requestedBranchId);
+    // The branch actually shown: the requested one, or the first branch when it is missing or gone.
+    const selectedBranchId = summaryQuery.data?.branchId ?? "";
+    const historyQuery = useBranchDiffHistory(selectedBranchId);
 
+    // Put the branch we fell back to in the URL. Skipped while the previous
+    // branch is still shown as placeholder data, or it would undo a branch switch.
+    const fellBack = !summaryQuery.isPlaceholderData && selectedBranchId !== "" && selectedBranchId !== requestedBranchId;
     useEffect(() => {
-        setSelectedBranchId(branchIdFromQuery);
-    }, [branchIdFromQuery]);
-
-    useEffect(() => {
-        if (!projectId) {
-            setLoading(false);
-            setError("No project ID provided.");
-            return;
-        }
-
-        let cancelled = false;
-
-        (async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                if (!selectedBranchId) {
-                    const data = await authFetch<ProjectSummaryResponse>(`/projects/${projectId}/summary`);
-
-                    if (cancelled) return;
-
-                    if (data.branches.length > 0) {
-                        const fallbackBranchId = data.branches[0].id;
-                        setSelectedBranchId(fallbackBranchId);
-                        router.replace(`/projects/history?id=${projectId}&branch_id=${fallbackBranchId}`);
-                        return;
-                    }
-
-                    setSummary(data);
-                    setHistoryEntries([]);
-                    return;
-                }
-
-                const [summaryData, historyData] = await Promise.all([
-                    authFetch<ProjectSummaryResponse>(`/projects/${projectId}/summary?branch_id=${selectedBranchId}`),
-                    authFetch<VersionDiffHistoryEntry[]>(`/branches/${selectedBranchId}/versions/diff-history`),
-                ]);
-
-                if (cancelled) return;
-
-                const branchExists = summaryData.branches.some((branch) => branch.id === selectedBranchId);
-                if (!branchExists && summaryData.branches.length > 0) {
-                    const fallbackBranchId = summaryData.branches[0].id;
-                    setSelectedBranchId(fallbackBranchId);
-                    router.replace(`/projects/history?id=${projectId}&branch_id=${fallbackBranchId}`);
-                    return;
-                }
-
-                setHistoryEntries(historyData);
-                setSummary(summaryData);
-            } catch (err) {
-                if (cancelled) return;
-                setError(err instanceof Error ? err.message : "Failed to load history");
-            } finally {
-                if (!cancelled) {
-                    setLoading(false);
-                }
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [projectId, router, selectedBranchId]);
-
-    const branches = summary?.branches || [];
+        if (fellBack) router.replace(`/projects/history?id=${projectId}&branch_id=${selectedBranchId}`);
+    }, [fellBack, projectId, router, selectedBranchId]);
 
     const handleBranchChange = (branchId: string) => {
-        setSelectedBranchId(branchId);
-        if (projectId) {
-            router.replace(`/projects/history?id=${projectId}&branch_id=${branchId}`);
-        }
+        router.replace(`/projects/history?id=${projectId}&branch_id=${branchId}`);
     };
 
-    if (loading) {
+    if (summaryQuery.isPending || (selectedBranchId && historyQuery.isPending)) {
         return (
             <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
                 <Loader2 className="size-8 text-accent animate-spin" />
@@ -135,13 +82,20 @@ function ProjectHistoryContent() {
         );
     }
 
-    if (error) {
+    if (summaryQuery.isError || historyQuery.isError) {
         return (
-            <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-                <p className="text-red-500">{error}</p>
-            </div>
+            <FullPageError
+                error={summaryQuery.error ?? historyQuery.error}
+                onRetry={() => {
+                    summaryQuery.refetch();
+                    if (selectedBranchId) historyQuery.refetch();
+                }}
+            />
         );
     }
+
+    const branches = summaryQuery.data.summary.branches;
+    const historyEntries = historyQuery.data ?? [];
 
     return (
         <div
