@@ -2,7 +2,8 @@
 
 import { useState, useRef } from "react";
 import { UploadCloud, Loader2 } from "lucide-react";
-import { API_URL } from "@/lib/api";
+import { apiFetch, errorMessage } from "@/lib/api";
+import { useToast } from "@/components/ToastProvider";
 
 interface AudioUploadButtonProps {
     projectId?: string;
@@ -12,6 +13,7 @@ interface AudioUploadButtonProps {
 export function AudioUploadButton({ projectId, onSuccess }: AudioUploadButtonProps) {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const toast = useToast();
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -23,24 +25,10 @@ export function AudioUploadButton({ projectId, onSuccess }: AudioUploadButtonPro
             const formData = new FormData();
             formData.append("preview", file);
 
-            const response = await fetch(`${API_URL}/projects/${projectId}/preview`, {
-                method: "POST",
-                credentials: "include",
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText || "Upload failed");
-            }
-
-            // Safely call the success callback to silently update
-            if (onSuccess) {
-                onSuccess();
-            }
+            await apiFetch(`/projects/${projectId}/preview`, { method: "POST", body: formData });
+            onSuccess?.();
         } catch (error) {
-            console.error("Upload error:", error);
-            alert("Failed to upload project preview. Please try again.");
+            toast.error(errorMessage(error, "Failed to upload project preview. Please try again."));
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) {
