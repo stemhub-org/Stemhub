@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -12,24 +12,14 @@ import {
     HardDrive,
     ChevronRight,
 } from "lucide-react";
-import { authFetch } from "@/lib/api";
+import { errorMessage } from "@/lib/api";
+import { useCreateProject, useCurrentUser, useProjects } from "@/lib/queries";
 import { Button } from "@/components/ui/Button";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import NewProjectModal from "@/components/NewProjectModal";
 import { useToast } from "@/components/ToastProvider";
-
-interface ProjectItem {
-    id: string;
-    name: string;
-    description: string | null;
-    category: string;
-    is_public: boolean;
-    owner_id: string;
-    created_at: string;
-    is_deleted: boolean;
-    deleted_at: string | null;
-}
 
 function formatTimeAgo(dateString: string): string {
     const now = new Date();
@@ -46,65 +36,53 @@ function formatTimeAgo(dateString: string): string {
 export default function DashboardPage() {
     const router = useRouter();
     const toast = useToast();
-    const [user, setUser] = useState<any>(null);
-    const [projects, setProjects] = useState<ProjectItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const userQuery = useCurrentUser();
+    const projectsQuery = useProjects();
+    const createProject = useCreateProject();
     const [showNewProject, setShowNewProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState("");
     const [newProjectDesc, setNewProjectDesc] = useState("");
     const [newProjectCategory, setNewProjectCategory] = useState("General");
-    const [creating, setCreating] = useState(false);
-
-    const fetchData = useCallback(async () => {
-        try {
-            const [userData, projectsData] = await Promise.all([
-                authFetch<any>("/auth/me"),
-                authFetch<ProjectItem[]>("/projects/"),
-            ]);
-            setUser(userData);
-            setProjects(projectsData);
-        } catch {
-            // If auth fails, user might need to login
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
 
     const handleCreateProject = async () => {
         if (!newProjectName.trim()) return;
-        setCreating(true);
         try {
-            const created = await authFetch<ProjectItem>("/projects/", {
-                method: "POST",
-                body: JSON.stringify({
-                    name: newProjectName.trim(),
-                    description: newProjectDesc.trim() || null,
-                    category: newProjectCategory,
-                }),
+            await createProject.mutateAsync({
+                name: newProjectName.trim(),
+                description: newProjectDesc.trim() || null,
+                category: newProjectCategory,
             });
-            setProjects((prev) => [created, ...prev]);
             setShowNewProject(false);
             setNewProjectName("");
             setNewProjectDesc("");
             setNewProjectCategory("General");
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Failed to create project");
-        } finally {
-            setCreating(false);
+            toast.error(errorMessage(err, "Failed to create project"));
         }
     };
 
-    if (loading) {
+    if (userQuery.isPending || projectsQuery.isPending) {
         return (
             <div className="flex h-full min-h-[50vh] items-center justify-center">
                 <div className="h-6 w-6 border-2 border-border-subtle border-t-accent rounded-full animate-spin" />
             </div>
         );
     }
+
+    if (projectsQuery.isError) {
+        return (
+            <div className="max-w-7xl mx-auto pt-8 px-4 lg:px-8">
+                <ErrorState
+                    title="Couldn't load your dashboard"
+                    error={projectsQuery.error}
+                    onRetry={() => projectsQuery.refetch()}
+                />
+            </div>
+        );
+    }
+
+    const user = userQuery.data;
+    const projects = projectsQuery.data;
 
     return (
         <div className="min-h-full bg-background">
@@ -260,7 +238,7 @@ export default function DashboardPage() {
                 onDescriptionChange={setNewProjectDesc}
                 category={newProjectCategory}
                 onCategoryChange={setNewProjectCategory}
-                creating={creating}
+                creating={createProject.isPending}
                 onCreate={handleCreateProject}
             />
         </div>

@@ -1,114 +1,52 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { Heart, History, Clock, Activity, Folder, Search, Plus, User, Loader2 } from "lucide-react";
-import { authFetch } from "@/lib/api";
+import { errorMessage } from "@/lib/api";
+import { useCreateProject, useCurrentUser, useProjects } from "@/lib/queries";
 import { useToast } from "@/components/ToastProvider";
-import { Button } from "@/components/ui/Button";
+import { ErrorState } from "@/components/ui/ErrorState";
 import NewProjectModal from "@/components/NewProjectModal";
 
-interface UserProfile {
-    id: string;
-    email: string;
-    username: string;
-    avatar_url?: string | null;
-    bio?: string | null;
-    location?: string | null;
-    website?: string | null;
-    genres?: string[] | null;
-    created_at: string;
-    is_active: boolean;
-}
-
-interface Project {
-    id: string;
-    owner_id: string;
-    name: string;
-    description?: string | null;
-    category?: string;
-    is_public: boolean;
-    created_at: string;
-    is_deleted: boolean;
-    deleted_at?: string | null;
-}
-
 export default function DashboardProjectsPage() {
-    const [user, setUser] = useState<UserProfile | null>(null);
-    const [projects, setProjects] = useState<Project[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const userQuery = useCurrentUser();
+    const projectsQuery = useProjects();
+    const createProject = useCreateProject();
     const [searchQuery, setSearchQuery] = useState("");
     const [favorites, setFavorites] = useState<Record<string, boolean>>({});
     const [showNewProject, setShowNewProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState("");
     const [newProjectDesc, setNewProjectDesc] = useState("");
     const [newProjectCategory, setNewProjectCategory] = useState("General");
-    const [creating, setCreating] = useState(false);
 
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
     const toast = useToast();
 
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            const [userRes, projectsRes] = await Promise.all([
-                authFetch<UserProfile>("/auth/me"),
-                authFetch<Project[]>("/projects/")
-            ]);
-
-            setUser(userRes);
-
-            const projectsData = Array.isArray(projectsRes)
-                ? projectsRes.filter((p: Project) => !p.is_deleted)
-                : [];
-
-            projectsData.sort(
-                (a, b) =>
-                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-            );
-
-            setProjects(projectsData);
-        } catch (err: any) {
-            console.error("Error fetching dashboard data:", err);
-            setError(err.message || "An error occurred while fetching data.");
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
     const handleCreateProject = async () => {
         if (!newProjectName.trim()) return;
-        setCreating(true);
         try {
-            const created = await authFetch<Project>("/projects/", {
-                method: "POST",
-                body: JSON.stringify({
-                    name: newProjectName.trim(),
-                    description: newProjectDesc.trim() || null,
-                    category: newProjectCategory,
-                }),
+            await createProject.mutateAsync({
+                name: newProjectName.trim(),
+                description: newProjectDesc.trim() || null,
+                category: newProjectCategory,
             });
-            setProjects((prev) => [created, ...prev]);
             setShowNewProject(false);
             setNewProjectName("");
             setNewProjectDesc("");
             setNewProjectCategory("General");
-        } catch (err: any) {
-            toast.error(err.message || "Failed to create project");
-        } finally {
-            setCreating(false);
+        } catch (err) {
+            toast.error(errorMessage(err, "Failed to create project"));
         }
     };
+
+    const user = userQuery.data;
+    const projects = [...(projectsQuery.data ?? [])].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
 
     const filteredProjects = projects.filter(p => 
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -132,22 +70,25 @@ export default function DashboardProjectsPage() {
         }).format(date);
     };
 
-    if (isLoading) {
+    if (userQuery.isPending || projectsQuery.isPending) {
         return (
             <div className="flex justify-center items-center min-h-[60vh]">
                 <Loader2 className="size-10 animate-spin text-accent" />
             </div>
         );
     }
-    
-    if (error) {
+
+    if (userQuery.isError || projectsQuery.isError) {
         return (
-            <div className="flex flex-col justify-center items-center min-h-[60vh] gap-4">
-                <p className="text-red-500 font-medium">Error loading dashboard</p>
-                <p className="text-foreground-muted text-sm">{error}</p>
-                <Button variant="outline" onClick={() => fetchData()}>
-                    Retry
-                </Button>
+            <div className="max-w-6xl mx-auto pt-6">
+                <ErrorState
+                    title="Error loading your projects"
+                    error={userQuery.error ?? projectsQuery.error}
+                    onRetry={() => {
+                        userQuery.refetch();
+                        projectsQuery.refetch();
+                    }}
+                />
             </div>
         );
     }
@@ -304,7 +245,7 @@ export default function DashboardProjectsPage() {
                 onDescriptionChange={setNewProjectDesc}
                 category={newProjectCategory}
                 onCategoryChange={setNewProjectCategory}
-                creating={creating}
+                creating={createProject.isPending}
                 onCreate={handleCreateProject}
             />
         </div>
