@@ -1,112 +1,99 @@
 #pragma once
 
 #include <atomic>
-#include <deque>
 #include <functional>
-#include <JuceHeader.h>
 #include <mutex>
+#include <utility>
+#include <vector>
 
-#include <cstdint>
+#include <JuceHeader.h>
 
-template <typename Payload>
+// Runs jobs on a small thread pool and hands their results to the message thread. Which results
+// still matter is the owner's call (StemhubSession tags each one with its request epoch); this
+// class only moves them between threads and makes sure no job outlives it.
+template <typename Result>
 class BackgroundJobCoordinator
 {
 public:
-    struct JobResult
-    {
-        uint64_t requestGeneration {};
-        uint64_t requestId {};
-        Payload payload;
-    };
+    // Hands the owner an extra result while the job runs, such as a progress report.
+    using Post = std::function<void(Result)>;
 
-    explicit BackgroundJobCoordinator(size_t workerCount)
-        : backgroundJobs(static_cast<int>(workerCount))
+    // onResultReady is called on the worker thread each time a result is queued; it should
+    // only schedule a takeResults() on the message thread.
+    BackgroundJobCoordinator(int workerCount, std::function<void()> onResultReady)
+        : resultReadyCallback(std::move(onResultReady)),
+          pool(juce::ThreadPoolOptions {}
+                   .withThreadName("Stemhub jobs")
+                   .withNumberOfThreads(workerCount))
     {
     }
 
     ~BackgroundJobCoordinator()
     {
-        backgroundJobs.removeAllJobs(true, 2000);
+        shutdown();
     }
 
-    void invalidateSession()
+    // Stops accepting work, asks the running jobs to stop, waits for them and drops their
+    // results. Owners call this before tearing down anything a job can reach, so no job
+    // outlives it. Jobs stop at their next check of isJobCancelled(), or when a request ends.
+    void shutdown()
     {
-        ++requestGeneration;
+        isClosed = true;
+        pool.removeAllJobs(true, -1);
 
         const std::lock_guard<std::mutex> lock(resultMutex);
         pendingResults.clear();
     }
 
-    uint64_t getCurrentGeneration() const noexcept
+    // Asks the running jobs to stop, without waiting; each still hands back a result. Jobs
+    // waiting for a thread are left alone.
+    void stopRunningJobs()
     {
-        return requestGeneration.load();
+        RunningJobs running;
+        pool.removeAllJobs(true, 0, &running);
     }
 
-    void enqueue(std::function<Payload()> task, std::function<void()> completionCallback)
+    void enqueue(std::function<Result(const Post& post)> task)
     {
-        const auto requestId = ++requestCounter;
-        const auto currentGeneration = requestGeneration.load();
+        if (isClosed)
+            return;
 
-        backgroundJobs.addJob([this,
-                              requestId,
-                              currentGeneration,
-                              taskFn = std::move(task),
-                              completionFn = std::move(completionCallback)]() mutable
+        pool.addJob([this, job = std::move(task)]
         {
-            if (currentGeneration != requestGeneration.load())
-                return;
-
-            auto payload = taskFn();
-
-            if (currentGeneration != requestGeneration.load())
-                return;
-
-            JobResult result { currentGeneration, requestId, std::move(payload) };
-
-            {
-                const std::lock_guard<std::mutex> lock(resultMutex);
-                pendingResults.push_back(std::move(result));
-            }
-
-            completionFn();
+            const Post post = [this](Result result) { queue(std::move(result)); };
+            queue(job(post));
         });
     }
 
-    template <typename ApplyResult>
-    bool flushResults(ApplyResult&& applyResult)
+    // The results queued since the last call, oldest first.
+    std::vector<Result> takeResults()
     {
-        std::deque<JobResult> results;
-
-        {
-            const std::lock_guard<std::mutex> lock(resultMutex);
-            std::swap(results, pendingResults);
-        }
-
-        if (results.empty())
-            return false;
-
-        const auto activeGeneration = requestGeneration.load();
-        bool didApply = false;
-
-        while (!results.empty())
-        {
-            auto result = std::move(results.front());
-            results.pop_front();
-
-            if (result.requestGeneration != activeGeneration)
-                continue;
-
-            applyResult(std::move(result));
-            didApply = true;
-        }
-
-        return didApply;
+        const std::lock_guard<std::mutex> lock(resultMutex);
+        return std::exchange(pendingResults, {});
     }
 
 private:
-    std::deque<JobResult> pendingResults;
-    mutable std::mutex resultMutex;
-    std::atomic<uint64_t> requestGeneration { 0 };
-    std::atomic<uint64_t> requestCounter { 0 };
-    juce::ThreadPool backgroundJobs;
+    struct RunningJobs final : juce::ThreadPool::JobSelector
+    {
+        bool isJobSuitable(juce::ThreadPoolJob* job) override { return job->isRunning(); }
+    };
+
+    void queue(Result result)
+    {
+        {
+            const std::lock_guard<std::mutex> lock(resultMutex);
+            if (isClosed)
+                return;
+
+            pendingResults.push_back(std::move(result));
+        }
+
+        resultReadyCallback();
+    }
+
+    std::function<void()> resultReadyCallback;
+    std::mutex resultMutex;
+    std::vector<Result> pendingResults;
+    std::atomic<bool> isClosed { false };
+    juce::ThreadPool pool;
 };
