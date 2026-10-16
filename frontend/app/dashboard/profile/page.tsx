@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queries";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import {
@@ -33,6 +35,7 @@ const GENRE_GROUPS = [
 
 export default function ProfilePage() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
     const [user, setUser] = useState<any>(null);
@@ -180,7 +183,7 @@ export default function ProfilePage() {
 
             const updatedUser = await response.json();
             setUser(updatedUser);
-            window.dispatchEvent(new Event("user-updated"));
+            queryClient.setQueryData(queryKeys.currentUser, updatedUser);
             setIsEditModalOpen(false);
         } catch (err: any) {
             alert(err.message);

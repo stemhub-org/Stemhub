@@ -12,7 +12,9 @@ import {
     ChevronLeft,
     LogOut,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
+import { apiFetch } from "@/lib/api";
 
 const navigation = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -30,6 +32,7 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
     const pathname = usePathname();
     const router = useRouter();
     const { resolvedTheme } = useTheme();
+    const queryClient = useQueryClient();
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -39,21 +42,12 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
     const isLight = mounted && resolvedTheme === "light";
 
     const handleLogout = async () => {
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            await fetch(`${apiUrl}/auth/logout`, {
-                method: "POST",
-                credentials: "include",
-            }).catch(() => {
-                // Ignore network errors to still allow client-side logout
-            });
-
-            if (typeof window !== "undefined") {
-                localStorage.removeItem("access_token");
-            }
-        } finally {
-            router.push("/login");
-        }
+        // Sign out locally even when the server can't be reached.
+        await apiFetch("/auth/logout", { method: "POST", redirectOnUnauthorized: false }).catch(() => undefined);
+        localStorage.removeItem("access_token");
+        // Don't show this user's data to whoever signs in next.
+        queryClient.clear();
+        router.push("/login");
     };
 
     return (
