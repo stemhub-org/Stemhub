@@ -139,7 +139,8 @@ describe("apiFetch", () => {
 
 describe("apiFetchResponse", () => {
     it("returns the raw response for downloads", async () => {
-        const response = new Response(new Blob(["audio"]), {
+        // Bytes, not a Blob: on Node 20 jsdom's Blob can't back a Node Response.
+        const response = new Response(new TextEncoder().encode("audio"), {
             status: 200,
             headers: { "Content-Type": "audio/mpeg" },
         });
