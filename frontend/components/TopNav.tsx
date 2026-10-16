@@ -4,8 +4,8 @@ import Link from "next/link";
 import { Bell, Sun, User as UserIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
+import { useCurrentUser } from "@/lib/queries";
 
 type TopNavProps = {
     onToggleSidebar?: () => void;
@@ -16,28 +16,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
     const router = useRouter();
     const { resolvedTheme, setTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
-    const [userData, setUserData] = useState<any>(null);
-
-    const fetchUser = async () => {
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const response = await fetch(`${apiUrl}/auth/me`, {
-                credentials: "include"
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setUserData(data);
-            }
-        } catch (error) {
-            console.error("Failed to fetch user data", error);
-        }
-    };
-
-    useEffect(() => {
-        fetchUser();
-        window.addEventListener("user-updated", fetchUser);
-        return () => window.removeEventListener("user-updated", fetchUser);
-    }, []);
+    const { data: userData } = useCurrentUser();
 
     return (
         <header className="h-20 border-b border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 backdrop-blur-xl flex items-center justify-between px-6 lg:px-8 z-10 sticky top-0">
