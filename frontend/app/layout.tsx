@@ -15,8 +15,8 @@ const syne = localFont({
 
 const jakarta = localFont({
   src: [
-    { path: "../public/fonts/jakarta-latin.woff2", weight: "200 600", style: "normal" },
-    { path: "../public/fonts/jakarta-latin-ext.woff2", weight: "200 600", style: "normal" },
+    { path: "../public/fonts/jakarta-latin.woff2", weight: "200 800", style: "normal" },
+    { path: "../public/fonts/jakarta-latin-ext.woff2", weight: "200 800", style: "normal" },
   ],
   variable: "--font-jakarta",
   display: "swap",
