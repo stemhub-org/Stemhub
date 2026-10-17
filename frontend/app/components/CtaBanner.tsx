@@ -1,74 +1,36 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { ArrowRight } from "lucide-react";
-import Link from "next/link";
+import { useRef } from "react";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { CONTAINER, WipeLink } from "./landing";
 
 export default function CtaBanner() {
+  const ref = useRef<HTMLElement>(null);
+  const reduceMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "start 25%"] });
+  // The lime panel opens from an inset card to full bleed as it reaches the top.
+  const clipPath = useTransform(
+    scrollYProgress,
+    [0, 1],
+    ["inset(14% 7% 14% 7% round 28px)", "inset(0% 0% 0% 0% round 0px)"]
+  );
+  const scale = useTransform(scrollYProgress, [0, 1], [0.86, 1]);
+
   return (
-    <section className="relative overflow-hidden px-6 py-32 md:px-12">
-      {/* Background glow */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div
-          className="h-[500px] w-[700px] rounded-full opacity-25 blur-[140px]"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(156,87,223,0.35) 0%, transparent 70%)",
-          }}
-        />
-      </div>
-
-      <div className="relative z-10 mx-auto max-w-3xl text-center">
+    <motion.section ref={ref} style={reduceMotion ? undefined : { clipPath }} className="bg-lime text-ink">
+      <div className={`${CONTAINER} flex flex-wrap items-end justify-between gap-8 py-24 md:py-32`}>
         <motion.h2
-          className="mb-6 text-[clamp(2rem,5vw,4rem)] font-extralight leading-[1.1] tracking-tight"
-          style={{ fontFamily: "var(--font-syne)" }}
-          initial={{ opacity: 0, y: 40 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          style={reduceMotion ? undefined : { scale }}
+          className="font-display origin-bottom-left text-[clamp(2.5rem,8vw,7.25rem)] leading-[0.88] font-extrabold tracking-[-0.04em] uppercase"
         >
-          Ready to never
+          Drop the perfect.
           <br />
-          <span className="text-accent">lose an idea again?</span>
+          Share the spark.
         </motion.h2>
-
-        <motion.p
-          className="mx-auto mb-10 max-w-md text-base font-light leading-relaxed text-foreground"
-          style={{ fontFamily: "var(--font-jakarta)" }}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-        >
-          Join producers who no longer let chance decide
-          the fate of their projects.
-        </motion.p>
-
-        <motion.div
-          className="flex flex-col items-center justify-center gap-4 sm:flex-row"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <Link
-            href="/register"
-            className="flex items-center gap-2 rounded-full bg-foreground px-8 py-4 text-sm font-light tracking-wide text-background transition-all duration-300 hover:bg-accent"
-            style={{ fontFamily: "var(--font-jakarta)" }}
-          >
-            Create an account
-            <ArrowRight size={16} strokeWidth={1.5} />
-          </Link>
-
-          <a
-            href="#product"
-            className="rounded-full border border-foreground/20 px-8 py-4 text-sm font-light tracking-wide text-foreground transition-all duration-300 hover:bg-foreground/5 hover:border-foreground/30"
-            style={{ fontFamily: "var(--font-jakarta)" }}
-          >
-            Learn more
-          </a>
-        </motion.div>
+        <WipeLink href="/register" variant="ink" size="lg">
+          Drop a stem +
+        </WipeLink>
       </div>
-    </section>
+    </motion.section>
   );
 }

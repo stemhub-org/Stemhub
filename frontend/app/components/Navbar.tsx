@@ -1,137 +1,104 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Menu, Sun } from "lucide-react";
+import { useState } from "react";
 import Link from "next/link";
-import { useTheme } from "next-themes";
+import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "framer-motion";
+import { Menu, X } from "lucide-react";
+import { BrandTile, Wordmark } from "./BrandMark";
+import { CONTAINER, EASE_OUT, EASE_SNAP, LABEL, WipeLink } from "./landing";
 
 const navLinks = [
-  { label: "Product", href: "#product" },
+  { label: "How it works", href: "#how" },
+  { label: "The diff", href: "#product" },
   { label: "Features", href: "#features" },
   { label: "Pricing", href: "#pricing" },
 ];
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const { resolvedTheme, setTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
+  const [hidden, setHidden] = useState(false);
+  const { scrollY } = useScroll();
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 50);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  // Gets out of the way while reading down, comes back as soon as you scroll up.
+  useMotionValueEvent(scrollY, "change", (latest) => {
+    const previous = scrollY.getPrevious() ?? 0;
+    setHidden(latest > previous && latest > 160 && !mobileOpen);
+  });
 
   return (
     <motion.header
-      initial={{ y: -20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-      className={`fixed top-0 left-0 z-50 w-full transition-all duration-500 ${
-        scrolled
-          ? "border-b border-accent/10 bg-background/80 backdrop-blur-xl dark:bg-background/90"
-          : "bg-transparent"
-      }`}
+      initial={{ y: "-100%" }}
+      animate={{ y: hidden ? "-100%" : "0%" }}
+      transition={{ duration: 0.5, ease: hidden ? EASE_SNAP : EASE_OUT }}
+      className="fixed inset-x-0 top-0 z-50 bg-paper/95 text-ink backdrop-blur-sm"
     >
-      <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-12">
-        <Link href="/" className="text-xl font-medium tracking-tight" style={{ fontFamily: "var(--font-syne)" }}>
-          stemhub<span className="text-accent">.</span>
+      <nav className={`${CONTAINER} flex items-center justify-between gap-6 border-b-2 border-ink py-4`}>
+        <Link href="/" className="flex items-center gap-2.5" aria-label="StemHub home">
+          <BrandTile className="h-9 w-9" />
+          <Wordmark className="text-xl" />
         </Link>
 
-        <div className="hidden items-center gap-10 md:flex">
+        <div className={`hidden items-center gap-7 md:flex ${LABEL}`}>
           {navLinks.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className="text-sm font-light tracking-wide text-foreground transition-colors duration-300 hover:opacity-80"
-              style={{ fontFamily: "var(--font-jakarta)" }}
-            >
+            <a key={link.href} href={link.href} className="group relative py-2">
               {link.label}
+              <span className="absolute inset-x-0 bottom-1 h-0.5 origin-left scale-x-0 bg-ink transition-transform duration-300 ease-snap group-hover:scale-x-100" />
             </a>
           ))}
         </div>
 
-        <div className="hidden items-center gap-4 md:flex">
-          <Link
-            href="/login"
-            className="text-sm font-light tracking-wide text-foreground transition-colors duration-300 hover:opacity-80"
-            style={{ fontFamily: "var(--font-jakarta)" }}
-          >
-            Log in
+        <div className="hidden items-center gap-2 md:flex">
+          <Link href="/login" className="px-3 py-3 text-sm font-medium hover:underline">
+            Sign in
           </Link>
-          <Link
-            href="/register"
-            className="rounded-full border border-foreground/20 px-6 py-2.5 text-sm font-light tracking-wide text-foreground transition-all duration-300 hover:bg-foreground/5 hover:border-foreground/30"
-            style={{ fontFamily: "var(--font-jakarta)" }}
-          >
-            Get started
-          </Link>
-          <button
-            type="button"
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-            className="p-2 rounded-full hover:bg-foreground/5 text-foreground transition-colors"
-            aria-label="Toggle theme"
-            title={isDark ? "Light mode" : "Dark mode"}
-          >
-            <Sun size={18} />
-          </button>
+          <WipeLink href="/register" variant="lime" size="sm">
+            Drop a stem +
+          </WipeLink>
         </div>
 
         <button
-          className="md:hidden"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Menu"
+          type="button"
+          className="flex h-11 w-11 items-center justify-center md:hidden"
+          onClick={() => setMobileOpen((open) => !open)}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileOpen}
         >
-          <Menu size={20} strokeWidth={1.5} />
+          {mobileOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
       </nav>
 
-      {mobileOpen && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="border-b border-accent/10 bg-background/90 dark:bg-background/95 px-6 pb-6 backdrop-blur-xl md:hidden"
-        >
-          {navLinks.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className="block py-3 text-sm font-light text-foreground"
-              onClick={() => setMobileOpen(false)}
-            >
-              {link.label}
-            </a>
-          ))}
-          <div className="mt-3 flex flex-col gap-3">
-            <Link
-              href="/login"
-              className="text-sm font-light text-foreground"
-              onClick={() => setMobileOpen(false)}
-            >
-              Log in
-            </Link>
-            <Link
-              href="/register"
-              className="inline-block rounded-full border border-foreground/20 text-foreground px-6 py-2.5 text-center text-sm font-light"
-              onClick={() => setMobileOpen(false)}
-            >
-              Get started
-            </Link>
-            <button
-              type="button"
-              onClick={() => { setTheme(isDark ? "light" : "dark"); setMobileOpen(false); }}
-              className="flex items-center gap-2 text-sm font-light text-foreground"
-              aria-label="Toggle theme"
-            >
-              <Sun size={18} /> {isDark ? "Light mode" : "Dark mode"}
-            </button>
-          </div>
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: "auto" }}
+            exit={{ height: 0 }}
+            transition={{ duration: 0.4, ease: EASE_SNAP }}
+            className="overflow-hidden border-b-2 border-ink bg-paper md:hidden"
+          >
+            <div className={`${CONTAINER} flex flex-col gap-1 py-4`}>
+              {navLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className="font-display py-2 text-3xl font-extrabold uppercase tracking-[-0.03em]"
+                >
+                  {link.label}
+                </a>
+              ))}
+              <div className="mt-4 flex gap-2">
+                <WipeLink href="/login" variant="outline" className="flex-1">
+                  Sign in
+                </WipeLink>
+                <WipeLink href="/register" variant="ink" className="flex-1">
+                  Drop a stem +
+                </WipeLink>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.header>
   );
 }

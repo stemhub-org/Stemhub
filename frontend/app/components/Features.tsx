@@ -1,179 +1,59 @@
 "use client";
 
-import { useRef } from "react";
 import { motion } from "framer-motion";
-import {
-  GitBranch,
-  History,
-  Shield,
-  Layers,
-  Zap,
-  Users,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { CONTAINER, EASE_SNAP, RevealHeading, SECTION_TITLE } from "./landing";
 
-interface Feature {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  size: "large" | "default";
-}
+type Tone = "ink" | "outline" | "lime";
 
-const features: Feature[] = [
+const features: { title: string; description: string; tone: Tone }[] = [
   {
-    icon: GitBranch,
     title: "Branches",
-    description:
-      "Try another idea on a branch without ever touching the original. Experiment freely, then open a pull request to bring the best one in.",
-    size: "large",
+    description: "Another idea, same project, original untouched. Bring it back with a pull request.",
+    tone: "ink",
   },
-  {
-    icon: History,
-    title: "Full history",
-    description:
-      "Browse every version of your project. Restore any of them into your DAW as a separate copy.",
-    size: "default",
-  },
-  {
-    icon: Shield,
-    title: "End‑to‑end encryption",
-    description:
-      "Your projects never leave your control. End‑to‑end encryption by default.",
-    size: "default",
-  },
-  {
-    icon: Layers,
-    title: "Mixer diff",
-    description:
-      "Each version shows what changed in the FL Studio mixer since the version it was saved from — insert by insert, effect slot by effect slot.",
-    size: "default",
-  },
-  {
-    icon: Users,
-    title: "Real‑time collaboration",
-    description:
-      "Invite your team to a project. Everyone works on their own branch, then opens a pull request for you to accept.",
-    size: "default",
-  },
-  {
-    icon: Zap,
-    title: "StemHub plugin",
-    description:
-      "Runs right inside FL Studio and Ableton Live. Save versions without leaving your DAW. Zero friction.",
-    size: "large",
-  },
+  { title: "Full history", description: "Every version. Restore any of them into your DAW as a separate copy.", tone: "outline" },
+  { title: "Mixer diff", description: "What changed in the FL Studio mixer, slot by slot.", tone: "lime" },
+  { title: "Collabs", description: "Invite your crew. You decide what goes into main.", tone: "outline" },
+  { title: "Encrypted", description: "End-to-end encryption by default. Your stems stay yours.", tone: "ink" },
+  { title: "In your DAW", description: "Save, restore and switch branches without leaving the session.", tone: "outline" },
 ];
 
-function FeatureCard({
-  feature,
-  index,
-}: {
-  feature: Feature;
-  index: number;
-}) {
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    cardRef.current.style.setProperty("--mouse-x", `${x}px`);
-    cardRef.current.style.setProperty("--mouse-y", `${y}px`);
-  };
-
-  const Icon = feature.icon;
-  const isLarge = feature.size === "large";
-
-  return (
-    <motion.div
-      ref={cardRef}
-      className={`group relative overflow-hidden rounded-2xl border border-accent/20 bg-accent/10 dark:bg-background-tertiary/50 transition-all duration-500 hover:scale-[1.02] hover:border-accent/40 ${
-        isLarge ? "col-span-1 md:col-span-2 p-10" : "col-span-1 p-8"
-      }`}
-      onMouseMove={handleMouseMove}
-      initial={{ opacity: 0, y: 40 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-80px" }}
-      transition={{
-        duration: 0.6,
-        delay: index * 0.08,
-        ease: [0.16, 1, 0.3, 1],
-      }}
-    >
-      {/* Glow effect following mouse */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-        style={{
-          background:
-            "radial-gradient(400px circle at var(--mouse-x) var(--mouse-y), rgba(156,87,223,0.08), transparent 40%)",
-        }}
-      />
-
-      <div className={`relative z-10 ${isLarge ? "max-w-md" : ""}`}>
-        <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-accent/10 bg-accent/[0.06]">
-          <Icon size={20} strokeWidth={1.5} className="text-accent" />
-        </div>
-
-        <h3
-          className={`mb-3 font-light tracking-tight ${isLarge ? "text-xl" : "text-lg"}`}
-          style={{ fontFamily: "var(--font-syne)" }}
-        >
-          {feature.title}
-        </h3>
-
-        <p
-          className="text-[0.85rem] font-light leading-[1.7] text-foreground"
-          style={{ fontFamily: "var(--font-jakarta)" }}
-        >
-          {feature.description}
-        </p>
-      </div>
-    </motion.div>
-  );
-}
+// Resting colours, and the colours each block flips to on hover.
+const TONES: Record<Tone, { block: string; text: string }> = {
+  ink: { block: "bg-ink text-paper hover:bg-lime hover:text-ink", text: "text-paper-soft group-hover:text-ink" },
+  outline: {
+    block: "border-2 border-ink hover:bg-ink hover:text-paper",
+    text: "text-ink-soft group-hover:text-paper-soft",
+  },
+  lime: { block: "bg-lime hover:bg-ink hover:text-paper", text: "group-hover:text-paper-soft" },
+};
 
 export default function Features() {
   return (
-    <section id="features" className="relative px-6 py-32 md:px-12">
-      <div className="mx-auto max-w-7xl">
-        {/* Section header */}
-        <motion.div
-          className="mb-20 text-center"
-          initial={{ opacity: 0, y: 40 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <p
-            className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-accent"
-            style={{ fontFamily: "var(--font-jakarta)" }}
-          >
-            Features
-          </p>
-          <h2
-            className="mx-auto max-w-xl text-[clamp(2rem,5vw,4.5rem)] font-extralight leading-[1.1] tracking-tight"
-            style={{ fontFamily: "var(--font-syne)" }}
-          >
-            Everything you need.
-            <br />
-            <span className="text-foreground">Nothing more.</span>
-          </h2>
-        </motion.div>
-
-        {/* Bento Grid — row 1: large + small + small, row 2: small + small + large */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {/* Row 1 */}
-          <FeatureCard feature={features[0]} index={0} />
-          <FeatureCard feature={features[1]} index={1} />
-          <FeatureCard feature={features[2]} index={2} />
-
-          {/* Row 2 */}
-          <FeatureCard feature={features[3]} index={3} />
-          <FeatureCard feature={features[4]} index={4} />
-          <FeatureCard feature={features[5]} index={5} />
-        </div>
-      </div>
+    <section id="features" className={`${CONTAINER} flex scroll-mt-24 flex-col gap-12 py-24 md:py-32`}>
+      <RevealHeading text="Built to hit." className={SECTION_TITLE} />
+      <motion.div
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-10% 0px" }}
+        transition={{ staggerChildren: 0.07 }}
+      >
+        {features.map((feature) => {
+          const tone = TONES[feature.tone];
+          return (
+            <motion.article
+              key={feature.title}
+              variants={{ hidden: { opacity: 0, y: 48, scale: 0.96 }, visible: { opacity: 1, y: 0, scale: 1 } }}
+              transition={{ duration: 0.55, ease: EASE_SNAP }}
+              className={`group flex min-h-[210px] flex-col justify-between gap-4 p-7 transition-colors duration-300 ease-snap ${tone.block}`}
+            >
+              <h3 className="font-display text-[28px] font-extrabold tracking-[-0.03em] uppercase">{feature.title}</h3>
+              <p className={`leading-relaxed transition-colors duration-300 ${tone.text}`}>{feature.description}</p>
+            </motion.article>
+          );
+        })}
+      </motion.div>
     </section>
   );
 }
