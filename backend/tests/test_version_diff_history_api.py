@@ -9,10 +9,10 @@ from fastapi.testclient import TestClient
 
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
-from stemhub.flp_mixer_snapshot import (
-    MixerInsertSnapshot,
-    MixerProjectSnapshot,
-    MixerSlotSnapshot,
+from stemhub.fl_mixer import (
+    FlEffectSlot,
+    FlMixer,
+    FlMixerInsert,
 )
 from stemhub.models import User, Version
 from stemhub.routers import versions as versions_router_module
@@ -42,28 +42,28 @@ def _build_version(
     source_daw: str | None = "FL Studio",
     source_project_filename: str | None = "demo.flp",
     parent_version_id=None,
-    commit_message="Compare me",
+    message="Compare me",
 ) -> Version:
     manifest_json = {
-        "manifest_version": 1,
+        "manifest_version": 2,
         "project_file": {
             "sha256": uuid.uuid4().hex + uuid.uuid4().hex,
             "size_bytes": 1024,
-            "filename": source_project_filename or "demo.flp",
+            "path": source_project_filename or "demo.flp",
         },
-        "tracks": [],
+        "assets": [],
     }
     return Version(
         id=uuid.uuid4(),
         branch_id=branch_id,
         parent_version_id=parent_version_id,
-        commit_message=commit_message,
+        message=message,
         created_at=datetime.now(timezone.utc),
         is_deleted=False,
         source_daw=source_daw,
         source_project_filename=source_project_filename,
         manifest_json=manifest_json,
-        manifest_version=1,
+        manifest_version=2,
     )
 
 
@@ -72,10 +72,10 @@ def _create_test_client(
     monkeypatch,
     current_user: User,
     versions: list[Version],
-    load_snapshot_side_effect,
+    load_mixer_side_effect,
 ):
-    """load_snapshot_side_effect receives a Version and returns a
-    MixerProjectSnapshot, or raises HTTPException/RuntimeError to test error paths."""
+    """load_mixer_side_effect receives a Version and returns an FlMixer,
+    or raises HTTPException/RuntimeError to test error paths."""
     app = FastAPI()
     app.include_router(versions_router)
     session = DummyAsyncSession()
@@ -100,9 +100,9 @@ def _create_test_client(
         del db
         return [version for version in versions if version.branch_id == branch_id]
 
-    async def fake_load_snapshot_for_compare(*, version, project_id, db, storage):
+    async def fake_load_mixer_for_compare(*, version, project_id, db, storage):
         del project_id, db, storage
-        result = load_snapshot_side_effect(version)
+        result = load_mixer_side_effect(version)
         if isinstance(result, Exception):
             raise result
         return result
@@ -115,8 +115,8 @@ def _create_test_client(
     )
     monkeypatch.setattr(
         versions_router_module,
-        "_load_snapshot_for_compare",
-        fake_load_snapshot_for_compare,
+        "_load_mixer_for_compare",
+        fake_load_mixer_for_compare,
     )
 
     return TestClient(app)
@@ -125,29 +125,29 @@ def _create_test_client(
 def test_list_version_diff_history_returns_compared_and_initial_entries(monkeypatch) -> None:
     branch_id = uuid.uuid4()
     current_user = _build_user()
-    oldest = _build_version(branch_id=branch_id, commit_message="Oldest")
-    newest = _build_version(branch_id=branch_id, parent_version_id=oldest.id, commit_message="Newest")
+    oldest = _build_version(branch_id=branch_id, message="Oldest")
+    newest = _build_version(branch_id=branch_id, parent_version_id=oldest.id, message="Newest")
 
-    snapshots = {
-        oldest.id: MixerProjectSnapshot(
-            inserts=(MixerInsertSnapshot(iid=0, name="Master", enabled=True, volume=12800, pan=0, slots=()),)
+    mixers = {
+        oldest.id: FlMixer(
+            inserts=(FlMixerInsert(index=0, name="Master", enabled=True, volume=12800, pan=0, slots=()),)
         ),
-        newest.id: MixerProjectSnapshot(
+        newest.id: FlMixer(
             inserts=(
-                MixerInsertSnapshot(
-                    iid=0,
+                FlMixerInsert(
+                    index=0,
                     name="Master",
                     enabled=True,
                     volume=14000,
                     pan=0,
                     slots=(
-                        MixerSlotSnapshot(
+                        FlEffectSlot(
                             index=1,
                             name="Soft Clipper",
                             internal_name="Fruity Soft Clipper",
                             enabled=True,
-                            mix=6400,
-                            plugin_key="Fruity Soft Clipper",
+                            dry_wet=6400,
+                            plugin_name="Fruity Soft Clipper",
                         ),
                     ),
                 ),
@@ -159,7 +159,7 @@ def test_list_version_diff_history_returns_compared_and_initial_entries(monkeypa
         monkeypatch=monkeypatch,
         current_user=current_user,
         versions=[newest, oldest],
-        load_snapshot_side_effect=lambda version: snapshots[version.id],
+        load_mixer_side_effect=lambda version: mixers[version.id],
     )
 
     response = client.get(f"/branches/{branch_id}/versions/diff-history")
@@ -177,29 +177,31 @@ def test_list_version_diff_history_returns_compared_and_initial_entries(monkeypa
     ]
     assert payload[1]["version"]["id"] == str(oldest.id)
     assert payload[1]["status"] == "initial"
-    assert payload[1]["status_message"] == "Initial snapshot on this branch."
+    assert payload[1]["status_message"] == "First version on this branch."
+    assert payload[0]["version"]["message"] == "Newest"
+    assert "commit_message" not in payload[0]["version"]
 
 
 def test_list_version_diff_history_marks_unsupported_versions(monkeypatch) -> None:
     branch_id = uuid.uuid4()
     current_user = _build_user()
-    oldest = _build_version(branch_id=branch_id, commit_message="Oldest")
+    oldest = _build_version(branch_id=branch_id, message="Oldest")
     newest = _build_version(
         branch_id=branch_id,
         parent_version_id=oldest.id,
         source_daw="Ableton Live",
         source_project_filename="demo.als",
-        commit_message="Newest",
+        message="Newest",
     )
 
     def refuse(version):
-        raise AssertionError(f"Snapshots should not be loaded for {version.id}")
+        raise AssertionError(f"Mixers should not be loaded for {version.id}")
 
     client = _create_test_client(
         monkeypatch=monkeypatch,
         current_user=current_user,
         versions=[newest, oldest],
-        load_snapshot_side_effect=refuse,
+        load_mixer_side_effect=refuse,
     )
 
     response = client.get(f"/branches/{branch_id}/versions/diff-history")
@@ -213,19 +215,19 @@ def test_list_version_diff_history_marks_unsupported_versions(monkeypatch) -> No
 def test_list_version_diff_history_uses_parent_version_before_previous_version(monkeypatch) -> None:
     branch_id = uuid.uuid4()
     current_user = _build_user()
-    oldest = _build_version(branch_id=branch_id, commit_message="Oldest")
-    middle = _build_version(branch_id=branch_id, commit_message="Middle")
+    oldest = _build_version(branch_id=branch_id, message="Oldest")
+    middle = _build_version(branch_id=branch_id, message="Middle")
     newest = _build_version(
         branch_id=branch_id,
         parent_version_id=oldest.id,
-        commit_message="Newest",
+        message="Newest",
     )
 
     client = _create_test_client(
         monkeypatch=monkeypatch,
         current_user=current_user,
         versions=[newest, middle, oldest],
-        load_snapshot_side_effect=lambda _version: MixerProjectSnapshot(inserts=()),
+        load_mixer_side_effect=lambda _version: FlMixer(inserts=()),
     )
 
     response = client.get(f"/branches/{branch_id}/versions/diff-history")
@@ -238,21 +240,21 @@ def test_list_version_diff_history_uses_parent_version_before_previous_version(m
 def test_list_version_diff_history_returns_parser_errors_as_unsupported(monkeypatch) -> None:
     branch_id = uuid.uuid4()
     current_user = _build_user()
-    oldest = _build_version(branch_id=branch_id, commit_message="Oldest")
-    newest = _build_version(branch_id=branch_id, parent_version_id=oldest.id, commit_message="Newest")
+    oldest = _build_version(branch_id=branch_id, message="Oldest")
+    newest = _build_version(branch_id=branch_id, parent_version_id=oldest.id, message="Newest")
 
-    def raise_snapshot(version):
+    def raise_read_error(version):
         del version
         raise HTTPException(
             status_code=422,
-            detail="Snapshot archive does not contain an FL Studio project file.",
+            detail="The FL Studio project file could not be read.",
         )
 
     client = _create_test_client(
         monkeypatch=monkeypatch,
         current_user=current_user,
         versions=[newest, oldest],
-        load_snapshot_side_effect=raise_snapshot,
+        load_mixer_side_effect=raise_read_error,
     )
 
     response = client.get(f"/branches/{branch_id}/versions/diff-history")
@@ -260,14 +262,14 @@ def test_list_version_diff_history_returns_parser_errors_as_unsupported(monkeypa
     assert response.status_code == 200
     payload = response.json()
     assert payload[0]["status"] == "unsupported"
-    assert payload[0]["status_message"] == "Snapshot archive does not contain an FL Studio project file."
+    assert payload[0]["status_message"] == "The FL Studio project file could not be read."
 
 
-def test_list_version_diff_history_returns_runtime_snapshot_errors_as_unsupported(monkeypatch) -> None:
+def test_list_version_diff_history_returns_runtime_read_errors_as_unsupported(monkeypatch) -> None:
     branch_id = uuid.uuid4()
     current_user = _build_user()
-    oldest = _build_version(branch_id=branch_id, commit_message="Oldest")
-    newest = _build_version(branch_id=branch_id, parent_version_id=oldest.id, commit_message="Newest")
+    oldest = _build_version(branch_id=branch_id, message="Oldest")
+    newest = _build_version(branch_id=branch_id, parent_version_id=oldest.id, message="Newest")
 
     def raise_runtime(version):
         del version
@@ -280,7 +282,7 @@ def test_list_version_diff_history_returns_runtime_snapshot_errors_as_unsupporte
         monkeypatch=monkeypatch,
         current_user=current_user,
         versions=[newest, oldest],
-        load_snapshot_side_effect=raise_runtime,
+        load_mixer_side_effect=raise_runtime,
     )
 
     response = client.get(f"/branches/{branch_id}/versions/diff-history")

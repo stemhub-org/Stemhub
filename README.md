@@ -10,17 +10,17 @@ StemHub brings Git/GitHub workflows to music production, enabling producers to v
 
 ## What is StemHub?
 
-StemHub solves the version control problem that has plagued music production for decades. No more `project_final_v2_FINAL_real_THISONE.wav` — just clean commits, branches, and merge workflows that developers have enjoyed for 20 years.
+StemHub solves the version control problem that has plagued music production for decades. No more `project_final_v2_FINAL_real_THISONE.wav` — just saved versions, branches and pull requests, the workflow developers have enjoyed for 20 years.
 
 **Dual-component system:**
-- **StemHub Plugin (DAW)** — Commit, push, pull, and branch directly from your DAW
+- **StemHub plugin (in your DAW)** — Save versions, restore any of them, and switch branches without leaving your DAW
 - **StemHub Platform (Web)** — Cloud storage, collaboration tools, portfolio showcase, and cross-DAW exports
 
 ---
 
 ## Key Features
 
-- 🔄 **Git-like version control** — Commits, branches, merge, rollback
+- 🔄 **Git-like version control** — Versions, branches, pull requests, restore any version
 - ☁️ **Cloud-first** — Zero local file management, stream playback
 - 🔀 **Multi-DAW export** — Convert between Ableton, FL Studio, Reaper, Logic, Bitwig
 - 🤝 **Real collaboration** — Musical pull requests, timestamped comments, track locking
@@ -29,7 +29,7 @@ StemHub solves the version control problem that has plagued music production for
 
 ## Documentation
 
-Comprehensive documentation is available in our [Wiki](../../wiki):
+Comprehensive documentation is available in our [Wiki](../../wiki). In this repository, [docs/SPECIFICATION.md](./docs/SPECIFICATION.md) is the product specification, and its [glossary](./docs/SPECIFICATION.md#19--glossary) fixes the words we use (project file, asset, version, branch, save, restore…).
 
 ---
 
