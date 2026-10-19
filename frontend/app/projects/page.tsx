@@ -6,21 +6,21 @@ import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Settings, FileText } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
-import { RepositoryHeader } from "./components/RepositoryHeader";
-import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
-import { RepositoryBranchBar } from "./components/RepositoryBranchBar";
-import { RepositoryAudioPlayer } from "./components/RepositoryAudioPlayer";
-import { QuickExport } from "./components/QuickExport";
-import { RecentChanges } from "./components/RecentChanges";
+import { ProjectHeader } from "./components/ProjectHeader";
+import { ProjectPageHeader } from "./components/ProjectPageHeader";
+import { BranchPicker } from "./components/BranchPicker";
+import { ProjectAudioPlayer } from "./components/ProjectAudioPlayer";
+import { PreviewDownload } from "./components/PreviewDownload";
+import { RecentVersions } from "./components/RecentVersions";
 import { ContributionActivity } from "./components/ContributionActivity";
 import { TopContributors } from "./components/TopContributors";
-import { RepositoryFileList } from "./components/RepositoryFileList";
+import { ProjectFileList } from "./components/ProjectFileList";
 import { authFetch } from "@/lib/api";
 import type {
     ProjectSummaryResponse,
     ActivityStatsResponse,
     TopContributorsResponse,
-    TrackSummary,
+    AssetSummary,
 } from "@/types/project";
 import { ProjectSettings } from "./components/ProjectSettings";
 import { Card } from "@/components/ui/Card";
@@ -33,7 +33,22 @@ type CurrentUserSummary = {
     username: string | null;
 };
 
-function RepositoryPageContent() {
+// The file list of one version. Keyed by version id so a list fetched for an
+// earlier version (another branch, or a newer save) is never shown for this one.
+type VersionAssets = {
+    versionId: string;
+    assets: AssetSummary[];
+    error: string | null;
+};
+
+function formatFileCount(hasVersion: boolean, count: number, isLoading: boolean, loadError: string | null): string {
+    if (!hasVersion) return "No versions yet";
+    if (isLoading) return "Loading files…";
+    if (loadError) return "File list unavailable";
+    return `${count} audio & MIDI ${count === 1 ? "file" : "files"}`;
+}
+
+function ProjectPageContent() {
     const searchParams = useSearchParams();
     const projectId = searchParams.get("id");
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -51,7 +66,7 @@ function RepositoryPageContent() {
     const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
     const [currentUsername, setCurrentUsername] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"Project" | "Settings">("Project");
-    const [tracks, setTracks] = useState<TrackSummary[]>([]);
+    const [versionAssets, setVersionAssets] = useState<VersionAssets | null>(null);
 
     const fetchData = useCallback(async (projectId: string, branchId?: string) => {
         setIsLoading(true);
@@ -91,7 +106,7 @@ function RepositoryPageContent() {
             await authFetch(`/branches/${branchId}`, { method: "DELETE" });
             if (projectId) fetchData(projectId);
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Failed to delete workspace");
+            toast.error(err instanceof Error ? err.message : "Failed to delete branch");
         }
     };
 
@@ -105,7 +120,7 @@ function RepositoryPageContent() {
             setSelectedBranchId(createdBranch.id);
             fetchData(projectId, createdBranch.id);
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Failed to create workspace");
+            toast.error(err instanceof Error ? err.message : "Failed to create branch");
             throw err;
         }
     };
@@ -128,22 +143,26 @@ function RepositoryPageContent() {
         }
     }, [fetchData, projectId, selectedBranchId]);
 
-    // Best-effort: per-stem data only exists for versions created via the
-    // manifest/CAS flow. Fetched separately so a failure here never blocks
-    // the rest of the project overview.
+    // The latest version's audio & MIDI files, read from its manifest. Fetched
+    // separately so a failure here never blocks the rest of the project overview.
+    // Until the result for the current version arrives, the list shows as loading
+    // (see `assetsLoading` below) instead of an empty or previous version's list.
     useEffect(() => {
         const versionId = summary?.latest_version_id;
-        if (!versionId) {
-            setTracks([]);
-            return;
-        }
+        if (!versionId) return;
         let cancelled = false;
-        authFetch<TrackSummary[]>(`/versions/${versionId}/tracks`)
+        authFetch<AssetSummary[]>(`/versions/${versionId}/assets`)
             .then((data) => {
-                if (!cancelled) setTracks(data);
+                if (cancelled) return;
+                setVersionAssets({ versionId, assets: Array.isArray(data) ? data : [], error: null });
             })
-            .catch(() => {
-                if (!cancelled) setTracks([]);
+            .catch((err) => {
+                if (cancelled) return;
+                setVersionAssets({
+                    versionId,
+                    assets: [],
+                    error: err instanceof Error ? err.message : "Failed to load the file list",
+                });
             });
         return () => {
             cancelled = true;
@@ -175,13 +194,21 @@ function RepositoryPageContent() {
     if (!summary) return null;
     const selectedBranchName = summary.branches.find((branch) => branch.id === selectedBranchId)?.name || "main";
     const latestVersion = summary.recent_versions?.[0];
+    const hasVersion = Boolean(summary.latest_version_id);
+    // A list fetched for another version is dropped, and while the summary itself
+    // refreshes (e.g. after a branch switch) the latest version may change too.
+    const currentAssets =
+        versionAssets && versionAssets.versionId === summary.latest_version_id ? versionAssets : null;
+    const assetsLoading = hasVersion && (isLoading || currentAssets === null);
+    const assets = assetsLoading ? [] : (currentAssets?.assets ?? []);
+    const assetsError = assetsLoading ? null : (currentAssets?.error ?? null);
 
     return (
         <div
             className="min-h-screen bg-background text-foreground"
             style={{ "--accent": "#9C57DF" } as React.CSSProperties}
         >
-            <RepositoryHeader
+            <ProjectHeader
                 onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
                 sidebarOpen={sidebarOpen}
                 userAvatarUrl={currentUserAvatar}
@@ -216,7 +243,7 @@ function RepositoryPageContent() {
 
             <div className="relative z-0 p-6 space-y-6">
                 <Card interactive padding="none" className="overflow-hidden">
-                    <RepositoryPageHeader
+                    <ProjectPageHeader
                         ownerUsername={summary.project.owner.username}
                         projectName={summary.project.name}
                         branchName={selectedBranchName}
@@ -271,7 +298,7 @@ function RepositoryPageContent() {
                         >
                             <section className="flex min-w-0 flex-1 flex-col gap-6 self-start">
                                 <div className="flex items-center gap-3">
-                                    <RepositoryBranchBar
+                                    <BranchPicker
                                         branches={summary.branches}
                                         selectedBranchId={selectedBranchId}
                                         onBranchChange={setSelectedBranchId}
@@ -285,25 +312,16 @@ function RepositoryPageContent() {
                                 </div>
                                 <Card interactive padding="none">
                                     <div className="p-8">
-                                        <RepositoryAudioPlayer
+                                        <ProjectAudioPlayer
                                             projectId={projectId}
                                             hasPreview={summary.has_preview}
                                         />
                                     </div>
                                 </Card>
                                 <Card className="flex flex-wrap items-center gap-3">
-                                    {(() => {
-                                        // Two independent "has data" signals coexist:
-                                        //   - has_artifact: pre-manifest full-bundle upload (single blob)
-                                        //   - tracks.length > 0: CAS manifest with per-stem entries (spec §7)
-                                        // A version is "stored" if either is present.
-                                        const hasStoredData = Boolean(latestVersion?.has_artifact) || tracks.length > 0;
-                                        return (
-                                            <Badge tone={hasStoredData ? "success" : "neutral"}>
-                                                {hasStoredData ? "Data stored" : "No artifact"}
-                                            </Badge>
-                                        );
-                                    })()}
+                                    <Badge tone={assets.length > 0 ? "success" : "neutral"}>
+                                        {formatFileCount(hasVersion, assets.length, assetsLoading, assetsError)}
+                                    </Badge>
                                     {latestVersion?.source_daw && (
                                         <Badge tone="accent">{latestVersion.source_daw}</Badge>
                                     )}
@@ -314,20 +332,22 @@ function RepositoryPageContent() {
                                     )}
                                 </Card>
                                 <Card interactive padding="none">
-                                    <RepositoryFileList tracks={tracks} />
-                                </Card>
-                                <Card interactive>
-                                    <QuickExport
-                                        projectId={projectId}
-                                        projectName={summary.project.name}
-                                        branchName={selectedBranchName}
-                                        latestVersionId={summary.latest_version_id}
-                                        hasPreview={summary.has_preview}
-                                        hasArtifact={Boolean(latestVersion?.has_artifact)}
+                                    <ProjectFileList
+                                        assets={assets}
+                                        hasVersion={hasVersion}
+                                        isLoading={assetsLoading}
+                                        loadError={assetsError}
                                     />
                                 </Card>
                                 <Card interactive>
-                                    <RecentChanges
+                                    <PreviewDownload
+                                        projectId={projectId}
+                                        projectName={summary.project.name}
+                                        hasPreview={summary.has_preview}
+                                    />
+                                </Card>
+                                <Card interactive>
+                                    <RecentVersions
                                         versions={summary.recent_versions}
                                         projectId={projectId}
                                         branchId={selectedBranchId || undefined}
@@ -339,7 +359,7 @@ function RepositoryPageContent() {
                                 <Card interactive className="overflow-hidden">
                                     <ContributionActivity
                                         dailyActivity={activity?.daily_activity || []}
-                                        totalCommits={activity?.total_commits || 0}
+                                        totalVersions={activity?.total_versions || 0}
                                         totalContributors={activity?.total_contributors || 0}
                                     />
                                 </Card>
@@ -370,7 +390,7 @@ function RepositoryPageContent() {
     );
 }
 
-export default function RepositoryPage() {
+export default function ProjectPage() {
     return (
         <Suspense
             fallback={
@@ -379,7 +399,7 @@ export default function RepositoryPage() {
                 </div>
             }
         >
-            <RepositoryPageContent />
+            <ProjectPageContent />
         </Suspense>
     );
 }
