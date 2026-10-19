@@ -1,9 +1,8 @@
 # StemHub — Profil cible & personas (v2)
 
-> **Objectif obligatoire 1** — « Define your target » (livrable Epitech : fin octobre 2026).
-> **Version :** v2 du 19/10/2026, suite à la séance de mentorat n°3.
+> **Objectif obligatoire 1** — « Define your target ».
 > **Remplace** les 4 personas de [PERSONAS_USE_CASES.md](./PERSONAS_USE_CASES.md) comme référence de ciblage. Les cas d'usage de ce fichier restent valables.
-> **Statut :** ce sont des **proto-personas**. Ce sont des hypothèses construites à partir de ce que l'équipe connaît du terrain. Le guide Epitech précise qu'un persona écrit en octobre, avant tout échange, n'est qu'une hypothèse bien présentée. Chaque hypothèse est donc numérotée (H1…H10) et sera validée ou invalidée par les entretiens du §7. La version sourcée (v3) est prévue pour **fin janvier 2027**, donc avant l'échéance Epitech de fin mars.
+> **Statut :** ce sont des **proto-personas**. Ce sont des hypothèses construites à partir de ce que l'équipe connaît du terrain. Le guide Epitech précise qu'un persona écrit avant tout échange n'est qu'une hypothèse bien présentée. Chaque hypothèse est donc numérotée (H1…H10). Les entretiens du §7 la valident ou l'invalident, et c'est ce qui permet d'en faire un persona sourcé.
 
 Documents liés : [ACQUISITION_STRATEGY.md](./ACQUISITION_STRATEGY.md) (où et comment aller chercher cette cible), [PARTNERSHIPS.md](./PARTNERSHIPS.md), [CREDIBILITY.md](./CREDIBILITY.md).
 
@@ -42,10 +41,10 @@ Un prospect est **dans la cible** s'il remplit **C1, C2 et C3**. Les critères C
 | **C3** | Collabore | ≥ 1 prod co-créée, envoyée ou reçue sur les 3 derniers mois | Crédits « prod. X x Y » ou « w/ @… » dans les titres, cook-ups à plusieurs | « Raconte ta dernière collab » |
 | C4 | Échange des fichiers de projet | Partage de FLP zippés, de stems ou de loops, pas seulement des MP3 | — | « Quels fichiers vous vous envoyez ? » |
 | C5 | Peut installer un VST3 | Ordinateur Windows ou macOS personnel | — | Question au formulaire |
-| C6 | Francophone (phase 1) | — | Langue des posts | — |
+| C6 | Francophone | — | Langue des posts | — |
 | C7 | Majeur | ≥ 18 ans pour les entretiens et la beta | Déclaratif | Consentement à l'enregistrement |
 
-**Justification de C6 et C7.** Pendant la phase 1 (entretiens et tests UX en observation), on doit pouvoir mener des échanges longs et observer sans intervenir, donc en français. Les mineurs demandent un consentement parental pour l'enregistrement et le traitement des données (le service accepte les 15 ans et plus, cf. [SPECIFICATION.md §11.2](./SPECIFICATION.md), mais les tests sont réservés aux majeurs). Les producteurs anglophones forment le deuxième cercle, à partir de la beta (mars 2027).
+**Justification de C6 et C7.** Pendant les entretiens et les tests UX en observation, on doit pouvoir mener des échanges longs et observer sans intervenir, donc en français. Les mineurs demandent un consentement parental pour l'enregistrement et le traitement des données (le service accepte les 15 ans et plus, cf. [SPECIFICATION.md §11.2](./SPECIFICATION.md), mais les tests sont réservés aux majeurs). Les producteurs anglophones forment un deuxième cercle, une fois le parcours validé en français.
 
 ---
 
@@ -101,7 +100,7 @@ C'est le lien direct avec les canaux d'acquisition ([ACQUISITION_STRATEGY.md](./
 | **Après une prod** | Upload YouTube (« type beat »), BeatStars, story Instagram. Envoie des loops à d'autres producteurs. | YouTube, BeatStars, mail | Mail pro en description YouTube ou BeatStars. Crédits « prod. X x Y » pour repérer les collaborateurs. |
 | **Apprentissage** | Tutos FL Studio en français, threads d'entraide, packs gratuits | YouTube, Reddit r/FL_Studio, forums Audiofanzine | Posts « question » (pas de pub) sur les forums et Reddit. Partenariats avec des créateurs de tutos. |
 | **Week-end** | Session studio avec un artiste (studio loué ou home studio), open mic, beat battle, concert | Studios, salles, événements | IRL : beat battles, studios et écoles partenaires ([PARTNERSHIPS.md](./PARTNERSHIPS.md)). |
-| **Achats** | Plugins (pic au Black Friday), packs de samples, abonnements (BeatStars Pro, Splice, FL Cloud) | Sites d'éditeurs, Splice, BeatStars | Fenêtre de fin novembre, quand les producteurs pensent « outils ». Utile pour le calendrier de contenu. |
+| **Achats** | Plugins (pic au Black Friday), packs de samples, abonnements (BeatStars Pro, Splice, FL Cloud) | Sites d'éditeurs, Splice, BeatStars | Période du Black Friday, quand les producteurs pensent « outils » : moment propice pour leur parler d'un nouvel outil. |
 
 **Qui l'influence** : les producteurs plus gros qu'il suit, ses co-producteurs et les modérateurs des serveurs où il est actif. Il fait peu confiance à la publicité, d'où l'inutilité d'un post Instagram sponsorisé.
 
@@ -154,9 +153,9 @@ Pourquoi le nommer : il est **très nombreux et très visible** sur les réseaux
 
 ---
 
-## 7. Hypothèses à valider et plan de sourcing
+## 7. Hypothèses à valider et comment les sourcer
 
-**Plan** : **20 entretiens de 15 à 20 minutes d'ici fin novembre 2026** (environ 15 profils « Yanis » et 5 profils « Inès »), recrutés selon [ACQUISITION_STRATEGY.md](./ACQUISITION_STRATEGY.md). Chaque entretien fait l'objet d'une fiche (§8). Les personas v3 sourcés sont prévus fin janvier 2027.
+**Moyen** : **20 entretiens de 15 à 20 minutes** (environ 15 profils « Yanis » et 5 profils « Inès »), recrutés selon [ACQUISITION_STRATEGY.md](./ACQUISITION_STRATEGY.md). Chaque entretien fait l'objet d'une fiche (§8). Les fiches servent de sources aux personas.
 
 | # | Hypothèse | Seuil de validation (sur 20 entretiens) | Statut | Sources (n° de fiches) |
 |---|---|---|---|---|
@@ -166,7 +165,7 @@ Pourquoi le nommer : il est **très nombreux et très visible** sur les réseaux
 | H4 | La peur de perdre ses prods (crash, disque) est réelle | ≥ 50 % ont déjà perdu du travail | À valider | — |
 | H5 | Le vocabulaire Git rebute | Mots compris ou non lors d'un test rapide de libellés | À valider | — |
 | H6 / H7 | (Inès) Les retours d'artistes sont dispersés et la version validée est difficile à retrouver | ≥ 3 « Inès » sur 5 | À valider | — |
-| H8 | Le referral passe par l'invitation de collab | Mesuré en beta : ≥ 1 invitation par testeur actif | Beta (mars 2027) | — |
+| H8 | Le referral passe par l'invitation de collab | ≥ 1 invitation par testeur actif | Mesuré pendant la beta | — |
 | H9 | Discord est le lieu principal d'échange entre producteurs | ≥ 60 % sont actifs sur au moins un serveur de prod | À valider | — |
 | H10 | Une capacité à payer existe | ≥ 30 % paient déjà un abonnement musical (Splice, BeatStars Pro, FL Cloud…) | À valider | — |
 
@@ -207,7 +206,7 @@ Une hypothèse invalidée n'est pas un échec. Elle **resserre** le persona, et 
 **Clôture**
 
 13. Qui d'autre je devrais interroger ? *(effet boule de neige, à tracer dans le CRM)*
-14. Est-ce que je peux te recontacter pour tester une maquette en janvier ? *(vivier pour le test UX du round 1)*
+14. Est-ce que je peux te recontacter pour tester une maquette ? *(vivier pour les tests UX)*
 
 ### Fiche d'entretien (une par entretien)
 

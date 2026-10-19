@@ -1,40 +1,42 @@
-# StemHub — Canaux d'acquisition : aller chercher les premiers producteurs
+# StemHub — Canaux d'acquisition : comment aller chercher les premiers producteurs
 
-> **Objectif obligatoire 1** — « Recruit your beta testers » (note de stratégie de recrutement : fin janvier 2027). Ce document en est la **phase 1** : trouver et contacter les **20 premiers producteurs** pour les entretiens (novembre 2026) et les tests UX du round 1 (janvier 2027).
-> **Version :** v1 du 19/10/2026, suite à la séance de mentorat n°3.
+> **Objectif visé :** obtenir les **20 premiers échanges** avec des producteurs de la cible, puis transformer une partie d'entre eux en testeurs (tests UX, beta).
 > **Cible :** [TARGET_PROFILE.md](./TARGET_PROFILE.md) (critères C1 à C7, personas « Yanis » et « Inès »).
+> Ce document décrit **les moyens** pour y arriver : où trouver les producteurs, comment les aborder, quoi leur offrir, comment s'organiser et comment mesurer ce qui marche.
 
 ---
 
-## 1. Principes (retours de la séance 3)
+## 1. Principes
 
-1. **Outbound d'abord.** On va chercher les producteurs là où ils sont, un par un. Un post Instagram sponsorisé n'est **pas** une stratégie : la cible fait peu confiance à la pub, et une pub ne crée ni conversation ni preuve exploitable pour le jury.
-2. **Du 1-to-1, même si ça ne passe pas à l'échelle.** Pour les 20 premiers, on chasse les profils individuellement sur les réseaux. Le referral et l'acquisition « scalable » viendront en phase 2 (§9).
+1. **Outbound d'abord.** On va chercher les producteurs là où ils sont, un par un. Un post Instagram sponsorisé n'est **pas** une stratégie : la cible fait peu confiance à la pub, et une pub ne crée ni conversation ni preuve exploitable.
+2. **Du 1-to-1, même si ça ne passe pas à l'échelle.** Pour les 20 premiers, on chasse les profils individuellement sur les réseaux. Le referral et les relais (§8) viennent s'ajouter ensuite, ils ne remplacent pas ce travail.
 3. **On demande une expérience, pas un avis sur StemHub.** Le premier message propose un échange de 15 minutes sur leur façon de travailler (guide d'entretien : [TARGET_PROFILE.md §8](./TARGET_PROFILE.md)). On ne pitche pas le produit.
 4. **On donne avant de demander.** On participe dans les serveurs (retours sur les prods des autres), on écoute la prod de la personne avant de lui écrire, et on propose une contrepartie (§5).
-5. **On respecte les règles de chaque lieu.** Pas de lien dans le premier message, pas de DM non sollicités là où le règlement l'interdit, et on passe par les modérateurs avant tout post. Un ban sur un gros serveur ferme un canal pour toute l'année.
-6. **Tout est tracé.** Chaque contact est noté dans le CRM (§6) avec son canal. C'est la « traçabilité du recrutement » exigée par Epitech, et c'est ce qui permet de savoir quel canal marche.
+5. **On respecte les règles de chaque lieu.** Pas de lien dans le premier message, pas de DM non sollicités là où le règlement l'interdit, et on passe par les modérateurs avant tout post. Un ban sur un gros serveur ferme un canal définitivement.
+6. **Tout est tracé.** Chaque contact est noté dans le CRM (§6) avec son canal. C'est la traçabilité du recrutement exigée par Epitech, et c'est ce qui permet de savoir quel canal marche.
 
 ---
 
-## 2. Objectif chiffré et entonnoir
-
-| Étape | Objectif d'ici la séance 4 (~9 nov.) | Objectif fin novembre | Hypothèse de conversion (à mesurer) |
-|---|---|---|---|
-| Prospects qualifiés listés (C1 à C3 vérifiés avant contact) | 120 | 200 | — |
-| Contactés (message personnalisé) | 80 | 170 | — |
-| Réponses | 15 | 40 | ~20 % en froid, ~60 % en réseau proche |
-| Entretiens réalisés | 8 | **20** | ~50 % des réponses |
-| OK pour un test UX en janvier | 5 | 12 | ~60 % des interviewés |
-| Recommandations obtenues (Q13) | 5 | 20 | ≥ 1 par entretien |
-
-Les taux de conversion sont des **hypothèses de départ**. On les remplace par les taux mesurés après la première semaine. Si un canal tombe sous 10 % de réponse après 30 contacts, on change le message. S'il reste sous 10 % après 30 contacts de plus, on le dépriorise (§7).
-
----
-
-## 3. Les canaux, par ordre de priorité
+## 2. Les canaux, par ordre de priorité
 
 <!-- CHANNELS_PLACEHOLDER -->
+
+---
+
+## 3. Combien de contacts pour 20 échanges
+
+Ordre de grandeur pour dimensionner l'effort. Les taux sont des **hypothèses de départ** ; on les remplace par les taux réellement mesurés (§7).
+
+| Étape | Volume nécessaire | Hypothèse de conversion |
+|---|---|---|
+| Prospects qualifiés listés (C1 à C3 vérifiés avant contact) | ~200 | — |
+| Contactés avec un message personnalisé | ~170 | — |
+| Réponses | ~40 | ~20 % en froid, ~60 % en réseau proche |
+| **Échanges réalisés** | **20** | ~50 % des réponses |
+| Volontaires pour tester une maquette | ~12 | ~60 % des interviewés |
+| Recommandations obtenues (question 13 du guide) | ~20 | ≥ 1 par échange |
+
+Le réseau proche convertit environ trois fois mieux que le froid. Chaque recommandation obtenue en fin d'échange vaut donc plus qu'un nouveau contact à froid.
 
 ---
 
@@ -53,7 +55,7 @@ Ce sont des **gabarits** : chaque message contient au moins **une ligne personne
 >
 > Salut [pseudo],
 > J'ai écouté [titre], [détail]. Je fais partie d'une équipe de 6 étudiants d'Epitech qui travaille sur la collaboration entre producteurs sur FL Studio. Avant de construire quoi que ce soit, on interroge des beatmakers qui font des co-prods pour comprendre comment ils s'échangent leurs projets et ce qui coince.
-> Est-ce que tu aurais 15 minutes en visio ou en vocal dans les deux prochaines semaines ? En échange : un accès gratuit à vie à l'outil quand il sortira, et ton nom dans les « producteurs fondateurs » si tu le souhaites.
+> Est-ce que tu aurais 15 minutes en visio ou en vocal ? En échange : un accès gratuit à vie à l'outil quand il sortira, et ton nom dans les « producteurs fondateurs » si tu le souhaites.
 > [Prénom], StemHub
 
 **D. Message à un modérateur ou admin de serveur Discord** (avant tout post sur le serveur)
@@ -66,14 +68,14 @@ Ce sont des **gabarits** : chaque message contient au moins **une ligne personne
 
 *(Version anglaise pour r/FL_Studio : « How do you keep track of FLP versions when you co-produce? », même structure.)*
 
-**F. Relance unique** (J+5, même canal)
+**F. Relance unique** (5 jours après, même canal)
 > Re [pseudo], je me permets une seule relance : toujours partant pour 15 min sur ta façon de bosser en collab ? Si c'est pas le moment, aucun souci. Force pour [projet ou prochaine sortie].
 
-**G. Réseau proche et recommandation** (après une recommandation obtenue en Q13)
+**G. Réseau proche et recommandation** (après une recommandation obtenue en fin d'échange)
 > Salut [pseudo], [prénom de la personne qui recommande] m'a dit que tu fais souvent des co-prods sur FL. On interroge des beatmakers pour un projet étudiant sur la façon de collaborer. Tu aurais 15 min cette semaine ?
 
-**H. Après l'entretien** (le jour même)
-> Merci pour ton temps [pseudo] ! [Une chose apprise de l'entretien]. Comme promis : [contrepartie]. Si tu penses à un ou deux potes beatmakers qui bossent souvent à plusieurs, je veux bien que tu me mettes en contact. Et on te recontacte en janvier pour tester la maquette.
+**H. Après l'échange** (le jour même)
+> Merci pour ton temps [pseudo] ! [Une chose apprise pendant l'échange]. Comme promis : [contrepartie]. Si tu penses à un ou deux potes beatmakers qui bossent souvent à plusieurs, je veux bien que tu me mettes en contact. On te recontactera pour tester la maquette.
 
 ---
 
@@ -81,70 +83,60 @@ Ce sont des **gabarits** : chaque message contient au moins **une ligne personne
 
 | Contrepartie | Pour qui | Coût pour l'équipe |
 |---|---|---|
-| **Accès beta + plan Studio gratuit à vie** (déjà prévu, [SPECIFICATION.md §13.2](./SPECIFICATION.md)) | Toute personne qui fait un entretien ou un test | Nul avant le lancement payant |
+| **Accès beta + plan Studio gratuit à vie** (déjà prévu, [SPECIFICATION.md §13.2](./SPECIFICATION.md)) | Toute personne qui fait un échange ou un test | Nul avant le lancement payant |
 | **Crédit « producteur fondateur »** sur le site et dans l'app | Interviewés et testeurs | Nul |
 | **Mise en avant d'une prod** sur nos canaux (post ou story « prod de la semaine ») | Interviewés qui le souhaitent | Une publication, qui alimente aussi la ligne éditoriale |
-| **Synthèse anonymisée** des entretiens (« comment 20 beatmakers gèrent leurs versions ») | Interviewés, serveurs et partenaires | Une page, utile aussi pour l'objectif C |
+| **Synthèse anonymisée** des échanges (« comment 20 beatmakers gèrent leurs versions ») | Interviewés, serveurs et partenaires | Une page, réutilisable pour l'objectif C |
 
 ---
 
 ## 6. Organisation et suivi
 
-### Rôles (proposition à valider en sprint review)
+### Répartition des canaux (proposition à valider en équipe)
 
-| Membre | Canaux | Quota indicatif |
+| Membre | Canaux | Volume indicatif |
 |---|---|---|
 | **JB** (lead communauté) | Discord (relations avec les modérateurs + DM), Reddit et forums | 5 contacts par jour ouvré |
 | **Erwan** | Réseau proche, profils « Inès » (Instagram pro, LinkedIn, studios), lien avec les partenaires | 3 contacts par jour |
 | **Gabin, Dryss** | Instagram / TikTok : prospection par hashtags et crédits « prod. X x Y » | 4 contacts par jour chacun |
 | **Hubert, Raphaël** | YouTube et BeatStars : producteurs en collab, contact par mail | 4 contacts par jour chacun |
 
-Chaque entretien se fait **à deux** : une personne pose les questions, l'autre note les verbatims. Tout le monde fait des entretiens, pas seulement JB.
+Chaque échange se fait **à deux** : une personne pose les questions, l'autre note les verbatims. Tout le monde fait des échanges, pas seulement JB.
 
 ### Le CRM (Notion ou Google Sheet partagé)
 
 Une ligne par prospect. **Colonnes :**
-`id · pseudo · lien du profil · canal (discord/insta/tiktok/youtube/beatstars/reddit/forum/IRL/réseau) · lieu précis (nom du serveur, hashtag, vidéo…) · C1 · C2 · C3 · C4 · C5 · C6 · C7 · persona (Yanis/Inès) · membre de l'équipe · date du 1er contact · gabarit utilisé · réponse (o/n) · date de relance · statut · date d'entretien · n° de fiche d'entretien · OK test UX · recommandé par · notes`
+`id · pseudo · lien du profil · canal (discord/insta/tiktok/youtube/beatstars/reddit/forum/IRL/réseau) · lieu précis (nom du serveur, hashtag, vidéo…) · C1 · C2 · C3 · C4 · C5 · C6 · C7 · persona (Yanis/Inès) · membre de l'équipe · date du 1er contact · gabarit utilisé · réponse (o/n) · date de relance · statut · date d'échange · n° de fiche d'entretien · OK test UX · recommandé par · notes`
 
-**Statuts :** `à contacter → contacté → relancé → a répondu → entretien planifié → entretien fait → vivier test UX` / `refus` / `hors cible`.
+**Statuts :** `à contacter → contacté → relancé → a répondu → échange planifié → échange fait → vivier test UX` / `refus` / `hors cible`.
 
 ### Traçabilité sur la landing
 
-Chaque lien envoyé (seulement après une réponse, jamais dans le premier message) porte un paramètre de source, par exemple `<url de la landing>/?src=discord&lieu=<serveur>` ou `?src=insta&membre=jb`. Le formulaire d'inscription à la beta et le lien de prise de rendez-vous (Cal.com ou Calendly, gratuits) reprennent ce paramètre. On sait ainsi pour chaque inscrit par quel canal il est arrivé. C'est exigé pour la liste des beta-testeurs.
+Chaque lien envoyé (seulement après une réponse, jamais dans le premier message) porte un paramètre de source, par exemple `<url de la landing>/?src=discord&lieu=<serveur>` ou `?src=insta&membre=jb`. Le formulaire d'inscription à la beta et le lien de prise de rendez-vous (Cal.com ou Calendly, gratuits) reprennent ce paramètre. On sait ainsi pour chaque inscrit par quel canal il est arrivé, ce qui est exigé pour la liste des beta-testeurs.
 
-### Rituel
+### Routine
 
-- **Chaque lundi** (sprint review) : 10 minutes sur le tableau de bord par canal (§7). On décide quel canal pousser ou couper, et quel message réécrire.
-- **Chaque vendredi** : relance des contacts sans réponse depuis 5 jours, une seule fois.
+- Un point hebdomadaire de 10 minutes sur le tableau §7 : quel canal pousser ou couper, quel message réécrire.
+- Une relance unique pour les contacts restés sans réponse depuis 5 jours.
 
 ---
 
-## 7. Indicateurs par canal
+## 7. Mesurer ce qui marche
 
-| Canal | Contactés | Réponses | Taux de réponse | Entretiens | Taux d'entretien | Recommandations | Temps passé | Minutes par entretien |
+| Canal | Contactés | Réponses | Taux de réponse | Échanges | Taux d'échange | Recommandations | Temps passé | Minutes par échange |
 |---|---|---|---|---|---|---|---|---|
-| *(une ligne par canal, mise à jour chaque lundi)* | | | | | | | | |
+| *(une ligne par canal, mise à jour à chaque point hebdomadaire)* | | | | | | | | |
 
 **Règles de décision** :
 - Moins de 10 % de réponse après 30 contacts → on réécrit le message (accroche, contrepartie).
 - Toujours moins de 10 % après 30 contacts de plus → on dépriorise le canal et on documente pourquoi (c'est une preuve d'apprentissage pour le jury).
-- Plus de 20 % de réponse → on double le quota sur ce canal.
+- Plus de 20 % de réponse → on double le volume sur ce canal.
 
 ---
 
-## 8. Calendrier des 3 prochaines semaines (jusqu'à la séance 4)
+## 8. Leviers complémentaires
 
-| Semaine | Actions | Livrable |
-|---|---|---|
-| **20 → 26 oct.** | Mettre en place le CRM. Rejoindre les serveurs Discord prioritaires et y être actif (retours sur les prods, sans parler de StemHub). Construire une liste de 120 prospects qualifiés. Faire relire les gabarits par 2 producteurs du réseau proche. Lancer le réseau proche (5 premiers entretiens). | CRM avec 120 lignes, gabarits v1 |
-| **27 oct. → 2 nov.** | Vague 1 : environ 50 contacts personnalisés, tous canaux. Messages aux modérateurs de 3 serveurs. 1 post « question » sur un forum ou Reddit. | Premiers taux de réponse par canal |
-| **3 → 8 nov.** | Vague 2 : environ 30 contacts, messages corrigés selon les taux. Entretiens. Relances. Synthèse intermédiaire des hypothèses H1 à H10. | ≥ 8 fiches d'entretien, tableau §7 rempli, envoi au mentor 48 h avant la séance |
-
----
-
-## 9. Après les 20 premiers (phase 2, à partir de décembre)
-
-Ces leviers ne sont **pas** prioritaires maintenant, mais ils s'appuient sur la phase 1 :
+Ils s'appuient sur les premiers échanges et viennent compléter l'outbound :
 - **Referral intégré au produit** : chaque collab invite un autre producteur (hypothèse H8). On demande le service aux moments émotionnels positifs ([TARGET_PROFILE.md §4](./TARGET_PROFILE.md)) : après une restauration réussie ou une prod finie.
 - **Parrainage explicite** : un interviewé ou un testeur qui fait entrer un producteur qualifié est crédité.
 - **Relais partenaires** (objectif A, [PARTNERSHIPS.md](./PARTNERSHIPS.md)) : écoles, créateurs de contenu, serveurs Discord partenaires.
@@ -155,9 +147,9 @@ Ces leviers ne sont **pas** prioritaires maintenant, mais ils s'appuient sur la 
 
 ---
 
-## 10. RGPD et éthique
+## 9. RGPD et éthique
 
 - On n'utilise que des **informations publiques et professionnelles** (pseudo, mail pro affiché, lien de profil).
 - Un « non » ou une absence de réponse après une relance clôt le contact : pas de troisième message.
-- Les entretiens sont enregistrés **avec consentement explicite** et ne concernent que des personnes majeures (C7). Les enregistrements sont stockés sur l'espace de l'équipe et supprimés à la fin de l'EIP.
+- Les échanges sont enregistrés **avec consentement explicite** et ne concernent que des personnes majeures (C7). Les enregistrements sont stockés sur l'espace de l'équipe et supprimés à la fin de l'EIP.
 - Le CRM est un fichier interne. Il n'est jamais publié et ne sert qu'à StemHub.
