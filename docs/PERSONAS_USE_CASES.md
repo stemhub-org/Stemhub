@@ -2,6 +2,8 @@
 
 This documentation details the target user profiles and the concrete problems StemHub solves through various use case scenarios.
 
+> **Targeting:** the target and personas used for acquisition and beta recruitment are in [TARGET_PROFILE.md](./TARGET_PROFILE.md). The use cases below remain valid illustrations of the product.
+
 ## 1. Tom Beats: The Music Producer
 **Profile**: Talented young music producer (22 years old, Paris).
 

@@ -19,7 +19,104 @@
 
 ## 2. Les canaux, par ordre de priorité
 
-<!-- CHANNELS_PLACEHOLDER -->
+Les tailles et l'activité ont été relevées le 19/10/2026. Les effectifs Discord sont mesurés via les invitations publiques. Les règles internes des serveurs ne sont lisibles qu'après les avoir rejoints : il faut les lire avant tout message.
+
+### Canal 1 — Réseau proche et recommandations
+
+- **Qui** : beatmakers de l'entourage de l'équipe, producteurs que nous avons en commun, contacts recommandés par chaque interviewé (question 13 du guide d'entretien).
+- **Comment** : message direct (gabarit G), puis demande systématique de deux contacts en fin d'échange (gabarit H).
+- **Pourquoi en premier** : c'est le canal qui convertit le mieux, et il fait tourner l'effet boule de neige. Les membres de l'équipe et de la promo ne comptent pas comme interviewés : on demande à son entourage de nous présenter **leurs** contacts producteurs.
+
+### Canal 2 — Serveurs Discord de producteurs francophones (le cœur de l'outbound)
+
+| Serveur | Accès | Membres (en ligne) | Ce qui nous intéresse |
+|---|---|---|---|
+| **PRODUCER ZONE ™** | [discord.com/servers](https://discord.com/servers/producer-zone-tm-638854102696329256) · discord.gg/producerzone | 11 679 (1 426) | Communauté FR partenaire de Discord. Annonces d'opportunités de **collaboration**, concours, cours de beatmaking et de mix, vocaux « Studio » et « OpenMic ». |
+| **Rap Fr RapZone Musique & Art** | [discord.com/servers](https://discord.com/servers/rap-fr-rapzone-musique-art-561902553626050561) | 11 592 (1 388) | Vocaux « BEATMAKER » et « MIX/MASTER », feedback écrit et vocal, événements compétitifs. Public mixte rappeurs et beatmakers. |
+| **Sommet Création** | [discordinvites.net](https://discordinvites.net/servers/704035531008376992) (l'invitation affichée a expiré : trouver un lien valide) | ~9 300 | Beatmaking et rap, vocaux quotidiens, auditions par niveau, invités qui écoutent les prods. |
+| **Sauce Lab 🧪** | [discord.me/saucelab](https://discord.me/saucelab) | ~360 | **Très en cible** : partage de beats, loops et drumkits, feedback, **recherche de collabs**, salons vocaux de cook-up. |
+| **BeatMesChoeurs** | [disboard.org](https://disboard.org/server/1244315809820577974) | ~370 | Défi hebdomadaire, feedback, collabs. Petite communauté bien notée. |
+| **KOSMOPOLITES** (YouTubeur SKT KOSMO) | discord.gg/g76cWrVB9R | 2 574 (341) | Communauté d'un beatmaker joueur de Beat Battle (canal 5). |
+| Le Colisée, Les Sneakos, équinoxe, L'Académie du Beatmaker | via Disboard et discord.me | 200 à 550 | Petits serveurs FR (kits, feedback, concours), où le contact direct est le plus facile. |
+
+**Méthode** :
+1. Rejoindre les serveurs et **lire le règlement**.
+2. Être actif quelques jours avant toute demande : retours sur les prods dans `#feedback`, présence dans les vocaux de cook-up.
+3. Écrire aux modérateurs avant tout post (gabarit D). La synthèse anonymisée ou l'animation d'un défi sont nos monnaies d'échange.
+4. Envoyer des DM seulement aux membres qui cherchent publiquement une collab ou à qui on a déjà fait un retour (gabarit A).
+
+**Sur les gros serveurs (Producer Zone, RapZone)**, on vise plutôt un message autorisé par les modérateurs qui touche beaucoup de monde d'un coup. **Sur les petits**, on vise le 1-to-1.
+
+> Les annuaires Disboard filtrés en français ([tag beatmaker, FR](https://disboard.org/servers/tag/beatmaker?fl=fr)) se parcourent à la main. Ils sont utiles pour trouver d'autres petits serveurs.
+
+### Canal 3 — Les beatmakers qui se montrent sur YouTube et Twitch
+
+On ne vise **pas** les YouTubeurs eux-mêmes : ils relèvent des partenariats ou de la crédibilité. On vise **les beatmakers qui gravitent autour** de leurs contenus.
+
+- **Lives et vidéos « j'écoute vos prods » / « on juge vos instrus »** : les beatmakers qui soumettent une prod sont identifiables en live ou en commentaire. C'est un public qui cherche activement des retours. Formats actifs repérés :
+  - BLESK. (lives « J'écoute vos prods »)
+  - Oxydz (65,6 K abonnés, lives de réaction)
+  - Ysos (491 K)
+  - KronoMuzik × Pprod (225 K)
+  - Grimkujow TV × Jeanjass (27,5 K)
+- **Vidéos co-signées « X et Y »** et **titres crédités « prod. X x Y »** (type beats, instrus) : ce sont des producteurs qui **collaborent publiquement**, notre critère C3 vérifiable avant le contact. On les contacte par le mail pro affiché en description, ou sur BeatStars (gabarit C).
+- **Petites chaînes FL Studio francophones** (moins de 10 K abonnés), dont les auteurs répondent plus facilement et sont eux-mêmes dans la cible : Travis Beatz, NVY, BLESK., Jeune H, Boss Beats (qui a un tuto « exporter sa prod pour un autre beatmaker », exactement notre sujet), Akim Beats, Mhp beats, Eusope +.
+
+### Canal 4 — Instagram et TikTok en 1-to-1
+
+- **Repérage** :
+  - comptes de beatmakers qui postent des cook-ups ou des extraits de prods sous #flstudio, #beatmakerfrance, #cookup, #producerlife ;
+  - bios qui mentionnent FL Studio, « send loops » ou un mail pro ;
+  - posts crédités à plusieurs.
+- **Méthode** : s'abonner, écouter, commenter sincèrement une prod, puis envoyer un DM (gabarit B).
+- **Vigilance** :
+  - utiliser les **comptes personnels** des membres (plus authentiques) ;
+  - ne jamais copier-coller le même message ;
+  - rester sous une vingtaine de DM par jour et par compte pour ne pas être signalé comme spam.
+
+### Canal 5 — Beat Battle (« FL Ranked »)
+
+- **Quoi** : [beat-battle.net](https://beat-battle.net), un jeu de battle de prods en ligne (ranked, duo, classement), surnommé « FL Ranked » par les communautés FL Studio. Son Discord (discord.gg/beatbattle) compte 48 187 membres. Des joueurs français y sont actifs : SKT KOSMO y consacre plusieurs vidéos.
+- **Pourquoi** : c'est un vivier de **producteurs FL Studio compétitifs et réguliers** (C1 et C2). Le mode duo implique déjà de produire à deux.
+- **Méthode** : jouer, repérer les joueurs francophones (pseudos, Discord KOSMOPOLITES), puis prendre contact en DM après une partie.
+
+### Canal 6 — Reddit et forum Image-Line (cercle anglophone)
+
+| Lieu | Taille | Règles utiles |
+|---|---|---|
+| [Forum Image-Line](https://forum.image-line.com) | Très actif. Section **flp Exchange** (échange de projets `.flp`) et section « To Do » (souhaits des utilisateurs) | Le forum officiel des utilisateurs FL Studio. Un projet indépendant y a recruté ses bêta-testeurs en octobre 2026. Poster serait réservé aux clients enregistrés (à vérifier). |
+| r/FL_Studio | ~570 K | Subreddit non officiel. Son Discord, « FL Studio Community », compte 58 456 membres (discord.gg/flstudio). Un modérateur a indiqué refuser l'auto-promo, sauf pour un logiciel gratuit sans inscription obligatoire. |
+| r/trapproduction | ~400 K | **Monthly Collab Thread** (des producteurs qui cherchent des collabs : en plein dans la cible). Weekly Feedback Thread : il faut donner un retour avant de poster. |
+| r/makinghiphop | ~350 K | Weekly Feedback Thread (« no feedback = ban »). Toute pub doit passer par le fil « Sales and Services ». |
+| r/WeAreTheMusicMakers | ~3,8 M | Toute promotion (y compris d'un Discord) est réservée au Weekly Promotion Thread. |
+
+**Méthode** :
+- Participer d'abord aux fils de feedback.
+- Poster une **question** (gabarit E, version anglaise) là où le règlement l'autorise.
+- Répondre aux producteurs du Monthly Collab Thread.
+
+**Attention** : un autre étudiant a posté le même jour une enquête du même type sur r/trapproduction. Le format est toléré mais déjà utilisé. On se distingue en **donnant d'abord** (des retours sur les prods) et en posant une question précise sur l'envoi de FLP.
+
+### Canal 7 — IRL, via les partenaires
+
+Ateliers beatmaking, battles et studios ([PARTNERSHIPS.md](./PARTNERSHIPS.md) : La Place, FGO-Barbara, Maison de la Conversation, Studiomatic, Star's Music). On y fait des **échanges en face à face**, plus longs et plus riches, et on recrute les participants majeurs qui remplissent les critères.
+
+### Canaux écartés
+
+| Canal | Pourquoi |
+|---|---|
+| Publicité sponsorisée (Instagram, TikTok) | Elle ne crée pas de conversation, la cible s'en méfie, et ce n'est pas une stratégie d'acquisition valide (retour mentor). |
+| Groupes Facebook | Aucun groupe FL Studio francophone actif vérifiable. La plateforme est peu utilisée par les 18-30 ans. |
+| Forum FL Studio d'Audiofanzine | Quasi inactif pour FL Studio (un seul fil en 2026). Audiofanzine reste un relais média (objectif C). |
+| Subreddits francophones (r/rapfr…) | Inactifs, ou leur existence n'a pas pu être vérifiée. |
+
+### Pourquoi on met l'accent sur la collaboration dans les messages
+
+Les commentaires publics montrent que le problème de la collab sur FL Studio est réel et mal résolu :
+- sous [« How to Send FLPs to Other Producers for Collabs »](https://www.youtube.com/watch?v=qrBUkXK9-EI) (86 K vues), le commentaire le plus aimé demande comment éviter le message « sample not found », et un autre avoue « 8 ans de prod et je ne savais pas » ;
+- ailleurs, des producteurs signalent des projets qui ne s'ouvrent pas d'une version de FL à l'autre, ou des plugins manquants ([exemple](https://www.youtube.com/watch?v=cP5JKbuaoZg)).
+
+À l'inverse, **la sauvegarde seule n'est plus un argument** : FL Studio 2026 sauvegarde déjà les projets dans FL Cloud. Les messages parlent donc de **la dernière collab** de la personne, pas de backup.
 
 ---
 

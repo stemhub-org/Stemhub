@@ -133,7 +133,7 @@ Priorities for the MVP shipping to the Greenlight jury. Reviewed at every mentor
 
 ## 4 — Personas & use cases
 
-Four detailed personas live in [PERSONAS_USE_CASES.md](./PERSONAS_USE_CASES.md).
+**Targeting reference:** [TARGET_PROFILE.md](./TARGET_PROFILE.md) — FL Studio producers who produce weekly and collaborate, with verifiable criteria, exclusions, two proto-personas and the hypotheses the interviews must validate. The four personas below and their use cases live in [PERSONAS_USE_CASES.md](./PERSONAS_USE_CASES.md).
 
 | Persona | Role | Primary pain point | Key use case for MVP |
 |---|---|---|---|
@@ -452,7 +452,8 @@ Every PR requires review from at least one other team member before merge. Merge
 
 ### 13.1 Who
 - **Target: 20 beta testers** (Epitech deliverable, end of March 2027).
-- Sourcing: producers we know personally, friends who produce music, music schools, Discord communities. Anyone who would use the service is welcome.
+- Who qualifies: the target criteria in [TARGET_PROFILE.md](./TARGET_PROFILE.md) (a tester who doesn't meet them doesn't count).
+- Sourcing: outbound, one to one — see [ACQUISITION_STRATEGY.md](./ACQUISITION_STRATEGY.md); partners and credibility relays in [PARTNERSHIPS.md](./PARTNERSHIPS.md) and [CREDIBILITY.md](./CREDIBILITY.md).
 
 ### 13.2 Incentive
 - **Max-tier subscription (Studio), free for life.**
@@ -658,3 +659,4 @@ DAW-neutral names for what a project file contains. The FL mixer diff uses them 
 | 2026-09-16 | Erwan (via Claude) | Initial consolidated specification. |
 | 2026-09-29 | Erwan | Vocabulary cleanup: §19 rewritten as the project-wide glossary (project file, asset, stem, mixdown, version, branch, save, restore, refresh, insert… with FL Studio / Ableton equivalents and the words each replaces); its pull request row also writes down the status rule the backend already enforces (`OPEN` until `MERGED` or `CLOSED`, both terminal). Wording elsewhere aligned to it (push/commit → save, pull → restore, session bundles → project file plus audio & MIDI assets stored content-addressed, Track entity removed from §7). Milestone deliverables (§17.1) are unchanged; only M3's "plugin" now reads "StemHub plugin". No decision, priority, KPI or commitment changed. |
 | 2026-09-29 | Erwan | Project model schema 0.1.0 (#170): the §19 Project model row links its format ([project-model.md](./project-model.md)); Volume is stored as a fader position with dB left empty until calibrated (M2), Pan as −1…+1. No decision, priority, KPI or commitment changed. |
+| 2026-10-19 | Erwan (via Claude) | Mentoring S3 follow-up: target narrowed to FL Studio producers who collaborate ([TARGET_PROFILE.md](./TARGET_PROFILE.md)); §4 and §13.1 point to it and to the acquisition, partnership and credibility docs. No product decision, priority or KPI changed. |

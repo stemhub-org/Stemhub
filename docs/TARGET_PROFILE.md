@@ -169,6 +169,14 @@ Pourquoi le nommer : il est **très nombreux et très visible** sur les réseaux
 | H9 | Discord est le lieu principal d'échange entre producteurs | ≥ 60 % sont actifs sur au moins un serveur de prod | À valider | — |
 | H10 | Une capacité à payer existe | ≥ 30 % paient déjà un abonnement musical (Splice, BeatStars Pro, FL Cloud…) | À valider | — |
 
+**Signaux publics déjà observés** (ce ne sont pas des sources d'entretien, mais ils orientent les questions) :
+- **H2** :
+  - Sous [« How to Send FLPs to Other Producers for Collabs »](https://www.youtube.com/watch?v=qrBUkXK9-EI) (86 K vues), le commentaire le plus aimé demande comment éviter « sample not found » lors de l'envoi d'un FLP.
+  - Sous [une autre vidéo](https://www.youtube.com/watch?v=cP5JKbuaoZg), des producteurs signalent des projets qui ne s'ouvrent pas d'une version de FL à l'autre, et des plugins manquants.
+- **H3** : sous les vidéos sur l'envoi de loops, les questions sur les « terms of agreement » et le copyright des loops montrent que les splits restent flous.
+- **H4** : FL Studio 2026 sauvegarde déjà les projets dans FL Cloud. Même si H4 se confirme, la sauvegarde seule ne différencie pas StemHub. C'est pour cette raison que le cœur de cible est défini par la **collaboration** (H2, H3, H6, H7).
+- **H9** : les serveurs Discord francophones de beatmaking dépassent 10 000 membres (Producer Zone, RapZone). Des salons de cook-up et de recherche de collab existent ([ACQUISITION_STRATEGY.md §2](./ACQUISITION_STRATEGY.md)).
+
 Une hypothèse invalidée n'est pas un échec. Elle **resserre** le persona, et ce qu'on a mesuré, appris et changé est précisément ce que le jury attend.
 
 ---
