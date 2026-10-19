@@ -15,7 +15,7 @@ on:
 
 env:
   # Pinned so every platform and every run builds against the same JUCE.
-  JUCE_VERSION: "9.0.2"
+  JUCE_VERSION: "9.0.4"
 
 jobs:
   build:
