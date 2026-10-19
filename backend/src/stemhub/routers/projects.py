@@ -154,7 +154,7 @@ async def get_project(
             recent_versions_data.append(
                 VersionWithAuthor(
                     id=v.id,
-                    commit_message=v.commit_message,
+                    message=v.message,
                     created_at=v.created_at,
                     branch_name=v.branch.name if v.branch else "unknown",
                     author=author_summary,

@@ -38,7 +38,7 @@ export default function SettingsPage() {
                 credentials: "include"
             });
             if (!response.ok) {
-                throw new Error("Session expirée");
+                throw new Error("Sign-in expired");
             }
             const data = await response.json();
             setUser(data);
@@ -287,10 +287,10 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
             });
             if (!res.ok) {
                 const errorData = await res.json();
-                throw new Error(errorData.detail || "Erreur lors de la mise à jour de l'email");
+                throw new Error(errorData.detail || "Failed to update email");
             }
             onUpdate();
-            alert("Email mis à jour !");
+            alert("Email updated.");
         } catch (err: any) {
             alert(err.message);
         } finally {
@@ -303,12 +303,12 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
         setPasswordSuccess("");
         
         if (!passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password) {
-            setPasswordError("Veuillez remplir tous les champs.");
+            setPasswordError("Please fill in all fields.");
             return;
         }
         
         if (passwordForm.new_password !== passwordForm.confirm_password) {
-            setPasswordError("Les nouveaux mots de passe ne correspondent pas.");
+            setPasswordError("The new passwords do not match.");
             return;
         }
 
@@ -326,9 +326,9 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
             });
             if (!res.ok) {
                 const errorData = await res.json();
-                throw new Error(errorData.detail || "Erreur lors de la mise à jour du mot de passe");
+                throw new Error(errorData.detail || "Failed to update password");
             }
-            setPasswordSuccess("Mot de passe mis à jour avec succès !");
+            setPasswordSuccess("Password updated.");
             setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
         } catch (err: any) {
             setPasswordError(err.message);
@@ -485,7 +485,7 @@ function IntegrationSettings({ user }: { user: any }) {
             </div>
 
             <div className="space-y-4 pt-4">
-                <h3 className="text-sm font-medium text-foreground/80 mb-3">DAW Plugins</h3>
+                <h3 className="text-sm font-medium text-foreground/80 mb-3">StemHub plugin</h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Ableton */}
@@ -502,7 +502,7 @@ function IntegrationSettings({ user }: { user: any }) {
                             </span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-xs text-foreground/50 font-light">Plugin v1.2.4</span>
+                            <span className="text-xs text-foreground/50 font-light">StemHub plugin v1.2.4</span>
                             <button className="text-xs text-accent hover:underline">Configure</button>
                         </div>
                     </div>
@@ -574,21 +574,21 @@ function StorageSettings({ user }: { user: any }) {
                     <div className="flex items-center justify-between p-3 rounded-lg hover:bg-foreground/5 transition-colors">
                         <div className="flex items-center gap-3">
                             <div className="w-2.5 h-2.5 rounded-full bg-accent"></div>
-                            <span className="text-sm">Audio Files (.wav, .mp3)</span>
+                            <span className="text-sm">Audio &amp; MIDI files (.wav, .mp3, .mid)</span>
                         </div>
                         <span className="text-sm font-medium">18.2 GB</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg hover:bg-foreground/5 transition-colors">
                         <div className="flex items-center gap-3">
                             <div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div>
-                            <span className="text-sm">Project Files (.als, .flp)</span>
+                            <span className="text-sm">Project files (.flp, .als)</span>
                         </div>
                         <span className="text-sm font-medium">5.1 GB</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg hover:bg-foreground/5 transition-colors">
                         <div className="flex items-center gap-3">
                             <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                            <span className="text-sm">Plugin Presets & Meta</span>
+                            <span className="text-sm">Previews (mixdowns)</span>
                         </div>
                         <span className="text-sm font-medium">1.7 GB</span>
                     </div>
@@ -630,8 +630,8 @@ function NotificationSettings({ user }: { user: any }) {
                             defaultChecked={true}
                         />
                         <ToggleRow
-                            title="Version Updates"
-                            description="When someone pushes to a version you're collaborating on"
+                            title="Branch Updates"
+                            description="When someone saves a version on a branch you're collaborating on"
                             defaultChecked={false}
                         />
                         <ToggleRow
@@ -641,7 +641,7 @@ function NotificationSettings({ user }: { user: any }) {
                         />
                         <ToggleRow
                             title="Marketing & Updates"
-                            description="News about StemHub features and plugins"
+                            description="News about StemHub and the StemHub plugin"
                             defaultChecked={false}
                         />
                     </div>
@@ -653,12 +653,12 @@ function NotificationSettings({ user }: { user: any }) {
                     <div className="space-y-3">
                         <ToggleRow
                             title="Collaborator Activity"
-                            description="Live updates when a collaborator joins a session"
+                            description="Live updates when a collaborator joins a project"
                             defaultChecked={true}
                         />
                         <ToggleRow
-                            title="Sync Status"
-                            description="Alerts when your DAW finishes syncing a version"
+                            title="Save Status"
+                            description="Alerts when the StemHub plugin finishes saving a version"
                             defaultChecked={true}
                         />
                     </div>

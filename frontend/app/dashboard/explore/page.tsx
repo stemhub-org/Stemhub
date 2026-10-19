@@ -25,7 +25,7 @@ interface ExploreProject {
     category: string | null;
     tags: string[];
     like_count: number;
-    bpm: number | null;
+    tempo_bpm: number | null;
     key: string | null;
     created_at: string;
     owner: {

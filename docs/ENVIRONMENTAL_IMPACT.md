@@ -29,7 +29,7 @@ By leveraging Google's commitment to 24/7 carbon-free energy, we significantly r
 ### B. Data Transfer: The "Low-Hops" Architecture
 
 **Challenge:**  
-Transferring heavy audio files (`.wav`, stems) consumes massive network energy.
+Transferring heavy audio files (`.wav` samples and recordings) consumes massive network energy.
 
 **StemHub Strategy:**  
 We use **Streaming Processing** in our Python backend. Files are streamed directly from the client through the server to **Google Cloud Storage (GCS)** without saving temporary copies on disk.

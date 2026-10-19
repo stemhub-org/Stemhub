@@ -1,0 +1,1796 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:stemhub:project-model:0.1.0",
+  "$defs": {
+    "Arrangement": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^arrangement:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "markers": {
+          "items": {
+            "$ref": "#/$defs/Marker"
+          },
+          "maxItems": 999,
+          "title": "Markers",
+          "type": "array"
+        },
+        "tracks": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "maxItems": 500,
+          "title": "Tracks",
+          "type": "array"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "markers",
+        "tracks"
+      ],
+      "title": "Arrangement",
+      "type": "object"
+    },
+    "AudioClip": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "audio",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^audio:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "start_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Start Ticks",
+          "type": "integer"
+        },
+        "length_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Length Ticks",
+          "type": "integer"
+        },
+        "offset_start_ticks": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offset Start Ticks"
+        },
+        "offset_end_ticks": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offset End Ticks"
+        },
+        "muted": {
+          "title": "Muted",
+          "type": "boolean"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "source_id",
+        "start_ticks",
+        "length_ticks",
+        "offset_start_ticks",
+        "offset_end_ticks",
+        "muted"
+      ],
+      "title": "AudioClip",
+      "type": "object"
+    },
+    "AudioSource": {
+      "additionalProperties": false,
+      "description": "Audio that audio clips play (FL Studio: an audio clip channel).",
+      "properties": {
+        "id": {
+          "pattern": "^audio:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ProjectSample"
+                },
+                {
+                  "$ref": "#/$defs/FactorySample"
+                },
+                {
+                  "$ref": "#/$defs/ExternalSample"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sample"
+        },
+        "insert": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/KnownInsert"
+            },
+            {
+              "$ref": "#/$defs/UnknownValue"
+            }
+          ],
+          "title": "Insert"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "sample",
+        "insert"
+      ],
+      "title": "AudioSource",
+      "type": "object"
+    },
+    "Automation": {
+      "additionalProperties": false,
+      "description": "A parameter's change over time, played by automation clips. A null target is linked to nothing.",
+      "properties": {
+        "id": {
+          "pattern": "^automation:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TempoTarget"
+                },
+                {
+                  "$ref": "#/$defs/InstrumentTarget"
+                },
+                {
+                  "$ref": "#/$defs/InsertTarget"
+                },
+                {
+                  "$ref": "#/$defs/EffectSlotTarget"
+                },
+                {
+                  "$ref": "#/$defs/UnknownValue"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/AutomationPoint"
+          },
+          "maxItems": 10000,
+          "title": "Points",
+          "type": "array"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "target",
+        "points"
+      ],
+      "title": "Automation",
+      "type": "object"
+    },
+    "AutomationClip": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "automation",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^automation:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "start_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Start Ticks",
+          "type": "integer"
+        },
+        "length_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Length Ticks",
+          "type": "integer"
+        },
+        "offset_start_ticks": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offset Start Ticks"
+        },
+        "offset_end_ticks": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offset End Ticks"
+        },
+        "muted": {
+          "title": "Muted",
+          "type": "boolean"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "source_id",
+        "start_ticks",
+        "length_ticks",
+        "offset_start_ticks",
+        "offset_end_ticks",
+        "muted"
+      ],
+      "title": "AutomationClip",
+      "type": "object"
+    },
+    "AutomationPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "position_ticks": {
+          "description": "From the start of the automation clip.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Position Ticks",
+          "type": "integer"
+        },
+        "value": {
+          "description": "The parameter's normalized value.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Value",
+          "type": "number"
+        },
+        "tension": {
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Tension",
+          "type": "number"
+        }
+      },
+      "required": [
+        "position_ticks",
+        "value",
+        "tension"
+      ],
+      "title": "AutomationPoint",
+      "type": "object"
+    },
+    "EffectSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "description": "0-based; FL Studio shows it as index + 1.",
+          "maximum": 9,
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "dry_wet": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Dry Wet",
+          "type": "number"
+        },
+        "plugin": {
+          "$ref": "#/$defs/Plugin"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "index",
+        "enabled",
+        "dry_wet",
+        "plugin"
+      ],
+      "title": "EffectSlot",
+      "type": "object"
+    },
+    "EffectSlotTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "effect_slot",
+          "title": "Kind",
+          "type": "string"
+        },
+        "insert_id": {
+          "pattern": "^insert:(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-6])$",
+          "title": "Insert Id",
+          "type": "string"
+        },
+        "slot_index": {
+          "description": "0-based; FL Studio shows it as index + 1.",
+          "maximum": 9,
+          "minimum": 0,
+          "title": "Slot Index",
+          "type": "integer"
+        },
+        "parameter": {
+          "enum": [
+            "enabled",
+            "dry_wet"
+          ],
+          "title": "Parameter",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "insert_id",
+        "slot_index",
+        "parameter"
+      ],
+      "title": "EffectSlotTarget",
+      "type": "object"
+    },
+    "ExternalSample": {
+      "additionalProperties": false,
+      "description": "A sample outside the project folder: only its file name is kept, never its folder.",
+      "properties": {
+        "location": {
+          "const": "external",
+          "title": "Location",
+          "type": "string"
+        },
+        "file_name": {
+          "description": "A file name without its folder: one segment of an asset path, without bidirectional controls.",
+          "maxLength": 255,
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\x00-\\x1f\\x7f\\u202a-\\u202e\\u2066-\\u2069]*[^/\\\\:\\x00-\\x1f\\x7f\\u202a-\\u202e\\u2066-\\u2069. ]$",
+          "title": "File Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "location",
+        "file_name"
+      ],
+      "title": "ExternalSample",
+      "type": "object"
+    },
+    "FactorySample": {
+      "additionalProperties": false,
+      "description": "A sample shipped with FL Studio, under its %FL...% folder variable.",
+      "properties": {
+        "location": {
+          "const": "factory",
+          "title": "Location",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path under one of FL Studio's %FL...% folder variables, '/'-separated.",
+          "maxLength": 255,
+          "minLength": 1,
+          "pattern": "^%FL[A-Za-z0-9]+%(?:/[^/\\\\:\\x00-\\x1f\\x7f]*[^/\\\\:\\x00-\\x1f\\x7f. ])+$",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "location",
+        "path"
+      ],
+      "title": "FactorySample",
+      "type": "object"
+    },
+    "Generator": {
+      "additionalProperties": false,
+      "description": "What wrote the document.",
+      "properties": {
+        "name": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^[\\x21-\\x7e]{1,64}$",
+          "title": "Version",
+          "type": "string"
+        },
+        "pyflp": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{7,40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The PyFLP commit the reader used.",
+          "title": "Pyflp"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "pyflp"
+      ],
+      "title": "Generator",
+      "type": "object"
+    },
+    "Insert": {
+      "additionalProperties": false,
+      "description": "One mixer insert; insert 0 is the Master insert. An insert that isn't listed has default values.",
+      "properties": {
+        "id": {
+          "pattern": "^insert:(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-6])$",
+          "title": "Id",
+          "type": "string"
+        },
+        "number": {
+          "maximum": 126,
+          "minimum": 0,
+          "title": "Number",
+          "type": "integer"
+        },
+        "name": {
+          "maxLength": 255,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "volume": {
+          "$ref": "#/$defs/InsertVolume"
+        },
+        "pan": {
+          "description": "-1 is fully left, 0 centred, +1 fully right.",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Pan",
+          "type": "number"
+        },
+        "stereo_separation": {
+          "description": "+1 fully separated, 0 unchanged, -1 merged (mono).",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Stereo Separation",
+          "type": "number"
+        },
+        "sends": {
+          "items": {
+            "$ref": "#/$defs/Send"
+          },
+          "maxItems": 126,
+          "title": "Sends",
+          "type": "array"
+        },
+        "effect_slots": {
+          "items": {
+            "$ref": "#/$defs/EffectSlot"
+          },
+          "maxItems": 10,
+          "title": "Effect Slots",
+          "type": "array"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "number",
+        "name",
+        "enabled",
+        "volume",
+        "pan",
+        "stereo_separation",
+        "sends",
+        "effect_slots"
+      ],
+      "title": "Insert",
+      "type": "object"
+    },
+    "InsertTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "insert",
+          "title": "Kind",
+          "type": "string"
+        },
+        "insert_id": {
+          "pattern": "^insert:(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-6])$",
+          "title": "Insert Id",
+          "type": "string"
+        },
+        "parameter": {
+          "enum": [
+            "volume",
+            "pan",
+            "stereo_separation"
+          ],
+          "title": "Parameter",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "insert_id",
+        "parameter"
+      ],
+      "title": "InsertTarget",
+      "type": "object"
+    },
+    "InsertVolume": {
+      "additionalProperties": false,
+      "description": "A mixer insert's volume, up to FL Studio's 125%.",
+      "properties": {
+        "fader": {
+          "description": "Fader position: FL raw / 12800, so 1.0 is FL Studio's 100%.",
+          "maximum": 1.25,
+          "minimum": 0.0,
+          "title": "Fader",
+          "type": "number"
+        },
+        "db": {
+          "const": null,
+          "description": "Volume in dB: always null in 0.1.0, until the fader-to-dB curve is calibrated (M2).",
+          "title": "Db",
+          "type": "null"
+        }
+      },
+      "required": [
+        "fader",
+        "db"
+      ],
+      "title": "InsertVolume",
+      "type": "object"
+    },
+    "InstrumentTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "instrument",
+          "title": "Kind",
+          "type": "string"
+        },
+        "instrument_id": {
+          "pattern": "^instrument:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "parameter": {
+          "enum": [
+            "volume",
+            "pan"
+          ],
+          "title": "Parameter",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "instrument_id",
+        "parameter"
+      ],
+      "title": "InstrumentTarget",
+      "type": "object"
+    },
+    "InstrumentVolume": {
+      "additionalProperties": false,
+      "description": "An instrument's volume (FL Studio: a channel's), up to FL Studio's 100%.",
+      "properties": {
+        "fader": {
+          "description": "Fader position: FL raw / 12800, so 1.0 is FL Studio's 100%.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Fader",
+          "type": "number"
+        },
+        "db": {
+          "const": null,
+          "description": "Volume in dB: always null in 0.1.0, until the fader-to-dB curve is calibrated (M2).",
+          "title": "Db",
+          "type": "null"
+        }
+      },
+      "required": [
+        "fader",
+        "db"
+      ],
+      "title": "InstrumentVolume",
+      "type": "object"
+    },
+    "KnownInsert": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "known",
+          "title": "Status",
+          "type": "string"
+        },
+        "insert_id": {
+          "pattern": "^insert:(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-6])$",
+          "title": "Insert Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "insert_id"
+      ],
+      "title": "KnownInsert",
+      "type": "object"
+    },
+    "Marker": {
+      "additionalProperties": false,
+      "properties": {
+        "position_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Position Ticks",
+          "type": "integer"
+        },
+        "name": {
+          "maxLength": 255,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "position_ticks",
+        "name"
+      ],
+      "title": "Marker",
+      "type": "object"
+    },
+    "Mixer": {
+      "additionalProperties": false,
+      "properties": {
+        "inserts": {
+          "items": {
+            "$ref": "#/$defs/Insert"
+          },
+          "maxItems": 127,
+          "title": "Inserts",
+          "type": "array"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "inserts"
+      ],
+      "title": "Mixer",
+      "type": "object"
+    },
+    "ModelWarning": {
+      "additionalProperties": false,
+      "description": "Something read with a loss, e.g. text with invalid characters replaced.",
+      "properties": {
+        "path": {
+          "description": "An RFC 6901 JSON pointer.",
+          "maxLength": 512,
+          "pattern": "^(?:/(?:[^~/\\x00]|~[01])*)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "pattern": "^[^\\x00]*$",
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "message"
+      ],
+      "title": "ModelWarning",
+      "type": "object"
+    },
+    "Note": {
+      "additionalProperties": false,
+      "properties": {
+        "instrument_id": {
+          "pattern": "^instrument:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "pitch": {
+          "description": "FL Studio's key number, as MIDI: 60 is middle C.",
+          "maximum": 131,
+          "minimum": 0,
+          "title": "Pitch",
+          "type": "integer"
+        },
+        "start_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Start Ticks",
+          "type": "integer"
+        },
+        "length_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Length Ticks",
+          "type": "integer"
+        },
+        "velocity": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Velocity",
+          "type": "number"
+        },
+        "pan": {
+          "description": "-1 is fully left, 0 centred, +1 fully right.",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Pan",
+          "type": "number"
+        },
+        "fine_pitch_cents": {
+          "maximum": 1200,
+          "minimum": -1200,
+          "multipleOf": 10,
+          "title": "Fine Pitch Cents",
+          "type": "integer"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "pitch",
+        "start_ticks",
+        "length_ticks",
+        "velocity",
+        "pan",
+        "fine_pitch_cents"
+      ],
+      "title": "Note",
+      "type": "object"
+    },
+    "Pattern": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^pattern:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "length_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Length Ticks",
+          "type": "integer"
+        },
+        "notes": {
+          "items": {
+            "$ref": "#/$defs/Note"
+          },
+          "maxItems": 100000,
+          "title": "Notes",
+          "type": "array"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "length_ticks",
+        "notes"
+      ],
+      "title": "Pattern",
+      "type": "object"
+    },
+    "PatternClip": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "pattern",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^pattern:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "start_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Start Ticks",
+          "type": "integer"
+        },
+        "length_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Length Ticks",
+          "type": "integer"
+        },
+        "offset_start_ticks": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offset Start Ticks"
+        },
+        "offset_end_ticks": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offset End Ticks"
+        },
+        "muted": {
+          "title": "Muted",
+          "type": "boolean"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "source_id",
+        "start_ticks",
+        "length_ticks",
+        "offset_start_ticks",
+        "offset_end_ticks",
+        "muted"
+      ],
+      "title": "PatternClip",
+      "type": "object"
+    },
+    "Plugin": {
+      "additionalProperties": false,
+      "description": "A native or third-party instrument or effect inside the project.",
+      "properties": {
+        "format": {
+          "enum": [
+            "fl_native",
+            "vst2",
+            "vst3"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "vendor": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "pattern": "^[^\\x00]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vendor"
+        },
+        "plugin_id": {
+          "anyOf": [
+            {
+              "pattern": "^[\\x20-\\x7e]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Plugin Id"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PluginState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "format",
+        "name",
+        "vendor",
+        "plugin_id",
+        "state"
+      ],
+      "title": "Plugin",
+      "type": "object"
+    },
+    "PluginInstrument": {
+      "additionalProperties": false,
+      "description": "An instrument played by a plugin (FL Studio: a generator channel).",
+      "properties": {
+        "id": {
+          "pattern": "^instrument:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "plugin",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "description": "#RRGGBB, upper-case hex.",
+              "pattern": "^#[0-9A-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Color"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "volume": {
+          "$ref": "#/$defs/InstrumentVolume"
+        },
+        "pan": {
+          "description": "-1 is fully left, 0 centred, +1 fully right.",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Pan",
+          "type": "number"
+        },
+        "insert": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/KnownInsert"
+            },
+            {
+              "$ref": "#/$defs/UnknownValue"
+            }
+          ],
+          "title": "Insert"
+        },
+        "sample": {
+          "title": "Sample",
+          "type": "null"
+        },
+        "plugin": {
+          "$ref": "#/$defs/Plugin"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "color",
+        "enabled",
+        "volume",
+        "pan",
+        "insert",
+        "sample",
+        "plugin"
+      ],
+      "title": "PluginInstrument",
+      "type": "object"
+    },
+    "PluginState": {
+      "additionalProperties": false,
+      "description": "The plugin's saved state, by hash only: its bytes stay in the project file.",
+      "properties": {
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "PluginState",
+      "type": "object"
+    },
+    "ProjectMetadata": {
+      "additionalProperties": false,
+      "description": "The project's own metadata. Comments, URL, licensee, paths and dates are never stored.",
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "pattern": "^[^\\x00]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Title"
+        },
+        "artists": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "pattern": "^[^\\x00]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Artists"
+        },
+        "genre": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "pattern": "^[^\\x00]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Genre"
+        }
+      },
+      "required": [
+        "title",
+        "artists",
+        "genre"
+      ],
+      "title": "ProjectMetadata",
+      "type": "object"
+    },
+    "ProjectSample": {
+      "additionalProperties": false,
+      "description": "A sample inside the project folder: one of the version's assets.",
+      "properties": {
+        "location": {
+          "const": "project",
+          "title": "Location",
+          "type": "string"
+        },
+        "asset_path": {
+          "description": "Path in the project folder, as in the version's manifest: relative and '/'-separated.",
+          "maxLength": 255,
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\x00-\\x1f\\x7f]*[^/\\\\:\\x00-\\x1f\\x7f. ](?:/[^/\\\\:\\x00-\\x1f\\x7f]*[^/\\\\:\\x00-\\x1f\\x7f. ])*$",
+          "title": "Asset Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "location",
+        "asset_path"
+      ],
+      "title": "ProjectSample",
+      "type": "object"
+    },
+    "SamplerInstrument": {
+      "additionalProperties": false,
+      "description": "An instrument that plays a sample (FL Studio: a sampler channel). Its sample is null when none is loaded.",
+      "properties": {
+        "id": {
+          "pattern": "^instrument:(?:0|[1-9][0-9]{0,4})$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "sampler",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "description": "#RRGGBB, upper-case hex.",
+              "pattern": "^#[0-9A-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Color"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "volume": {
+          "$ref": "#/$defs/InstrumentVolume"
+        },
+        "pan": {
+          "description": "-1 is fully left, 0 centred, +1 fully right.",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Pan",
+          "type": "number"
+        },
+        "insert": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/KnownInsert"
+            },
+            {
+              "$ref": "#/$defs/UnknownValue"
+            }
+          ],
+          "title": "Insert"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ProjectSample"
+                },
+                {
+                  "$ref": "#/$defs/FactorySample"
+                },
+                {
+                  "$ref": "#/$defs/ExternalSample"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sample"
+        },
+        "plugin": {
+          "title": "Plugin",
+          "type": "null"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "color",
+        "enabled",
+        "volume",
+        "pan",
+        "insert",
+        "sample",
+        "plugin"
+      ],
+      "title": "SamplerInstrument",
+      "type": "object"
+    },
+    "Send": {
+      "additionalProperties": false,
+      "properties": {
+        "to_insert_id": {
+          "pattern": "^insert:(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-6])$",
+          "title": "To Insert Id",
+          "type": "string"
+        },
+        "level": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Level",
+          "type": "number"
+        }
+      },
+      "required": [
+        "to_insert_id",
+        "level"
+      ],
+      "title": "Send",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "The project file the model was read from.",
+      "properties": {
+        "daw": {
+          "const": "fl_studio",
+          "title": "Daw",
+          "type": "string"
+        },
+        "daw_version": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9]{1,4}(?:\\.[0-9]{1,6}){0,4}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The version that saved the file, e.g. 25.2.4.4960.",
+          "title": "Daw Version"
+        },
+        "ppq": {
+          "description": "Ticks per quarter note of every *_ticks value.",
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Ppq",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "daw",
+        "daw_version",
+        "ppq"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "TempoTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "tempo",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "TempoTarget",
+      "type": "object"
+    },
+    "TimeSignature": {
+      "additionalProperties": false,
+      "properties": {
+        "numerator": {
+          "maximum": 99,
+          "minimum": 1,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "denominator": {
+          "enum": [
+            1,
+            2,
+            4,
+            8,
+            16,
+            32
+          ],
+          "title": "Denominator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "TimeSignature",
+      "type": "object"
+    },
+    "Track": {
+      "additionalProperties": false,
+      "description": "One lane of an arrangement. A track that isn't listed is empty, not removed.",
+      "properties": {
+        "id": {
+          "pattern": "^track:(?:[1-9]|[1-9][0-9]|[1-4][0-9]{2}|500)$",
+          "title": "Id",
+          "type": "string"
+        },
+        "number": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        },
+        "name": {
+          "maxLength": 255,
+          "pattern": "^[^\\x00]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "clips": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/PatternClip"
+              },
+              {
+                "$ref": "#/$defs/AudioClip"
+              },
+              {
+                "$ref": "#/$defs/AutomationClip"
+              }
+            ]
+          },
+          "maxItems": 20000,
+          "title": "Clips",
+          "type": "array"
+        },
+        "extensions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Extensions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "number",
+        "name",
+        "enabled",
+        "clips"
+      ],
+      "title": "Track",
+      "type": "object"
+    },
+    "UnknownValue": {
+      "additionalProperties": false,
+      "description": "A value the reader could not read. The document lists it in unsupported[] too.",
+      "properties": {
+        "status": {
+          "const": "unknown",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "UnknownValue",
+      "type": "object"
+    },
+    "UnsupportedEntry": {
+      "additionalProperties": false,
+      "description": "Something the project file holds that the model doesn't: at ``path`` and below.",
+      "properties": {
+        "path": {
+          "description": "An RFC 6901 JSON pointer.",
+          "maxLength": 512,
+          "pattern": "^(?:/(?:[^~/\\x00]|~[01])*)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "pattern": "^[^\\x00]*$",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "reason"
+      ],
+      "title": "UnsupportedEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A project's musical content, DAW-neutral (StemHub project model 0.1.0).",
+  "properties": {
+    "schema": {
+      "const": "stemhub.project-model",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "generator": {
+      "$ref": "#/$defs/Generator"
+    },
+    "source": {
+      "$ref": "#/$defs/Source"
+    },
+    "project": {
+      "$ref": "#/$defs/ProjectMetadata"
+    },
+    "tempo_bpm": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0.0,
+          "maximum": 999.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Null only when the project file stores no tempo (listed in unsupported[]).",
+      "title": "Tempo Bpm"
+    },
+    "time_signature": {
+      "$ref": "#/$defs/TimeSignature"
+    },
+    "instruments": {
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/SamplerInstrument"
+          },
+          {
+            "$ref": "#/$defs/PluginInstrument"
+          }
+        ]
+      },
+      "maxItems": 999,
+      "title": "Instruments",
+      "type": "array"
+    },
+    "audio_sources": {
+      "items": {
+        "$ref": "#/$defs/AudioSource"
+      },
+      "maxItems": 999,
+      "title": "Audio Sources",
+      "type": "array"
+    },
+    "patterns": {
+      "items": {
+        "$ref": "#/$defs/Pattern"
+      },
+      "maxItems": 999,
+      "title": "Patterns",
+      "type": "array"
+    },
+    "arrangements": {
+      "items": {
+        "$ref": "#/$defs/Arrangement"
+      },
+      "maxItems": 999,
+      "minItems": 1,
+      "title": "Arrangements",
+      "type": "array"
+    },
+    "current_arrangement_id": {
+      "pattern": "^arrangement:(?:0|[1-9][0-9]{0,4})$",
+      "title": "Current Arrangement Id",
+      "type": "string"
+    },
+    "mixer": {
+      "$ref": "#/$defs/Mixer"
+    },
+    "automation": {
+      "items": {
+        "$ref": "#/$defs/Automation"
+      },
+      "maxItems": 999,
+      "title": "Automation",
+      "type": "array"
+    },
+    "unsupported": {
+      "items": {
+        "$ref": "#/$defs/UnsupportedEntry"
+      },
+      "maxItems": 1000,
+      "title": "Unsupported",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "$ref": "#/$defs/ModelWarning"
+      },
+      "maxItems": 1000,
+      "title": "Warnings",
+      "type": "array"
+    },
+    "extensions": {
+      "additionalProperties": {
+        "type": "object"
+      },
+      "description": "What the core objects don't model, as free-form JSON per namespace (fl_studio). At most 8 levels deep (this object is level 1) and 65536 bytes as compact UTF-8 JSON; those two caps are checked by the backend.",
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "title": "Extensions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "generator",
+    "source",
+    "project",
+    "tempo_bpm",
+    "time_signature",
+    "instruments",
+    "audio_sources",
+    "patterns",
+    "arrangements",
+    "current_arrangement_id",
+    "mixer",
+    "automation",
+    "unsupported",
+    "warnings"
+  ],
+  "title": "ProjectModel",
+  "type": "object"
+}

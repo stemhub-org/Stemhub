@@ -70,15 +70,31 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e backend/vendor/PyFLP_v2
           pip install -e "backend[dev]"
-          pip install pytest-cov
 
+      # The floor is the whole percentage under the total measured when it was
+      # last raised (78.89% on Python 3.11 and 3.13, then 79.26% on 3.13). Raise
+      # it as coverage grows, toward the 80% backend target (SPECIFICATION.md §9.1).
       - name: Run backend tests with coverage
         run: |
           pytest backend/tests \
             --cov=backend/src/stemhub \
             --cov-report=term-missing \
             --cov-report=xml:backend/coverage.xml \
-            --cov-report=html:backend/htmlcov
+            --cov-report=html:backend/htmlcov \
+            --cov-fail-under=78
+
+      # New code starts at the target: the project model package alone must
+      # reach 80%. The guard skips the check on branches without the package
+      # (coverage exits with "No data to report" when nothing matches).
+      - name: Check project model coverage
+        run: |
+          if compgen -G 'backend/src/stemhub/project_model/*.py' > /dev/null; then
+            coverage report \
+              --include='backend/src/stemhub/project_model/*' \
+              --fail-under=80
+          else
+            echo "::warning::backend/src/stemhub/project_model has no Python modules; skipping its coverage check"
+          fi
 
       - name: Upload backend coverage report
         if: always()
@@ -123,7 +139,7 @@ jobs:
       GOOGLE_CLIENT_ID: ci
       GOOGLE_CLIENT_SECRET: ci
       STEMHUB_STORAGE_PROVIDER: local
-      STEMHUB_ARTIFACTS_ROOT: /tmp/artifacts
+      STEMHUB_STORAGE_ROOT: /tmp/storage
       STEMHUB_GCS_BUCKET: ci
       STEMHUB_GCS_PROJECT: ci
       STEMHUB_GCS_CREDENTIALS_JSON: "{}"
@@ -135,6 +151,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # The backend image installs PyFLP from backend/vendor/PyFLP_v2.
+          submodules: recursive
 
       - name: Verify Docker Compose is available
         run: docker compose version

@@ -7,12 +7,13 @@ BUILD_DIR="${PLUGIN_DIR}/build"
 BUILD_TYPE="${1:-Release}"
 
 # JUCE release fetched into ${PLUGIN_DIR}/JUCE when no JUCE install is found.
+# Keep in sync with JUCE_VERSION in .github/workflows/plugin-build.yml.
 JUCE_VERSION="${JUCE_VERSION:-9.0.4}"
 JUCE_REPO_URL="https://github.com/juce-framework/JUCE.git"
 LOCAL_JUCE_DIR="${PLUGIN_DIR}/JUCE"
 
-for tool in cmake ninja git; do
-    if ! command -v "${tool}" &>/dev/null; then
+for tool in cmake git; do
+    if ! command -v "${tool}" >/dev/null 2>&1; then
         echo "Error: ${tool} is not installed."
         if [[ "$(uname -s)" == "Darwin" ]]; then
             echo "Run: brew install ${tool}"
@@ -46,16 +47,23 @@ echo "Using JUCE at: ${JUCE_DIR}"
 cmake_args=(
     -S "${PLUGIN_DIR}"
     -B "${BUILD_DIR}"
-    -G Ninja
     "-DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
     -DCOPY_PLUGIN=ON
     "-DJUCE_DIR=${JUCE_DIR}"
 )
 
-cmake "${cmake_args[@]}"
-cmake --build "${BUILD_DIR}" --target stemhub_VST3 --config "${BUILD_TYPE}"
-
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    echo "Built VST3 target. Rescan plugins in FL Studio from:"
-    echo "  Options -> Manage plugins -> Find plugins"
+# Ninja when it is installed and the build folder is new; otherwise CMake's default generator.
+if command -v ninja >/dev/null 2>&1 && [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
+    cmake_args+=(-G Ninja)
 fi
+
+targets=(stemhub_VST3)
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    targets+=(stemhub_AU)
+fi
+
+cmake "${cmake_args[@]}"
+cmake --build "${BUILD_DIR}" --target "${targets[@]}" --config "${BUILD_TYPE}"
+
+echo "Built ${targets[*]} and copied the plugin to your plug-in folder."
+echo "Rescan plugins in your DAW, e.g. in FL Studio: Options -> Manage plugins -> Find plugins"

@@ -35,7 +35,7 @@ Example:
 | GCS | Medium — no file access | Multi-region redundancy (GCS default); local cache for hot files. |
 | Backend API | High — no requests processed | Horizontal scaling behind Cloud Run; auto-scaling on CPU/memory. |
 | Auth service | Critical — users locked out | Redundant instances; JWT validated via shared secret (stateless). |
-| Plugin update server | Low — users keep working offline | CDN distribution; plugin functions without a connection. |
+| StemHub plugin update server | Low — users keep working offline | CDN distribution; the StemHub plugin works without a connection. |
 
 ---
 
@@ -67,7 +67,7 @@ Backup retention is **capped at 35 days** to match the privacy promise in [SPECI
 
 Graceful failure paths when a dependency is down:
 
-1. **File storage unavailable** — plugin keeps working locally; web shows cached metadata; auto-sync on reconnect. UI banner: "Working offline — changes will sync when reconnected."
+1. **File storage unavailable** — the StemHub plugin keeps working locally; web shows cached metadata; queued saves upload on reconnect. UI banner: "Working offline — your versions will upload when you reconnect."
 2. **Database in read-only** — reads continue; writes queue for retry; auth and payment writes blocked with a user-visible notice.
 3. **Collaboration service down** — real-time features disabled; version control still functions; conflicts resolved on reconnect.
 4. **DAW-format parser failure** — fallback to plain-file handling without diff/change-summary features. UI banner: "Advanced features temporarily unavailable."

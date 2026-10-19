@@ -16,12 +16,12 @@ known-good parser samples while owning its own test inputs.
 
 ## Adding a fixture
 
-1. Add the binary `.flp` asset under `assets/fl_studio/`.
-2. Create a new entry in `manifest.json`.
+1. Add the `.flp` project file under `assets/fl_studio/`.
+2. Create a new entry in `corpus.json`.
 3. Record only stable expectations:
    - parse success or error
    - project metadata that should not drift accidentally
-   - mixer snapshot facts needed by current roadmap work
+   - mixer facts needed by current roadmap work
 4. Prefer message substrings over full parser exception messages when validating failures.
 
 ## Schema notes
@@ -31,5 +31,5 @@ known-good parser samples while owning its own test inputs.
 - `kind`: currently only `fl_studio_project`
 - `expectations.parse`: `success` or `error`
 - `expectations.project`: optional project-level assertions for successful parses
-- `expectations.mixer_snapshot`: optional StemHub mixer snapshot assertions
+- `expectations.mixer`: optional assertions on the mixer StemHub reads from the project file (`fl_mixer.parse_fl_mixer`)
 - `expectations.error`: expected exception type and message substring for invalid fixtures

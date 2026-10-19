@@ -42,23 +42,23 @@ The following screens illustrate the core user flows of the web platform.
 
 ### Screen 1 — User Dashboard
 
-The main landing page after login. Shows recent repositories, activity feed, and quick access to key sections (Pull Requests, Issues).
+The main landing page after login. Shows recent projects, activity feed, and quick access to key sections (Pull Requests, Issues).
 
 <img width="900" alt="User Dashboard" src="https://github.com/user-attachments/assets/52f3fff9-4d0b-4c5a-ac7b-e93184673332" />
 
 ---
 
-### Screen 2 — Repository View
+### Screen 2 — Project View
 
-The project page for a music repository. Displays the file tree organized by stem categories (Vocals, Drums, Synths), with the last commit message per file and multi-DAW format support (`.als`, `.rpp`, `.flp`).
+The project page. Displays the project's audio & MIDI files organized by category (Vocals, Drums, Synths), with the message of the last version that changed each file and multi-DAW project file support (`.als`, `.rpp`, `.flp`).
 
-<img width="900" alt="Repository View" src="https://github.com/user-attachments/assets/ac4a042f-6a2a-4347-90bf-3d628b3aec0a" />
+<img width="900" alt="Project View" src="https://github.com/user-attachments/assets/ac4a042f-6a2a-4347-90bf-3d628b3aec0a" />
 
 ---
 
 ### Screen 3 — Audio Preview & File Tree
 
-Continuation of the repository view showing the integrated audio player. The waveform player renders directly in the browser (client-side via Wavesurfer.js), allowing producers to preview the latest bounce without leaving the platform.
+Continuation of the project view showing the integrated audio player. The waveform player renders directly in the browser (client-side via Wavesurfer.js), allowing producers to play the project's preview (its latest uploaded mixdown) without leaving the platform.
 
 <img width="900" alt="Audio Preview" src="https://github.com/user-attachments/assets/a033e0f3-b074-45ed-b27f-a6056ce6f499" />
 
@@ -66,7 +66,7 @@ Continuation of the repository view showing the integrated audio player. The wav
 
 ### Screen 4 — Visual Diff
 
-A key differentiator from standard Git tools. When comparing two versions of an audio file, StemHub surfaces audio-specific metadata changes: EQ adjustments, compression settings, peak levels, RMS averages. Producers can accept or reject commits with full context.
+A key differentiator from standard Git tools. When comparing two versions of an audio file, StemHub surfaces audio-specific metadata changes: EQ adjustments, compression settings, peak levels, RMS averages. Producers can accept or close a pull request with full context.
 
 <img width="900" alt="Visual Diff" src="https://github.com/user-attachments/assets/f77af900-0d57-406e-b7e5-b7bfcfcb2c8f" />
 
@@ -74,7 +74,7 @@ A key differentiator from standard Git tools. When comparing two versions of an 
 
 ### Screen 5 — Pull Request
 
-The musical equivalent of a GitHub Pull Request. Collaborators can leave timestamped comments with embedded audio snippets, reviewers are assigned by role (Vocal Producer, Mixing Engineer, Mastering Engineer), and the merge is blocked until approval thresholds are met.
+The musical equivalent of a GitHub Pull Request. Collaborators can leave timestamped comments with embedded audio snippets, reviewers are assigned by role (Vocal Producer, Mixing Engineer, Mastering Engineer), and accepting it is blocked until approval thresholds are met.
 
 <img width="900" alt="Pull Request" src="https://github.com/user-attachments/assets/745ac26d-d220-4eaa-8ce9-1654dec3e5ba" />
 
@@ -95,4 +95,4 @@ This ensures zero hydration mismatches and a smooth visual transition after the 
 
 ## Design Principles
 
-The interface deliberately adopts patterns familiar to developers (repository structure, branches, commits, pull requests) while replacing code-specific terminology and visuals with music production equivalents. The goal is to make the learning curve minimal for producers who already collaborate via Discord or WeTransfer, without requiring any knowledge of Git.
+The interface deliberately adopts patterns familiar to developers (a Git repository's branches, commits and pull requests) while replacing code-specific terminology and visuals with music production equivalents: project, version, save, restore (see the glossary in [SPECIFICATION.md §19](./SPECIFICATION.md#19--glossary)). The goal is to make the learning curve minimal for producers who already collaborate via Discord or WeTransfer, without requiring any knowledge of Git.
