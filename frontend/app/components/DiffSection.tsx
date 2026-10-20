@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   motion,
   useMotionValueEvent,
@@ -63,7 +63,7 @@ function DiffRow({
   );
 }
 
-export default function DiffSection() {
+export default function DiffSection({ figure }: { figure?: ReactNode }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotion() ?? false;
   const { scrollYProgress } = useScroll({ target: cardRef, offset: ["start 85%", "end 45%"] });
@@ -110,6 +110,8 @@ export default function DiffSection() {
             <DiffRow key={change.kind} change={change} index={i} progress={scrollYProgress} reduceMotion={reduceMotion} />
           ))}
         </div>
+
+        {figure ? <div className="min-w-0 basis-full">{figure}</div> : null}
       </div>
     </section>
   );
