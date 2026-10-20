@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { CONTAINER, EASE_OUT, LABEL, RevealHeading, SECTION_TITLE } from "./landing";
 
@@ -45,7 +45,7 @@ function StepContent({ step, muted }: { step: (typeof steps)[number]; muted: boo
   );
 }
 
-export default function HowItWorks() {
+export default function HowItWorks({ figure }: { figure?: ReactNode }) {
   return (
     <section id="how" className={`${CONTAINER} flex scroll-mt-24 flex-col gap-12 py-24 md:py-32`}>
       <div className="flex flex-wrap items-end justify-between gap-6">
@@ -71,6 +71,17 @@ export default function HowItWorks() {
           )
         )}
       </div>
+
+      {figure ? (
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-10% 0px" }}
+          transition={{ duration: 0.8, ease: EASE_OUT }}
+        >
+          {figure}
+        </motion.div>
+      ) : null}
     </section>
   );
 }

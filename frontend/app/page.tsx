@@ -1,6 +1,3 @@
-"use client";
-
-import { MotionConfig } from "framer-motion";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Marquee from "./components/Marquee";
@@ -10,24 +7,27 @@ import Features from "./components/Features";
 import Pricing from "./components/Pricing";
 import CtaBanner from "./components/CtaBanner";
 import Footer from "./components/Footer";
+import LandingMotion from "./components/LandingMotion";
+import { MixerFigure } from "./components/figures/mixer/figure";
+import { StudioFigure } from "./components/figures/studio/figure";
 
 export default function Home() {
   return (
     // The landing page is always on Paper, whatever the app theme.
-    <MotionConfig reducedMotion="user">
+    <LandingMotion>
       <div className="bg-paper text-ink selection:bg-lime selection:text-ink">
         <Navbar />
         <main>
           <Hero />
           <Marquee />
-          <HowItWorks />
-          <DiffSection />
+          <HowItWorks figure={<StudioFigure />} />
+          <DiffSection figure={<MixerFigure />} />
           <Features />
           <Pricing />
           <CtaBanner />
         </main>
         <Footer />
       </div>
-    </MotionConfig>
+    </LandingMotion>
   );
 }
