@@ -37,6 +37,9 @@ def _assert_mixer_expectations(mixer: Any, mixer_expectations: dict[str, Any]) -
         assert mixer.mixer_supported is mixer_expectations["mixer_supported"]
     if "insert_count" in mixer_expectations:
         assert len(mixer.inserts) == mixer_expectations["insert_count"]
+    if "effect_slot_count" in mixer_expectations:
+        loaded_slots = sum(len(insert.slots) for insert in mixer.inserts)
+        assert loaded_slots == mixer_expectations["effect_slot_count"]
     if "flp_size_bytes" in mixer_expectations:
         assert mixer.flp_size_bytes == mixer_expectations["flp_size_bytes"]
     if "flp_sha256" in mixer_expectations:
