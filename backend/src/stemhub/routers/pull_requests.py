@@ -31,8 +31,8 @@ from stemhub.schemas import PullRequestCreate, PullRequestResponse
 router = APIRouter(tags=["pull-requests"])
 
 
-async def _branch_head_id(*, branch_id: UUID, db: AsyncSession) -> UUID | None:
-    """Id of the latest live version on a branch, or None if it has none.
+async def _branch_head(*, branch_id: UUID, db: AsyncSession) -> Version | None:
+    """Latest live version on a branch, or None if it has none.
 
     Branch carries no head pointer; "head" is defined by created_at, the same
     rule the version-history endpoint uses.
@@ -43,7 +43,12 @@ async def _branch_head_id(*, branch_id: UUID, db: AsyncSession) -> UUID | None:
         .order_by(Version.created_at.desc())
         .limit(1)
     )
-    head = result.scalars().first()
+    return result.scalars().first()
+
+
+async def _branch_head_id(*, branch_id: UUID, db: AsyncSession) -> UUID | None:
+    """Id of the latest live version on a branch, or None if it has none."""
+    head = await _branch_head(branch_id=branch_id, db=db)
     return head.id if head else None
 
 
