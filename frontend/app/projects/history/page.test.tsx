@@ -73,4 +73,32 @@ describe("HistoryPage", () => {
         expect((await screen.findByRole("alert")).textContent).toContain("Parser crashed");
         expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     });
+
+    it("gives each version's exact save time on hover", async () => {
+        search = "id=p1&branch_id=b-main";
+        const entry = {
+            version: {
+                id: "v1",
+                message: "First beat",
+                created_at: "2026-11-08T10:00:00Z",
+                branch_name: "main",
+                author: { id: "u1", username: "jb" },
+                source_daw: "FL Studio",
+                source_project_filename: "beat.flp",
+            },
+            compared_to_version_id: null,
+            status: "initial",
+            status_message: null,
+            summary: null,
+            changes: [],
+        };
+        vi.stubGlobal("fetch", vi.fn(async (url: string) => (url.includes("diff-history") ? json([entry]) : json(summary))));
+
+        const { container } = renderPage();
+
+        await screen.findByText("First beat");
+        const time = container.querySelector("time");
+        expect(time?.getAttribute("dateTime")).toBe("2026-11-08T10:00:00Z");
+        expect(time?.getAttribute("title")).toBe(new Date("2026-11-08T10:00:00Z").toLocaleString());
+    });
 });
