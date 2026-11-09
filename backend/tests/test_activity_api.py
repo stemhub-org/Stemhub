@@ -27,6 +27,7 @@ from sqlalchemy.sql.elements import (
     UnaryExpression,
 )
 
+from stemhub.activity import decode_cursor
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
 from stemhub.models import Branch, Collaborator, Project, PullRequest, User, Version
@@ -727,3 +728,120 @@ def test_activity_open_pull_request_has_no_closing_event() -> None:
 
     assert _of_type(items, "pull_request_merged") == []
     assert _of_type(items, "pull_request_closed") == []
+
+
+# ── Ordering and pagination ──
+
+
+def _walk(client: TestClient, project: Project, *, limit: int, **params: Any) -> list[list[str]]:
+    """Every page of the feed, following next_cursor, as lists of item ids."""
+    pages: list[list[str]] = []
+    cursor = None
+    while True:
+        query = {"limit": limit, **params}
+        if cursor is not None:
+            query["cursor"] = cursor
+        response = _activity(client, project, **query)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        pages.append(_ids(body["items"]))
+        cursor = body["next_cursor"]
+        if cursor is None:
+            return pages
+        assert len(pages) < 50, "pagination does not end"
+
+
+BUSY_PROJECT_ITEMS = 17
+
+
+def _busy_project() -> tuple[FakeSession, Project]:
+    """Every activity type, several of them sharing timestamps."""
+    session, project, main, feature = _project_with_feature_branch()
+    old = _branch(project.id, "old-idea", created_at=_at(2), deleted_at=_at(5))
+    session.branches.append(old)
+    for minute in (2, 3, 3, 3, 5, 5):
+        session.versions.append(_version(main, created_at=_at(minute), created_by=session.user))
+    session.versions.append(_version(old, created_at=_at(3), deleted_at=_at(5)))
+    merged = _pull_request(
+        project,
+        feature,
+        main,
+        created_at=_at(3),
+        created_by=session.user,
+        status="MERGED",
+        closed_at=_at(5),
+        closed_by=session.user,
+    )
+    closed = _pull_request(project, old, main, created_at=_at(5), status="CLOSED", closed_at=_at(6))
+    session.pull_requests.extend([merged, closed, _pull_request(project, feature, old, created_at=_at(6))])
+    # 4 branch events, 7 versions saved, 1 deleted, 3 opened, 1 merged, 1 closed.
+    return session, project
+
+
+def test_activity_orders_items_sharing_a_timestamp_by_id_descending() -> None:
+    session, project = _busy_project()
+    client = _make_client(session)
+
+    items = _items(client, project, limit=100)
+
+    keys = [(item["occurred_at"], item["id"]) for item in items]
+    assert keys == sorted(keys, reverse=True)
+    assert len(set(_ids(items))) == len(items) == BUSY_PROJECT_ITEMS
+
+
+def test_activity_last_page_has_no_next_cursor() -> None:
+    session, project = _busy_project()
+    client = _make_client(session)
+
+    body = _activity(client, project, limit=100).json()
+
+    assert body["next_cursor"] is None
+
+
+def test_activity_next_cursor_points_at_the_last_item_of_the_page() -> None:
+    session, project = _busy_project()
+    client = _make_client(session)
+
+    body = _activity(client, project, limit=4).json()
+
+    cursor = decode_cursor(body["next_cursor"])
+    last = body["items"][-1]
+    assert cursor.item_id == last["id"]
+    assert _iso(cursor.occurred_at) == last["occurred_at"]
+
+
+@pytest.mark.parametrize("limit", [1, 2, 3, 5, BUSY_PROJECT_ITEMS - 1, BUSY_PROJECT_ITEMS])
+def test_activity_pages_cover_the_feed_without_skips_or_duplicates(limit: int) -> None:
+    session, project = _busy_project()
+    client = _make_client(session)
+    everything = _ids(_items(client, project, limit=100))
+
+    pages = _walk(client, project, limit=limit)
+
+    assert [item_id for page in pages for item_id in page] == everything
+    assert all(len(page) == limit for page in pages[:-1])
+    assert 0 < len(pages[-1]) <= limit
+
+
+def test_activity_pages_through_many_versions_saved_at_the_same_time() -> None:
+    """More versions share the cursor's timestamp than one page (+1) holds:
+    the next page must still pick up right after the cursor."""
+    session, project, main = _owned_project_session()
+    same_time = [_version(main, created_at=_at(5)) for _ in range(9)]
+    session.versions.extend(same_time)
+    client = _make_client(session)
+
+    pages = _walk(client, project, limit=2)
+
+    expected = sorted((f"version_saved:{v.id}" for v in same_time), reverse=True)
+    assert [item_id for page in pages for item_id in page] == expected + [f"branch_created:{main.id}"]
+
+
+def test_activity_rejects_an_invalid_cursor() -> None:
+    session, project, _ = _owned_project_session()
+    client = _make_client(session)
+
+    response = _activity(client, project, cursor="not-a-cursor")
+
+    assert response.status_code == 400
+    assert "cursor" in response.json()["detail"].lower()
