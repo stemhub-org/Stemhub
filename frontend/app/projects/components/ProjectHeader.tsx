@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Sun, User } from "lucide-react";
 import { useTheme } from "next-themes";
+import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
 import { Avatar } from "@/components/ui/Avatar";
 
 
@@ -57,13 +58,9 @@ export function ProjectHeader({
                     </button>
                 )}
                 {(!onToggleSidebar || !sidebarOpen) && (
-                    <Link href="/dashboard">
-                        <span
-                            className="text-2xl font-medium tracking-tight text-foreground"
-                            style={{ fontFamily: "var(--font-syne)" }}
-                        >
-                            StemHub<span className="text-accent">.</span>
-                        </span>
+                    <Link href="/dashboard" aria-label="StemHub home" className="flex items-center gap-2 text-foreground">
+                        <BrandFigure className="h-7 w-auto" />
+                        <Wordmark className="text-xl" />
                     </Link>
                 )}
             </div>
