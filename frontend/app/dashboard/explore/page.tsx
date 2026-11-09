@@ -66,6 +66,14 @@ interface Challenge {
     created_at: string;
 }
 
+interface PlatformUpdate {
+    id: string;
+    version_string: string;
+    title: string;
+    description: string;
+    created_at: string;
+}
+
 interface EventItem {
     id: string;
     type: string;
@@ -82,7 +90,7 @@ export default function ExplorePage() {
     const [trendingProjects, setTrendingProjects] = useState<ExploreProject[]>([]);
     const [challenges, setChallenges] = useState<Challenge[]>([]);
     const [events, setEvents] = useState<EventItem[]>([]);
-    const [changelog, setChangelog] = useState<any[]>([]);
+    const [changelog, setChangelog] = useState<PlatformUpdate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isJoining, setIsJoining] = useState<Record<string, boolean>>({});
     const [isRegistering, setIsRegistering] = useState<Record<string, boolean>>({});
@@ -97,7 +105,7 @@ export default function ExplorePage() {
                     authFetch<ExploreProject[]>("/explore/projects?sort_by=trending"),
                     authFetch<Challenge[]>("/community/challenges?status=active"),
                     authFetch<EventItem[]>("/community/events"),
-                    authFetch<any[]>("/explore/changelog").catch(() => [])
+                    authFetch<PlatformUpdate[]>("/explore/changelog").catch((): PlatformUpdate[] => [])
                 ]);
 
                 setFeed(Array.isArray(feedRes) ? feedRes : []);
