@@ -10,15 +10,15 @@ export function MixerFigure() {
     <div className="iso lp-figure">
       <Plate
         fig="Fig. 02"
-        title="The same save, on the desk"
-        hint="Scroll · click for before / after"
+        title="Le même diff, sur la console"
+        hint="Défile · clique pour avant / après"
         readout={readoutOf(CHANGES, WET_AFTER)}
         keys={[
-          { mark: "lit", label: "The change shown last" },
-          { mark: "raised", label: "Modules that stayed" },
-          { mark: "dotted", label: "Where a removed module sat" },
+          { mark: "lit", label: "Le dernier changement affiché" },
+          { mark: "raised", label: "Les modules restés en place" },
+          { mark: "dotted", label: "L’emplacement d’un module retiré" },
         ]}
-        caption="Five inserts, two slots each. A reverb drops into Lead's slot 2, the delay leaves Hats' slot 1, and the Drum Bus compressor goes from fully wet to half: 12800 → 6400."
+        caption="Cinq inserts, deux slots chacun. Une reverb arrive dans le slot 2 de Lead, le delay quitte le slot 1 de Hats, et le compresseur du Drum Bus passe de 100&nbsp;% à 50&nbsp;% de wet&nbsp;: 12800 → 6400."
       >
         <MixerArt />
       </Plate>
