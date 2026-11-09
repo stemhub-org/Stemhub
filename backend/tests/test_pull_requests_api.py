@@ -738,3 +738,18 @@ def test_accept_pull_request_promotes_the_latest_source_version() -> None:
     assert response.status_code == 200, response.text
     [promoted] = [v for v in _versions_on(session, main) if v.id != main_head.id]
     assert promoted.manifest_json == latest.manifest_json
+
+
+def test_accept_pull_request_refuses_when_a_branch_was_deleted() -> None:
+    for deleted in ("source", "target"):
+        session, _, main, feature, pr, _, _ = _accept_session()
+        (feature if deleted == "source" else main).is_deleted = True
+        before = list(session.versions)
+        client = _make_client(session)
+
+        response = client.post(f"/pull-requests/{pr.id}/accept")
+
+        assert response.status_code == 409, deleted
+        assert response.json()["detail"] == "The source or target branch was deleted"
+        assert pr.status == "OPEN"
+        assert session.versions == before

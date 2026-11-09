@@ -219,6 +219,13 @@ async def accept_pull_request(
     if pull_request.status != "OPEN":
         raise HTTPException(status_code=409, detail=f"Pull request is already {pull_request.status}")
 
+    branch_ids = [pull_request.source_branch_id, pull_request.target_branch_id]
+    live_branches = await db.execute(
+        select(Branch).where(Branch.id.in_(branch_ids), Branch.is_deleted == False)
+    )
+    if len(live_branches.scalars().all()) != len(branch_ids):
+        raise HTTPException(status_code=409, detail="The source or target branch was deleted")
+
     source_head = await _branch_head(branch_id=pull_request.source_branch_id, db=db)
     if source_head is None:
         raise HTTPException(status_code=409, detail="The source branch has no version to promote")
