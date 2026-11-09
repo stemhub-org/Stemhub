@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { useUpdateProfile } from "@/lib/account";
+import { useChangeEmail, useUpdateProfile } from "@/lib/account";
 import { errorMessage } from "@/lib/api";
 import { useCurrentUser } from "@/lib/queries";
 import type { UserProfile } from "@/types/user";
@@ -97,7 +97,7 @@ export default function SettingsPage() {
                 >
                     <AnimatePresence mode="wait">
                         {activeTab === "profile" && <ProfileSettings key="profile" user={user} />}
-                        {activeTab === "account" && <AccountSettings key="account" user={user} onUpdate={() => refetch()} />}
+                        {activeTab === "account" && <AccountSettings key="account" user={user} />}
                         {activeTab === "integrations" && <IntegrationSettings key="integrations" user={user} />}
                         {activeTab === "storage" && <StorageSettings key="storage" user={user} />}
                         {activeTab === "notifications" && <NotificationSettings key="notifications" user={user} />}
@@ -252,9 +252,11 @@ function ProfileSettings({ user }: { user: UserProfile }) {
     );
 }
 
-function AccountSettings({ user, onUpdate }: { user: UserProfile, onUpdate: () => void }) {
-    const [emailForm, setEmailForm] = useState(user?.email || "");
-    const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+function AccountSettings({ user }: { user: UserProfile }) {
+    const [emailForm, setEmailForm] = useState(user.email);
+    const changeEmail = useChangeEmail();
+    const toast = useToast();
+    const isUpdatingEmail = changeEmail.isPending;
     
     const [passwordForm, setPasswordForm] = useState({
         current_password: "",
@@ -265,28 +267,16 @@ function AccountSettings({ user, onUpdate }: { user: UserProfile, onUpdate: () =
     const [passwordError, setPasswordError] = useState("");
     const [passwordSuccess, setPasswordSuccess] = useState("");
 
-    const handleUpdateEmail = async () => {
-        if (!emailForm || emailForm === user?.email) return;
-        setIsUpdatingEmail(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const res = await fetch(`${apiUrl}/auth/me/email`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ new_email: emailForm }),
-                credentials: "include"
-            });
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.detail || "Failed to update email");
-            }
-            onUpdate();
-            alert("Email updated.");
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsUpdatingEmail(false);
-        }
+    const handleUpdateEmail = () => {
+        const newEmail = emailForm.trim();
+        if (!newEmail || newEmail === user.email) return;
+        changeEmail.mutate(
+            { new_email: newEmail },
+            {
+                onSuccess: () => toast.success("Email updated."),
+                onError: (error) => toast.error(errorMessage(error, "Couldn't change your email.")),
+            },
+        );
     };
 
     const handleUpdatePassword = async () => {
@@ -354,7 +344,7 @@ function AccountSettings({ user, onUpdate }: { user: UserProfile, onUpdate: () =
                         />
                         <button 
                             onClick={handleUpdateEmail}
-                            disabled={isUpdatingEmail || emailForm === user?.email}
+                            disabled={isUpdatingEmail || emailForm.trim() === user.email}
                             className="shrink-0 px-4 py-3 rounded-xl bg-foreground/5 hover:bg-foreground/10 text-sm font-medium transition-colors border border-foreground/10 disabled:opacity-50"
                         >
                             {isUpdatingEmail ? <Loader2 size={16} className="animate-spin" /> : "Change"}
