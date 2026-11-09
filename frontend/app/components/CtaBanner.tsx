@@ -28,7 +28,7 @@ export default function CtaBanner() {
           Partage le&nbsp;feu.
         </motion.h2>
         <WipeLink href="/register" variant="ink" size="lg">
-          Dépose un stem +
+          Pose un stem +
         </WipeLink>
       </div>
     </motion.section>

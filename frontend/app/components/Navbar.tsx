@@ -8,10 +8,10 @@ import { BrandTile, Wordmark } from "./BrandMark";
 import { CONTAINER, EASE_OUT, EASE_SNAP, LABEL, WipeLink } from "./landing";
 
 const navLinks = [
-  { label: "How it works", href: "#how" },
-  { label: "The diff", href: "#product" },
-  { label: "Features", href: "#features" },
-  { label: "Pricing", href: "#pricing" },
+  { label: "Le principe", href: "#how" },
+  { label: "Le diff", href: "#product" },
+  { label: "Fonctions", href: "#features" },
+  { label: "Tarifs", href: "#pricing" },
 ];
 
 export default function Navbar() {
@@ -33,7 +33,7 @@ export default function Navbar() {
       className="fixed inset-x-0 top-0 z-50 bg-paper/95 text-ink backdrop-blur-sm"
     >
       <nav className={`${CONTAINER} flex items-center justify-between gap-6 border-b-2 border-ink py-4`}>
-        <Link href="/" className="flex items-center gap-2.5" aria-label="StemHub home">
+        <Link href="/" className="flex items-center gap-2.5" aria-label="StemHub, accueil">
           <BrandTile className="h-9 w-9" />
           <Wordmark className="text-xl" />
         </Link>
@@ -49,10 +49,10 @@ export default function Navbar() {
 
         <div className="hidden items-center gap-2 md:flex">
           <Link href="/login" className="px-3 py-3 text-sm font-medium hover:underline">
-            Sign in
+            Connexion
           </Link>
           <WipeLink href="/register" variant="lime" size="sm">
-            Drop a stem +
+            Pose un stem +
           </WipeLink>
         </div>
 
@@ -60,7 +60,7 @@ export default function Navbar() {
           type="button"
           className="flex h-11 w-11 items-center justify-center md:hidden"
           onClick={() => setMobileOpen((open) => !open)}
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
           aria-expanded={mobileOpen}
         >
           {mobileOpen ? <X size={22} /> : <Menu size={22} />}
@@ -89,10 +89,10 @@ export default function Navbar() {
               ))}
               <div className="mt-4 flex gap-2">
                 <WipeLink href="/login" variant="outline" className="flex-1">
-                  Sign in
+                  Connexion
                 </WipeLink>
                 <WipeLink href="/register" variant="ink" className="flex-1">
-                  Drop a stem +
+                  Pose un stem +
                 </WipeLink>
               </div>
             </div>
