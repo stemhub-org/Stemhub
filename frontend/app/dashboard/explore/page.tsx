@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { Avatar } from "@/components/ui/Avatar";
 import { authFetch } from "@/lib/api";
 import {
     Play,
@@ -239,13 +240,16 @@ export default function ExplorePage() {
                 <div key={producer.id} className="flex items-center justify-between p-3 rounded-xl bg-background border border-border-subtle hover:border-accent/40 hover:shadow-md transition-all cursor-pointer group/item">
                     <div className="flex items-center gap-4">
                         <span className="text-xs font-bold text-foreground-muted w-3">{idx + 1}</span>
-                        {producer.avatar_url ? (
-                            <img src={producer.avatar_url} alt={producer.username} className="h-10 w-10 rounded-full object-cover group-hover/item:scale-110 transition-transform" />
-                        ) : (
-                            <div className={`h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-rose-400 flex items-center justify-center text-white text-xs font-bold shadow-sm group-hover/item:scale-110 group-hover/item:rotate-3 transition-transform`}>
-                                {producer.username.substring(0, 2).toUpperCase()}
-                            </div>
-                        )}
+                        <Avatar
+                            src={producer.avatar_url}
+                            alt={producer.username}
+                            className="h-10 w-10 rounded-full object-cover group-hover/item:scale-110 transition-transform"
+                            fallback={
+                                <div className={`h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-rose-400 flex items-center justify-center text-white text-xs font-bold shadow-sm group-hover/item:scale-110 group-hover/item:rotate-3 transition-transform`}>
+                                    {producer.username.substring(0, 2).toUpperCase()}
+                                </div>
+                            }
+                        />
                         <div>
                             <div className="font-bold text-foreground group-hover/item:text-accent transition-colors">{producer.username}</div>
                             <div className="text-xs text-foreground-muted">{producer.follower_count} followers</div>
@@ -284,13 +288,16 @@ export default function ExplorePage() {
             {producers.slice(4, 7).map((collab, idx) => (
                 <div key={collab.id} className="bg-background border border-border-subtle rounded-xl p-4 hover:border-blue-500/40 hover:shadow-md transition-all group/item">
                     <div className="flex items-center gap-3 mb-3 relative">
-                        {collab.avatar_url ? (
-                            <img src={collab.avatar_url} alt={collab.username} className="h-12 w-12 rounded-full object-cover group-hover/item:shadow-lg transition-shadow" />
-                        ) : (
-                            <div className={`h-12 w-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white text-sm font-bold shadow-md group-hover/item:shadow-lg transition-shadow`}>
-                                {collab.username.substring(0, 2).toUpperCase()}
-                            </div>
-                        )}
+                        <Avatar
+                            src={collab.avatar_url}
+                            alt={collab.username}
+                            className="h-12 w-12 rounded-full object-cover group-hover/item:shadow-lg transition-shadow"
+                            fallback={
+                                <div className={`h-12 w-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white text-sm font-bold shadow-md group-hover/item:shadow-lg transition-shadow`}>
+                                    {collab.username.substring(0, 2).toUpperCase()}
+                                </div>
+                            }
+                        />
                         <div>
                             <h4 className="font-bold text-foreground text-sm group-hover/item:text-blue-500 transition-colors">{collab.username}</h4>
                             <p className="text-[10px] text-foreground-muted mt-0.5">{collab.follower_count} followers</p>
