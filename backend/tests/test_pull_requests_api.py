@@ -675,3 +675,19 @@ def test_accept_pull_request_onto_an_empty_target_starts_its_history() -> None:
     assert version.parent_version_id is None
     assert version.manifest_json == _MANIFEST
 
+
+
+def test_accept_pull_request_refuses_one_that_is_not_open() -> None:
+    for status in ("CLOSED", "MERGED"):
+        session, _, main, _, pr, _, _ = _accept_session()
+        pr.status = status
+        before = list(session.versions)
+        client = _make_client(session)
+
+        response = client.post(f"/pull-requests/{pr.id}/accept")
+
+        assert response.status_code == 409, status
+        assert response.json()["detail"] == f"Pull request is already {status}"
+        assert pr.status == status
+        assert session.versions == before
+        assert session.commit_calls == 0
