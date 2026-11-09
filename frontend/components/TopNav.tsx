@@ -60,7 +60,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                     <input
                         type="text"
                         placeholder="Search users, projects, genres..."
-                        className="w-full h-10 pl-10 pr-4 rounded-xl border border-border-subtle bg-background-secondary dark:bg-background-tertiary text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all outline-none shadow-sm group-focus-within:shadow-[0_0_15px_rgba(156,87,223,0.1)]"
+                        className="w-full h-10 pl-10 pr-4 rounded-xl border border-border-subtle bg-background-secondary dark:bg-background-tertiary text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all outline-none shadow-sm group-focus-within:shadow-[var(--shadow-glow-accent)]"
                     />
                 </div>
             </div>
@@ -91,8 +91,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                         onClick={() => {
                             router.push("/dashboard/profile");
                         }}
-                        className={`h-10 w-10 rounded-full flex items-center justify-center text-white border-2 shadow-sm hover:opacity-90 transition-opacity bg-background-secondary dark:bg-background-tertiary overflow-hidden ${isDark ? "border-transparent" : "border-white"}`}
-                        style={!userData?.avatar_url ? { background: "linear-gradient(to top right, #9C57DF, #C28CF0)" } : {}}
+                        className={`h-10 w-10 rounded-full flex items-center justify-center border-2 shadow-sm hover:opacity-90 transition-opacity overflow-hidden ${isDark ? "border-transparent" : "border-white"} ${userData?.avatar_url ? "bg-background-secondary dark:bg-background-tertiary" : "bg-accent text-accent-foreground"}`}
                         title="View profile"
                     >
                         <Avatar
