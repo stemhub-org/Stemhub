@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ToastProvider";
+import { SITE_URL } from "@/lib/site";
 
 const syne = localFont({
   src: [
@@ -23,6 +24,7 @@ const jakarta = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "StemHub — Your music's memory",
   description:
     "Decentralized versioning designed for music producers. Every project, every version, every decision — preserved.",
