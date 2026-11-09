@@ -753,3 +753,49 @@ def test_accept_pull_request_refuses_when_a_branch_was_deleted() -> None:
         assert response.json()["detail"] == "The source or target branch was deleted"
         assert pr.status == "OPEN"
         assert session.versions == before
+
+
+def _as_collaborator(session: FakeSession, project: Project, role: str) -> User:
+    member = _user()
+    session.collaborators.append(Collaborator(project_id=project.id, user_id=member.id, role=role))
+    session.user = member
+    return member
+
+
+def test_accept_pull_request_is_open_to_admin_collaborators() -> None:
+    session, project, _, _, pr, _, _ = _accept_session()
+    admin = _as_collaborator(session, project, "Admin")
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    assert pr.closed_by == admin.id
+
+
+def test_accept_pull_request_is_forbidden_to_editors() -> None:
+    """Editors can open and close pull requests, but accepting is the owner's review."""
+    session, project, _, _, pr, _, _ = _accept_session()
+    _as_collaborator(session, project, "Editor")
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only the project owner or an Admin can accept a pull request"
+    assert pr.status == "OPEN"
+
+
+def test_accept_pull_request_hides_the_pr_from_viewers_and_strangers() -> None:
+    for role in ("Viewer", None):
+        session, project, _, _, pr, _, _ = _accept_session()
+        if role:
+            _as_collaborator(session, project, role)
+        else:
+            session.user = _user()
+        client = _make_client(session)
+
+        response = client.post(f"/pull-requests/{pr.id}/accept")
+
+        assert response.status_code == 404, role
+        assert pr.status == "OPEN"
