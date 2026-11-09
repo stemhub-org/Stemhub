@@ -479,7 +479,7 @@ export default function ProfilePage() {
                                 group.genres.filter(g => g.replace(/-/g, ' ').toLowerCase().includes(genreSearch.toLowerCase())).length === 0
                             ) && (
                                     <div className="text-center py-10 text-foreground/40 text-sm italic">
-                                        No genres found matching "{genreSearch}"
+                                        No genres found matching “{genreSearch}”
                                     </div>
                                 )}
                         </div>
