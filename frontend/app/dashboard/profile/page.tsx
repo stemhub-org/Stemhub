@@ -18,8 +18,6 @@ import {
     Music,
     Heart,
     Headphones,
-    GitBranch,
-    Users,
     Edit2,
     Search,
     X,
@@ -81,7 +79,6 @@ export default function ProfilePage() {
     const [isSearchingLocation, setIsSearchingLocation] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [featuredFavorites, setFeaturedFavorites] = useState<Record<string, boolean>>({});
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
