@@ -24,7 +24,7 @@ function item(id: string) {
 
 describe("fetchProjectActivityPage", () => {
     it("asks for one page with the page size", async () => {
-        const fetchMock = vi.fn(async (_url: string) => json({ items: [], next_cursor: null }));
+        const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () => json({ items: [], next_cursor: null }));
         vi.stubGlobal("fetch", fetchMock);
 
         await fetchProjectActivityPage("p1", {});
@@ -33,7 +33,7 @@ describe("fetchProjectActivityPage", () => {
     });
 
     it("passes the cursor and repeats types", async () => {
-        const fetchMock = vi.fn(async (_url: string) => json({ items: [], next_cursor: null }));
+        const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () => json({ items: [], next_cursor: null }));
         vi.stubGlobal("fetch", fetchMock);
 
         await fetchProjectActivityPage("p1", { cursor: "abc_-", types: ["branch_created", "branch_deleted"] });
