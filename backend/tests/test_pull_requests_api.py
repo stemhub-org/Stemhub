@@ -118,10 +118,12 @@ class FakeSession:
         self.versions: list[Version] = []
         self.pull_requests: list[PullRequest] = []
         self.commit_calls = 0
+        self.statements: list[Any] = []
 
     # ── SQLAlchemy surface ──
 
     async def execute(self, stmt):
+        self.statements.append(stmt)
         return _FakeResult(self, stmt)
 
     def add(self, obj) -> None:
@@ -799,3 +801,19 @@ def test_accept_pull_request_hides_the_pr_from_viewers_and_strangers() -> None:
 
         assert response.status_code == 404, role
         assert pr.status == "OPEN"
+
+
+def test_accept_pull_request_locks_the_pull_request_row() -> None:
+    """Two concurrent accepts must not both promote: the second waits for the
+    first, then sees MERGED and gets a 409."""
+    session, _, _, _, pr, _, _ = _accept_session()
+    client = _make_client(session)
+
+    client.post(f"/pull-requests/{pr.id}/accept")
+
+    pr_reads = [
+        stmt for stmt in session.statements
+        if stmt.column_descriptions[0]["entity"] is PullRequest
+    ]
+    assert pr_reads and pr_reads[0]._for_update_arg is not None
+
