@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any, get_args
 from uuid import UUID
 
+from sqlalchemy import and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -113,6 +114,30 @@ class _Event:
         column = _ACTOR_COLUMN.get(self.type)
         return getattr(self.entity, column) if column else None
 
+    def is_after(self, cursor: Cursor | None) -> bool:
+        """Whether the event comes strictly after the cursor, newest first."""
+        if cursor is None:
+            return True
+        return (self.occurred_at, self.id) < (cursor.occurred_at, cursor.item_id)
+
+
+def _after_cursor(activity_type: str, occurred_at, entity_id, cursor: Cursor):
+    """SQL twin of _Event.is_after for the events of one type.
+
+    Item ids of one type compare like their entity ids (Postgres orders
+    uuids by their bytes, which is the order of their hex text). Ids of two
+    different types compare by the type alone, so at the cursor's timestamp
+    a type's events are either all after the cursor or all before it.
+    """
+    if activity_type == cursor.type:
+        return or_(
+            occurred_at < cursor.occurred_at,
+            and_(occurred_at == cursor.occurred_at, entity_id < cursor.entity_id),
+        )
+    if f"{activity_type}:" < f"{cursor.type}:":
+        return occurred_at <= cursor.occurred_at
+    return occurred_at < cursor.occurred_at
+
 
 async def _query_events(
     db: AsyncSession,
@@ -121,9 +146,12 @@ async def _query_events(
     occurred_at,
     filters: list,
     *,
+    cursor: Cursor | None,
     limit: int,
 ) -> list[_Event]:
-    """The newest `limit` events of one type, newest first."""
+    """The first `limit` events of one type after the cursor, newest first."""
+    if cursor is not None:
+        filters = [*filters, _after_cursor(activity_type, occurred_at, model.id, cursor)]
     result = await db.execute(
         select(model)
         .where(*filters)
@@ -187,29 +215,37 @@ def _branch_events(branches: dict[UUID, Branch]) -> list[_Event]:
     return events
 
 
-async def build_activity_feed(db: AsyncSession, *, project_id: UUID, limit: int) -> ActivityFeedResponse:
-    """One page of the project's activity, newest first.
+async def build_activity_feed(
+    db: AsyncSession,
+    *,
+    project_id: UUID,
+    limit: int,
+    cursor: Cursor | None = None,
+) -> ActivityFeedResponse:
+    """One page of the project's activity, newest first, after `cursor`.
 
-    Each source is queried for at most `limit + 1` events, so merging them
-    is enough to know the page and whether more items exist. Actors are then
-    loaded in one query for the page only.
+    Each source is queried for at most `limit + 1` events after the cursor,
+    so merging them is enough to know the page and whether more items exist.
+    Actors are then loaded in one query for the page only.
     """
     # Deleted branches included: their versions were saved, and their own
     # creation and deletion are activity.
     branch_result = await db.execute(select(Branch).where(Branch.project_id == project_id))
     branches = {branch.id: branch for branch in branch_result.scalars().all()}
 
-    events = _branch_events(branches)
+    events = [event for event in _branch_events(branches) if event.is_after(cursor)]
     if branches:
         in_project = Version.branch_id.in_(list(branches))
         events += await _query_events(
             db, "version_saved", Version, Version.created_at,
             [in_project],
+            cursor=cursor,
             limit=limit + 1,
         )
         events += await _query_events(
             db, "version_deleted", Version, Version.deleted_at,
             [in_project, Version.is_deleted == True, Version.deleted_at.is_not(None)],
+            cursor=cursor,
             limit=limit + 1,
         )
 
@@ -218,20 +254,23 @@ async def build_activity_feed(db: AsyncSession, *, project_id: UUID, limit: int)
     events += await _query_events(
         db, "pull_request_opened", PullRequest, PullRequest.created_at,
         live_pull_requests,
+        cursor=cursor,
         limit=limit + 1,
     )
     for activity_type, status in (("pull_request_merged", "MERGED"), ("pull_request_closed", "CLOSED")):
         events += await _query_events(
             db, activity_type, PullRequest, PullRequest.closed_at,
             [*live_pull_requests, PullRequest.status == status, PullRequest.closed_at.is_not(None)],
+            cursor=cursor,
             limit=limit + 1,
         )
 
     events.sort(key=lambda event: (event.occurred_at, event.id), reverse=True)
     page = events[:limit]
+    next_cursor = encode_cursor(page[-1].occurred_at, page[-1].id) if len(events) > limit else None
 
     actors = await _load_actors(db, page)
     return ActivityFeedResponse(
         items=[_to_item(event, branches=branches, actors=actors) for event in page],
-        next_cursor=None,
+        next_cursor=next_cursor,
     )
