@@ -77,13 +77,18 @@ async def _ensure_no_other_open_pull_request(
         )
 
 
-async def _get_pull_request_or_404(*, pull_request_id: UUID, db: AsyncSession) -> PullRequest:
-    result = await db.execute(
-        select(PullRequest).where(
-            PullRequest.id == pull_request_id,
-            PullRequest.is_deleted == False,
-        )
+async def _get_pull_request_or_404(
+    *, pull_request_id: UUID, db: AsyncSession, for_update: bool = False
+) -> PullRequest:
+    """Load a live pull request. `for_update` locks its row until the commit,
+    so two concurrent state changes run one after the other."""
+    query = select(PullRequest).where(
+        PullRequest.id == pull_request_id,
+        PullRequest.is_deleted == False,
     )
+    if for_update:
+        query = query.with_for_update()
+    result = await db.execute(query)
     pull_request = result.scalar_one_or_none()
     if pull_request is None:
         raise HTTPException(status_code=404, detail="Pull request not found")
@@ -214,7 +219,7 @@ async def accept_pull_request(
     state becomes the source's. Files are content-addressed, so nothing is
     copied in storage.
     """
-    pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
+    pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db, for_update=True)
     project = await get_project_with_write_access(
         project_id=pull_request.project_id, current_user=current_user, db=db
     )
