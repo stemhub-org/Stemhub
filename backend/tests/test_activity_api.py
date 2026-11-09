@@ -685,3 +685,45 @@ def test_activity_lists_pull_requests_of_this_project_only() -> None:
     items = _items(client, project)
 
     assert _of_type(items, "pull_request_opened") == []
+
+
+@pytest.mark.parametrize(
+    ("status", "activity_type"),
+    [("MERGED", "pull_request_merged"), ("CLOSED", "pull_request_closed")],
+)
+def test_activity_lists_a_pull_request_merged_or_closed_by_its_closer(status: str, activity_type: str) -> None:
+    session, project, main, feature = _project_with_feature_branch()
+    reviewer = _user("reviewer")
+    session.users.append(reviewer)
+    pr = _pull_request(
+        project,
+        feature,
+        main,
+        created_at=_at(6),
+        created_by=session.user,
+        status=status,
+        closed_at=_at(8),
+        closed_by=reviewer,
+    )
+    session.pull_requests.append(pr)
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    assert _ids(items)[:2] == [f"{activity_type}:{pr.id}", f"pull_request_opened:{pr.id}"]
+    assert items[0]["occurred_at"] == _iso(_at(8))
+    assert items[0]["actor"] == {"id": str(reviewer.id), "username": "reviewer"}
+    assert items[0]["pull_request"]["status"] == status
+    assert items[1]["actor"] == {"id": str(session.user.id), "username": "demo"}
+    assert items[1]["pull_request"]["status"] == status  # the PR's current status
+
+
+def test_activity_open_pull_request_has_no_closing_event() -> None:
+    session, project, main, feature = _project_with_feature_branch()
+    session.pull_requests.append(_pull_request(project, feature, main, created_at=_at(6)))
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    assert _of_type(items, "pull_request_merged") == []
+    assert _of_type(items, "pull_request_closed") == []
