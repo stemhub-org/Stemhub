@@ -11,12 +11,12 @@ import {
 } from "framer-motion";
 import { CONTAINER, EASE_OUT, LABEL, RevealHeading, SECTION_TITLE } from "./landing";
 
-// The diff of a save in the StemHub plugin, worded as the backend reports it
+// The diff of a save in the StemHub plugin, after what the backend reports
 // (dry/wet values are FL Studio's raw values).
 const changes = [
-  { kind: "added", marker: "+", target: "Insert 3 “Lead” · slot 2", detail: "Reverb added" },
-  { kind: "removed", marker: "−", target: "Insert 5 “Hats” · slot 1", detail: "Delay removed" },
-  { kind: "changed", marker: "~", target: "Insert 2 “Drum Bus” · slot 1", detail: "Dry/wet 12800 → 6400" },
+  { kind: "added", marker: "+", target: "Insert 3 «\u00a0Lead\u00a0» · slot 2", detail: "Reverb ajoutée" },
+  { kind: "removed", marker: "−", target: "Insert 5 «\u00a0Hats\u00a0» · slot 1", detail: "Delay retiré" },
+  { kind: "changed", marker: "~", target: "Insert 2 «\u00a0Drum Bus\u00a0» · slot 1", detail: "Dry/wet 12800 → 6400" },
 ] as const;
 
 const MARKER_STYLES = {
@@ -79,8 +79,8 @@ export default function DiffSection({ figure }: { figure?: ReactNode }) {
     <section id="product" className="scroll-mt-16 bg-ink text-paper">
       <div className={`${CONTAINER} flex flex-wrap items-center gap-14 py-24 md:py-32`}>
         <div className="flex flex-[1_1_380px] flex-col gap-5">
-          <span className={`${LABEL} text-lime`}>The diff</span>
-          <RevealHeading text="See what moved." className={SECTION_TITLE} />
+          <span className={`${LABEL} text-lime`}>Le diff</span>
+          <RevealHeading text="Vois ce qui a bougé." className={SECTION_TITLE} />
           <motion.p
             className="max-w-[420px] text-[17px] leading-relaxed text-paper-soft"
             initial={{ opacity: 0, y: 16 }}
@@ -88,16 +88,16 @@ export default function DiffSection({ figure }: { figure?: ReactNode }) {
             viewport={{ once: true }}
             transition={{ duration: 0.8, ease: EASE_OUT }}
           >
-            Each version lists what changed in the FL Studio mixer since the one before: insert by insert, effect
-            slot by effect slot.
+            Chaque version liste ce qui a changé dans le mixer de FL Studio depuis la précédente&nbsp;: insert par
+            insert, slot d’effet par slot d’effet.
           </motion.p>
         </div>
 
         <div ref={cardRef} className="min-w-0 flex-[1_1_520px] border-2 border-paper">
           <div className={`flex justify-between gap-4 border-b-2 border-paper px-5 py-3.5 ${LABEL}`}>
-            <span>Late Night / “Late-night idea”</span>
+            <span>Late Night / «&nbsp;Idée de nuit&nbsp;»</span>
             <span className="text-lime" aria-live="polite">
-              {count} {count === 1 ? "change" : "changes"}
+              {count}&nbsp;{count <= 1 ? "changement" : "changements"}
             </span>
           </div>
           <div className="h-0.5 bg-paper-line">
