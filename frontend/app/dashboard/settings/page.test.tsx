@@ -37,6 +37,26 @@ function renderPage() {
 }
 
 describe("SettingsPage", () => {
+    it("shows the error with a retry instead of sending the user to /login", async () => {
+        let calls = 0;
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => {
+                calls += 1;
+                return calls === 1 ? json({ detail: "Database unavailable" }, 503) : json(user);
+            }),
+        );
+
+        renderPage();
+
+        expect((await screen.findByRole("alert")).textContent).toContain("Database unavailable");
+        expect(push).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+        expect(((await screen.findByLabelText("Username")) as HTMLInputElement).value).toBe("jb");
+    });
+
     it("fills the profile form with the signed-in user", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => json(user)));
 
