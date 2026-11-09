@@ -144,7 +144,7 @@ export function BranchPicker({
                                             <button 
                                                 type="submit" 
                                                 disabled={!newBranchName.trim() || isSubmitting} 
-                                                className="px-3 py-1 text-xs font-medium bg-accent text-white rounded hover:bg-accent/90 disabled:opacity-50 transition-colors"
+                                                className="px-3 py-1 text-xs font-medium bg-accent text-accent-foreground rounded hover:bg-accent/90 disabled:opacity-50 transition-colors"
                                             >
                                                 {isSubmitting ? "Creating..." : "Create"}
                                             </button>

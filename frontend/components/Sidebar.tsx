@@ -12,6 +12,7 @@ import {
     LogOut,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
 import { Button } from "@/components/ui/Button";
 import { apiFetch } from "@/lib/api";
 import { useHydrated } from "@/lib/useHydrated";
@@ -54,13 +55,9 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
             {isOpen && (
                 <>
                     <div className="h-20 flex items-center justify-between px-8 border-b border-border-subtle">
-                        <Link href="/dashboard">
-                            <span
-                                className="text-2xl font-medium tracking-tight text-foreground"
-                                style={{ fontFamily: "var(--font-syne)" }}
-                            >
-                                StemHub<span className="text-accent">.</span>
-                            </span>
+                        <Link href="/dashboard" aria-label="StemHub home" className="flex items-center gap-2 text-foreground">
+                            <BrandFigure className="h-7 w-auto" />
+                            <Wordmark className="text-xl" />
                         </Link>
                         {onToggleSidebar && (
                             <button
@@ -83,7 +80,7 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                                     key={item.name}
                                     href={item.href}
                                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 group ${isActive
-                                            ? "bg-accent/10 text-accent border border-accent/20 shadow-[0_0_15px_rgba(156,87,223,0.1)]"
+                                            ? "bg-accent/10 text-accent border border-accent/20 shadow-[var(--shadow-glow-accent)]"
                                             : "text-foreground-muted hover:text-foreground hover:bg-gradient-to-r hover:from-background-secondary hover:to-accent/5 border border-transparent hover:border-accent/20"
                                         }`}
                                 >

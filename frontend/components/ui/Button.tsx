@@ -17,7 +17,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-    solid: "bg-accent text-white hover:bg-accent/90 hover:shadow-[var(--shadow-glow-accent)]",
+    solid: "bg-accent text-accent-foreground hover:bg-accent/90 hover:shadow-[var(--shadow-glow-accent)]",
     outline:
         "border border-accent/20 bg-accent/10 text-accent hover:bg-accent/20 hover:border-accent/40",
     ghost: "text-foreground-muted hover:text-foreground hover:bg-foreground/5",

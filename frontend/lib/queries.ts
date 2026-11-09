@@ -21,6 +21,9 @@ export const queryKeys = {
     projectSummary: (projectId: string, branchId: string | null) =>
         ["projects", projectId, "summary", branchId] as const,
     projectActivity: (projectId: string) => ["projects", projectId, "activity"] as const,
+    /** The activity feed, per filter (`null` = every type). */
+    projectActivityFeed: (projectId: string, types: readonly string[] | null) =>
+        ["projects", projectId, "activity-feed", types ?? "all"] as const,
     topContributors: (projectId: string) => ["projects", projectId, "top-contributors"] as const,
     versionAssets: (versionId: string) => ["versions", versionId, "assets"] as const,
     branchDiffHistory: (branchId: string) => ["branches", branchId, "diff-history"] as const,

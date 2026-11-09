@@ -7,25 +7,30 @@
   --background: #FFFFFF;
   --background-secondary: #F4F4F5;
   --background-tertiary: #E4E4E7;
-  --accent: #9C57DF;
+  /* Identity 2026: on Paper the accent is Ink (Lime text on Paper is forbidden);
+     accent fills carry Lime text. On Ink it flips: Lime accent, Ink text on it. */
+  --accent: #0A0A0A;
+  --accent-foreground: #C8FF00;
   --accent-blue: #3E63DD;
-  --foreground: #09090B;
+  --foreground: #0A0A0A;
   --foreground-muted: #71717A;
   --border-subtle: rgba(0, 0, 0, 0.08);
   --border-hover: rgba(0, 0, 0, 0.15);
-  --shadow-glow-accent: 0 0 15px rgba(156, 87, 223, 0.3);
+  --shadow-glow-accent: 0 0 15px rgba(10, 10, 10, 0.15);
 }
 
 .dark {
-  --background: #000000;
-  --background-secondary: #0A0A0A;
-  --background-tertiary: #111111;
-  --accent: #9C57DF;
+  --background: #0A0A0A;
+  --background-secondary: #121212;
+  --background-tertiary: #1A1A1A;
+  --accent: #C8FF00;
+  --accent-foreground: #0A0A0A;
   --accent-blue: #3E63DD;
-  --foreground: #EDEDED;
-  --foreground-muted: #888888;
+  --foreground: #FFFFFF;
+  --foreground-muted: #8A8A8A;
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.15);
+  --shadow-glow-accent: 0 0 15px rgba(200, 255, 0, 0.25);
 }
 
 @theme inline {
@@ -33,6 +38,7 @@
   --color-background-secondary: var(--background-secondary);
   --color-background-tertiary: var(--background-tertiary);
   --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-accent-blue: var(--accent-blue);
   --color-foreground: var(--foreground);
   --color-foreground-muted: var(--foreground-muted);
@@ -40,6 +46,20 @@
   --color-border-hover: var(--border-hover);
   --font-display: var(--font-syne);
   --ease-brand: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Identity system 2026 (Ink / Paper / Lime). Fixed brand colours, not themed:
+   the landing page always renders on Paper. Lime is for Ink surfaces; Lime on
+   Paper is decorative only (1.0:1), never text. */
+@theme {
+  --color-ink: #0A0A0A;
+  --color-ink-soft: #4A4A4A;
+  --color-ink-line: #D0D0D0;
+  --color-paper: #FFFFFF;
+  --color-paper-soft: #BDBDBD;
+  --color-paper-line: #333333;
+  --color-lime: #C8FF00;
+  --ease-snap: cubic-bezier(0.7, 0, 0.2, 1);
 }
 
 html {
@@ -53,8 +73,8 @@ body {
 }
 
 ::selection {
-  background: rgba(62, 99, 221, 0.3);
-  color: #ffffff;
+  background: var(--color-lime);
+  color: var(--color-ink);
 }
 
 html.lenis,

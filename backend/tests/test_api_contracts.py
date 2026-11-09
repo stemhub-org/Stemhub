@@ -8,9 +8,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import get_args
 
 from stemhub.schemas import (
+    ActivityActor,
+    ActivityBranch,
+    ActivityFeedResponse,
+    ActivityItem,
+    ActivityPullRequest,
     ActivityStatsResponse,
+    ActivityType,
+    ActivityVersion,
     AssetSummary,
     ContributorStats,
     ExploreProjectResponse,
@@ -80,3 +88,46 @@ def test_mixer_diff_change_allows_a_project_level_change_without_an_insert() -> 
     payload = change.model_dump()
     assert payload["insert_index"] is None
     assert "insert_iid" not in payload
+
+
+def test_activity_feed_event_types() -> None:
+    assert set(get_args(ActivityType)) == {
+        "version_saved",
+        "version_deleted",
+        "branch_created",
+        "branch_deleted",
+        "pull_request_opened",
+        "pull_request_merged",
+        "pull_request_closed",
+    }
+
+
+def test_activity_feed_item_fields() -> None:
+    main = ActivityBranch(id=uuid.uuid4(), name="main", is_deleted=False)
+    feature = ActivityBranch(id=uuid.uuid4(), name="feature-fast-tempo", is_deleted=True)
+    version = ActivityVersion(
+        id=uuid.uuid4(), message="Mixed the drums", source_daw="FL Studio", source_project_filename="beat.flp"
+    )
+    pull_request = ActivityPullRequest(
+        id=uuid.uuid4(), title="Faster tempo", status="OPEN", source_branch=feature, target_branch=main
+    )
+    item = ActivityItem(
+        id=f"version_saved:{version.id}",
+        type="version_saved",
+        occurred_at=NOW,
+        actor=ActivityActor(id=uuid.uuid4(), username="demo"),
+        branch=main,
+        version=version,
+        pull_request=None,
+    )
+    feed = ActivityFeedResponse(items=[item], next_cursor=None)
+
+    payload = feed.model_dump()
+    assert set(payload) == {"items", "next_cursor"}
+    assert set(payload["items"][0]) == {
+        "id", "type", "occurred_at", "actor", "branch", "version", "pull_request",
+    }
+    assert set(payload["items"][0]["actor"]) == {"id", "username"}
+    assert set(payload["items"][0]["branch"]) == {"id", "name", "is_deleted"}
+    assert set(payload["items"][0]["version"]) == {"id", "message", "source_daw", "source_project_filename"}
+    assert set(pull_request.model_dump()) == {"id", "title", "status", "source_branch", "target_branch"}
