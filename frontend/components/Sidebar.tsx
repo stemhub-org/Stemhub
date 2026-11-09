@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useState, useEffect } from "react";
 import {
     LayoutDashboard,
     Compass,
@@ -15,6 +14,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { apiFetch } from "@/lib/api";
+import { useHydrated } from "@/lib/useHydrated";
 
 const navigation = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -33,13 +33,8 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
     const router = useRouter();
     const { resolvedTheme } = useTheme();
     const queryClient = useQueryClient();
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    const isLight = mounted && resolvedTheme === "light";
+    const hydrated = useHydrated();
+    const isLight = hydrated && resolvedTheme === "light";
 
     const handleLogout = async () => {
         // Sign out locally even when the server can't be reached.
