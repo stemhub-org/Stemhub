@@ -12,6 +12,7 @@ import { BranchPicker } from "./components/BranchPicker";
 import { ProjectAudioPlayer } from "./components/ProjectAudioPlayer";
 import { PreviewDownload } from "./components/PreviewDownload";
 import { RecentVersions } from "./components/RecentVersions";
+import { ActivityFeed } from "./components/ActivityFeed";
 import { ContributionActivity } from "./components/ContributionActivity";
 import { TopContributors } from "./components/TopContributors";
 import { ProjectFileList } from "./components/ProjectFileList";
@@ -271,6 +272,9 @@ function ProjectOverview({ projectId }: { projectId: string }) {
                             </section>
 
                             <aside className="w-[28rem] shrink-0 flex flex-col gap-6">
+                                <Card interactive className="overflow-hidden">
+                                    <ActivityFeed projectId={projectId} />
+                                </Card>
                                 <Card interactive className="overflow-hidden">
                                     <ContributionActivity
                                         dailyActivity={activity?.daily_activity || []}

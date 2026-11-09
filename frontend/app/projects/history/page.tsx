@@ -12,20 +12,7 @@ import type { VersionDiffHistoryEntry } from "@/types/project";
 import { BranchPicker } from "../components/BranchPicker";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
-
-function formatTimeAgo(dateString: string): string {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffMs = now.getTime() - date.getTime();
-    const diffMinutes = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffMinutes < 1) return "just now";
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
-}
+import { formatDateTime, formatTimeAgo } from "@/lib/time";
 
 function getInitials(username: string): string {
     return username.slice(0, 2).toUpperCase();
@@ -180,9 +167,13 @@ function ProjectHistory({ projectId, requestedBranchId }: { projectId: string; r
                                                         <span className="font-medium text-foreground">
                                                             {authorName}
                                                         </span>
-                                                        <span className="text-foreground/50">
+                                                        <time
+                                                            dateTime={version.created_at}
+                                                            title={formatDateTime(version.created_at)}
+                                                            className="text-foreground/50"
+                                                        >
                                                             {formatTimeAgo(version.created_at)}
-                                                        </span>
+                                                        </time>
                                                     </div>
                                                     <p className="mt-1 text-sm text-foreground/80">
                                                         {version.message || "No message"}
