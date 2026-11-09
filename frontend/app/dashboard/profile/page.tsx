@@ -195,7 +195,7 @@ export default function ProfilePage() {
                     {!isEditModalOpen ? (
                         <button
                             onClick={startEditing}
-                            className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 relative"
+                            className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 relative"
                         >
                             <Edit2 size={16} /> Edit Profile
                         </button>
@@ -203,14 +203,14 @@ export default function ProfilePage() {
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setIsEditModalOpen(false)}
-                                className="px-5 py-2.5 border border-white/10 hover:bg-white/5 text-white text-sm font-medium rounded-xl transition-colors"
+                                className="px-5 py-2.5 border border-foreground/10 hover:bg-foreground/5 text-foreground text-sm font-medium rounded-xl transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleUpdateProfile}
                                 disabled={isSaving}
-                                className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
+                                className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
                             >
                                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Save"}
                             </button>
@@ -240,7 +240,7 @@ export default function ProfilePage() {
                             {isEditModalOpen && (
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-white shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
+                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-accent-foreground shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
                                     title="Change picture"
                                 >
                                     <Edit2 size={16} />
@@ -249,7 +249,7 @@ export default function ProfilePage() {
                         </div>
                     ) : (
                         <div
-                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl relative border-4 ${isDark ? "border-accent" : "border-white"
+                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-accent flex items-center justify-center text-accent-foreground text-5xl font-bold shadow-xl relative border-4 ${isDark ? "border-accent" : "border-white"
                                 } ${isEditModalOpen ? "cursor-pointer hover:brightness-90" : ""}`}
                             onClick={() => isEditModalOpen && fileInputRef.current?.click()}
                         >
@@ -257,7 +257,7 @@ export default function ProfilePage() {
                             {isEditModalOpen && (
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-white shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
+                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-accent-foreground shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
                                     title="Change picture"
                                 >
                                     <Edit2 size={16} />
@@ -289,7 +289,7 @@ export default function ProfilePage() {
                             value={editForm.bio}
                             onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
                             placeholder="Write a short summary about yourself..."
-                            className="w-full bg-transparent border border-white/20 rounded-xl p-3 text-sm text-foreground focus:border-accent focus:outline-none placeholder:text-foreground/30 resize-none h-24 max-w-2xl"
+                            className="w-full bg-transparent border border-foreground/20 rounded-xl p-3 text-sm text-foreground focus:border-accent focus:outline-none placeholder:text-foreground/30 resize-none h-24 max-w-2xl"
                         />
                     ) : bio ? (
                         <p className="text-foreground/80 text-sm max-w-2xl leading-relaxed">
@@ -310,18 +310,18 @@ export default function ProfilePage() {
                                         type="text"
                                         value={editForm.location}
                                         onChange={(e) => handleLocationSearch(e.target.value)}
-                                        className="bg-transparent border-b border-white/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
+                                        className="bg-transparent border-b border-foreground/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
                                         placeholder="Location (e.g. Paris, France)"
                                     />
                                     {isSearchingLocation && <Loader2 size={14} className="animate-spin text-accent absolute right-2" />}
                                     {locationSuggestions.length > 0 && (
-                                        <div className="absolute z-[60] left-6 top-8 w-[calc(100%-1.5rem)] bg-black border border-white/20 rounded-xl overflow-hidden shadow-2xl backdrop-blur-3xl">
+                                        <div className="absolute z-[60] left-6 top-8 w-[calc(100%-1.5rem)] bg-background-secondary dark:bg-background-tertiary border border-foreground/20 rounded-xl overflow-hidden shadow-2xl backdrop-blur-3xl">
                                             {locationSuggestions.map((suggestion) => (
                                                 <button
                                                     key={suggestion.place_id}
                                                     type="button"
                                                     onClick={() => selectLocation(suggestion)}
-                                                    className="w-full px-4 py-3 text-left hover:bg-white/10 text-sm text-white transition-colors border-b border-white/10 last:border-none"
+                                                    className="w-full px-4 py-3 text-left hover:bg-foreground/10 text-sm text-foreground transition-colors border-b border-foreground/10 last:border-none"
                                                 >
                                                     {suggestion.display_name}
                                                 </button>
@@ -335,7 +335,7 @@ export default function ProfilePage() {
                                         type="text"
                                         value={editForm.website}
                                         onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-                                        className="bg-transparent border-b border-white/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
+                                        className="bg-transparent border-b border-foreground/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
                                         placeholder="Website URL"
                                     />
                                 </div>
@@ -411,29 +411,29 @@ export default function ProfilePage() {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className="relative w-full max-w-4xl max-h-[80vh] bg-background-secondary dark:bg-background-tertiary border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                        className="relative w-full max-w-4xl max-h-[80vh] bg-background-secondary dark:bg-background-tertiary border border-foreground/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                     >
-                        <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                        <div className="p-6 border-b border-foreground/10 flex items-center justify-between">
                             <div>
                                 <h2 className="text-xl font-medium" style={{ fontFamily: "var(--font-syne)" }}>Select Production Styles</h2>
                                 <p className="text-sm text-foreground/50 mt-1">Choose the genres that best describe your music.</p>
                             </div>
                             <button
                                 onClick={() => setIsGenreModalOpen(false)}
-                                className="p-2 hover:bg-white/5 rounded-full transition-colors"
+                                className="p-2 hover:bg-foreground/5 rounded-full transition-colors"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        <div className="px-6 pt-6 pb-2 border-b border-white/10 relative">
+                        <div className="px-6 pt-6 pb-2 border-b border-foreground/10 relative">
                             <Search size={16} className="absolute left-10 top-1/2 -translate-y-1/2 text-foreground/40 mt-2" />
                             <input
                                 type="text"
                                 placeholder="Search styles..."
                                 value={genreSearch}
                                 onChange={(e) => setGenreSearch(e.target.value)}
-                                className="w-full bg-background/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
+                                className="w-full bg-background/50 border border-foreground/10 rounded-xl py-3 pl-11 pr-4 text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
                             />
                         </div>
 
@@ -463,8 +463,8 @@ export default function ProfilePage() {
                                                             setEditForm({ ...editForm, genres: newGenres });
                                                         }}
                                                         className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between border ${isSelected
-                                                            ? "bg-accent border-accent text-white"
-                                                            : "bg-white/5 border-white/10 text-foreground/60 hover:border-white/20 hover:text-foreground"
+                                                            ? "bg-accent border-accent text-accent-foreground"
+                                                            : "bg-foreground/5 border-foreground/10 text-foreground/60 hover:border-foreground/20 hover:text-foreground"
                                                             }`}
                                                     >
                                                         <span className="capitalize text-left">{genre.replace(/-/g, ' ')}</span>
@@ -486,13 +486,13 @@ export default function ProfilePage() {
                                 )}
                         </div>
 
-                        <div className="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
+                        <div className="p-6 border-t border-foreground/10 bg-foreground/5 flex justify-end gap-3">
                             <button
                                 onClick={() => {
                                     setEditForm({ ...editForm, genres: user.genres ?? [] });
                                     setIsGenreModalOpen(false);
                                 }}
-                                className="px-5 py-2 text-sm font-medium hover:bg-white/5 rounded-xl transition-colors disabled:opacity-50"
+                                className="px-5 py-2 text-sm font-medium hover:bg-foreground/5 rounded-xl transition-colors disabled:opacity-50"
                                 disabled={isSaving}
                             >
                                 Cancel
@@ -500,7 +500,7 @@ export default function ProfilePage() {
                             <button
                                 onClick={handleSaveGenres}
                                 disabled={isSaving}
-                                className="px-6 py-2 bg-accent text-white text-sm font-medium rounded-xl hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
+                                className="px-6 py-2 bg-accent text-accent-foreground text-sm font-medium rounded-xl hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
                             >
                                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Confirm Selection"}
                             </button>

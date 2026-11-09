@@ -12,6 +12,7 @@ import { BranchPicker } from "./components/BranchPicker";
 import { ProjectAudioPlayer } from "./components/ProjectAudioPlayer";
 import { PreviewDownload } from "./components/PreviewDownload";
 import { RecentVersions } from "./components/RecentVersions";
+import { ActivityFeed } from "./components/ActivityFeed";
 import { ContributionActivity } from "./components/ContributionActivity";
 import { TopContributors } from "./components/TopContributors";
 import { ProjectFileList } from "./components/ProjectFileList";
@@ -126,10 +127,7 @@ function ProjectOverview({ projectId }: { projectId: string }) {
         assetsLoading || !assetsQuery.isError ? null : errorMessage(assetsQuery.error, "Failed to load the file list");
 
     return (
-        <div
-            className="min-h-screen bg-background text-foreground"
-            style={{ "--accent": "#9C57DF" } as React.CSSProperties}
-        >
+        <div className="min-h-screen bg-background text-foreground">
             <ProjectHeader
                 onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
                 sidebarOpen={sidebarOpen}
@@ -274,6 +272,9 @@ function ProjectOverview({ projectId }: { projectId: string }) {
                             </section>
 
                             <aside className="w-[28rem] shrink-0 flex flex-col gap-6">
+                                <Card interactive className="overflow-hidden">
+                                    <ActivityFeed projectId={projectId} />
+                                </Card>
                                 <Card interactive className="overflow-hidden">
                                     <ContributionActivity
                                         dailyActivity={activity?.daily_activity || []}
