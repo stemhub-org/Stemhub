@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Avatar } from "@/components/ui/Avatar";
-import { authFetch } from "@/lib/api";
+import { useToast } from "@/components/ToastProvider";
+import { authFetch, errorMessage } from "@/lib/api";
 import {
     Play,
     Star,
@@ -94,6 +95,7 @@ export default function ExplorePage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isJoining, setIsJoining] = useState<Record<string, boolean>>({});
     const [isRegistering, setIsRegistering] = useState<Record<string, boolean>>({});
+    const toast = useToast();
 
     useEffect(() => {
         const fetchExploreData = async () => {
@@ -124,27 +126,27 @@ export default function ExplorePage() {
         fetchExploreData();
     }, []);
 
-    const handleJoinChallenge = async (challengeId: string) => {
-        setIsJoining(prev => ({ ...prev, [challengeId]: true }));
+    const handleJoinChallenge = async (challenge: Challenge) => {
+        setIsJoining(prev => ({ ...prev, [challenge.id]: true }));
         try {
-            await authFetch(`/community/challenges/${challengeId}/join`, { method: "POST" });
-            alert("Successfully joined challenge!");
-        } catch (err: any) {
-            alert(err.message || "Failed to join challenge");
+            await authFetch(`/community/challenges/${challenge.id}/join`, { method: "POST" });
+            toast.success(`You joined “${challenge.title}”.`);
+        } catch (err) {
+            toast.error(errorMessage(err, "Couldn't join this challenge."));
         } finally {
-            setIsJoining(prev => ({ ...prev, [challengeId]: false }));
+            setIsJoining(prev => ({ ...prev, [challenge.id]: false }));
         }
     };
 
-    const handleRegisterEvent = async (eventId: string) => {
-        setIsRegistering(prev => ({ ...prev, [eventId]: true }));
+    const handleRegisterEvent = async (event: EventItem) => {
+        setIsRegistering(prev => ({ ...prev, [event.id]: true }));
         try {
-            await authFetch(`/community/events/${eventId}/register`, { method: "POST" });
-            alert("Successfully registered for event!");
-        } catch (err: any) {
-            alert(err.message || "Failed to register for event");
+            await authFetch(`/community/events/${event.id}/register`, { method: "POST" });
+            toast.success(`You're registered for “${event.title}”.`);
+        } catch (err) {
+            toast.error(errorMessage(err, "Couldn't register for this event."));
         } finally {
-            setIsRegistering(prev => ({ ...prev, [eventId]: false }));
+            setIsRegistering(prev => ({ ...prev, [event.id]: false }));
         }
     };
 
@@ -391,7 +393,7 @@ export default function ExplorePage() {
                                 <span className="font-bold text-accent">{challenge.prize}</span>
                             </div>
                             <button 
-                                onClick={() => handleJoinChallenge(challenge.id)}
+                                onClick={() => handleJoinChallenge(challenge)}
                                 disabled={isJoining[challenge.id]}
                                 className="px-4 py-2 rounded-lg bg-accent text-white font-bold text-xs hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_4px_15px_rgba(156,87,223,0.3)] hover:-translate-y-0.5"
                             >
@@ -427,7 +429,7 @@ export default function ExplorePage() {
                             <p className="text-xs font-medium text-foreground-muted flex items-center gap-2"><Users size={14} className="text-blue-500" /> -- attending</p>
                         </div>
                         <button 
-                            onClick={() => handleRegisterEvent(event.id)}
+                            onClick={() => handleRegisterEvent(event)}
                             disabled={isRegistering[event.id]}
                             className="w-full py-2.5 rounded-lg bg-transparent border-2 border-border-subtle text-foreground font-bold text-xs hover:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed hover:text-blue-500 transition-all hover:-translate-y-0.5 shadow-sm"
                         >
