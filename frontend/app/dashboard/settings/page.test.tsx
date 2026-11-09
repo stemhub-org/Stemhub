@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@/components/ToastProvider";
+import { queryKeys } from "@/lib/queries";
 import SettingsPage from "./page";
 
 const push = vi.fn();
@@ -78,5 +79,43 @@ describe("SettingsPage", () => {
         expect(screen.getByLabelText("Current Password")).toBeTruthy();
         expect(screen.getByLabelText("New Password")).toBeTruthy();
         expect(screen.getByLabelText("Confirm New Password")).toBeTruthy();
+    });
+});
+
+describe("SettingsPage profile tab", () => {
+    it("saves the profile and confirms it", async () => {
+        const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+            init?.method === "PUT" ? json({ ...user, bio: "New bio" }) : json(user),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        const { client } = renderPage();
+
+        fireEvent.change(await screen.findByLabelText("Bio"), { target: { value: "New bio" } });
+        fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+
+        expect(await screen.findByText("Profile saved.")).toBeTruthy();
+        const [, init] = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
+        expect(JSON.parse(String(init?.body))).toEqual({
+            username: "jb",
+            avatar_url: null,
+            bio: "New bio",
+            location: "Paris, France",
+            website: "https://jb.example",
+        });
+        await waitFor(() => expect(client.getQueryData(queryKeys.currentUser)).toMatchObject({ bio: "New bio" }));
+    });
+
+    it("shows the backend's message when the save fails", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (_url: string, init?: RequestInit) =>
+                init?.method === "PUT" ? json({ detail: "Username already taken" }, 400) : json(user),
+            ),
+        );
+        renderPage();
+
+        fireEvent.click(await screen.findByRole("button", { name: "Save Changes" }));
+
+        expect(await screen.findByText("Username already taken")).toBeTruthy();
     });
 });

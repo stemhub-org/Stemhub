@@ -15,7 +15,10 @@ import {
     CheckCircle2,
     Loader2
 } from "lucide-react";
+import { useToast } from "@/components/ToastProvider";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { useUpdateProfile } from "@/lib/account";
+import { errorMessage } from "@/lib/api";
 import { useCurrentUser } from "@/lib/queries";
 import type { UserProfile } from "@/types/user";
 
@@ -93,7 +96,7 @@ export default function SettingsPage() {
                     className="flex-1 rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 backdrop-blur-xl p-8 min-h-[500px]"
                 >
                     <AnimatePresence mode="wait">
-                        {activeTab === "profile" && <ProfileSettings key="profile" user={user} onUpdate={() => refetch()} />}
+                        {activeTab === "profile" && <ProfileSettings key="profile" user={user} />}
                         {activeTab === "account" && <AccountSettings key="account" user={user} onUpdate={() => refetch()} />}
                         {activeTab === "integrations" && <IntegrationSettings key="integrations" user={user} />}
                         {activeTab === "storage" && <StorageSettings key="storage" user={user} />}
@@ -105,15 +108,23 @@ export default function SettingsPage() {
     );
 }
 
-function ProfileSettings({ user, onUpdate }: { user: UserProfile, onUpdate: () => void }) {
+/** Empty text fields are saved as "not set". */
+function orNull(value: string): string | null {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+}
+
+function ProfileSettings({ user }: { user: UserProfile }) {
     const [form, setForm] = useState({
-        username: user?.username || "",
-        avatar_url: user?.avatar_url || "",
-        bio: user?.bio || "",
-        location: user?.location || "",
-        website: user?.website || ""
+        username: user.username,
+        avatar_url: user.avatar_url ?? "",
+        bio: user.bio ?? "",
+        location: user.location ?? "",
+        website: user.website ?? ""
     });
-    const [isSaving, setIsSaving] = useState(false);
+    const updateProfile = useUpdateProfile();
+    const toast = useToast();
+    const isSaving = updateProfile.isPending;
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,26 +138,20 @@ function ProfileSettings({ user, onUpdate }: { user: UserProfile, onUpdate: () =
         }
     };
 
-    const handleSave = async () => {
-        setIsSaving(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const res = await fetch(`${apiUrl}/auth/me`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(form),
-                credentials: "include"
-            });
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.detail || "Error updating profile");
-            }
-            onUpdate();
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsSaving(false);
-        }
+    const handleSave = () => {
+        updateProfile.mutate(
+            {
+                username: form.username.trim(),
+                avatar_url: orNull(form.avatar_url),
+                bio: orNull(form.bio),
+                location: orNull(form.location),
+                website: orNull(form.website),
+            },
+            {
+                onSuccess: () => toast.success("Profile saved."),
+                onError: (error) => toast.error(errorMessage(error, "Couldn't save your profile.")),
+            },
+        );
     };
 
     return (
