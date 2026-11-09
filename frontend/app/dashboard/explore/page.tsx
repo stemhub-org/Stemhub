@@ -19,6 +19,7 @@ import {
     Globe,
     Compass
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 interface ExploreProject {
     id: string;
@@ -224,7 +225,7 @@ export default function ExplorePage() {
         </div>
     );
 
-    const renderCardContainer = (Icon: any, title: string, subtitle: string, colorClass: string, children: React.ReactNode) => (
+    const renderCardContainer = (Icon: LucideIcon, title: string, subtitle: string, colorClass: string, children: React.ReactNode) => (
         <div className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-2xl p-6 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
             <div className={`absolute top-0 right-0 w-24 h-24 rounded-full blur-3xl -mr-8 -mt-8 pointer-events-none opacity-20 group-hover:opacity-40 transition-opacity ${colorClass.includes('accent') ? 'bg-accent' : colorClass.includes('amber') ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
             <div className="flex items-center gap-3 mb-6 relative z-10">
