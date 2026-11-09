@@ -119,3 +119,42 @@ describe("SettingsPage profile tab", () => {
         expect(await screen.findByText("Username already taken")).toBeTruthy();
     });
 });
+
+describe("SettingsPage account tab", () => {
+    async function openAccountTab() {
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Account" }));
+    }
+
+    it("changes the email and confirms it", async () => {
+        const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
+            init?.method === "PUT" ? json({ ...user, email: "new@stemhub.fr" }) : json(user),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        await openAccountTab();
+
+        fireEvent.change(await screen.findByLabelText("Email Address"), { target: { value: "new@stemhub.fr" } });
+        fireEvent.click(screen.getByRole("button", { name: "Change" }));
+
+        expect(await screen.findByText("Email updated.")).toBeTruthy();
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringMatching(/\/auth\/me\/email$/),
+            expect.objectContaining({ method: "PUT", body: JSON.stringify({ new_email: "new@stemhub.fr" }) }),
+        );
+    });
+
+    it("shows the backend's message when the email change fails", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (_url: string, init?: RequestInit) =>
+                init?.method === "PUT" ? json({ detail: "Email already in use" }, 400) : json(user),
+            ),
+        );
+        await openAccountTab();
+
+        fireEvent.change(await screen.findByLabelText("Email Address"), { target: { value: "taken@stemhub.fr" } });
+        fireEvent.click(screen.getByRole("button", { name: "Change" }));
+
+        expect(await screen.findByText("Email already in use")).toBeTruthy();
+    });
+});
