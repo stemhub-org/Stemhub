@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { useChangeEmail, useUpdateProfile } from "@/lib/account";
+import { useChangeEmail, useChangePassword, useUpdateProfile } from "@/lib/account";
 import { errorMessage } from "@/lib/api";
 import { useCurrentUser } from "@/lib/queries";
 import type { UserProfile } from "@/types/user";
@@ -263,7 +263,8 @@ function AccountSettings({ user }: { user: UserProfile }) {
         new_password: "",
         confirm_password: ""
     });
-    const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+    const changePassword = useChangePassword();
+    const isUpdatingPassword = changePassword.isPending;
     const [passwordError, setPasswordError] = useState("");
     const [passwordSuccess, setPasswordSuccess] = useState("");
 
@@ -279,7 +280,7 @@ function AccountSettings({ user }: { user: UserProfile }) {
         );
     };
 
-    const handleUpdatePassword = async () => {
+    const handleUpdatePassword = () => {
         setPasswordError("");
         setPasswordSuccess("");
         
@@ -293,29 +294,16 @@ function AccountSettings({ user }: { user: UserProfile }) {
             return;
         }
 
-        setIsUpdatingPassword(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const res = await fetch(`${apiUrl}/auth/me/password`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    current_password: passwordForm.current_password,
-                    new_password: passwordForm.new_password
-                }),
-                credentials: "include"
-            });
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.detail || "Failed to update password");
-            }
-            setPasswordSuccess("Password updated.");
-            setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
-        } catch (err: any) {
-            setPasswordError(err.message);
-        } finally {
-            setIsUpdatingPassword(false);
-        }
+        changePassword.mutate(
+            { current_password: passwordForm.current_password, new_password: passwordForm.new_password },
+            {
+                onSuccess: () => {
+                    setPasswordSuccess("Password updated.");
+                    setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+                },
+                onError: (error) => setPasswordError(errorMessage(error, "Couldn't change your password.")),
+            },
+        );
     };
 
     return (
@@ -389,10 +377,10 @@ function AccountSettings({ user }: { user: UserProfile }) {
                 </div>
                 
                 {passwordError && (
-                    <p className="text-sm text-red-500 font-medium">{passwordError}</p>
+                    <p role="alert" className="text-sm text-red-500 font-medium">{passwordError}</p>
                 )}
                 {passwordSuccess && (
-                    <p className="text-sm text-green-500 font-medium">{passwordSuccess}</p>
+                    <p role="status" className="text-sm text-green-500 font-medium">{passwordSuccess}</p>
                 )}
 
                 <div className="pt-2">
