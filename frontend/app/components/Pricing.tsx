@@ -7,8 +7,8 @@ const plans = [
   {
     name: "Solo",
     price: "0",
-    features: ["3 projects", "500 MB storage", "30-day history", "FL Studio & Ableton Live plugin"],
-    cta: "Start for free",
+    features: ["3 projets", "500\u00a0Mo de stockage", "Historique sur 30\u00a0jours", "Plugin FL Studio et Ableton Live"],
+    cta: "Commencer gratis",
     href: "/register",
     highlighted: false,
   },
@@ -16,14 +16,14 @@ const plans = [
     name: "Pro",
     price: "12",
     features: [
-      "Unlimited projects",
-      "50 GB storage",
-      "Unlimited history",
-      "Branches & pull requests",
-      "Up to 5 collaborators",
-      "Priority support",
+      "Projets illimités",
+      "50\u00a0Go de stockage",
+      "Historique illimité",
+      "Branches et pull requests",
+      "Jusqu’à 5\u00a0collaborateurs",
+      "Support prioritaire",
     ],
-    cta: "14-day free trial",
+    cta: "Essai gratuit de 14\u00a0jours",
     href: "/register",
     highlighted: true,
   },
@@ -31,13 +31,13 @@ const plans = [
     name: "Studio",
     price: "39",
     features: [
-      "Everything in Pro",
-      "Unlimited storage & members",
-      "SSO & permissions",
-      "API & webhooks",
-      "Dedicated account manager",
+      "Tout le plan Pro",
+      "Stockage et membres illimités",
+      "SSO et permissions",
+      "API et webhooks",
+      "Interlocuteur dédié",
     ],
-    cta: "Talk to us",
+    cta: "Parlons-en",
     href: "/register",
     highlighted: false,
   },
@@ -47,7 +47,7 @@ export default function Pricing() {
   return (
     <section id="pricing" className="scroll-mt-16 border-t-2 border-ink">
       <div className={`${CONTAINER} flex flex-col gap-12 py-24 md:py-32`}>
-        <RevealHeading text="Pick your room." className={SECTION_TITLE} />
+        <RevealHeading text="Choisis ta formule." className={SECTION_TITLE} />
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           {plans.map((plan, i) => (
             <motion.div
@@ -68,12 +68,12 @@ export default function Pricing() {
                     viewport={{ once: true }}
                     transition={{ delay: 0.5, type: "spring", stiffness: 420, damping: 15 }}
                   >
-                    Most picked
+                    Le plus choisi
                   </motion.span>
                 )}
               </div>
               <p className="font-display text-[64px] leading-none font-extrabold tracking-[-0.04em]">
-                {plan.price} €<span className="ml-1 [font-family:var(--font-jakarta)] text-[15px] font-medium tracking-normal">/ month</span>
+                {plan.price}&nbsp;€<span className="ml-1 inline-block [font-family:var(--font-jakarta)] text-[15px] font-medium tracking-normal">/ mois</span>
               </p>
               <ul
                 className={`flex flex-1 flex-col gap-2.5 border-t pt-5 text-[15px] ${plan.highlighted ? "border-paper-line" : "border-ink-line"}`}
