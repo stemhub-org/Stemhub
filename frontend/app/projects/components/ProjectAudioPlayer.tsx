@@ -134,7 +134,7 @@ function PreviewPlayer({ projectId }: { projectId: string | null }) {
                     type="button"
                     onClick={togglePlay}
                     disabled={!hasPreview || !audioUrl}
-                    className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label={isPlaying ? "Pause" : "Play"}
                 >
                     {isPlaying ? (
