@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queries";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { queryKeys, useCurrentUser, useProjects } from "@/lib/queries";
+import type { UserProfile } from "@/types/user";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import {
@@ -33,30 +35,35 @@ const GENRE_GROUPS = [
     { label: "Other & Moods", genres: ["ambient", "anime", "children", "chill", "classical", "comedy", "country", "disney", "gospel", "happy", "holidays", "honky-tonk", "jazz", "kids", "movies", "mpb", "new-age", "new-release", "opera", "party", "rainy-day", "road-trip", "show-tunes", "sleep", "soundtracks", "study", "summer", "work-out"] }
 ];
 
+interface ProfileForm {
+    username: string;
+    location: string;
+    website: string;
+    avatar_url: string;
+    bio: string;
+    genres: string[];
+}
+
+function formFromUser(user: UserProfile | undefined): ProfileForm {
+    return {
+        username: user?.username ?? "",
+        location: user?.location ?? "",
+        website: user?.website ?? "",
+        avatar_url: user?.avatar_url ?? "",
+        bio: user?.bio ?? "",
+        genres: user?.genres ?? [],
+    };
+}
+
 export default function ProfilePage() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
-    const [user, setUser] = useState<any>(null);
-    const [projects, setProjects] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { data: user, error: userError, refetch: refetchUser } = useCurrentUser();
+    const { data: projects = [] } = useProjects();
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [editForm, setEditForm] = useState<{
-        username: string;
-        location: string;
-        website: string;
-        avatar_url: string;
-        bio: string;
-        genres: string[];
-    }>({
-        username: "",
-        location: "",
-        website: "",
-        avatar_url: "",
-        bio: "",
-        genres: []
-    });
+    const [editForm, setEditForm] = useState<ProfileForm>(() => formFromUser(undefined));
     const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
     const [genreSearch, setGenreSearch] = useState("");
     const [isSaving, setIsSaving] = useState(false);
@@ -77,57 +84,34 @@ export default function ProfilePage() {
         }
     };
 
-    useEffect(() => {
-        const fetchUserAndProjects = async () => {
-            try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    if (userError) {
+        return (
+            <ErrorState
+                error={userError}
+                title="Couldn't load your profile"
+                onRetry={() => refetchUser()}
+                className="max-w-xl mx-auto mt-12"
+            />
+        );
+    }
 
-                // Fetch User
-                const userResponse = await fetch(`${apiUrl}/auth/me`, {
-                    credentials: "include"
-                });
-
-                if (!userResponse.ok) {
-                    throw new Error("Sign-in expired");
-                }
-
-                const data = await userResponse.json();
-                setUser(data);
-                setEditForm({
-                    username: data.username || "",
-                    location: data.location || "",
-                    website: data.website || "",
-                    avatar_url: data.avatar_url || "",
-                    bio: data.bio || "",
-                    genres: data.genres || []
-                });
-
-                // Fetch Projects
-                const projectsResponse = await fetch(`${apiUrl}/projects/`, {
-                    credentials: "include"
-                });
-
-                if (projectsResponse.ok) {
-                    const projectsData = await projectsResponse.json();
-                    setProjects(projectsData);
-                }
-            } catch (err) {
-                router.push("/login");
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchUserAndProjects();
-    }, [router]);
-
-    if (loading) {
+    if (!user) {
         return (
             <div className="flex h-full min-h-[50vh] items-center justify-center">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
             </div>
         );
     }
+
+    const startEditing = () => {
+        setEditForm(formFromUser(user));
+        setIsEditModalOpen(true);
+    };
+
+    const openGenreModal = () => {
+        setEditForm(formFromUser(user));
+        setIsGenreModalOpen(true);
+    };
 
     const handleLocationSearch = (query: string) => {
         setEditForm({ ...editForm, location: query });
@@ -182,7 +166,6 @@ export default function ProfilePage() {
             }
 
             const updatedUser = await response.json();
-            setUser(updatedUser);
             queryClient.setQueryData(queryKeys.currentUser, updatedUser);
             setIsEditModalOpen(false);
         } catch (err: any) {
@@ -211,7 +194,7 @@ export default function ProfilePage() {
             }
 
             const updatedUser = await response.json();
-            setUser(updatedUser);
+            queryClient.setQueryData(queryKeys.currentUser, updatedUser);
             setIsGenreModalOpen(false);
         } catch (err: any) {
             alert(err.message);
@@ -220,9 +203,10 @@ export default function ProfilePage() {
         }
     };
 
-    const { username, email, avatar_url, created_at, location, website, bio } = user || {};
+    const { username, email, avatar_url, created_at, location, website, bio } = user;
     const joinedDate = created_at ? new Date(created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown Date';
     const initials = username ? username.substring(0, 2).toUpperCase() : '??';
+    const shownAvatar = (isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url) || null;
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-12">
             {/* Header Section */}
@@ -235,7 +219,7 @@ export default function ProfilePage() {
                 <div className="absolute right-8 top-8 z-10">
                     {!isEditModalOpen ? (
                         <button
-                            onClick={() => setIsEditModalOpen(true)}
+                            onClick={startEditing}
                             className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 relative"
                         >
                             <Edit2 size={16} /> Edit Profile
@@ -243,17 +227,7 @@ export default function ProfilePage() {
                     ) : (
                         <div className="flex gap-3">
                             <button
-                                onClick={() => {
-                                    setEditForm({
-                                        username: user?.username || "",
-                                        location: user?.location || "",
-                                        website: user?.website || "",
-                                        avatar_url: user?.avatar_url || "",
-                                        bio: user?.bio || "",
-                                        genres: user?.genres || []
-                                    });
-                                    setIsEditModalOpen(false);
-                                }}
+                                onClick={() => setIsEditModalOpen(false)}
                                 className="px-5 py-2.5 border border-white/10 hover:bg-white/5 text-white text-sm font-medium rounded-xl transition-colors"
                             >
                                 Cancel
@@ -277,10 +251,10 @@ export default function ProfilePage() {
                         accept="image/*"
                         className="hidden"
                     />
-                    {editForm.avatar_url || avatar_url ? (
+                    {shownAvatar ? (
                         <div className="relative">
                             <img
-                                src={isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url}
+                                src={shownAvatar}
                                 alt={username}
                                 className={`h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 shadow-xl transition-all ${isDark ? "border-accent" : "border-white"
                                     } ${isEditModalOpen ? "cursor-pointer hover:brightness-75" : ""}`}
@@ -428,7 +402,7 @@ export default function ProfilePage() {
                         <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Production Styles</h2>
                     </div>
                     <button
-                        onClick={() => setIsGenreModalOpen(true)}
+                        onClick={openGenreModal}
                         className="flex items-center gap-2 text-xs text-foreground/60 hover:text-foreground border border-foreground/10 px-4 py-2 rounded-xl transition-colors hover:bg-foreground/5"
                     >
                         <Edit2 size={14} /> Edit
@@ -629,11 +603,11 @@ export default function ProfilePage() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
                             <span className="text-xs text-foreground/50 font-light">Projects</span>
-                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p: any) => p.owner_id === user?.id).length}</p>
+                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p) => p.owner_id === user.id).length}</p>
                         </div>
                         <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
                             <span className="text-xs text-foreground/50 font-light">Collaborations</span>
-                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p: any) => p.owner_id !== user?.id).length}</p>
+                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p) => p.owner_id !== user.id).length}</p>
                         </div>
                     </div>
                 </motion.div>
