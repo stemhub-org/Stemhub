@@ -59,6 +59,20 @@ describe("ActivityFeed", () => {
         await waitFor(() => expect(screen.queryByRole("button", { name: "Load older activity" })).toBeNull());
     });
 
+    it("filters by kind of activity", async () => {
+        const fetchMock = renderFeed(() => json({ items: [], next_cursor: null }));
+        await screen.findByText("Nothing has happened in this project yet.");
+
+        fireEvent.click(screen.getByRole("button", { name: "Branches" }));
+
+        await waitFor(() => {
+            const urls = fetchMock.mock.calls.map(([url]) => new URL(url));
+            expect(urls.some((url) => url.searchParams.getAll("types").join() === "branch_created,branch_deleted")).toBe(true);
+        });
+        expect(screen.getByRole("button", { name: "Branches" }).getAttribute("aria-pressed")).toBe("true");
+        expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("false");
+    });
+
     it("shows the error with a retry", async () => {
         let calls = 0;
         renderFeed(() => {
