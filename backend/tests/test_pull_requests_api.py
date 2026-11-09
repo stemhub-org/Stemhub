@@ -1,4 +1,4 @@
-"""Tests for the pull-request lifecycle endpoints (issue #250).
+"""Tests for the pull-request lifecycle endpoints (issues #250 and #253).
 
 Covers:
 - POST /projects/{pid}/pull-requests: create (captures both branch heads),
@@ -8,9 +8,12 @@ Covers:
 - GET /pull-requests/{id}: get by id, 404 without project access.
 - POST /pull-requests/{id}/close: OPEN → CLOSED with closed_at/closed_by; non-OPEN → 409.
 
-CLOSED is terminal (SPECIFICATION.md §19): a closed PR is not reopened,
-users open a new one. Accepting a pull request (OPEN → MERGED, issue #253) is
-out of scope: there is no endpoint for it here.
+- POST /pull-requests/{id}/accept (#253): OPEN → MERGED by promoting the
+  source head onto the target; owner or Admin only; 409 when not open, a
+  branch was deleted, the source is empty or the target moved; row lock.
+
+CLOSED and MERGED are terminal (SPECIFICATION.md §19): a closed PR is not
+reopened, users open a new one.
 """
 from __future__ import annotations
 
