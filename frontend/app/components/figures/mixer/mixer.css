@@ -1,0 +1,31 @@
+.mx {
+  cursor: pointer;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.mx:focus-visible {
+  outline: 1px solid var(--anatomy-muted);
+  outline-offset: 6px;
+}
+
+.mx .iso-svg {
+  overflow: visible;
+}
+
+.mx-hole {
+  fill: #000000;
+  stroke: none;
+}
+
+@media (max-width: 640px) {
+  .mx {
+    overflow: hidden;
+  }
+
+  .iso-plate .mx .iso-svg {
+    width: 116%;
+    margin: -4% -8% -3%;
+  }
+}
