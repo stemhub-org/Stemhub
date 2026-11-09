@@ -5,14 +5,14 @@ import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion
 import { CONTAINER, EASE_OUT, LABEL, RevealHeading, SECTION_TITLE } from "./landing";
 
 const steps = [
-  { number: "01", title: "Install the plugin", description: "Add StemHub to FL Studio or Ableton Live in one click." },
-  { number: "02", title: "Save versions", description: "Every save gets a message so you find it again." },
+  { number: "01", title: "Installe le plugin", description: "Ajoute StemHub à FL Studio ou Ableton Live en un clic." },
+  { number: "02", title: "Enregistre tes versions", description: "Chaque version a son message\u00a0: tu la retrouves sans chercher." },
   {
     number: "03",
-    title: "Branch the idea",
-    description: "Try something wild without touching the original. Compare, restore, keep the best.",
+    title: "Ouvre une branche",
+    description: "Tente un truc fou sans toucher à l’original. Compare, restaure, garde le meilleur.",
   },
-  { number: "04", title: "Pass it on", description: "Invite collaborators. Everyone works on their own branch." },
+  { number: "04", title: "Fais tourner", description: "Invite tes collaborateurs. Chacun bosse sur sa propre branche." },
 ];
 
 // Step 03 is the one element of the composition allowed to collide: it swings in
@@ -49,8 +49,8 @@ export default function HowItWorks({ figure }: { figure?: ReactNode }) {
   return (
     <section id="how" className={`${CONTAINER} flex scroll-mt-24 flex-col gap-12 py-24 md:py-32`}>
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <RevealHeading text="Catch it. Pull it apart. Push it further." className={`${SECTION_TITLE} max-w-[900px]`} />
-        <span className={LABEL}>How it works / 01–04</span>
+        <RevealHeading text={"Attrape. Démonte. Va\u00a0plus loin."} className={`${SECTION_TITLE} max-w-[900px]`} />
+        <span className={LABEL}>Comment ça marche / 01–04</span>
       </div>
 
       <div className="grid grid-cols-1 border-t-2 border-ink sm:grid-cols-2 lg:grid-cols-4">
