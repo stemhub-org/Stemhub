@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
     Activity,
@@ -14,7 +15,8 @@ import {
 } from "lucide-react";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { useProjectActivityFeed } from "@/lib/activityFeed";
-import { describeActivity, groupActivityByDay } from "@/lib/activityText";
+import { ACTIVITY_FILTERS, describeActivity, groupActivityByDay } from "@/lib/activityText";
+import type { ActivityFilter } from "@/lib/activityText";
 import { formatDateTime, formatTimeAgo } from "@/lib/time";
 import type { ActivityItem, ActivityType } from "@/types/activity";
 
@@ -62,9 +64,10 @@ interface ActivityFeedProps {
     projectId: string;
 }
 
-/** What happened in a project, newest first, one page at a time. */
+/** What happened in a project, newest first, with filters and paging. */
 export function ActivityFeed({ projectId }: ActivityFeedProps) {
-    const feed = useProjectActivityFeed(projectId, null);
+    const [filter, setFilter] = useState<ActivityFilter>(ACTIVITY_FILTERS[0]);
+    const feed = useProjectActivityFeed(projectId, filter.types);
     const items = feed.data?.pages.flatMap((page) => page.items) ?? [];
 
     return (
@@ -74,6 +77,27 @@ export function ActivityFeed({ projectId }: ActivityFeedProps) {
                 <h3 className="text-sm font-medium text-foreground" style={{ fontFamily: "var(--font-syne)" }}>
                     Activity
                 </h3>
+            </div>
+
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter activity">
+                {ACTIVITY_FILTERS.map((option) => {
+                    const isActive = option.id === filter.id;
+                    return (
+                        <button
+                            key={option.id}
+                            type="button"
+                            aria-pressed={isActive}
+                            onClick={() => setFilter(option)}
+                            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                                isActive
+                                    ? "border-accent bg-accent text-accent-foreground"
+                                    : "border-border-subtle text-foreground-muted hover:border-border-hover hover:text-foreground"
+                            }`}
+                        >
+                            {option.label}
+                        </button>
+                    );
+                })}
             </div>
 
             {feed.isError ? (
@@ -89,7 +113,7 @@ export function ActivityFeed({ projectId }: ActivityFeedProps) {
                 </div>
             ) : items.length === 0 ? (
                 <p className="text-sm text-foreground-muted">
-                    Nothing has happened in this project yet.
+                    {filter.types ? "Nothing of this kind yet." : "Nothing has happened in this project yet."}
                 </p>
             ) : (
                 <div className="flex flex-col gap-5">
