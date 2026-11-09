@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { EmailChangeRequest, ProfileUpdate, UserProfile } from "@/types/user";
+import type { EmailChangeRequest, PasswordChangeRequest, ProfileUpdate, UserProfile } from "@/types/user";
 import { ApiError, apiFetch } from "./api";
 import { queryKeys } from "./queries";
 
@@ -25,6 +25,15 @@ export function useChangeEmail() {
             apiFetch<UserProfile>("/auth/me/email", { method: "PUT", body: JSON.stringify(request) }),
         onSuccess: (user) => {
             queryClient.setQueryData(queryKeys.currentUser, user);
+        },
+    });
+}
+
+/** Changes the password (PUT /auth/me/password). The signed-in user is unchanged. */
+export function useChangePassword() {
+    return useMutation<void, ApiError, PasswordChangeRequest>({
+        mutationFn: async (request) => {
+            await apiFetch<unknown>("/auth/me/password", { method: "PUT", body: JSON.stringify(request) });
         },
     });
 }

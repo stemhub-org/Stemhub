@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { API_URL, ApiError } from "./api";
-import { useChangeEmail, useUpdateProfile } from "./account";
+import { useChangeEmail, useChangePassword, useUpdateProfile } from "./account";
 import { queryKeys } from "./queries";
 
 function json(body: unknown, status = 200) {
@@ -74,5 +74,32 @@ describe("useChangeEmail", () => {
         await expect(result.current.mutateAsync({ new_email: "taken@stemhub.fr" })).rejects.toThrow(
             "Email already in use",
         );
+    });
+});
+
+describe("useChangePassword", () => {
+    it("sends the current and new password", async () => {
+        const fetchMock = vi.fn(async () => json({ message: "Password updated" }));
+        vi.stubGlobal("fetch", fetchMock);
+        const { result } = renderWithClient(() => useChangePassword());
+
+        await result.current.mutateAsync({ current_password: "old-secret", new_password: "new-secret" });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            `${API_URL}/auth/me/password`,
+            expect.objectContaining({
+                method: "PUT",
+                body: JSON.stringify({ current_password: "old-secret", new_password: "new-secret" }),
+            }),
+        );
+    });
+
+    it("rejects with the backend's message for a wrong current password", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => json({ detail: "Current password is incorrect" }, 400)));
+        const { result } = renderWithClient(() => useChangePassword());
+
+        await expect(
+            result.current.mutateAsync({ current_password: "wrong", new_password: "new-secret" }),
+        ).rejects.toThrow("Current password is incorrect");
     });
 });
