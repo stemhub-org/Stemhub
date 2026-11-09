@@ -195,7 +195,7 @@ export default function ProfilePage() {
                     {!isEditModalOpen ? (
                         <button
                             onClick={startEditing}
-                            className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 relative"
+                            className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 relative"
                         >
                             <Edit2 size={16} /> Edit Profile
                         </button>
@@ -210,7 +210,7 @@ export default function ProfilePage() {
                             <button
                                 onClick={handleUpdateProfile}
                                 disabled={isSaving}
-                                className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
+                                className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
                             >
                                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Save"}
                             </button>
@@ -240,7 +240,7 @@ export default function ProfilePage() {
                             {isEditModalOpen && (
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-white shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
+                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-accent-foreground shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
                                     title="Change picture"
                                 >
                                     <Edit2 size={16} />
@@ -249,7 +249,7 @@ export default function ProfilePage() {
                         </div>
                     ) : (
                         <div
-                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl relative border-4 ${isDark ? "border-accent" : "border-white"
+                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-accent flex items-center justify-center text-accent-foreground text-5xl font-bold shadow-xl relative border-4 ${isDark ? "border-accent" : "border-white"
                                 } ${isEditModalOpen ? "cursor-pointer hover:brightness-90" : ""}`}
                             onClick={() => isEditModalOpen && fileInputRef.current?.click()}
                         >
@@ -257,7 +257,7 @@ export default function ProfilePage() {
                             {isEditModalOpen && (
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-white shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
+                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-accent-foreground shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
                                     title="Change picture"
                                 >
                                     <Edit2 size={16} />
@@ -463,7 +463,7 @@ export default function ProfilePage() {
                                                             setEditForm({ ...editForm, genres: newGenres });
                                                         }}
                                                         className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between border ${isSelected
-                                                            ? "bg-accent border-accent text-white"
+                                                            ? "bg-accent border-accent text-accent-foreground"
                                                             : "bg-white/5 border-white/10 text-foreground/60 hover:border-white/20 hover:text-foreground"
                                                             }`}
                                                     >
@@ -500,7 +500,7 @@ export default function ProfilePage() {
                             <button
                                 onClick={handleSaveGenres}
                                 disabled={isSaving}
-                                className="px-6 py-2 bg-accent text-white text-sm font-medium rounded-xl hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
+                                className="px-6 py-2 bg-accent text-accent-foreground text-sm font-medium rounded-xl hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
                             >
                                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Confirm Selection"}
                             </button>
