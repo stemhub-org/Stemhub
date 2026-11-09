@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ActivityItem } from "@/types/activity";
-import { describeActivity } from "./activityText";
+import { describeActivity, groupActivityByDay } from "./activityText";
 
 const main = { id: "b-main", name: "main", is_deleted: false };
 const feat = { id: "b-feat", name: "feature-fast-tempo", is_deleted: false };
@@ -62,5 +62,26 @@ describe("describeActivity", () => {
         });
         expect(describeActivity(activity({ type: "pull_request_merged", actor: jb, pull_request: pullRequest })).title).toBe("jb accepted a pull request");
         expect(describeActivity(activity({ type: "pull_request_closed", actor: jb, pull_request: pullRequest })).title).toBe("jb closed a pull request");
+    });
+});
+
+describe("groupActivityByDay", () => {
+    it("groups items under Today, Yesterday and their date, keeping the order", () => {
+        const now = new Date("2026-11-08T18:00:00");
+        const items = [
+            activity({ id: "a", occurred_at: new Date("2026-11-08T09:00:00").toISOString() }),
+            activity({ id: "b", occurred_at: new Date("2026-11-07T22:00:00").toISOString() }),
+            activity({ id: "c", occurred_at: new Date("2026-11-02T12:00:00").toISOString() }),
+            activity({ id: "d", occurred_at: new Date("2026-11-02T08:00:00").toISOString() }),
+        ];
+
+        const groups = groupActivityByDay(items, now);
+
+        expect(groups.map((group) => group.label)).toEqual([
+            "Today",
+            "Yesterday",
+            new Date("2026-11-02T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }),
+        ]);
+        expect(groups.map((group) => group.items.map((item) => item.id))).toEqual([["a"], ["b"], ["c", "d"]]);
     });
 });
