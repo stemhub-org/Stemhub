@@ -8,6 +8,7 @@ import { Heart, History, Clock, Activity, Folder, Search, Plus, User, Loader2 } 
 import { errorMessage } from "@/lib/api";
 import { useCreateProject, useCurrentUser, useProjects } from "@/lib/queries";
 import { useToast } from "@/components/ToastProvider";
+import { Avatar } from "@/components/ui/Avatar";
 import { ErrorState } from "@/components/ui/ErrorState";
 import NewProjectModal from "@/components/NewProjectModal";
 
@@ -102,13 +103,16 @@ export default function DashboardProjectsPage() {
                 <aside className="w-full md:w-62 flex-shrink-0">
                     <div className="flex flex-col items-center md:items-start gap-4">
                         <div className={`h-60 w-60 overflow-hidden rounded-full bg-gradient-to-tr from-accent to-accent/40 flex items-center justify-center border-2 ${isDark ? "border-transparent" : "border-white"}`}>
-                            {user?.avatar_url ? (
-                                <img src={user.avatar_url} alt={`${user.username}'s avatar`} className="h-full w-full object-cover rounded-full" />
-                            ) : (
-                                <span className="flex h-24 w-24 items-center justify-center rounded-full bg-black/15">
-                                    <User className="h-14 w-14 text-white/90" aria-hidden />
-                                </span>
-                            )}
+                            <Avatar
+                                src={user?.avatar_url}
+                                alt={`${user?.username ?? "Your"}'s avatar`}
+                                className="h-full w-full object-cover rounded-full"
+                                fallback={
+                                    <span className="flex h-24 w-24 items-center justify-center rounded-full bg-black/15">
+                                        <User className="h-14 w-14 text-white/90" aria-hidden />
+                                    </span>
+                                }
+                            />
                         </div>
                         <div className="space-y-2 text-center md:text-left">
                             <h1
