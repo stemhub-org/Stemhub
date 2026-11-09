@@ -216,6 +216,9 @@ async def accept_pull_request(
     pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
     await get_project_with_write_access(project_id=pull_request.project_id, current_user=current_user, db=db)
 
+    if pull_request.status != "OPEN":
+        raise HTTPException(status_code=409, detail=f"Pull request is already {pull_request.status}")
+
     source_head = await _branch_head(branch_id=pull_request.source_branch_id, db=db)
     target_head_id = await _branch_head_id(branch_id=pull_request.target_branch_id, db=db)
 
