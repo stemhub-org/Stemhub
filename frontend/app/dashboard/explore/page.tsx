@@ -8,14 +8,12 @@ import { authFetch, errorMessage } from "@/lib/api";
 import {
     Play,
     Star,
-    GitFork,
     TrendingUp,
     Clock,
     Activity,
     Users,
     Sparkles,
     Zap,
-    Box,
     Globe,
     Compass
 } from "lucide-react";
@@ -275,7 +273,7 @@ export default function ExplorePage() {
         Star, "Hot This Week", "Most starred projects", "text-amber-500",
         <div className="space-y-2">
             {trendingProjects.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No trending projects.</p>}
-            {trendingProjects.slice(0, 4).map((project, idx) => (
+            {trendingProjects.slice(0, 4).map((project) => (
                 <div key={project.id} className="flex items-center justify-between p-3 rounded-xl bg-background border border-border-subtle hover:border-amber-500/40 hover:shadow-md transition-all cursor-pointer group/item">
                     <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_currentColor]`} />
@@ -296,7 +294,7 @@ export default function ExplorePage() {
         Users, "Suggested Collabs", "Based on your style", "text-blue-500",
         <div className="space-y-3">
             {producers.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No suggestions available.</p>}
-            {producers.slice(4, 7).map((collab, idx) => (
+            {producers.slice(4, 7).map((collab) => (
                 <div key={collab.id} className="bg-background border border-border-subtle rounded-xl p-4 hover:border-blue-500/40 hover:shadow-md transition-all group/item">
                     <div className="flex items-center gap-3 mb-3 relative">
                         <Avatar
@@ -340,7 +338,7 @@ export default function ExplorePage() {
             </div>
             <div className="space-y-4">
                 {changelog.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No recent updates.</p>}
-                {changelog.slice(0, 4).map((update, idx) => {
+                {changelog.slice(0, 4).map((update) => {
                     return (
                         <div key={update.id} className="relative pl-6 pb-4 last:pb-0 border-l border-border-subtle group">
                             <div className="absolute left-[-17px] top-1 h-8 w-8 rounded-full bg-background border-4 border-background-secondary dark:border-background-tertiary flex items-center justify-center group-hover:bg-accent/10 group-hover:border-accent/20 transition-colors">
@@ -365,7 +363,7 @@ export default function ExplorePage() {
         TrendingUp, "Active Challenges", "Join to win prizes", "text-accent",
         <div className="space-y-4">
             {challenges.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No active challenges right now.</p>}
-            {challenges.map((challenge, idx) => {
+            {challenges.map((challenge) => {
                 const endsAtDate = new Date(challenge.ends_at);
                 const daysLeft = Math.max(0, Math.ceil((endsAtDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24)));
                 
@@ -411,7 +409,7 @@ export default function ExplorePage() {
         Clock, "Upcoming Events", "Workshops & Streams", "text-blue-500",
         <div className="space-y-4">
             {events.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No upcoming events right now.</p>}
-            {events.map((event, idx) => {
+            {events.map((event) => {
                 const eventDate = new Date(event.event_date);
                 const formattedDate = eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 const formattedTime = eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
