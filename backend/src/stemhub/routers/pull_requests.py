@@ -26,6 +26,7 @@ from stemhub.models import Branch, PullRequest, User, Version
 from stemhub.routers._project_access import (
     get_project_with_read_access,
     get_project_with_write_access,
+    is_project_admin,
 )
 from stemhub.schemas import PullRequestCreate, PullRequestResponse
 
@@ -214,7 +215,16 @@ async def accept_pull_request(
     copied in storage.
     """
     pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
-    await get_project_with_write_access(project_id=pull_request.project_id, current_user=current_user, db=db)
+    project = await get_project_with_write_access(
+        project_id=pull_request.project_id, current_user=current_user, db=db
+    )
+    # Accepting is the owner's review (§19): Editors may open and close pull
+    # requests, but not accept them.
+    if not await is_project_admin(project=project, user=current_user, db=db):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the project owner or an Admin can accept a pull request",
+        )
 
     if pull_request.status != "OPEN":
         raise HTTPException(status_code=409, detail=f"Pull request is already {pull_request.status}")
