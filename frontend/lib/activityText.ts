@@ -45,3 +45,40 @@ export function describeActivity(item: ActivityItem): ActivityText {
             return { title: `${who} closed a pull request`, detail: pullRequest?.title ?? null, meta: pullRequestMeta };
     }
 }
+
+export interface ActivityDay {
+    /** "Today", "Yesterday", or the local date. */
+    label: string;
+    items: ActivityItem[];
+}
+
+function localDayKey(date: Date): string {
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+/** Groups items (already newest first) by local day, keeping their order. */
+export function groupActivityByDay(items: ActivityItem[], now: Date = new Date()): ActivityDay[] {
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const todayKey = localDayKey(now);
+    const yesterdayKey = localDayKey(yesterday);
+
+    const days: ActivityDay[] = [];
+    let currentKey: string | null = null;
+    for (const item of items) {
+        const date = new Date(item.occurred_at);
+        const key = localDayKey(date);
+        if (key !== currentKey) {
+            const label =
+                key === todayKey
+                    ? "Today"
+                    : key === yesterdayKey
+                      ? "Yesterday"
+                      : date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+            days.push({ label, items: [] });
+            currentKey = key;
+        }
+        days[days.length - 1].items.push(item);
+    }
+    return days;
+}
