@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Sun, User } from "lucide-react";
 import { useTheme } from "next-themes";
+import { Avatar } from "@/components/ui/Avatar";
 
 const PROJECT_ACCENT = "#9C57DF";
 
@@ -105,15 +106,12 @@ export function ProjectHeader({
                         title="View profile"
                         aria-label="Open profile"
                     >
-                        {userAvatarUrl ? (
-                            <img
-                                src={userAvatarUrl}
-                                alt={username}
-                                className="h-full w-full object-cover"
-                            />
-                        ) : (
-                            <User size={18} />
-                        )}
+                        <Avatar
+                            src={userAvatarUrl}
+                            alt={username}
+                            className="h-full w-full object-cover"
+                            fallback={<User size={18} />}
+                        />
                     </button>
                 </div>
             </div>
