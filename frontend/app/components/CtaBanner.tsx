@@ -23,12 +23,12 @@ export default function CtaBanner() {
           style={reduceMotion ? undefined : { scale }}
           className="font-display origin-bottom-left text-[clamp(2.5rem,8vw,7.25rem)] leading-[0.88] font-extrabold tracking-[-0.04em] uppercase"
         >
-          Drop the perfect.
+          Lâche le parfait.
           <br />
-          Share the spark.
+          Partage le&nbsp;feu.
         </motion.h2>
         <WipeLink href="/register" variant="ink" size="lg">
-          Drop a stem +
+          Dépose un stem +
         </WipeLink>
       </div>
     </motion.section>
