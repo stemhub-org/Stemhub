@@ -3,26 +3,12 @@
 import Link from "next/link";
 import { Clock, ChevronRight } from "lucide-react";
 import type { VersionWithAuthor } from "@/types/project";
+import { formatTimeAgo } from "@/lib/time";
 
 interface RecentVersionsProps {
     versions: VersionWithAuthor[];
     projectId?: string | null;
     branchId?: string | null;
-}
-
-function formatTimeAgo(dateString: string): string {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffMs = now.getTime() - date.getTime();
-    const diffMinutes = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMinutes < 1) return "just now";
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
 }
 
 function getInitials(username: string): string {
