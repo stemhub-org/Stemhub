@@ -45,7 +45,11 @@ function renderPage() {
 }
 
 function stubApi(overrides: { me?: () => Response; put?: (body: unknown) => Response } = {}) {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+        if (String(url).startsWith("https://nominatim.openstreetmap.org/")) {
+            return json([{ place_id: 7, display_name: "Paris, Île-de-France, France" }]);
+        }
+        url = String(url);
         if (init?.method === "PUT") return overrides.put ? overrides.put(JSON.parse(String(init.body))) : json(user);
         if (url.endsWith("/auth/me")) return overrides.me ? overrides.me() : json(user);
         if (url.endsWith("/projects/")) return json(projects);
@@ -163,5 +167,21 @@ describe("ProfilePage production styles", () => {
 
         expect(await screen.findByText("Too many styles")).toBeTruthy();
         expect(screen.getByRole("button", { name: "Confirm Selection" })).toBeTruthy();
+    });
+});
+
+describe("ProfilePage location", () => {
+    it("suggests places while typing and fills the field with the chosen one", async () => {
+        stubApi();
+        renderPage();
+
+        fireEvent.click(await screen.findByRole("button", { name: "Edit Profile" }));
+        const field = screen.getByPlaceholderText("Location (e.g. Paris, France)") as HTMLInputElement;
+        fireEvent.change(field, { target: { value: "Paris" } });
+
+        fireEvent.click(await screen.findByRole("button", { name: "Paris, Île-de-France, France" }, { timeout: 2000 }));
+
+        expect(field.value).toBe("Paris, Île-de-France, France");
+        expect(screen.queryByRole("button", { name: "Paris, Île-de-France, France" })).toBeNull();
     });
 });
