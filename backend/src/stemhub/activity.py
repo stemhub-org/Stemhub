@@ -19,7 +19,7 @@ import base64
 import binascii
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, get_args
+from typing import Any, Iterable, get_args
 from uuid import UUID
 
 from sqlalchemy import and_, or_
@@ -221,48 +221,54 @@ async def build_activity_feed(
     project_id: UUID,
     limit: int,
     cursor: Cursor | None = None,
+    types: Iterable[str] | None = None,
 ) -> ActivityFeedResponse:
-    """One page of the project's activity, newest first, after `cursor`.
+    """One page of the project's activity, newest first, after `cursor`,
+    keeping only `types` when given.
 
     Each source is queried for at most `limit + 1` events after the cursor,
     so merging them is enough to know the page and whether more items exist.
     Actors are then loaded in one query for the page only.
     """
+    wanted = set(types) if types else set(ACTIVITY_TYPES)
+
     # Deleted branches included: their versions were saved, and their own
     # creation and deletion are activity.
     branch_result = await db.execute(select(Branch).where(Branch.project_id == project_id))
     branches = {branch.id: branch for branch in branch_result.scalars().all()}
 
-    events = [event for event in _branch_events(branches) if event.is_after(cursor)]
-    if branches:
-        in_project = Version.branch_id.in_(list(branches))
-        events += await _query_events(
-            db, "version_saved", Version, Version.created_at,
-            [in_project],
-            cursor=cursor,
-            limit=limit + 1,
-        )
-        events += await _query_events(
-            db, "version_deleted", Version, Version.deleted_at,
-            [in_project, Version.is_deleted == True, Version.deleted_at.is_not(None)],
-            cursor=cursor,
-            limit=limit + 1,
-        )
-
+    in_project = Version.branch_id.in_(list(branches))
     # Soft-deleted pull requests are left out entirely.
     live_pull_requests = [PullRequest.project_id == project_id, PullRequest.is_deleted == False]
-    events += await _query_events(
-        db, "pull_request_opened", PullRequest, PullRequest.created_at,
-        live_pull_requests,
-        cursor=cursor,
-        limit=limit + 1,
-    )
-    for activity_type, status in (("pull_request_merged", "MERGED"), ("pull_request_closed", "CLOSED")):
+    sources = {
+        "version_saved": (Version, Version.created_at, [in_project]),
+        "version_deleted": (
+            Version,
+            Version.deleted_at,
+            [in_project, Version.is_deleted == True, Version.deleted_at.is_not(None)],
+        ),
+        "pull_request_opened": (PullRequest, PullRequest.created_at, live_pull_requests),
+        "pull_request_merged": (
+            PullRequest,
+            PullRequest.closed_at,
+            [*live_pull_requests, PullRequest.status == "MERGED", PullRequest.closed_at.is_not(None)],
+        ),
+        "pull_request_closed": (
+            PullRequest,
+            PullRequest.closed_at,
+            [*live_pull_requests, PullRequest.status == "CLOSED", PullRequest.closed_at.is_not(None)],
+        ),
+    }
+
+    events = [
+        event for event in _branch_events(branches)
+        if event.type in wanted and event.is_after(cursor)
+    ]
+    for activity_type, (model, occurred_at, filters) in sources.items():
+        if activity_type not in wanted or (model is Version and not branches):
+            continue
         events += await _query_events(
-            db, activity_type, PullRequest, PullRequest.closed_at,
-            [*live_pull_requests, PullRequest.status == status, PullRequest.closed_at.is_not(None)],
-            cursor=cursor,
-            limit=limit + 1,
+            db, activity_type, model, occurred_at, filters, cursor=cursor, limit=limit + 1
         )
 
     events.sort(key=lambda event: (event.occurred_at, event.id), reverse=True)

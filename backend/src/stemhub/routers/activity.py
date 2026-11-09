@@ -19,7 +19,7 @@ from stemhub.auth import get_current_user
 from stemhub.database import get_db
 from stemhub.models import User
 from stemhub.routers._project_access import get_project_with_read_access
-from stemhub.schemas import ActivityFeedResponse
+from stemhub.schemas import ActivityFeedResponse, ActivityType
 
 router = APIRouter(tags=["activity"])
 
@@ -29,6 +29,7 @@ async def get_project_activity(
     project_id: UUID,
     limit: int = Query(30, ge=1, le=100),
     cursor: Optional[str] = Query(None, description="`next_cursor` of the previous page."),
+    types: Optional[list[ActivityType]] = Query(None, description="Keep only these types (repeatable)."),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -36,6 +37,8 @@ async def get_project_activity(
 
     Pages hold at most `limit` items; pass a page's `next_cursor` as
     `cursor` to get the next one. `next_cursor` is null on the last page.
+    `types` (repeatable) keeps only those activity types; keep the same
+    `types` while paging.
     """
     await get_project_with_read_access(project_id=project_id, current_user=current_user, db=db)
 
@@ -47,4 +50,4 @@ async def get_project_activity(
             detail="Invalid cursor: pass the next_cursor of a previous page unchanged",
         )
 
-    return await build_activity_feed(db, project_id=project_id, limit=limit, cursor=after)
+    return await build_activity_feed(db, project_id=project_id, limit=limit, cursor=after, types=types)
