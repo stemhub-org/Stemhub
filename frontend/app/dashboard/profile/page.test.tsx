@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@/components/ToastProvider";
+import { queryKeys } from "@/lib/queries";
 import ProfilePage from "./page";
 
 const push = vi.fn();
@@ -86,5 +87,49 @@ describe("ProfilePage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
         expect(await screen.findByRole("heading", { name: "jb" })).toBeTruthy();
+    });
+});
+
+describe("ProfilePage editing", () => {
+    it("saves the edited profile and leaves edit mode", async () => {
+        let sent: unknown;
+        stubApi({
+            put: (body) => {
+                sent = body;
+                return json({ ...user, bio: "Late-night house" });
+            },
+        });
+        const { client } = renderPage();
+
+        fireEvent.click(await screen.findByRole("button", { name: "Edit Profile" }));
+        fireEvent.change(screen.getByPlaceholderText("Write a short summary about yourself..."), {
+            target: { value: "Late-night house" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+        expect(await screen.findByText("Profile saved.")).toBeTruthy();
+        expect(sent).toEqual({
+            username: "jb",
+            location: "Paris, France",
+            website: "jb.example",
+            avatar_url: null,
+            bio: "Late-night house",
+            genres: ["house"],
+        });
+        expect(screen.getByRole("button", { name: "Edit Profile" })).toBeTruthy();
+        await waitFor(() =>
+            expect(client.getQueryData(queryKeys.currentUser)).toMatchObject({ bio: "Late-night house" }),
+        );
+    });
+
+    it("stays in edit mode and shows the backend's message when the save fails", async () => {
+        stubApi({ put: () => json({ detail: "Username already taken" }, 400) });
+        renderPage();
+
+        fireEvent.click(await screen.findByRole("button", { name: "Edit Profile" }));
+        fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+        expect(await screen.findByText("Username already taken")).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
     });
 });

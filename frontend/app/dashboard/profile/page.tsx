@@ -3,7 +3,10 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/components/ToastProvider";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { useUpdateProfile } from "@/lib/account";
+import { errorMessage } from "@/lib/api";
 import { queryKeys, useCurrentUser, useProjects } from "@/lib/queries";
 import type { UserProfile } from "@/types/user";
 import { useTheme } from "next-themes";
@@ -44,6 +47,12 @@ interface ProfileForm {
     genres: string[];
 }
 
+/** Empty text fields are saved as "not set". */
+function orNull(value: string): string | null {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+}
+
 function formFromUser(user: UserProfile | undefined): ProfileForm {
     return {
         username: user?.username ?? "",
@@ -62,6 +71,8 @@ export default function ProfilePage() {
     const isDark = resolvedTheme === "dark";
     const { data: user, error: userError, refetch: refetchUser } = useCurrentUser();
     const { data: projects = [] } = useProjects();
+    const updateProfile = useUpdateProfile();
+    const toast = useToast();
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editForm, setEditForm] = useState<ProfileForm>(() => formFromUser(undefined));
     const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
@@ -146,33 +157,24 @@ export default function ProfilePage() {
         setLocationSuggestions([]);
     };
 
-    const handleUpdateProfile = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSaving(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const response = await fetch(`${apiUrl}/auth/me`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
+    const handleUpdateProfile = () => {
+        updateProfile.mutate(
+            {
+                username: editForm.username.trim(),
+                location: orNull(editForm.location),
+                website: orNull(editForm.website),
+                avatar_url: orNull(editForm.avatar_url),
+                bio: orNull(editForm.bio),
+                genres: editForm.genres,
+            },
+            {
+                onSuccess: () => {
+                    toast.success("Profile saved.");
+                    setIsEditModalOpen(false);
                 },
-                body: JSON.stringify(editForm),
-                credentials: "include"
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || "Failed to update profile");
-            }
-
-            const updatedUser = await response.json();
-            queryClient.setQueryData(queryKeys.currentUser, updatedUser);
-            setIsEditModalOpen(false);
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsSaving(false);
-        }
+                onError: (error) => toast.error(errorMessage(error, "Couldn't save your profile.")),
+            },
+        );
     };
 
     const handleSaveGenres = async () => {
