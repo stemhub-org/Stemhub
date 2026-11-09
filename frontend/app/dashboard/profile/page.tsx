@@ -228,6 +228,8 @@ export default function ProfilePage() {
                     />
                     {shownAvatar ? (
                         <div className="relative">
+                            {/* A plain img: the picture is any URL or a fresh data URI, which next/image can't optimize. */}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 src={shownAvatar}
                                 alt={username}
