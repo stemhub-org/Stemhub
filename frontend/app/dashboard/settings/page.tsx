@@ -211,18 +211,20 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
 
             <div className="space-y-5">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Username</label>
+                    <label htmlFor="settings-username" className="text-sm font-medium text-foreground/80">Username</label>
                     <input
                         type="text"
+                        id="settings-username"
                         value={form.username}
                         onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                         className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Location</label>
+                    <label htmlFor="settings-location" className="text-sm font-medium text-foreground/80">Location</label>
                     <input
                         type="text"
+                        id="settings-location"
                         value={form.location}
                         onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
                         placeholder="e.g. Paris, France"
@@ -230,9 +232,10 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Website</label>
+                    <label htmlFor="settings-website" className="text-sm font-medium text-foreground/80">Website</label>
                     <input
                         type="url"
+                        id="settings-website"
                         value={form.website}
                         onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
                         placeholder="https://yourwebsite.com"
@@ -240,9 +243,10 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Bio</label>
+                    <label htmlFor="settings-bio" className="text-sm font-medium text-foreground/80">Bio</label>
                     <textarea
                         rows={4}
+                        id="settings-bio"
                         value={form.bio}
                         onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
                         placeholder="Electronic music producer..."
@@ -352,10 +356,11 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
 
             <div className="space-y-5 pb-8 border-b border-foreground/5">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Email Address</label>
+                    <label htmlFor="settings-email" className="text-sm font-medium text-foreground/80">Email Address</label>
                     <div className="flex gap-4">
                         <input
                             type="email"
+                            id="settings-email"
                             value={emailForm}
                             onChange={(e) => setEmailForm(e.target.value)}
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
@@ -371,10 +376,11 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                 </div>
 
                 <div className="space-y-2 pt-2">
-                    <label className="text-sm font-medium text-foreground/80">Current Password</label>
+                    <label htmlFor="settings-current-password" className="text-sm font-medium text-foreground/80">Current Password</label>
                     <input
                         type="password"
                         placeholder="••••••••"
+                        id="settings-current-password"
                         value={passwordForm.current_password}
                         onChange={(e) => setPasswordForm(f => ({ ...f, current_password: e.target.value }))}
                         className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
@@ -382,20 +388,22 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground/80">New Password</label>
+                        <label htmlFor="settings-new-password" className="text-sm font-medium text-foreground/80">New Password</label>
                         <input
                             type="password"
                             placeholder="••••••••"
+                            id="settings-new-password"
                             value={passwordForm.new_password}
                             onChange={(e) => setPasswordForm(f => ({ ...f, new_password: e.target.value }))}
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground/80">Confirm New Password</label>
+                        <label htmlFor="settings-confirm-password" className="text-sm font-medium text-foreground/80">Confirm New Password</label>
                         <input
                             type="password"
                             placeholder="••••••••"
+                            id="settings-confirm-password"
                             value={passwordForm.confirm_password}
                             onChange={(e) => setPasswordForm(f => ({ ...f, confirm_password: e.target.value }))}
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
