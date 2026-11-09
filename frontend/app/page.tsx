@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Marquee from "./components/Marquee";
@@ -10,6 +11,18 @@ import Footer from "./components/Footer";
 import LandingMotion from "./components/LandingMotion";
 import { MixerFigure } from "./components/figures/mixer/figure";
 import { StudioFigure } from "./components/figures/studio/figure";
+
+const title = "StemHub — Gestion de versions pour producteurs";
+const description =
+  "Enregistre chaque version de tes projets FL Studio et Ableton Live, teste tes idées sur des branches et collabore sans jamais écraser l’original.";
+
+export const metadata: Metadata = {
+  title,
+  description,
+  alternates: { canonical: "/" },
+  openGraph: { type: "website", locale: "fr_FR", siteName: "StemHub", url: "/", title, description },
+  twitter: { card: "summary_large_image" },
+};
 
 export default function Home() {
   return (
