@@ -12,7 +12,7 @@ import {
   useVelocity,
 } from "framer-motion";
 
-const items = ["FL Studio", "Ableton Live", "Versions", "Branches", "Pull requests", "Mixer diff"];
+const items = ["FL Studio", "Ableton Live", "Versions", "Branches", "Pull requests", "Diff du mixer"];
 const COPIES = 4;
 const BASE_SPEED = 2.4; // % of the track per second
 
@@ -43,7 +43,7 @@ export default function Marquee() {
   });
 
   return (
-    <section aria-label="Works with FL Studio and Ableton Live" className="overflow-hidden bg-ink py-5 text-paper">
+    <section aria-label="Compatible avec FL Studio et Ableton Live" className="overflow-hidden bg-ink py-5 text-paper">
       <motion.div style={{ x }} className="flex w-max whitespace-nowrap will-change-transform">
         {Array.from({ length: COPIES }, (_, copy) => (
           <div
