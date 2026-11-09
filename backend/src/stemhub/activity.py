@@ -173,9 +173,15 @@ async def build_activity_feed(db: AsyncSession, *, project_id: UUID, limit: int)
 
     events: list[_Event] = []
     if branches:
+        in_project = Version.branch_id.in_(list(branches))
         events += await _query_events(
             db, "version_saved", Version, Version.created_at,
-            [Version.branch_id.in_(list(branches))],
+            [in_project],
+            limit=limit + 1,
+        )
+        events += await _query_events(
+            db, "version_deleted", Version, Version.deleted_at,
+            [in_project, Version.is_deleted == True, Version.deleted_at.is_not(None)],
             limit=limit + 1,
         )
 
