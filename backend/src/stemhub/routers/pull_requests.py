@@ -223,6 +223,16 @@ async def accept_pull_request(
     if source_head is None:
         raise HTTPException(status_code=409, detail="The source branch has no version to promote")
     target_head_id = await _branch_head_id(branch_id=pull_request.target_branch_id, db=db)
+    # The reviewer saw the target as it was when the PR was opened. Promoting
+    # over newer versions would bury them without anyone having reviewed them.
+    if target_head_id != pull_request.target_head_version_id:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "The target branch has new versions since this pull request was opened: "
+                "open a new pull request to review them"
+            ),
+        )
 
     db.add(
         Version(

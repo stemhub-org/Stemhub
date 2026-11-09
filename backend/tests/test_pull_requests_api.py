@@ -704,3 +704,37 @@ def test_accept_pull_request_refuses_an_empty_source_branch() -> None:
     assert response.json()["detail"] == "The source branch has no version to promote"
     assert pr.status == "OPEN"
     assert session.commit_calls == 0
+
+
+def test_accept_pull_request_refuses_when_the_target_moved_since_it_was_opened() -> None:
+    """Accepting must never hide a target version the reviewer hasn't seen."""
+    for target_has_head in (True, False):
+        session, _, main, _, pr, _, _ = _accept_session(target_has_head=target_has_head)
+        newer = _version(main.id, created_at=datetime(2026, 11, 5, tzinfo=timezone.utc))
+        session.versions.append(newer)
+        client = _make_client(session)
+
+        response = client.post(f"/pull-requests/{pr.id}/accept")
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == (
+            "The target branch has new versions since this pull request was opened: "
+            "open a new pull request to review them"
+        )
+        assert pr.status == "OPEN"
+        assert session.commit_calls == 0
+
+
+def test_accept_pull_request_promotes_the_latest_source_version() -> None:
+    """New versions on the source after opening are part of what gets accepted."""
+    session, _, main, feature, pr, main_head, _ = _accept_session()
+    latest = _version(feature.id, created_at=datetime(2026, 11, 6, tzinfo=timezone.utc))
+    latest.manifest_json = {"manifest_version": 2, "project_file": {"sha256": "b" * 64}, "assets": []}
+    session.versions.append(latest)
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    [promoted] = [v for v in _versions_on(session, main) if v.id != main_head.id]
+    assert promoted.manifest_json == latest.manifest_json
