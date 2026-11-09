@@ -462,3 +462,48 @@ def test_activity_returns_at_most_limit_items() -> None:
     items = _items(client, project, limit=2)
 
     assert _ids(items) == [f"version_saved:{v.id}" for v in (versions[4], versions[3])]
+
+
+# ── Versions deleted ──
+
+
+def test_activity_lists_a_deleted_version_as_saved_then_deleted() -> None:
+    session, project, main = _owned_project_session()
+    version = _version(main, created_at=_at(1), created_by=session.user, deleted_at=_at(7))
+    session.versions.append(version)
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    deleted = _of_type(items, "version_deleted")
+    assert deleted == [
+        {
+            "id": f"version_deleted:{version.id}",
+            "type": "version_deleted",
+            "occurred_at": _iso(_at(7)),
+            "actor": None,  # who deleted a version is not recorded
+            "branch": {"id": str(main.id), "name": "main", "is_deleted": False},
+            "version": {
+                "id": str(version.id),
+                "message": "Mixed the drums",
+                "source_daw": "FL Studio",
+                "source_project_filename": "beat.flp",
+            },
+            "pull_request": None,
+        }
+    ]
+    assert _ids(_of_type(items, "version_saved")) == [f"version_saved:{version.id}"]
+    assert _ids(items)[:2] == [f"version_deleted:{version.id}", f"version_saved:{version.id}"]
+
+
+def test_activity_skips_a_deletion_without_timestamp() -> None:
+    session, project, main = _owned_project_session()
+    version = _version(main, created_at=_at(1))
+    version.is_deleted = True  # deleted_at unset: the deletion can't be placed in time
+    session.versions.append(version)
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    assert _of_type(items, "version_deleted") == []
+    assert _ids(_of_type(items, "version_saved")) == [f"version_saved:{version.id}"]
