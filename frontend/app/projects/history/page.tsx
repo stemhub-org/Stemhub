@@ -12,7 +12,7 @@ import type { VersionDiffHistoryEntry } from "@/types/project";
 import { BranchPicker } from "../components/BranchPicker";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { formatTimeAgo } from "@/lib/time";
+import { formatDateTime, formatTimeAgo } from "@/lib/time";
 
 function getInitials(username: string): string {
     return username.slice(0, 2).toUpperCase();
@@ -167,9 +167,13 @@ function ProjectHistory({ projectId, requestedBranchId }: { projectId: string; r
                                                         <span className="font-medium text-foreground">
                                                             {authorName}
                                                         </span>
-                                                        <span className="text-foreground/50">
+                                                        <time
+                                                            dateTime={version.created_at}
+                                                            title={formatDateTime(version.created_at)}
+                                                            className="text-foreground/50"
+                                                        >
                                                             {formatTimeAgo(version.created_at)}
-                                                        </span>
+                                                        </time>
                                                     </div>
                                                     <p className="mt-1 text-sm text-foreground/80">
                                                         {version.message || "No message"}
