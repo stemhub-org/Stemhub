@@ -82,9 +82,19 @@ export function RecentVersions({ versions, projectId, branchId }: RecentVersions
                                             <p className="mt-1 text-sm text-foreground/80">
                                                 {version.message || "No message"}
                                             </p>
-                                            <p className="mt-0.5 font-mono text-xs text-foreground/60">
-                                                {version.branch_name}
-                                            </p>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                                                <span className="font-mono text-foreground/60">{version.branch_name}</span>
+                                                {version.source_daw && (
+                                                    <span className="rounded-md border border-border-subtle px-1.5 py-0.5 font-medium text-foreground/70">
+                                                        {version.source_daw}
+                                                    </span>
+                                                )}
+                                                {version.source_project_filename && (
+                                                    <span className="truncate font-mono text-foreground-muted">
+                                                        {version.source_project_filename}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
