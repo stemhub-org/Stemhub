@@ -34,14 +34,16 @@ export const CHANGES = 3;
 // The knob sweeps 270°, from −135° at 0 to +135° at 12800.
 export const wetAngle = (value: number) => ((-135 + (270 * value) / WET_MAX) * Math.PI) / 180;
 
+const changes = (count: number) => `${count} ${count <= 1 ? "changement" : "changements"} sur ${CHANGES}`;
+
 export function readoutOf(applied: number, wet: number) {
   const value = Math.round(wet / 100) * 100;
-  if (applied === 0) return `before save · dry/wet ${value}`;
-  return `${applied} of ${CHANGES} changes · dry/wet ${value}`;
+  if (applied === 0) return `avant la sauvegarde · dry/wet ${value}`;
+  return `${changes(applied)} · dry/wet ${value}`;
 }
 
 export function spokenOf(applied: number) {
-  const steps = ["Reverb added on insert 3, Lead, slot 2", "Delay removed from insert 5, Hats, slot 1", "Drum Bus dry/wet from 12800 to 6400"];
-  if (applied === 0) return "Before the save: no changes shown";
-  return `${applied} of ${CHANGES} changes shown. Latest: ${steps[applied - 1]}`;
+  const steps = ["Reverb ajoutée sur l’insert 3, Lead, slot 2", "Delay retiré de l’insert 5, Hats, slot 1", "Dry/wet du Drum Bus de 12800 à 6400"];
+  if (applied === 0) return "Avant la sauvegarde\u00a0: aucun changement affiché";
+  return `${changes(applied)} ${applied === 1 ? "affiché" : "affichés"}. Dernier\u00a0: ${steps[applied - 1]}`;
 }

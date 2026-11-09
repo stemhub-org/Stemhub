@@ -161,7 +161,7 @@ const MODULE_PARTS = ALL.map(({ module, role }) => ({
 }));
 
 const LABEL =
-  "A small mixing desk with five channel strips: Kick, Drum Bus, Lead, Pad and Hats. Each strip has two insert slots on the meter bridge, and a plugin is a module plugged into a slot. Scrolling plays the save: a reverb module drops into the Lead's second slot, the delay module lifts out of the Hats' first slot, and the dry/wet knob on the Drum Bus compressor turns from 12800 to 6400.";
+  "Une petite console de mixage à cinq tranches\u00a0: Kick, Drum Bus, Lead, Pad et Hats. Chaque tranche a deux slots d’insert sur le pont de VU-mètres, et un plugin est un module branché dans un slot. Le défilement rejoue la sauvegarde\u00a0: un module de reverb tombe dans le deuxième slot de Lead, le module de delay sort du premier slot de Hats, et le bouton dry/wet du compresseur du Drum Bus passe de 12800 à 6400.";
 
 export function MixerArt() {
   return <MixerLive label={LABEL} defs={DEFS} base={BASE} desk={DESK} slots={SLOT_ART} ghost={GHOST} modules={MODULE_PARTS} deskTop={DESK_TOP} />;
