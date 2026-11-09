@@ -99,8 +99,8 @@ export default function SettingsPage() {
                         {activeTab === "profile" && <ProfileSettings key="profile" user={user} />}
                         {activeTab === "account" && <AccountSettings key="account" user={user} />}
                         {activeTab === "integrations" && <IntegrationSettings key="integrations" user={user} />}
-                        {activeTab === "storage" && <StorageSettings key="storage" user={user} />}
-                        {activeTab === "notifications" && <NotificationSettings key="notifications" user={user} />}
+                        {activeTab === "storage" && <StorageSettings key="storage" />}
+                        {activeTab === "notifications" && <NotificationSettings key="notifications" />}
                     </AnimatePresence>
                 </motion.div>
             </div>
@@ -503,7 +503,7 @@ function IntegrationSettings({ user }: { user: UserProfile }) {
     );
 }
 
-function StorageSettings({ user }: { user: UserProfile }) {
+function StorageSettings() {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -578,7 +578,7 @@ function StorageSettings({ user }: { user: UserProfile }) {
     );
 }
 
-function NotificationSettings({ user }: { user: UserProfile }) {
+function NotificationSettings() {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
