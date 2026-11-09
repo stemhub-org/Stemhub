@@ -166,7 +166,7 @@ describe("SettingsPage account tab", () => {
     }
 
     it("refuses mismatched new passwords without calling the API", async () => {
-        const fetchMock = vi.fn(async (_url: string) => json(user));
+        const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () => json(user));
         vi.stubGlobal("fetch", fetchMock);
         await openAccountTab();
         await screen.findByLabelText("Current Password");
