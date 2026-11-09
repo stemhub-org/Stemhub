@@ -104,6 +104,35 @@ def _version(
     )
 
 
+def _pull_request(
+    project: Project,
+    source: Branch,
+    target: Branch,
+    *,
+    created_at: datetime,
+    created_by: User | None = None,
+    status: str = "OPEN",
+    closed_at: datetime | None = None,
+    closed_by: User | None = None,
+    is_deleted: bool = False,
+) -> PullRequest:
+    return PullRequest(
+        id=uuid.uuid4(),
+        project_id=project.id,
+        source_branch_id=source.id,
+        target_branch_id=target.id,
+        title="Faster tempo",
+        description=None,
+        status=status,
+        created_by=created_by.id if created_by else None,
+        created_at=created_at,
+        closed_by=closed_by.id if closed_by else None,
+        closed_at=closed_at,
+        is_deleted=is_deleted,
+        deleted_at=closed_at if is_deleted else None,
+    )
+
+
 # ── Fake session ──
 
 
@@ -584,3 +613,75 @@ def test_activity_lists_branches_of_this_project_only() -> None:
     items = _items(client, project)
 
     assert _ids(items) == [f"branch_created:{main.id}"]
+
+
+# ── Pull requests ──
+
+
+def _project_with_feature_branch() -> tuple[FakeSession, Project, Branch, Branch]:
+    session, project, main = _owned_project_session()
+    feature = _branch(project.id, "feature-fast-tempo", created_at=_at(1))
+    session.branches.append(feature)
+    return session, project, main, feature
+
+
+def test_activity_lists_an_opened_pull_request() -> None:
+    session, project, main, feature = _project_with_feature_branch()
+    pr = _pull_request(project, feature, main, created_at=_at(6), created_by=session.user)
+    session.pull_requests.append(pr)
+    client = _make_client(session)
+
+    items = _of_type(_items(client, project), "pull_request_opened")
+
+    assert items == [
+        {
+            "id": f"pull_request_opened:{pr.id}",
+            "type": "pull_request_opened",
+            "occurred_at": _iso(_at(6)),
+            "actor": {"id": str(session.user.id), "username": "demo"},
+            "branch": None,
+            "version": None,
+            "pull_request": {
+                "id": str(pr.id),
+                "title": "Faster tempo",
+                "status": "OPEN",
+                "source_branch": {"id": str(feature.id), "name": "feature-fast-tempo", "is_deleted": False},
+                "target_branch": {"id": str(main.id), "name": "main", "is_deleted": False},
+            },
+        }
+    ]
+
+
+def test_activity_skips_soft_deleted_pull_requests() -> None:
+    session, project, main, feature = _project_with_feature_branch()
+    deleted = _pull_request(
+        project,
+        feature,
+        main,
+        created_at=_at(6),
+        status="CLOSED",
+        closed_at=_at(7),
+        closed_by=session.user,
+        is_deleted=True,
+    )
+    session.pull_requests.append(deleted)
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    assert [item for item in items if item["pull_request"] is not None] == []
+
+
+def test_activity_lists_pull_requests_of_this_project_only() -> None:
+    session, project, main, feature = _project_with_feature_branch()
+    other_project = _project(session.user.id)
+    other_main = _branch(other_project.id)
+    other_feature = _branch(other_project.id, "other")
+    session.projects.append(other_project)
+    session.branches.extend([other_main, other_feature])
+    session.pull_requests.append(_pull_request(other_project, other_feature, other_main, created_at=_at(6)))
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    assert _of_type(items, "pull_request_opened") == []
