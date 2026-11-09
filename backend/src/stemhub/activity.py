@@ -143,20 +143,36 @@ def _branch_summary(branch: Branch) -> ActivityBranch:
 
 def _to_item(event: _Event, *, branches: dict[UUID, Branch], actors: dict[UUID, User]) -> ActivityItem:
     actor = actors.get(event.actor_id) if event.actor_id is not None else None
-    version = event.entity
+    entity = event.entity
+    details: dict[str, Any] = {}
+    if isinstance(entity, Version):
+        details["branch"] = _branch_summary(branches[entity.branch_id])
+        details["version"] = ActivityVersion(
+            id=entity.id,
+            message=entity.message,
+            source_daw=entity.source_daw,
+            source_project_filename=entity.source_project_filename,
+        )
+    elif isinstance(entity, Branch):
+        details["branch"] = _branch_summary(entity)
     return ActivityItem(
         id=event.id,
         type=event.type,
         occurred_at=event.occurred_at,
         actor=ActivityActor(id=actor.id, username=actor.username) if actor else None,
-        branch=_branch_summary(branches[version.branch_id]),
-        version=ActivityVersion(
-            id=version.id,
-            message=version.message,
-            source_daw=version.source_daw,
-            source_project_filename=version.source_project_filename,
-        ),
+        **details,
     )
+
+
+def _branch_events(branches: dict[UUID, Branch]) -> list[_Event]:
+    """Branch events, from the project's branches already in memory: a
+    project has few branches, so this saves two queries."""
+    events = []
+    for branch in branches.values():
+        events.append(_Event("branch_created", branch.created_at, branch))
+        if branch.is_deleted and branch.deleted_at is not None:
+            events.append(_Event("branch_deleted", branch.deleted_at, branch))
+    return events
 
 
 async def build_activity_feed(db: AsyncSession, *, project_id: UUID, limit: int) -> ActivityFeedResponse:
@@ -171,7 +187,7 @@ async def build_activity_feed(db: AsyncSession, *, project_id: UUID, limit: int)
     branch_result = await db.execute(select(Branch).where(Branch.project_id == project_id))
     branches = {branch.id: branch for branch in branch_result.scalars().all()}
 
-    events: list[_Event] = []
+    events = _branch_events(branches)
     if branches:
         in_project = Version.branch_id.in_(list(branches))
         events += await _query_events(

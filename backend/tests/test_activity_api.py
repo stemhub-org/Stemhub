@@ -507,3 +507,80 @@ def test_activity_skips_a_deletion_without_timestamp() -> None:
 
     assert _of_type(items, "version_deleted") == []
     assert _ids(_of_type(items, "version_saved")) == [f"version_saved:{version.id}"]
+
+
+# ── Branches ──
+
+
+def test_activity_lists_a_created_branch() -> None:
+    session, project, main = _owned_project_session()
+    feature = _branch(project.id, "feature-fast-tempo", created_at=_at(4))
+    session.branches.append(feature)
+    client = _make_client(session)
+
+    items = _of_type(_items(client, project), "branch_created")
+
+    assert items == [
+        {
+            "id": f"branch_created:{feature.id}",
+            "type": "branch_created",
+            "occurred_at": _iso(_at(4)),
+            "actor": None,  # Branch records no author
+            "branch": {"id": str(feature.id), "name": "feature-fast-tempo", "is_deleted": False},
+            "version": None,
+            "pull_request": None,
+        },
+        {
+            "id": f"branch_created:{main.id}",
+            "type": "branch_created",
+            "occurred_at": _iso(T0),
+            "actor": None,
+            "branch": {"id": str(main.id), "name": "main", "is_deleted": False},
+            "version": None,
+            "pull_request": None,
+        },
+    ]
+
+
+def test_activity_lists_a_deleted_branch_as_created_then_deleted() -> None:
+    session, project, _ = _owned_project_session()
+    old = _branch(project.id, "old-idea", created_at=_at(2), deleted_at=_at(9))
+    session.branches.append(old)
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    assert items[0] == {
+        "id": f"branch_deleted:{old.id}",
+        "type": "branch_deleted",
+        "occurred_at": _iso(_at(9)),
+        "actor": None,
+        "branch": {"id": str(old.id), "name": "old-idea", "is_deleted": True},
+        "version": None,
+        "pull_request": None,
+    }
+    assert f"branch_created:{old.id}" in _ids(_of_type(items, "branch_created"))
+
+
+def test_activity_skips_a_branch_deletion_without_timestamp() -> None:
+    session, project, _ = _owned_project_session()
+    old = _branch(project.id, "old-idea", created_at=_at(2))
+    old.is_deleted = True
+    session.branches.append(old)
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    assert _of_type(items, "branch_deleted") == []
+
+
+def test_activity_lists_branches_of_this_project_only() -> None:
+    session, project, main = _owned_project_session()
+    other_project = _project(session.user.id)
+    session.projects.append(other_project)
+    session.branches.append(_branch(other_project.id, "elsewhere", created_at=_at(3), deleted_at=_at(4)))
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    assert _ids(items) == [f"branch_created:{main.id}"]
