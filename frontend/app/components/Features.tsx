@@ -8,14 +8,22 @@ type Tone = "ink" | "outline" | "lime";
 const features: { title: string; description: string; tone: Tone }[] = [
   {
     title: "Branches",
-    description: "Another idea, same project, original untouched. Bring it back with a pull request.",
+    description: "Une autre idée, le même projet, l’original intact. Ramène-la avec une pull request.",
     tone: "ink",
   },
-  { title: "Full history", description: "Every version. Restore any of them into your DAW as a separate copy.", tone: "outline" },
-  { title: "Mixer diff", description: "What changed in the FL Studio mixer, slot by slot.", tone: "lime" },
-  { title: "Collabs", description: "Invite your crew. You decide what goes into main.", tone: "outline" },
-  { title: "Encrypted", description: "End-to-end encryption by default. Your stems stay yours.", tone: "ink" },
-  { title: "In your DAW", description: "Save, restore and switch branches without leaving the session.", tone: "outline" },
+  {
+    title: "Rien ne se perd",
+    description: "Toutes tes versions. Restaure n’importe laquelle dans ton DAW, en copie séparée.",
+    tone: "outline",
+  },
+  { title: "Diff du mixer", description: "Ce qui a changé dans le mixer de FL Studio, slot par slot.", tone: "lime" },
+  { title: "Collabs", description: "Invite ton crew. C’est toi qui décides de ce qui entre dans main.", tone: "outline" },
+  { title: "Chiffré", description: "Chiffrement de bout en bout par défaut. Tes stems restent à toi.", tone: "ink" },
+  {
+    title: "Dans ton DAW",
+    description: "Enregistre, restaure et change de branche sans quitter ton projet.",
+    tone: "outline",
+  },
 ];
 
 // Resting colours, and the colours each block flips to on hover.
@@ -31,7 +39,7 @@ const TONES: Record<Tone, { block: string; text: string }> = {
 export default function Features() {
   return (
     <section id="features" className={`${CONTAINER} flex scroll-mt-24 flex-col gap-12 py-24 md:py-32`}>
-      <RevealHeading text="Built to hit." className={SECTION_TITLE} />
+      <RevealHeading text="Taillé pour cogner." className={SECTION_TITLE} />
       <motion.div
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
         initial="hidden"
