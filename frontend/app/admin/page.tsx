@@ -128,7 +128,7 @@ export default function AdminDashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35 }}
             >
-                <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">Vue d'ensemble</h1>
+                <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">Vue d’ensemble</h1>
                 <p className="text-sm text-[#1A1A1A]/50 mt-1">Statistiques globales de la plateforme</p>
             </motion.div>
 
