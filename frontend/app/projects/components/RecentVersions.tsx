@@ -75,7 +75,7 @@ export function RecentVersions({ versions, projectId, branchId }: RecentVersions
                                 <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-4">
                                     <div className="flex gap-3">
                                         <div
-                                            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/80 text-xs font-medium text-white"
+                                            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground"
                                             aria-hidden
                                         >
                                             {initials}
