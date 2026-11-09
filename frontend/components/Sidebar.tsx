@@ -12,6 +12,7 @@ import {
     LogOut,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
 import { Button } from "@/components/ui/Button";
 import { apiFetch } from "@/lib/api";
 import { useHydrated } from "@/lib/useHydrated";
@@ -54,13 +55,9 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
             {isOpen && (
                 <>
                     <div className="h-20 flex items-center justify-between px-8 border-b border-border-subtle">
-                        <Link href="/dashboard">
-                            <span
-                                className="text-2xl font-medium tracking-tight text-foreground"
-                                style={{ fontFamily: "var(--font-syne)" }}
-                            >
-                                StemHub<span className="text-accent">.</span>
-                            </span>
+                        <Link href="/dashboard" aria-label="StemHub home" className="flex items-center gap-2 text-foreground">
+                            <BrandFigure className="h-7 w-auto" />
+                            <Wordmark className="text-xl" />
                         </Link>
                         {onToggleSidebar && (
                             <button
