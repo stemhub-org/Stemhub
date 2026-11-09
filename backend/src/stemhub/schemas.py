@@ -316,6 +316,60 @@ class ContributorStats(BaseModel):
 class TopContributorsResponse(BaseModel):
     contributors: list[ContributorStats]
 
+# ── Activity Feed Schemas ──
+
+# What happened in a project, derived from its versions, branches and pull
+# requests (issue #217). There is no event table: each type is read from the
+# timestamp that records it (see stemhub.activity).
+ActivityType = Literal[
+    "version_saved",
+    "version_deleted",
+    "branch_created",
+    "branch_deleted",
+    "pull_request_opened",
+    "pull_request_merged",
+    "pull_request_closed",
+]
+
+class ActivityActor(BaseModel):
+    id: UUID
+    username: str
+
+class ActivityBranch(BaseModel):
+    id: UUID
+    name: str
+    is_deleted: bool
+
+class ActivityVersion(BaseModel):
+    id: UUID
+    message: Optional[str] = None
+    source_daw: Optional[str] = None
+    source_project_filename: Optional[str] = None
+
+class ActivityPullRequest(BaseModel):
+    id: UUID
+    title: str
+    status: str
+    source_branch: ActivityBranch
+    target_branch: ActivityBranch
+
+class ActivityItem(BaseModel):
+    # "<type>:<entity id>": unique and stable across requests.
+    id: str
+    type: ActivityType
+    occurred_at: datetime
+    # Who did it, when it is recorded (versions saved, pull requests opened,
+    # merged or closed). None for branch events and deleted versions.
+    actor: Optional[ActivityActor] = None
+    branch: Optional[ActivityBranch] = None
+    version: Optional[ActivityVersion] = None
+    pull_request: Optional[ActivityPullRequest] = None
+
+class ActivityFeedResponse(BaseModel):
+    items: list[ActivityItem]
+    # Opaque; pass it back as `cursor` for the next page. None on the last page.
+    next_cursor: Optional[str] = None
+
 # ── Project Summary Schemas ──
 
 class OwnerSummary(BaseModel):
