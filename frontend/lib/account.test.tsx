@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { API_URL, ApiError } from "./api";
-import { useUpdateProfile } from "./account";
+import { useChangeEmail, useUpdateProfile } from "./account";
 import { queryKeys } from "./queries";
 
 function json(body: unknown, status = 200) {
@@ -48,5 +48,31 @@ describe("useUpdateProfile", () => {
         await expect(failure).rejects.toBeInstanceOf(ApiError);
         await expect(failure).rejects.toThrow("Username already taken");
         expect(client.getQueryData(queryKeys.currentUser)).toBe(cached);
+    });
+});
+
+describe("useChangeEmail", () => {
+    it("sends the new address and caches the updated user", async () => {
+        const updated = { id: "u1", email: "new@stemhub.fr" };
+        const fetchMock = vi.fn(async () => json(updated));
+        vi.stubGlobal("fetch", fetchMock);
+        const { client, result } = renderWithClient(() => useChangeEmail());
+
+        await result.current.mutateAsync({ new_email: "new@stemhub.fr" });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            `${API_URL}/auth/me/email`,
+            expect.objectContaining({ method: "PUT", body: JSON.stringify({ new_email: "new@stemhub.fr" }) }),
+        );
+        expect(client.getQueryData(queryKeys.currentUser)).toEqual(updated);
+    });
+
+    it("rejects with the backend's message", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => json({ detail: "Email already in use" }, 400)));
+        const { result } = renderWithClient(() => useChangeEmail());
+
+        await expect(result.current.mutateAsync({ new_email: "taken@stemhub.fr" })).rejects.toThrow(
+            "Email already in use",
+        );
     });
 });
