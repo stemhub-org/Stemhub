@@ -93,6 +93,8 @@ def decode_cursor(raw: str) -> Cursor:
 _ACTOR_COLUMN = {
     "version_saved": "created_by",
     "pull_request_opened": "created_by",
+    "pull_request_merged": "closed_by",
+    "pull_request_closed": "closed_by",
 }
 
 
@@ -218,6 +220,12 @@ async def build_activity_feed(db: AsyncSession, *, project_id: UUID, limit: int)
         live_pull_requests,
         limit=limit + 1,
     )
+    for activity_type, status in (("pull_request_merged", "MERGED"), ("pull_request_closed", "CLOSED")):
+        events += await _query_events(
+            db, activity_type, PullRequest, PullRequest.closed_at,
+            [*live_pull_requests, PullRequest.status == status, PullRequest.closed_at.is_not(None)],
+            limit=limit + 1,
+        )
 
     events.sort(key=lambda event: (event.occurred_at, event.id), reverse=True)
     page = events[:limit]
