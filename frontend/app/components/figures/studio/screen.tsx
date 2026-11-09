@@ -5,7 +5,8 @@ import { BRANCHES, CHANNELS, PROJECT, STEPS, branchVersions, changeCount, label,
 import { SCREEN_H, SCREEN_W } from "./view";
 
 // The monitor's picture, in flat screen units (u right, v down). The DAW on the left, the
-// StemHub plugin docked on the right, drawn after the plugin's own layout and wording.
+// StemHub plugin docked on the right, drawn after the plugin's own layout and wording (in French here).
+// The DAW's own labels stay as FL Studio shows them.
 
 export const RACK = { u: 3, v: 12, w: 127, h: 64 };
 export const PLAYLIST = { u: 3, v: 79, w: 127, h: 56 };
@@ -106,7 +107,7 @@ export function Screen({ studio, playing, handlers, playhead, column, progress }
       <text className="st-t" x={78} y={6.2} fontSize={3.5}>
         {studio.file}
       </text>
-      <Hit onPress={handlers.play} label={playing ? "Stop playback" : "Play"} className="st-play">
+      <Hit onPress={handlers.play} label={playing ? "Arrêter la lecture" : "Lecture"} className="st-play">
         <rect className={playing ? "st-key st-key-on" : "st-key"} x={176} y={1.6} width={9} height={5.8} rx={0.8} />
         {playing ? <rect className="st-glyph" x={178.9} y={3.1} width={3.2} height={2.8} /> : <path className="st-glyph" d="M179 3l3.6 1.5L179 6z" />}
       </Hit>
@@ -134,7 +135,7 @@ export function Screen({ studio, playing, handlers, playhead, column, progress }
           {Array.from({ length: STEPS }, (_, step) => {
             const on = studio.pattern[channel]![step]!;
             return (
-              <Hit key={step} onPress={() => handlers.toggle(channel, step)} label={`${name}, step ${step + 1}, ${on ? "on" : "off"}`} disabled={busy} focusable={false}>
+              <Hit key={step} onPress={() => handlers.toggle(channel, step)} label={`${name}, pas ${step + 1}, ${on ? "activé" : "désactivé"}`} disabled={busy} focusable={false}>
                 <rect
                   className={on ? "st-step st-step-on" : Math.floor(step / 4) % 2 ? "st-step st-step-alt" : "st-step"}
                   x={stepU(step)}
@@ -159,7 +160,7 @@ export function Screen({ studio, playing, handlers, playhead, column, progress }
           {bar + 1}
         </text>
       ))}
-      {["Beat", "Vocal chop", "Filter"].map((name, lane) => (
+      {["Beat", "Vocal chop", "Filtre"].map((name, lane) => (
         <g key={name}>
           <rect className="st-name" x={PLAYLIST.u + 3} y={LANE_V0 + lane * LANE_H} width={19} height={LANE_H - 2} rx={0.8} />
           <text className="st-t" x={PLAYLIST.u + 4.6} y={LANE_V0 + lane * LANE_H + 5} fontSize={2.9}>
@@ -195,14 +196,14 @@ export function Screen({ studio, playing, handlers, playhead, column, progress }
       </text>
 
       <text className="st-t st-dim" x={PLUGIN.u + 3} y={PLUGIN.v + 20} fontSize={2.8}>
-        Branch
+        Branche
       </text>
       {BRANCHES.map((name, index) => {
         const u = PLUGIN.u + 3 + (index ? 26 : 0);
         const w = index ? 52 : 23;
         const on = studio.branch === name;
         return (
-          <Hit key={name} onPress={() => handlers.branch(name)} label={`Switch to branch ${name}`} disabled={busy}>
+          <Hit key={name} onPress={() => handlers.branch(name)} label={`Passer sur la branche ${name}`} disabled={busy}>
             <rect className={on ? "st-chip st-chip-on" : "st-chip"} x={u} y={PLUGIN.v + 22} width={w} height={6.6} rx={3.3} />
             <text className={on ? "st-t st-ink" : "st-t"} x={u + w / 2} y={PLUGIN.v + 26.4} fontSize={3.1} textAnchor="middle">
               {name}
@@ -213,23 +214,23 @@ export function Screen({ studio, playing, handlers, playhead, column, progress }
 
       <rect className="st-input" x={PLUGIN.u + 3} y={PLUGIN.v + 32} width={PLUGIN.w - 6} height={7.4} rx={0.8} />
       <text className={message ? "st-t" : "st-t st-faint"} x={PLUGIN.u + 5} y={PLUGIN.v + 36.9} fontSize={3.1}>
-        {message || "What changed? (optional)"}
+        {message || "Qu’est-ce qui a changé\u00a0? (facultatif)"}
       </text>
 
-      <Hit onPress={handlers.save} label="Save version" disabled={busy || count === 0}>
+      <Hit onPress={handlers.save} label="Enregistrer la version" disabled={busy || count === 0}>
         <rect className={count && !busy ? "st-save" : studio.activity.kind === "saving" ? "st-save st-save-busy" : "st-save st-save-off"} x={PLUGIN.u + 3} y={PLUGIN.v + 42} width={PLUGIN.w - 6} height={8.6} rx={1} />
         <text className={count && !busy ? "st-t st-ink st-bold" : "st-t st-dim st-bold"} x={PLUGIN.u + PLUGIN.w / 2} y={PLUGIN.v + 47.4} fontSize={3.4} textAnchor="middle">
-          {studio.activity.kind === "saving" ? "Saving..." : "Save version"}
+          {studio.activity.kind === "saving" ? "Sauvegarde…" : "Enregistrer la version"}
         </text>
       </Hit>
       <rect className="st-track" x={PLUGIN.u + 3} y={PLUGIN.v + 52} width={PLUGIN.w - 6} height={1} />
       <rect ref={progress} className="st-progress" x={PLUGIN.u + 3} y={PLUGIN.v + 52} width={0} height={1} />
-      <text className={studio.status.startsWith("Saved") || studio.status.startsWith("Opened") ? "st-t st-lime" : "st-t st-dim"} x={PLUGIN.u + 3} y={PLUGIN.v + 58.6} fontSize={3}>
+      <text className={studio.status.endsWith(" enregistrée.") || studio.status.startsWith("Ouverte") ? "st-t st-lime" : "st-t st-dim"} x={PLUGIN.u + 3} y={PLUGIN.v + 58.6} fontSize={3}>
         {studio.status}
       </text>
 
       <text className="st-t st-dim" x={PLUGIN.u + 3} y={HISTORY_V0 - 3} fontSize={2.8}>
-        History · {studio.branch}
+        Historique · {studio.branch}
       </text>
       {history.map((version, index) => {
         const v = HISTORY_V0 + index * HISTORY_ROW;
@@ -246,16 +247,16 @@ export function Screen({ studio, playing, handlers, playhead, column, progress }
             </text>
             <text className="st-t st-faint" x={PLUGIN.u + 16} y={v + 6.6} fontSize={2.4}>
               {version.when}
-              {version.id === studio.base && studio.file.includes("(") ? " · in your DAW" : ""}
+              {version.id === studio.base && studio.file.includes("(") ? " · dans ton DAW" : ""}
             </text>
           </Hit>
         );
       })}
 
-      <Hit onPress={handlers.restore} label={selected ? `Restore ${label(selected)}` : "Restore this version"} disabled={busy || !selected}>
+      <Hit onPress={handlers.restore} label={selected ? `Restaurer ${label(selected)}` : "Restaurer cette version"} disabled={busy || !selected}>
         <rect className={studio.activity.kind === "restoring" ? "st-restore st-restore-busy" : "st-restore"} x={PLUGIN.u + 3} y={PLUGIN.v + PLUGIN.h - 12.4} width={PLUGIN.w - 6} height={8.4} rx={1} />
         <text className="st-t st-bold" x={PLUGIN.u + PLUGIN.w / 2} y={PLUGIN.v + PLUGIN.h - 7.1} fontSize={3.3} textAnchor="middle">
-          {studio.activity.kind === "restoring" ? "Restoring..." : `Restore ${selected ? label(selected) : "this version"}`}
+          {studio.activity.kind === "restoring" ? "Restauration…" : `Restaurer ${selected ? label(selected) : "cette version"}`}
         </text>
       </Hit>
     </g>
