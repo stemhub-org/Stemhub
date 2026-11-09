@@ -1,6 +1,6 @@
 // The StemHub plugin's state in a tiny DAW session, as a pure reducer: a step pattern being
 // edited, two branches with their saved versions, and what the plugin panel shows.
-// Wording follows the plugin itself (plugin/stemhub/Source/src/ui).
+// Wording follows the plugin itself (plugin/stemhub/Source/src/ui), in French for the landing page.
 
 export const CHANNELS = ["Kick", "Snare", "Hats", "Bass", "Lead", "Pad"] as const;
 export const STEPS = 16;
@@ -46,14 +46,14 @@ const HALF_KICK = "x.......x.......";
 const HALF_SNARE = "........x.......";
 
 const MAIN: [string, string, string[]][] = [
-  ["First loop", "Mon 12 Oct, 22:41", [KICK, EMPTY, HATS, EMPTY, EMPTY, EMPTY]],
-  ["Drums in", "Tue 13 Oct, 23:05", [KICK, SNARE, HATS, EMPTY, EMPTY, EMPTY]],
-  ["Bassline", "Thu 15 Oct, 21:17", [KICK, SNARE, HATS, BASS, EMPTY, EMPTY]],
-  ["Lead hook", "Sun 18 Oct, 00:52", [KICK, SNARE, HATS, BASS, LEAD, EMPTY]],
+  ["Première boucle", "lun. 12 oct., 22:41", [KICK, EMPTY, HATS, EMPTY, EMPTY, EMPTY]],
+  ["Batterie posée", "mar. 13 oct., 23:05", [KICK, SNARE, HATS, EMPTY, EMPTY, EMPTY]],
+  ["Ligne de basse", "jeu. 15 oct., 21:17", [KICK, SNARE, HATS, BASS, EMPTY, EMPTY]],
+  ["Hook au lead", "dim. 18 oct., 00:52", [KICK, SNARE, HATS, BASS, LEAD, EMPTY]],
 ];
 const IDEA: [string, string, string[]][] = [
-  ["Half-time drums", "Fri 16 Oct, 02:13", [HALF_KICK, HALF_SNARE, HATS, BASS, EMPTY, EMPTY]],
-  ["Pad swell", "Sat 17 Oct, 03:38", [HALF_KICK, HALF_SNARE, HATS, BASS, EMPTY, PAD]],
+  ["Batterie en half-time", "ven. 16 oct., 02:13", [HALF_KICK, HALF_SNARE, HATS, BASS, EMPTY, EMPTY]],
+  ["Montée de pad", "sam. 17 oct., 03:38", [HALF_KICK, HALF_SNARE, HATS, BASS, EMPTY, PAD]],
 ];
 
 const versionsOf = (branch: BranchName, list: [string, string, string[]][]): Version[] =>
@@ -70,11 +70,12 @@ export const branchVersions = (studio: Studio, branch: BranchName = studio.branc
 export const headOf = (studio: Studio, branch: BranchName = studio.branch) => branchVersions(studio, branch).at(-1)!;
 export const versionById = (studio: Studio, id: string | null) => studio.versions.find((version) => version.id === id) ?? null;
 export const label = (version: Version) => `V${String(version.number).padStart(2, "0")}`;
+const unsaved = (count: number) => `${count} ${count === 1 ? "modification non enregistrée" : "modifications non enregistrées"}`;
 
 export function initialStudio(): Studio {
   const versions = [...versionsOf("main", MAIN), ...versionsOf("late-night-idea", IDEA)];
   const head = versions.find((version) => version.id === "main-4")!;
-  return { branch: "main", versions, pattern: clone(head.pattern), base: head.id, selected: head.id, file: FILE, status: "Ready.", activity: { kind: "idle" }, saves: 0 };
+  return { branch: "main", versions, pattern: clone(head.pattern), base: head.id, selected: head.id, file: FILE, status: "Prêt.", activity: { kind: "idle" }, saves: 0 };
 }
 
 // What changed in the pattern since the version it came from, worded for a save message:
@@ -130,23 +131,23 @@ export function reduce(studio: Studio, action: Action): Studio {
       pattern[action.channel]![action.step] = !pattern[action.channel]![action.step];
       const next = { ...studio, pattern };
       const count = changeCount(next);
-      return { ...next, status: count ? `${count} unsaved ${count === 1 ? "change" : "changes"}` : "Ready." };
+      return { ...next, status: count ? unsaved(count) : "Prêt." };
     }
     case "save": {
       if (busy(studio) || changeCount(studio) === 0) return studio;
-      return { ...studio, activity: { kind: "saving", startedAt: action.at }, status: "Saving…" };
+      return { ...studio, activity: { kind: "saving", startedAt: action.at }, status: "Sauvegarde…" };
     }
     case "saved": {
       if (studio.activity.kind !== "saving") return studio;
       const list = branchVersions(studio);
       const number = list.at(-1)!.number + 1;
-      const version: Version = { id: `${studio.branch}-${number}`, branch: studio.branch, number, message: messageOf(studio) || "Untitled", when: "Just now", pattern: clone(studio.pattern) };
-      return { ...studio, versions: [...studio.versions, version], base: version.id, selected: version.id, activity: { kind: "idle" }, status: `Saved ${label(version)}.`, saves: studio.saves + 1 };
+      const version: Version = { id: `${studio.branch}-${number}`, branch: studio.branch, number, message: messageOf(studio) || "Sans titre", when: "À l’instant", pattern: clone(studio.pattern) };
+      return { ...studio, versions: [...studio.versions, version], base: version.id, selected: version.id, activity: { kind: "idle" }, status: `${label(version)} enregistrée.`, saves: studio.saves + 1 };
     }
     case "branch": {
       if (busy(studio) || action.branch === studio.branch) return studio;
       const head = headOf(studio, action.branch);
-      return { ...studio, branch: action.branch, pattern: clone(head.pattern), base: head.id, selected: head.id, file: FILE, status: `On ${action.branch}.` };
+      return { ...studio, branch: action.branch, pattern: clone(head.pattern), base: head.id, selected: head.id, file: FILE, status: `Sur ${action.branch}.` };
     }
     case "select": {
       if (busy(studio)) return studio;
@@ -158,7 +159,7 @@ export function reduce(studio: Studio, action: Action): Studio {
     case "restore": {
       const version = versionById(studio, studio.selected);
       if (busy(studio) || !version) return studio;
-      return { ...studio, activity: { kind: "restoring", startedAt: action.at }, status: "Restoring…" };
+      return { ...studio, activity: { kind: "restoring", startedAt: action.at }, status: "Restauration…" };
     }
     case "restored": {
       const version = versionById(studio, studio.selected);
@@ -169,7 +170,7 @@ export function reduce(studio: Studio, action: Action): Studio {
         base: version.id,
         file: `${PROJECT} (${label(version)}).flp`,
         activity: { kind: "idle" },
-        status: `Opened as a separate copy.`,
+        status: "Ouverte dans une copie à part.",
       };
     }
     case "reset":
@@ -180,8 +181,8 @@ export function reduce(studio: Studio, action: Action): Studio {
 export function readoutOf(studio: Studio) {
   const version = versionById(studio, studio.selected);
   const count = changeCount(studio);
-  const where = `${studio.branch} · ${version ? `${label(version)} “${version.message}”` : "no version"}`;
-  if (studio.activity.kind === "saving") return `${studio.branch} · saving…`;
-  if (studio.activity.kind === "restoring") return `${studio.branch} · restoring ${version ? label(version) : ""}`;
-  return count ? `${studio.branch} · ${count} unsaved ${count === 1 ? "change" : "changes"}` : where;
+  const where = `${studio.branch} · ${version ? `${label(version)} «\u00a0${version.message}\u00a0»` : "aucune version"}`;
+  if (studio.activity.kind === "saving") return `${studio.branch} · sauvegarde…`;
+  if (studio.activity.kind === "restoring") return `${studio.branch} · restauration ${version ? `de ${label(version)}` : ""}`;
+  return count ? `${studio.branch} · ${unsaved(count)}` : where;
 }

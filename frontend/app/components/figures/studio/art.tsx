@@ -84,7 +84,7 @@ const SPINDLE_BASES = SPINDLE_ART.map((spindle) => (
 ));
 
 const LABEL =
-  "A producer's desk. A monitor runs the DAW with the StemHub plugin docked beside the channel rack and playlist; in front sits a MIDI keyboard. Beside the monitor, a version tower holds one spindle per branch, main and late-night-idea, with one disc per saved version. Change the beat on screen, save a version and a disc drops onto the branch's spindle; switch branches or restore any version and the session on screen follows.";
+  "Le bureau d’un producteur. Un écran fait tourner le DAW avec le plugin StemHub ouvert à côté du channel rack et de la playlist\u00a0; devant, un clavier MIDI. À côté de l’écran, une tour de versions porte un axe par branche, main et late-night-idea, avec un disque par version enregistrée. Change le beat à l’écran, enregistre une version et un disque tombe sur l’axe de sa branche\u00a0; change de branche ou restaure une version, et le projet à l’écran suit.";
 
 export function StudioArt() {
   return <StudioLive label={LABEL} desk={DESK} monitor={MONITOR} rim={SCREEN_RIM} keyboard={KEYBOARD} spindles={SPINDLE_BASES} />;
