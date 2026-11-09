@@ -11,6 +11,7 @@ import {
     Tooltip,
     ResponsiveContainer,
 } from "recharts";
+import { Avatar } from "@/components/ui/Avatar";
 import { authFetch } from "@/lib/api";
 
 interface DailySignup {
@@ -91,13 +92,17 @@ function formatDateFull(iso: string) {
 }
 
 function UserAvatar({ user }: { user: RecentUser }) {
-    if (user.avatar_url) {
-        return <img src={user.avatar_url} alt={user.username} className="w-7 h-7 rounded-full object-cover" />;
-    }
     return (
-        <div className="w-7 h-7 rounded-full bg-[#9C57DF]/15 text-[#9C57DF] text-xs font-semibold flex items-center justify-center">
-            {user.username.slice(0, 2).toUpperCase()}
-        </div>
+        <Avatar
+            src={user.avatar_url}
+            alt={user.username}
+            className="w-7 h-7 rounded-full object-cover"
+            fallback={
+                <div className="w-7 h-7 rounded-full bg-[#9C57DF]/15 text-[#9C57DF] text-xs font-semibold flex items-center justify-center">
+                    {user.username.slice(0, 2).toUpperCase()}
+                </div>
+            }
+        />
     );
 }
 
