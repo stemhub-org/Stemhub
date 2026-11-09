@@ -83,6 +83,27 @@ def _branch(
     )
 
 
+def _version(
+    branch: Branch,
+    *,
+    created_at: datetime,
+    created_by: User | None = None,
+    deleted_at: datetime | None = None,
+    message: str | None = "Mixed the drums",
+) -> Version:
+    return Version(
+        id=uuid.uuid4(),
+        branch_id=branch.id,
+        created_by=created_by.id if created_by else None,
+        message=message,
+        created_at=created_at,
+        is_deleted=deleted_at is not None,
+        deleted_at=deleted_at,
+        source_daw="FL Studio",
+        source_project_filename="beat.flp",
+    )
+
+
 # ── Fake session ──
 
 
@@ -237,6 +258,25 @@ def _activity(client: TestClient, project: Project, **params: Any):
     return client.get(f"/projects/{project.id}/activity", params=params)
 
 
+def _items(client: TestClient, project: Project, **params: Any) -> list[dict[str, Any]]:
+    response = _activity(client, project, **params)
+    assert response.status_code == 200, response.text
+    return response.json()["items"]
+
+
+def _of_type(items: list[dict[str, Any]], activity_type: str) -> list[dict[str, Any]]:
+    return [item for item in items if item["type"] == activity_type]
+
+
+def _ids(items: list[dict[str, Any]]) -> list[str]:
+    return [item["id"] for item in items]
+
+
+def _iso(moment: datetime) -> str:
+    # Pydantic serialises UTC as "Z".
+    return moment.isoformat().replace("+00:00", "Z")
+
+
 # ── Access ──
 
 
@@ -316,3 +356,109 @@ def test_activity_rejects_limit_out_of_bounds(limit: int) -> None:
     response = _activity(client, project, limit=limit)
 
     assert response.status_code == 422
+
+
+# ── Versions saved ──
+
+
+def test_activity_lists_a_saved_version() -> None:
+    session, project, main = _owned_project_session()
+    version = _version(main, created_at=_at(5), created_by=session.user)
+    session.versions.append(version)
+    client = _make_client(session)
+
+    items = _of_type(_items(client, project), "version_saved")
+
+    assert items == [
+        {
+            "id": f"version_saved:{version.id}",
+            "type": "version_saved",
+            "occurred_at": _iso(_at(5)),
+            "actor": {"id": str(session.user.id), "username": "demo"},
+            "branch": {"id": str(main.id), "name": "main", "is_deleted": False},
+            "version": {
+                "id": str(version.id),
+                "message": "Mixed the drums",
+                "source_daw": "FL Studio",
+                "source_project_filename": "beat.flp",
+            },
+            "pull_request": None,
+        }
+    ]
+
+
+def test_activity_lists_saved_versions_newest_first() -> None:
+    session, project, main = _owned_project_session()
+    first = _version(main, created_at=_at(1))
+    third = _version(main, created_at=_at(3))
+    second = _version(main, created_at=_at(2))
+    session.versions.extend([first, third, second])
+    client = _make_client(session)
+
+    items = _of_type(_items(client, project), "version_saved")
+
+    assert _ids(items) == [f"version_saved:{v.id}" for v in (third, second, first)]
+
+
+def test_activity_lists_versions_on_deleted_branches() -> None:
+    session, project, _ = _owned_project_session()
+    old = _branch(project.id, "old-idea", deleted_at=_at(10))
+    session.branches.append(old)
+    version = _version(old, created_at=_at(5))
+    session.versions.append(version)
+    client = _make_client(session)
+
+    items = _of_type(_items(client, project), "version_saved")
+
+    assert _ids(items) == [f"version_saved:{version.id}"]
+    assert items[0]["branch"] == {"id": str(old.id), "name": "old-idea", "is_deleted": True}
+
+
+def test_activity_lists_versions_of_this_project_only() -> None:
+    session, project, main = _owned_project_session()
+    other_project = _project(session.user.id)
+    other_branch = _branch(other_project.id)
+    session.projects.append(other_project)
+    session.branches.append(other_branch)
+    mine = _version(main, created_at=_at(1))
+    session.versions.extend([mine, _version(other_branch, created_at=_at(2))])
+    client = _make_client(session)
+
+    items = _of_type(_items(client, project), "version_saved")
+
+    assert _ids(items) == [f"version_saved:{mine.id}"]
+
+
+def test_activity_saved_version_without_author_has_no_actor() -> None:
+    session, project, main = _owned_project_session()
+    session.versions.append(_version(main, created_at=_at(1), created_by=None))
+    client = _make_client(session)
+
+    items = _of_type(_items(client, project), "version_saved")
+
+    assert items[0]["actor"] is None
+
+
+def test_activity_loads_actors_in_one_query() -> None:
+    session, project, main = _owned_project_session()
+    for minute in range(5):
+        author = _user(f"producer{minute}")
+        session.users.append(author)
+        session.versions.append(_version(main, created_at=_at(minute), created_by=author))
+    client = _make_client(session)
+
+    items = _of_type(_items(client, project), "version_saved")
+
+    assert [item["actor"]["username"] for item in items] == [f"producer{m}" for m in range(4, -1, -1)]
+    assert session.queries_for(User) == 1
+
+
+def test_activity_returns_at_most_limit_items() -> None:
+    session, project, main = _owned_project_session()
+    versions = [_version(main, created_at=_at(minute)) for minute in range(5)]
+    session.versions.extend(versions)
+    client = _make_client(session)
+
+    items = _items(client, project, limit=2)
+
+    assert _ids(items) == [f"version_saved:{v.id}" for v in (versions[4], versions[3])]

@@ -13,6 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from stemhub.activity import build_activity_feed
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
 from stemhub.models import User
@@ -32,4 +33,4 @@ async def get_project_activity(
     """List the project's activity, newest first."""
     await get_project_with_read_access(project_id=project_id, current_user=current_user, db=db)
 
-    return ActivityFeedResponse(items=[], next_cursor=None)
+    return await build_activity_feed(db, project_id=project_id, limit=limit)

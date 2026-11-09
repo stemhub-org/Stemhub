@@ -19,10 +19,21 @@ import base64
 import binascii
 from dataclasses import dataclass
 from datetime import datetime
-from typing import get_args
+from typing import Any, get_args
 from uuid import UUID
 
-from stemhub.schemas import ActivityType
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
+from stemhub.models import Branch, User, Version
+from stemhub.schemas import (
+    ActivityActor,
+    ActivityBranch,
+    ActivityFeedResponse,
+    ActivityItem,
+    ActivityType,
+    ActivityVersion,
+)
 
 ACTIVITY_TYPES: tuple[str, ...] = get_args(ActivityType)
 
@@ -73,3 +84,106 @@ def decode_cursor(raw: str) -> Cursor:
         raise InvalidCursor("bad item id") from exc
 
     return Cursor(occurred_at=occurred_at, item_id=item_id, type=activity_type, entity_id=entity_id)
+
+
+# ── Feed ──
+
+# Column holding the user who did it, for the types that record one.
+_ACTOR_COLUMN = {
+    "version_saved": "created_by",
+}
+
+
+@dataclass(frozen=True)
+class _Event:
+    type: str
+    occurred_at: datetime
+    entity: Any
+
+    @property
+    def id(self) -> str:
+        return f"{self.type}:{self.entity.id}"
+
+    @property
+    def actor_id(self) -> UUID | None:
+        column = _ACTOR_COLUMN.get(self.type)
+        return getattr(self.entity, column) if column else None
+
+
+async def _query_events(
+    db: AsyncSession,
+    activity_type: str,
+    model,
+    occurred_at,
+    filters: list,
+    *,
+    limit: int,
+) -> list[_Event]:
+    """The newest `limit` events of one type, newest first."""
+    result = await db.execute(
+        select(model)
+        .where(*filters)
+        .order_by(occurred_at.desc(), model.id.desc())
+        .limit(limit)
+    )
+    return [_Event(activity_type, getattr(row, occurred_at.key), row) for row in result.scalars().all()]
+
+
+async def _load_actors(db: AsyncSession, events: list[_Event]) -> dict[UUID, User]:
+    actor_ids = {event.actor_id for event in events if event.actor_id is not None}
+    if not actor_ids:
+        return {}
+    result = await db.execute(select(User).where(User.id.in_(actor_ids)))
+    return {user.id: user for user in result.scalars().all()}
+
+
+def _branch_summary(branch: Branch) -> ActivityBranch:
+    return ActivityBranch(id=branch.id, name=branch.name, is_deleted=branch.is_deleted)
+
+
+def _to_item(event: _Event, *, branches: dict[UUID, Branch], actors: dict[UUID, User]) -> ActivityItem:
+    actor = actors.get(event.actor_id) if event.actor_id is not None else None
+    version = event.entity
+    return ActivityItem(
+        id=event.id,
+        type=event.type,
+        occurred_at=event.occurred_at,
+        actor=ActivityActor(id=actor.id, username=actor.username) if actor else None,
+        branch=_branch_summary(branches[version.branch_id]),
+        version=ActivityVersion(
+            id=version.id,
+            message=version.message,
+            source_daw=version.source_daw,
+            source_project_filename=version.source_project_filename,
+        ),
+    )
+
+
+async def build_activity_feed(db: AsyncSession, *, project_id: UUID, limit: int) -> ActivityFeedResponse:
+    """One page of the project's activity, newest first.
+
+    Each source is queried for at most `limit + 1` events, so merging them
+    is enough to know the page and whether more items exist. Actors are then
+    loaded in one query for the page only.
+    """
+    # Deleted branches included: their versions were saved, and their own
+    # creation and deletion are activity.
+    branch_result = await db.execute(select(Branch).where(Branch.project_id == project_id))
+    branches = {branch.id: branch for branch in branch_result.scalars().all()}
+
+    events: list[_Event] = []
+    if branches:
+        events += await _query_events(
+            db, "version_saved", Version, Version.created_at,
+            [Version.branch_id.in_(list(branches))],
+            limit=limit + 1,
+        )
+
+    events.sort(key=lambda event: (event.occurred_at, event.id), reverse=True)
+    page = events[:limit]
+
+    actors = await _load_actors(db, page)
+    return ActivityFeedResponse(
+        items=[_to_item(event, branches=branches, actors=actors) for event in page],
+        next_cursor=None,
+    )
