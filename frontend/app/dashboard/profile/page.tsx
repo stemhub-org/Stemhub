@@ -487,8 +487,7 @@ export default function ProfilePage() {
                         <div className="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
                             <button
                                 onClick={() => {
-                                    setEditForm({ ...editForm, genres: user?.genres || [] });
-                                    setEditForm({ ...editForm, genres: user?.genres || [] });
+                                    setEditForm({ ...editForm, genres: user.genres ?? [] });
                                     setIsGenreModalOpen(false);
                                 }}
                                 className="px-5 py-2 text-sm font-medium hover:bg-white/5 rounded-xl transition-colors disabled:opacity-50"
