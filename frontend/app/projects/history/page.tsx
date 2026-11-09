@@ -98,10 +98,7 @@ function ProjectHistory({ projectId, requestedBranchId }: { projectId: string; r
     const historyEntries = historyQuery.data ?? [];
 
     return (
-        <div
-            className="min-h-screen bg-background text-foreground"
-            style={{ "--accent": "#9C57DF" } as React.CSSProperties}
-        >
+        <div className="min-h-screen bg-background text-foreground">
             <ProjectHeader />
             <div className="p-6 space-y-6">
                 <Link
