@@ -3,26 +3,12 @@
 import Link from "next/link";
 import { Clock, ChevronRight } from "lucide-react";
 import type { VersionWithAuthor } from "@/types/project";
+import { formatDateTime, formatTimeAgo } from "@/lib/time";
 
 interface RecentVersionsProps {
     versions: VersionWithAuthor[];
     projectId?: string | null;
     branchId?: string | null;
-}
-
-function formatTimeAgo(dateString: string): string {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffMs = now.getTime() - date.getTime();
-    const diffMinutes = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMinutes < 1) return "just now";
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
 }
 
 function getInitials(username: string): string {
@@ -85,16 +71,30 @@ export function RecentVersions({ versions, projectId, branchId }: RecentVersions
                                                 <span className="font-medium text-foreground">
                                                     {authorName}
                                                 </span>
-                                                <span className="text-foreground/50">
+                                                <time
+                                                    dateTime={version.created_at}
+                                                    title={formatDateTime(version.created_at)}
+                                                    className="text-foreground/50"
+                                                >
                                                     {formatTimeAgo(version.created_at)}
-                                                </span>
+                                                </time>
                                             </div>
                                             <p className="mt-1 text-sm text-foreground/80">
                                                 {version.message || "No message"}
                                             </p>
-                                            <p className="mt-0.5 font-mono text-xs text-foreground/60">
-                                                {version.branch_name}
-                                            </p>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                                                <span className="font-mono text-foreground/60">{version.branch_name}</span>
+                                                {version.source_daw && (
+                                                    <span className="rounded-md border border-border-subtle px-1.5 py-0.5 font-medium text-foreground/70">
+                                                        {version.source_daw}
+                                                    </span>
+                                                )}
+                                                {version.source_project_filename && (
+                                                    <span className="truncate font-mono text-foreground-muted">
+                                                        {version.source_project_filename}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
