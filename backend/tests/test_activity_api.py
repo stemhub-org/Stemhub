@@ -845,3 +845,59 @@ def test_activity_rejects_an_invalid_cursor() -> None:
 
     assert response.status_code == 400
     assert "cursor" in response.json()["detail"].lower()
+
+
+# ── Type filter ──
+
+
+def test_activity_filters_by_one_type() -> None:
+    session, project = _busy_project()
+    client = _make_client(session)
+    everything = _items(client, project, limit=100)
+
+    items = _items(client, project, limit=100, types="version_saved")
+
+    assert items == _of_type(everything, "version_saved")
+    assert len(items) == 7
+
+
+def test_activity_filters_by_several_types() -> None:
+    session, project = _busy_project()
+    client = _make_client(session)
+    everything = _items(client, project, limit=100)
+
+    items = _items(client, project, limit=100, types=["branch_deleted", "pull_request_merged"])
+
+    assert items == [item for item in everything if item["type"] in {"branch_deleted", "pull_request_merged"}]
+    assert {item["type"] for item in items} == {"branch_deleted", "pull_request_merged"}
+
+
+def test_activity_filter_only_queries_the_requested_sources() -> None:
+    session, project = _busy_project()
+    client = _make_client(session)
+
+    items = _items(client, project, types="branch_created")
+
+    assert {item["type"] for item in items} == {"branch_created"}
+    assert session.queries_for(Version) == 0
+    assert session.queries_for(PullRequest) == 0
+
+
+def test_activity_filtered_pages_cover_the_filtered_feed() -> None:
+    session, project = _busy_project()
+    client = _make_client(session)
+    types = ["version_saved", "pull_request_opened"]
+    expected = _ids(_items(client, project, limit=100, types=types))
+
+    pages = _walk(client, project, limit=2, types=types)
+
+    assert [item_id for page in pages for item_id in page] == expected
+
+
+def test_activity_rejects_an_unknown_type() -> None:
+    session, project, _ = _owned_project_session()
+    client = _make_client(session)
+
+    response = _activity(client, project, types="commit")
+
+    assert response.status_code == 422
