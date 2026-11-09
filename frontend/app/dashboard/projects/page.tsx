@@ -99,14 +99,14 @@ export default function DashboardProjectsPage() {
             <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10">
                 <aside className="w-full md:w-62 flex-shrink-0">
                     <div className="flex flex-col items-center md:items-start gap-4">
-                        <div className={`h-60 w-60 overflow-hidden rounded-full bg-gradient-to-tr from-accent to-accent/40 flex items-center justify-center border-2 ${isDark ? "border-transparent" : "border-white"}`}>
+                        <div className={`h-60 w-60 overflow-hidden rounded-full bg-accent flex items-center justify-center border-2 ${isDark ? "border-transparent" : "border-white"}`}>
                             <Avatar
                                 src={user?.avatar_url}
                                 alt={`${user?.username ?? "Your"}'s avatar`}
                                 className="h-full w-full object-cover rounded-full"
                                 fallback={
-                                    <span className="flex h-24 w-24 items-center justify-center rounded-full bg-black/15">
-                                        <User className="h-14 w-14 text-white/90" aria-hidden />
+                                    <span className="flex h-24 w-24 items-center justify-center rounded-full bg-accent-foreground/15">
+                                        <User className="h-14 w-14 text-accent-foreground" aria-hidden />
                                     </span>
                                 }
                             />
@@ -152,7 +152,7 @@ export default function DashboardProjectsPage() {
                         <button
                             type="button"
                             onClick={() => setShowNewProject(true)}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 text-base font-medium text-foreground dark:text-white bg-accent/25 border border-accent/35 backdrop-blur-xl shadow-[0_0_24px_rgba(156,87,223,0.18)] hover:bg-accent/35 hover:border-accent/50 transition-all duration-300"
+                            className="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 text-base font-medium text-foreground bg-accent/15 border border-accent/35 backdrop-blur-xl shadow-[var(--shadow-glow-accent)] hover:bg-accent/35 hover:border-accent/50 transition-all duration-300"
                         >
                             <Plus className="size-4" aria-hidden />
                             New
