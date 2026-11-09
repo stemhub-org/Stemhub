@@ -1,4 +1,4 @@
-import type { ActivityItem } from "@/types/activity";
+import type { ActivityItem, ActivityType } from "@/types/activity";
 
 export interface ActivityText {
     /** What happened, e.g. "jb saved a version on main". */
@@ -82,3 +82,21 @@ export function groupActivityByDay(items: ActivityItem[], now: Date = new Date()
     }
     return days;
 }
+
+export interface ActivityFilter {
+    id: "all" | "versions" | "branches" | "pull-requests";
+    label: string;
+    /** The types it keeps; null keeps them all. */
+    types: readonly ActivityType[] | null;
+}
+
+export const ACTIVITY_FILTERS: readonly ActivityFilter[] = [
+    { id: "all", label: "All", types: null },
+    { id: "versions", label: "Versions", types: ["version_saved", "version_deleted"] },
+    { id: "branches", label: "Branches", types: ["branch_created", "branch_deleted"] },
+    {
+        id: "pull-requests",
+        label: "Pull requests",
+        types: ["pull_request_opened", "pull_request_merged", "pull_request_closed"],
+    },
+];

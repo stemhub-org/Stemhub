@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ActivityItem } from "@/types/activity";
-import { describeActivity, groupActivityByDay } from "./activityText";
+import { ACTIVITY_FILTERS, describeActivity, groupActivityByDay } from "./activityText";
 
 const main = { id: "b-main", name: "main", is_deleted: false };
 const feat = { id: "b-feat", name: "feature-fast-tempo", is_deleted: false };
@@ -83,5 +83,22 @@ describe("groupActivityByDay", () => {
             new Date("2026-11-02T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }),
         ]);
         expect(groups.map((group) => group.items.map((item) => item.id))).toEqual([["a"], ["b"], ["c", "d"]]);
+    });
+});
+
+describe("ACTIVITY_FILTERS", () => {
+    it("covers every activity type exactly once besides All", () => {
+        const types = ACTIVITY_FILTERS.flatMap((filter) => filter.types ?? []);
+        expect(new Set(types).size).toBe(types.length);
+        expect(types.sort()).toEqual([
+            "branch_created",
+            "branch_deleted",
+            "pull_request_closed",
+            "pull_request_merged",
+            "pull_request_opened",
+            "version_deleted",
+            "version_saved",
+        ]);
+        expect(ACTIVITY_FILTERS[0]).toEqual({ id: "all", label: "All", types: null });
     });
 });
