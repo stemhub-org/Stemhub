@@ -6,25 +6,25 @@ import { CONTAINER, EASE_OUT, LABEL } from "./landing";
 
 const columns = [
   {
-    title: "Product",
+    title: "Produit",
     links: [
-      { label: "How it works", href: "#how" },
-      { label: "Features", href: "#features" },
-      { label: "Pricing", href: "#pricing" },
+      { label: "Comment ça marche", href: "#how" },
+      { label: "Fonctionnalités", href: "#features" },
+      { label: "Tarifs", href: "#pricing" },
     ],
   },
   {
-    title: "Account",
+    title: "Compte",
     links: [
-      { label: "Sign in", href: "/login" },
-      { label: "Create an account", href: "/register" },
+      { label: "Se connecter", href: "/login" },
+      { label: "Créer un compte", href: "/register" },
     ],
   },
   {
-    title: "Legal",
+    title: "Légal",
     links: [
-      { label: "Privacy", href: "#" },
-      { label: "Terms", href: "#" },
+      { label: "Confidentialité", href: "#" },
+      { label: "Conditions d’utilisation", href: "#" },
     ],
   },
 ];
