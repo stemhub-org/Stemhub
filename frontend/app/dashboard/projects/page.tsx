@@ -95,10 +95,7 @@ export default function DashboardProjectsPage() {
     }
 
     return (
-        <div
-            className="max-w-6xl mx-auto pt-6 pb-10"
-            style={{ "--accent": "#9C57DF" } as React.CSSProperties}
-        >
+        <div className="max-w-6xl mx-auto pt-6 pb-10">
             <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10">
                 <aside className="w-full md:w-62 flex-shrink-0">
                     <div className="flex flex-col items-center md:items-start gap-4">
