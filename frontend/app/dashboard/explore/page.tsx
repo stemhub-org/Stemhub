@@ -190,7 +190,7 @@ export default function ExplorePage() {
                 >
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#9C57DF] to-[#C28CF0] flex items-center justify-center text-white font-bold shadow-lg ring-4 ring-background">
+                            <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold shadow-lg ring-4 ring-background">
                                 {item.producer.username.substring(0, 2).toUpperCase()}
                             </div>
                             <div>
@@ -213,7 +213,7 @@ export default function ExplorePage() {
                                 <h3 className="text-xl font-bold text-foreground hover:text-accent cursor-pointer transition-colors mb-2">{item.project_name}</h3>
                                 <p className="text-sm text-foreground-muted leading-relaxed max-w-lg">Check out this new project by {item.producer.username}.</p>
                             </div>
-                            <button className="bg-accent/10 hover:bg-accent text-accent hover:text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-[0_0_15px_rgba(156,87,223,0.15)] hover:shadow-[0_0_25px_rgba(156,87,223,0.4)] hover:-translate-y-0.5 flex items-center gap-2">
+                            <button className="bg-accent/10 hover:bg-accent text-accent hover:text-accent-foreground px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-[0_0_15px_rgba(156,87,223,0.15)] hover:shadow-[0_0_25px_rgba(156,87,223,0.4)] hover:-translate-y-0.5 flex items-center gap-2">
                                 <Play size={16} fill="currentColor" /> Listen
                             </button>
                         </div>
@@ -254,7 +254,7 @@ export default function ExplorePage() {
                             alt={producer.username}
                             className="h-10 w-10 rounded-full object-cover group-hover/item:scale-110 transition-transform"
                             fallback={
-                                <div className={`h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-rose-400 flex items-center justify-center text-white text-xs font-bold shadow-sm group-hover/item:scale-110 group-hover/item:rotate-3 transition-transform`}>
+                                <div className={`h-10 w-10 rounded-full bg-foreground/10 flex items-center justify-center text-foreground text-xs font-bold shadow-sm group-hover/item:scale-110 group-hover/item:rotate-3 transition-transform`}>
                                     {producer.username.substring(0, 2).toUpperCase()}
                                 </div>
                             }
@@ -302,7 +302,7 @@ export default function ExplorePage() {
                             alt={collab.username}
                             className="h-12 w-12 rounded-full object-cover group-hover/item:shadow-lg transition-shadow"
                             fallback={
-                                <div className={`h-12 w-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white text-sm font-bold shadow-md group-hover/item:shadow-lg transition-shadow`}>
+                                <div className={`h-12 w-12 rounded-full bg-foreground/10 flex items-center justify-center text-foreground text-sm font-bold shadow-md group-hover/item:shadow-lg transition-shadow`}>
                                     {collab.username.substring(0, 2).toUpperCase()}
                                 </div>
                             }
@@ -394,7 +394,7 @@ export default function ExplorePage() {
                             <button 
                                 onClick={() => handleJoinChallenge(challenge)}
                                 disabled={isJoining[challenge.id]}
-                                className="px-4 py-2 rounded-lg bg-accent text-white font-bold text-xs hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_4px_15px_rgba(156,87,223,0.3)] hover:-translate-y-0.5"
+                                className="px-4 py-2 rounded-lg bg-accent text-accent-foreground font-bold text-xs hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[var(--shadow-glow-accent)] hover:-translate-y-0.5"
                             >
                                 {isJoining[challenge.id] ? "Joining..." : "Join Now"}
                             </button>
@@ -472,17 +472,17 @@ export default function ExplorePage() {
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id)}
                                         className={`relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-full text-sm font-bold transition-colors z-10 ${
-                                            isActive ? 'text-white' : 'text-foreground-muted hover:text-foreground hover:bg-foreground/5'
+                                            isActive ? 'text-accent-foreground' : 'text-foreground-muted hover:text-foreground hover:bg-foreground/5'
                                         }`}
                                     >
                                         {isActive && (
                                             <motion.div
                                                 layoutId="explore-active-tab"
-                                                className="absolute inset-0 bg-accent rounded-full -z-10 shadow-[0_4px_20px_rgba(156,87,223,0.5)]"
+                                                className="absolute inset-0 bg-accent rounded-full -z-10 shadow-[var(--shadow-glow-accent)]"
                                                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                             />
                                         )}
-                                        <Icon size={18} className={isActive ? 'text-white' : ''} />
+                                        <Icon size={18} className={isActive ? 'text-accent-foreground' : ''} />
                                         {tab.label}
                                     </button>
                                 );
