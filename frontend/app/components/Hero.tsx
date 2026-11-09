@@ -5,14 +5,14 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { FIGURE_BARS, FIGURE_HEAD, FIGURE_LIMBS, FIGURE_TORSO, FIGURE_VIEWBOX } from "./BrandMark";
 import { CONTAINER, EASE_OUT, EASE_SNAP, LABEL, WipeLink } from "./landing";
 
-const headline = ["Your", "loop", "wants", "company."];
-const values = ["Reckless, not careless", "Raw, not retro", "Loud, not hostile", "Open, never elitist"];
+const headline = ["Ta", "boucle", "veut", "du", "monde."];
+const values = ["Téméraire, pas négligent", "Brut, pas rétro", "Fort, pas hostile", "Ouvert, jamais élitiste"];
 
 // The logo figure, assembled in front of you: body first, limbs drawn out, and the
 // reaching arm last, right before it catches the three signal bars.
 function CatchFigure() {
   return (
-    <svg viewBox={FIGURE_VIEWBOX} fill="currentColor" className="w-full max-w-[420px]" role="img" aria-label="StemHub figure catching a signal">
+    <svg viewBox={FIGURE_VIEWBOX} fill="currentColor" className="w-full max-w-[420px]" role="img" aria-label="La figure StemHub qui attrape un signal">
       <motion.circle
         {...FIGURE_HEAD}
         initial={{ scale: 0 }}
@@ -72,11 +72,11 @@ export default function Hero() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.6 }}
         >
-          StemHub® / Version control for producers
+          StemHub® / Gestion de versions pour producteurs
         </motion.span>
 
         {/* Sized on the column, not the window: Syne 800 runs ~1.1em per capital, so
-            11cqw keeps "COMPANY." inside the column at every width. */}
+            11cqw keeps a word of up to 8 capitals ("BOUCLE", "MONDE.") inside the column. */}
         <h1 className="font-display text-[clamp(2.25rem,11cqw,8rem)] leading-[0.88] font-extrabold tracking-[-0.04em] uppercase">
           {headline.map((word, i) => (
             <span key={word} className="inline-block overflow-hidden pr-[0.22em] pb-[0.06em] align-top">
@@ -108,8 +108,8 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.85, duration: 0.8, ease: EASE_OUT }}
           >
-            StemHub is the shared workbench where producers catch an idea, pull it apart, and push it
-            somewhere nobody could reach alone. Save every version straight from FL Studio or Ableton Live.
+            StemHub, c’est l’atelier partagé où les producteurs attrapent une idée, la démontent et
+            l’emmènent là où personne n’irait seul. Enregistre chaque version depuis FL Studio ou Ableton Live.
           </motion.p>
           <motion.div
             className="flex flex-wrap gap-2.5"
@@ -118,10 +118,10 @@ export default function Hero() {
             transition={{ delay: 0.95, duration: 0.8, ease: EASE_OUT }}
           >
             <WipeLink href="/register" variant="ink">
-              Start free
+              Commencer gratuitement
             </WipeLink>
             <WipeLink href="#how" variant="outline">
-              How it works
+              Comment ça marche
             </WipeLink>
           </motion.div>
         </div>
