@@ -465,8 +465,8 @@ function IntegrationSettings({ user }: { user: UserProfile }) {
                     <div className="p-5 rounded-xl border border-accent/20 bg-accent/5 flex flex-col justify-between h-32">
                         <div className="flex justify-between items-start">
                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-black rounded-md flex items-center justify-center font-bold text-white text-xs border border-white/10">
-                                    ///
+                                <div aria-hidden="true" className="w-8 h-8 bg-black rounded-md flex items-center justify-center font-bold text-white text-xs border border-white/10">
+                                    {"///"}
                                 </div>
                                 <span className="text-sm font-medium">Ableton Live</span>
                             </div>
