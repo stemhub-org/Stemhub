@@ -126,10 +126,7 @@ function ProjectOverview({ projectId }: { projectId: string }) {
         assetsLoading || !assetsQuery.isError ? null : errorMessage(assetsQuery.error, "Failed to load the file list");
 
     return (
-        <div
-            className="min-h-screen bg-background text-foreground"
-            style={{ "--accent": "#9C57DF" } as React.CSSProperties}
-        >
+        <div className="min-h-screen bg-background text-foreground">
             <ProjectHeader
                 onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
                 sidebarOpen={sidebarOpen}
