@@ -38,7 +38,7 @@ export default function Navbar() {
           <Wordmark className="text-xl" />
         </Link>
 
-        <div className={`hidden items-center gap-7 md:flex ${LABEL}`}>
+        <div className={`hidden items-center gap-7 lg:flex ${LABEL}`}>
           {navLinks.map((link) => (
             <a key={link.href} href={link.href} className="group relative py-2">
               {link.label}
@@ -47,7 +47,7 @@ export default function Navbar() {
           ))}
         </div>
 
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="hidden items-center gap-2 lg:flex">
           <Link href="/login" className="px-3 py-3 text-sm font-medium hover:underline">
             Connexion
           </Link>
@@ -58,7 +58,7 @@ export default function Navbar() {
 
         <button
           type="button"
-          className="flex h-11 w-11 items-center justify-center md:hidden"
+          className="flex h-11 w-11 items-center justify-center lg:hidden"
           onClick={() => setMobileOpen((open) => !open)}
           aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
           aria-expanded={mobileOpen}
@@ -74,7 +74,7 @@ export default function Navbar() {
             animate={{ height: "auto" }}
             exit={{ height: 0 }}
             transition={{ duration: 0.4, ease: EASE_SNAP }}
-            className="overflow-hidden border-b-2 border-ink bg-paper md:hidden"
+            className="overflow-hidden border-b-2 border-ink bg-paper lg:hidden"
           >
             <div className={`${CONTAINER} flex flex-col gap-1 py-4`}>
               {navLinks.map((link) => (
