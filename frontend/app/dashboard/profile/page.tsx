@@ -6,6 +6,7 @@ import { useToast } from "@/components/ToastProvider";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { useUpdateProfile } from "@/lib/account";
 import { errorMessage } from "@/lib/api";
+import { searchPlaces, type PlaceSuggestion } from "@/lib/places";
 import { useCurrentUser, useProjects } from "@/lib/queries";
 import type { UserProfile } from "@/types/user";
 import { useTheme } from "next-themes";
@@ -76,7 +77,7 @@ export default function ProfilePage() {
     const [editForm, setEditForm] = useState<ProfileForm>(() => formFromUser(undefined));
     const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
     const [genreSearch, setGenreSearch] = useState("");
-    const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
+    const [locationSuggestions, setLocationSuggestions] = useState<PlaceSuggestion[]>([]);
     const [isSearchingLocation, setIsSearchingLocation] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -134,23 +135,15 @@ export default function ProfilePage() {
             return;
         }
 
+        // Nominatim allows one request per second: wait for a pause in typing.
         searchTimeoutRef.current = setTimeout(async () => {
             setIsSearchingLocation(true);
-            try {
-                // Nominatim restricts to 1 request/second.
-                // We also avoid custom headers like User-Agent to prevent CORS preflight blocks in newer browsers.
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=5`);
-                const data = await response.json();
-                setLocationSuggestions(data);
-            } catch (error) {
-                console.error("Error searching location:", error);
-            } finally {
-                setIsSearchingLocation(false);
-            }
-        }, 600); // 600ms debounce
+            setLocationSuggestions(await searchPlaces(query));
+            setIsSearchingLocation(false);
+        }, 600);
     };
 
-    const selectLocation = (suggestion: any) => {
+    const selectLocation = (suggestion: PlaceSuggestion) => {
         setEditForm({ ...editForm, location: suggestion.display_name });
         setLocationSuggestions([]);
     };
@@ -324,7 +317,7 @@ export default function ProfilePage() {
                                     {isSearchingLocation && <Loader2 size={14} className="animate-spin text-accent absolute right-2" />}
                                     {locationSuggestions.length > 0 && (
                                         <div className="absolute z-[60] left-6 top-8 w-[calc(100%-1.5rem)] bg-black border border-white/20 rounded-xl overflow-hidden shadow-2xl backdrop-blur-3xl">
-                                            {locationSuggestions.map((suggestion: any) => (
+                                            {locationSuggestions.map((suggestion) => (
                                                 <button
                                                     key={suggestion.place_id}
                                                     type="button"
