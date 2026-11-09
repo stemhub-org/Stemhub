@@ -3,7 +3,7 @@ import { searchPlaces } from "./places";
 
 describe("searchPlaces", () => {
     it("asks Nominatim for five places matching the query", async () => {
-        const fetchMock = vi.fn(async (_url: URL) =>
+        const fetchMock = vi.fn<(url: URL) => Promise<Response>>(async () =>
             new Response(JSON.stringify([{ place_id: 1, display_name: "Paris, France", lat: "48.8" }])),
         );
         vi.stubGlobal("fetch", fetchMock);
