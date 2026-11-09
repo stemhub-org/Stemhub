@@ -136,6 +136,14 @@ class FakeSession:
             if obj.is_deleted is None:
                 obj.is_deleted = False
             self.pull_requests.append(obj)
+        elif isinstance(obj, Version):
+            if obj.id is None:
+                obj.id = uuid.uuid4()
+            if obj.created_at is None:
+                obj.created_at = datetime.now(timezone.utc)
+            if obj.is_deleted is None:
+                obj.is_deleted = False
+            self.versions.append(obj)
         else:
             raise TypeError(f"FakeSession does not track {type(obj).__name__}")
 
@@ -600,3 +608,70 @@ def test_close_pull_request_requires_write_access() -> None:
 
     assert response.status_code == 404
     assert pr.status == "OPEN"
+
+
+# ── Accept (issue #253) ──
+
+
+_MANIFEST = {"manifest_version": 2, "project_file": {"sha256": "a" * 64}, "assets": []}
+
+
+def _accept_session(*, target_has_head: bool = True):
+    """Owned project with an open PR from `feature` into `main`, whose heads
+    were captured when it was opened."""
+    session, project, main, feature = _owned_project_session()
+    opened = datetime(2026, 11, 1, tzinfo=timezone.utc)
+    main_head = _version(main.id, created_at=opened) if target_has_head else None
+    feature_head = _version(feature.id, created_at=opened)
+    feature_head.manifest_json = _MANIFEST
+    feature_head.manifest_version = 2
+    feature_head.source_daw = "FL Studio"
+    feature_head.source_project_filename = "beat.flp"
+    session.versions.extend([v for v in (main_head, feature_head) if v is not None])
+    pr = _pull_request(project, feature, main, created_by=session.user.id)
+    pr.source_head_version_id = feature_head.id
+    pr.target_head_version_id = main_head.id if main_head else None
+    session.pull_requests.append(pr)
+    return session, project, main, feature, pr, main_head, feature_head
+
+
+def _versions_on(session: FakeSession, branch: Branch) -> list[Version]:
+    return [v for v in session.versions if v.branch_id == branch.id]
+
+
+def test_accept_pull_request_promotes_the_source_head_onto_the_target() -> None:
+    session, _, main, _, pr, main_head, feature_head = _accept_session()
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "MERGED"
+    assert body["closed_by"] == str(session.user.id)
+    assert body["closed_at"] is not None
+    promoted = [v for v in _versions_on(session, main) if v.id != main_head.id]
+    assert len(promoted) == 1
+    version = promoted[0]
+    assert version.parent_version_id == main_head.id
+    assert version.created_by == session.user.id
+    assert version.message == "Accept PR: Faster tempo"
+    assert version.manifest_json == _MANIFEST
+    assert version.manifest_json is not feature_head.manifest_json
+    assert version.manifest_version == 2
+    assert version.source_daw == "FL Studio"
+    assert version.source_project_filename == "beat.flp"
+    assert session.commit_calls == 1
+
+
+def test_accept_pull_request_onto_an_empty_target_starts_its_history() -> None:
+    session, _, main, _, pr, _, _ = _accept_session(target_has_head=False)
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    [version] = _versions_on(session, main)
+    assert version.parent_version_id is None
+    assert version.manifest_json == _MANIFEST
+

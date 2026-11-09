@@ -11,6 +11,7 @@ Admin/Editor collaborator); listing and reading require read access. Both
 helpers return 404 on miss, never 403, so a non-member cannot probe whether a
 project or PR exists.
 """
+import copy
 from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
@@ -197,3 +198,44 @@ async def close_pull_request(
     await db.commit()
     await db.refresh(pull_request)
     return pull_request
+
+
+@router.post("/pull-requests/{pull_request_id}/accept", response_model=PullRequestResponse)
+async def accept_pull_request(
+    pull_request_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Accept a pull request (OPEN → MERGED) by promoting its source branch.
+
+    Promotion, not merge (SPECIFICATION.md §8, §19): a new version on the
+    target branch reuses the source head's manifest, so the target's latest
+    state becomes the source's. Files are content-addressed, so nothing is
+    copied in storage.
+    """
+    pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
+    await get_project_with_write_access(project_id=pull_request.project_id, current_user=current_user, db=db)
+
+    source_head = await _branch_head(branch_id=pull_request.source_branch_id, db=db)
+    target_head_id = await _branch_head_id(branch_id=pull_request.target_branch_id, db=db)
+
+    db.add(
+        Version(
+            branch_id=pull_request.target_branch_id,
+            created_by=current_user.id,
+            parent_version_id=target_head_id,
+            message=f"Accept PR: {pull_request.title}",
+            source_daw=source_head.source_daw,
+            source_project_filename=source_head.source_project_filename,
+            # A copy, so the two versions never share a mutable JSON document.
+            manifest_json=copy.deepcopy(source_head.manifest_json),
+            manifest_version=source_head.manifest_version,
+        )
+    )
+    pull_request.status = "MERGED"
+    pull_request.closed_at = datetime.now(timezone.utc)
+    pull_request.closed_by = current_user.id
+    await db.commit()
+    await db.refresh(pull_request)
+    return pull_request
+
