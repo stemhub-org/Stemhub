@@ -213,7 +213,7 @@ export default function ExplorePage() {
                                 <h3 className="text-xl font-bold text-foreground hover:text-accent cursor-pointer transition-colors mb-2">{item.project_name}</h3>
                                 <p className="text-sm text-foreground-muted leading-relaxed max-w-lg">Check out this new project by {item.producer.username}.</p>
                             </div>
-                            <button className="bg-accent/10 hover:bg-accent text-accent hover:text-accent-foreground px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-[0_0_15px_rgba(156,87,223,0.15)] hover:shadow-[0_0_25px_rgba(156,87,223,0.4)] hover:-translate-y-0.5 flex items-center gap-2">
+                            <button className="bg-accent/10 hover:bg-accent text-accent hover:text-accent-foreground px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:shadow-[var(--shadow-glow-accent)] hover:-translate-y-0.5 flex items-center gap-2">
                                 <Play size={16} fill="currentColor" /> Listen
                             </button>
                         </div>
