@@ -220,6 +220,8 @@ async def accept_pull_request(
         raise HTTPException(status_code=409, detail=f"Pull request is already {pull_request.status}")
 
     source_head = await _branch_head(branch_id=pull_request.source_branch_id, db=db)
+    if source_head is None:
+        raise HTTPException(status_code=409, detail="The source branch has no version to promote")
     target_head_id = await _branch_head_id(branch_id=pull_request.target_branch_id, db=db)
 
     db.add(

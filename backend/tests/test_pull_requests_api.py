@@ -691,3 +691,16 @@ def test_accept_pull_request_refuses_one_that_is_not_open() -> None:
         assert pr.status == status
         assert session.versions == before
         assert session.commit_calls == 0
+
+
+def test_accept_pull_request_refuses_an_empty_source_branch() -> None:
+    session, _, _, feature, pr, _, feature_head = _accept_session()
+    feature_head.is_deleted = True  # the source's only version was deleted
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "The source branch has no version to promote"
+    assert pr.status == "OPEN"
+    assert session.commit_calls == 0
