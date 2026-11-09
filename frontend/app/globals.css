@@ -42,6 +42,20 @@
   --ease-brand: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Identity system 2026 (Ink / Paper / Lime). Fixed brand colours, not themed:
+   the landing page always renders on Paper. Lime is for Ink surfaces; Lime on
+   Paper is decorative only (1.0:1), never text. */
+@theme {
+  --color-ink: #0A0A0A;
+  --color-ink-soft: #4A4A4A;
+  --color-ink-line: #D0D0D0;
+  --color-paper: #FFFFFF;
+  --color-paper-soft: #BDBDBD;
+  --color-paper-line: #333333;
+  --color-lime: #C8FF00;
+  --ease-snap: cubic-bezier(0.7, 0, 0.2, 1);
+}
+
 html {
   scroll-behavior: auto;
 }
@@ -55,23 +69,6 @@ body {
 ::selection {
   background: rgba(62, 99, 221, 0.3);
   color: #ffffff;
-}
-
-html.lenis,
-html.lenis body {
-  height: auto;
-}
-
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}
-
-.lenis.lenis-stopped {
-  overflow: hidden;
 }
 
 .glass-panel {

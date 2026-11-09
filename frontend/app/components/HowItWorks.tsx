@@ -1,120 +1,87 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Download, GitCommit, GitBranch, Share2 } from "lucide-react";
+import { useRef, type ReactNode } from "react";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { CONTAINER, EASE_OUT, LABEL, RevealHeading, SECTION_TITLE } from "./landing";
 
 const steps = [
-  {
-    number: "01",
-    icon: Download,
-    title: "Install the StemHub plugin",
-    description:
-      "Add the StemHub plugin to FL Studio or Ableton Live in one click. No setup required.",
-  },
-  {
-    number: "02",
-    icon: GitCommit,
-    title: "Save versions",
-    description:
-      "Save a version of your project from the StemHub plugin. Add a message to remember your choices.",
-  },
+  { number: "01", title: "Installe le plugin", description: "Ajoute StemHub à FL Studio ou Ableton Live en un clic." },
+  { number: "02", title: "Enregistre tes versions", description: "Chaque version a son message\u00a0: tu la retrouves sans chercher." },
   {
     number: "03",
-    icon: GitBranch,
-    title: "Create branches",
-    description:
-      "Try new ideas without touching the original. Compare versions, restore any of them, and open a pull request.",
+    title: "Ouvre une branche",
+    description: "Tente un truc fou sans toucher à l’original. Compare, restaure, garde le meilleur.",
   },
-  {
-    number: "04",
-    icon: Share2,
-    title: "Collaborate",
-    description:
-      "Share a project with your team or clients. Everyone works on their own branch.",
-  },
+  { number: "04", title: "Fais tourner", description: "Invite tes collaborateurs. Chacun bosse sur sa propre branche." },
 ];
 
-export default function HowItWorks() {
+// Step 03 is the one element of the composition allowed to collide: it swings in
+// from an angle as you scroll and settles slightly off-axis.
+function CollidingStep({ step }: { step: (typeof steps)[number] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center 55%"] });
+  const rotate = useTransform(scrollYProgress, [0, 1], [9, -1.5]);
+  const y = useTransform(scrollYProgress, [0, 1], [90, 0]);
+
   return (
-    <section className="relative px-6 py-32 md:px-12">
-      <div className="mx-auto max-w-7xl">
-        {/* Header */}
+    <motion.div
+      ref={ref}
+      style={reduceMotion ? { rotate: -1.5 } : { rotate, y }}
+      className="flex flex-col gap-3 bg-lime p-6"
+    >
+      <StepContent step={step} muted={false} />
+    </motion.div>
+  );
+}
+
+function StepContent({ step, muted }: { step: (typeof steps)[number]; muted: boolean }) {
+  return (
+    <>
+      <span className="font-display text-6xl leading-none font-extrabold tracking-[-0.04em]">{step.number}</span>
+      <h3 className="text-xl font-bold">{step.title}</h3>
+      <p className={`leading-relaxed ${muted ? "text-ink-soft" : ""}`}>{step.description}</p>
+    </>
+  );
+}
+
+export default function HowItWorks({ figure }: { figure?: ReactNode }) {
+  return (
+    <section id="how" className={`${CONTAINER} flex scroll-mt-24 flex-col gap-12 py-24 md:py-32`}>
+      <div className="flex flex-wrap items-end justify-between gap-6">
+        <RevealHeading text={"Attrape. Démonte. Va\u00a0plus loin."} className={`${SECTION_TITLE} max-w-[900px]`} />
+        <span className={LABEL}>Comment ça marche / 01–04</span>
+      </div>
+
+      <div className="grid grid-cols-1 border-t-2 border-ink sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map((step, i) =>
+          step.number === "03" ? (
+            <CollidingStep key={step.number} step={step} />
+          ) : (
+            <motion.div
+              key={step.number}
+              className={`flex flex-col gap-3 py-6 pr-6 ${i === 3 ? "sm:pl-6" : ""}`}
+              initial={{ opacity: 0, y: 32 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-10% 0px" }}
+              transition={{ delay: i * 0.08, duration: 0.7, ease: EASE_OUT }}
+            >
+              <StepContent step={step} muted />
+            </motion.div>
+          )
+        )}
+      </div>
+
+      {figure ? (
         <motion.div
-          className="mb-20 text-center"
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          viewport={{ once: true, margin: "-10% 0px" }}
+          transition={{ duration: 0.8, ease: EASE_OUT }}
         >
-          <p
-            className="mb-4 text-sm font-light uppercase tracking-[0.2em] text-accent"
-            style={{ fontFamily: "var(--font-jakarta)" }}
-          >
-            How it works
-          </p>
-          <h2
-            className="mx-auto max-w-xl text-[clamp(2rem,5vw,4.5rem)] font-extralight leading-[1.1] tracking-tight"
-            style={{ fontFamily: "var(--font-syne)" }}
-          >
-            Four steps.
-            <br />
-            <span className="text-foreground">Zero friction.</span>
-          </h2>
+          {figure}
         </motion.div>
-
-        {/* Steps */}
-        <div className="relative grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-          {/* Connecting line (desktop) */}
-          <div className="pointer-events-none absolute top-16 right-0 left-0 hidden h-[1px] bg-gradient-to-r from-transparent via-accent/30 to-transparent lg:block" />
-
-          {steps.map((step, i) => {
-            const Icon = step.icon;
-            return (
-              <motion.div
-                key={step.number}
-                className="group relative"
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-80px" }}
-                transition={{
-                  duration: 0.6,
-                  delay: i * 0.12,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
-              >
-                {/* Step number + icon */}
-                <div className="relative mb-8 flex h-16 w-16 items-center justify-center rounded-2xl border border-accent/25 bg-accent/10 dark:bg-background-tertiary/50 transition-all duration-500 group-hover:border-accent/40 group-hover:bg-accent/20">
-                  <Icon
-                    size={22}
-                    strokeWidth={1.5}
-                    className="text-accent/80 transition-colors duration-500 group-hover:text-accent"
-                  />
-                  <span
-                    className="absolute -top-2.5 -right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-background text-[10px] font-light text-accent/80 ring-1 ring-accent/20"
-                    style={{ fontFamily: "var(--font-jakarta)" }}
-                  >
-                    {step.number}
-                  </span>
-                </div>
-
-                {/* Content */}
-                <h3
-                  className="mb-3 text-lg font-light tracking-tight"
-                  style={{ fontFamily: "var(--font-syne)" }}
-                >
-                  {step.title}
-                </h3>
-                <p
-                  className="text-sm font-light leading-relaxed text-foreground"
-                  style={{ fontFamily: "var(--font-jakarta)" }}
-                >
-                  {step.description}
-                </p>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
+      ) : null}
     </section>
   );
 }
