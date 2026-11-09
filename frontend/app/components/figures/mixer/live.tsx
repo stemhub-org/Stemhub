@@ -182,7 +182,7 @@ export function MixerLive(props: Props) {
       className="mx"
       role="slider"
       tabIndex={0}
-      aria-label="Mixing desk replaying a save: Space or a click switches between before and after the save, arrow keys step through the three changes"
+      aria-label="Console de mixage qui rejoue une sauvegarde&nbsp;: Espace ou un clic bascule entre avant et après, les flèches parcourent les trois changements"
       aria-valuemin={0}
       aria-valuemax={CHANGES}
       aria-valuenow={CHANGES}
