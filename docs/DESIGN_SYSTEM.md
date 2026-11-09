@@ -112,14 +112,14 @@ The musical equivalent of a GitHub Pull Request. Collaborators can leave timesta
 
 ## Technical Implementation: SSR Hydration Resilience
 
-Since StemHub uses Next.js, we enforce a **strict client-side mounting pattern** for components that depend on dynamic browser data (like theme, local storage, or audio contexts).
+Since StemHub uses Next.js, components that show browser-only values (the resolved theme, local storage, audio contexts) must render the same markup on the server and during hydration. Use the `useHydrated()` hook from `frontend/lib/useHydrated.ts`: it is `false` on the server and during hydration, `true` afterwards.
 
 ```tsx
-const [mounted, setMounted] = useState(false);
-useEffect(() => setMounted(true), []);
-if (!mounted) return <LoadingState />; // or null
+const hydrated = useHydrated();
+const isLight = hydrated && resolvedTheme === "light";
 ```
-This ensures zero hydration mismatches and a smooth visual transition after the initial server render.
+
+It is built on `useSyncExternalStore`, so it doesn't need a `setState` inside a mount effect (which the `react-hooks/set-state-in-effect` lint rule flags).
 
 ---
 
