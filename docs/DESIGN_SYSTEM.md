@@ -6,17 +6,17 @@ This page documents StemHub's visual identity: logo, color palette, and UI mocku
 
 ## Logo
 
-StemHub's logo combines a waveform and a Git branch merge symbol, reflecting the core concept of version control applied to music.
+The logo ("Catch / Signal") is a figure catching three signal bars, next to the **STEMHUB®** wordmark set in Syne 800 uppercase. It replaces the 2025 purple waveform logo.
 
-Two variants are available depending on the background context:
+In the web app, use the components in `frontend/app/components/BrandMark.tsx`:
 
-**Dark variant** — for dark backgrounds and app icon usage
+| Component | Use |
+|-----------|-----|
+| `BrandFigure` | The figure alone, drawn in `currentColor` |
+| `Wordmark` | The STEMHUB® wordmark |
+| `BrandTile` | The app-icon tile (Paper figure on an Ink rounded square) |
 
-<img width="180" alt="StemHub Logo Dark" src="https://github.com/user-attachments/assets/6dd80b8f-e18c-480d-a37b-1d730ea5003f" />
-
-**Light variant** — for light backgrounds and documentation
-
-<img width="180" alt="StemHub Logo Light" src="https://github.com/user-attachments/assets/00337e57-1b7b-4ae1-bfd9-1f4e2fa808b2" />
+The figure's geometry is shared with the plugin (`paintLogoMark` in `plugin/stemhub/Source/src/ui/PluginTheme.cpp`): never redraw, outline or separate it, and change both places together.
 
 ---
 
