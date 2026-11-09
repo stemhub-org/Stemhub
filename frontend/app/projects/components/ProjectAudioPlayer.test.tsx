@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectAudioPlayer } from "./ProjectAudioPlayer";
 
+// Response bodies are strings: Node 20's fetch Response rejects jsdom's Blob.
 describe("ProjectAudioPlayer", () => {
     beforeEach(() => {
         vi.stubGlobal("URL", Object.assign(URL, {
@@ -22,7 +23,7 @@ describe("ProjectAudioPlayer", () => {
     });
 
     it("loads the preview and enables Play", async () => {
-        const fetchMock = vi.fn(async () => new Response(new Blob(["RIFF"], { type: "audio/wav" })));
+        const fetchMock = vi.fn(async () => new Response("RIFF", { headers: { "Content-Type": "audio/wav" } }));
         vi.stubGlobal("fetch", fetchMock);
 
         const { container } = render(<ProjectAudioPlayer projectId="p1" hasPreview />);
@@ -35,7 +36,7 @@ describe("ProjectAudioPlayer", () => {
     });
 
     it("drops the loaded preview when the project loses it", async () => {
-        vi.stubGlobal("fetch", vi.fn(async () => new Response(new Blob(["RIFF"]))));
+        vi.stubGlobal("fetch", vi.fn(async () => new Response("RIFF", { headers: { "Content-Type": "audio/wav" } })));
         const { container, rerender } = render(<ProjectAudioPlayer projectId="p1" hasPreview />);
         await waitFor(() => expect(container.querySelector("audio")).not.toBeNull());
 
