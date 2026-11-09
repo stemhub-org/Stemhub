@@ -83,7 +83,7 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                                     key={item.name}
                                     href={item.href}
                                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 group ${isActive
-                                            ? "bg-accent/10 text-accent border border-accent/20 shadow-[0_0_15px_rgba(156,87,223,0.1)]"
+                                            ? "bg-accent/10 text-accent border border-accent/20 shadow-[var(--shadow-glow-accent)]"
                                             : "text-foreground-muted hover:text-foreground hover:bg-gradient-to-r hover:from-background-secondary hover:to-accent/5 border border-transparent hover:border-accent/20"
                                         }`}
                                 >
