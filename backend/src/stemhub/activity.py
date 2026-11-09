@@ -25,12 +25,13 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from stemhub.models import Branch, User, Version
+from stemhub.models import Branch, PullRequest, User, Version
 from stemhub.schemas import (
     ActivityActor,
     ActivityBranch,
     ActivityFeedResponse,
     ActivityItem,
+    ActivityPullRequest,
     ActivityType,
     ActivityVersion,
 )
@@ -91,6 +92,7 @@ def decode_cursor(raw: str) -> Cursor:
 # Column holding the user who did it, for the types that record one.
 _ACTOR_COLUMN = {
     "version_saved": "created_by",
+    "pull_request_opened": "created_by",
 }
 
 
@@ -155,6 +157,14 @@ def _to_item(event: _Event, *, branches: dict[UUID, Branch], actors: dict[UUID, 
         )
     elif isinstance(entity, Branch):
         details["branch"] = _branch_summary(entity)
+    elif isinstance(entity, PullRequest):
+        details["pull_request"] = ActivityPullRequest(
+            id=entity.id,
+            title=entity.title,
+            status=entity.status,
+            source_branch=_branch_summary(branches[entity.source_branch_id]),
+            target_branch=_branch_summary(branches[entity.target_branch_id]),
+        )
     return ActivityItem(
         id=event.id,
         type=event.type,
@@ -200,6 +210,14 @@ async def build_activity_feed(db: AsyncSession, *, project_id: UUID, limit: int)
             [in_project, Version.is_deleted == True, Version.deleted_at.is_not(None)],
             limit=limit + 1,
         )
+
+    # Soft-deleted pull requests are left out entirely.
+    live_pull_requests = [PullRequest.project_id == project_id, PullRequest.is_deleted == False]
+    events += await _query_events(
+        db, "pull_request_opened", PullRequest, PullRequest.created_at,
+        live_pull_requests,
+        limit=limit + 1,
+    )
 
     events.sort(key=lambda event: (event.occurred_at, event.id), reverse=True)
     page = events[:limit]
