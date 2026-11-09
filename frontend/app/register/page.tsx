@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { API_URL, apiFetch, errorMessage } from "@/lib/api";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -14,7 +15,6 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,22 +26,14 @@ export default function RegisterPage() {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/auth/register`, {
+      await apiFetch("/auth/register", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({ username, email, password }),
+        redirectOnUnauthorized: false,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || "Error while creating your account");
-      }
-
       router.push("/login");
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred");
+    } catch (err) {
+      setError(errorMessage(err, "Error while creating your account"));
     }
   };
 
@@ -88,14 +80,14 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <p className="mb-4 text-center text-sm font-light text-red-500">
+          <p role="alert" className="mb-4 text-center text-sm font-light text-red-500">
             {error}
           </p>
         )}
 
         <button
           type="button"
-          onClick={() => { window.location.href = `${apiUrl}/auth/login/google`; }}
+          onClick={() => { window.location.href = `${API_URL}/auth/login/google`; }}
           className="flex w-full items-center justify-center gap-3 rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 px-6 py-3.5 text-sm font-light transition-all duration-300 hover:border-foreground/20 hover:bg-background-secondary dark:hover:bg-background-tertiary"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >
