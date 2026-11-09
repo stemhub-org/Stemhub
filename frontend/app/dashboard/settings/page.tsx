@@ -243,7 +243,7 @@ function ProfileSettings({ user }: { user: UserProfile }) {
             </div>
 
             <div className="pt-4 flex justify-end">
-                <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-white text-sm font-medium transition-all shadow-lg shadow-accent/20">
+                <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium transition-all shadow-lg shadow-accent/20">
                     {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     Save Changes
                 </button>
@@ -534,7 +534,7 @@ function StorageSettings() {
                         <span className="font-medium">25 GB <span className="text-foreground/40 font-light">/ 100 GB</span></span>
                     </div>
                     <div className="w-full bg-background/50 rounded-full h-2 overflow-hidden border border-foreground/5">
-                        <div className="bg-gradient-to-r from-accent to-purple-500 h-full rounded-full w-1/4"></div>
+                        <div className="bg-accent h-full rounded-full w-1/4"></div>
                     </div>
                     <p className="text-xs text-foreground/50 font-light pt-1">Your next billing date is April 4, 2026.</p>
                 </div>
@@ -553,7 +553,7 @@ function StorageSettings() {
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg hover:bg-foreground/5 transition-colors">
                         <div className="flex items-center gap-3">
-                            <div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div>
+                            <div className="w-2.5 h-2.5 rounded-full bg-foreground-muted"></div>
                             <span className="text-sm">Project files (.flp, .als)</span>
                         </div>
                         <span className="text-sm font-medium">5.1 GB</span>
@@ -639,7 +639,7 @@ function NotificationSettings() {
             </div>
 
             <div className="pt-6 flex justify-end">
-                <button className="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-white text-sm font-medium transition-all shadow-lg shadow-accent/20">
+                <button className="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium transition-all shadow-lg shadow-accent/20">
                     Save Preferences
                 </button>
             </div>
