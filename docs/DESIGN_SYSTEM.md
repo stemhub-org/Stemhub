@@ -22,17 +22,47 @@ Two variants are available depending on the background context:
 
 ## Color Palette
 
-The interface is built around three core colors:
-
-<img width="500" alt="Color Palette" src="https://github.com/user-attachments/assets/03586183-4884-4438-8890-6bb26dd6b587" />
+The 2026 identity system uses three colours:
 
 | Name | Hex | Usage |
 |------|-----|-------|
-| **Purple** | `#9C57DF` | Primary actions, buttons, highlights, active states |
-| **Dark** | `#1E1E1E` | App background, dark surfaces |
-| **Light** | `#F1F1F1` | Text on dark backgrounds, secondary surfaces |
+| **Ink** | `#0A0A0A` | Text on Paper, dark surfaces, the accent on Paper |
+| **Paper** | `#FFFFFF` | Light surfaces, text on Ink |
+| **Lime** | `#C8FF00` | The accent on Ink, and text on Ink fills |
 
-The purple accent is intentionally distinct from Git/GitHub's green to establish StemHub's own identity in the music production space.
+**Lime is never text on Paper** (1.0:1 contrast). On Paper it is decorative only (a glow, a chart fill, a tint behind Ink text).
+
+They are Tailwind colours (`ink`, `paper`, `lime`, plus `ink-soft`, `ink-line`, `paper-soft`, `paper-line`) defined in `frontend/app/globals.css`. The landing page always renders on Paper and uses them directly.
+
+### App theme tokens
+
+The web app follows the system light/dark theme, so its components use themed tokens instead of the raw colours:
+
+| Token | Light (Paper) | Dark (Ink) | Use it for |
+|-------|---------------|------------|------------|
+| `background` | `#FFFFFF` | `#0A0A0A` | Page background |
+| `background-secondary` / `-tertiary` | `#F4F4F5` / `#E4E4E7` | `#121212` / `#1A1A1A` | Cards, panels, inputs |
+| `foreground` | `#0A0A0A` | `#FFFFFF` | Text |
+| `foreground-muted` | `#71717A` | `#8A8A8A` | Secondary text |
+| `accent` | Ink | Lime | Active states, highlights, primary fills |
+| `accent-foreground` | Lime | Ink | Text and icons on an `accent` fill |
+
+Rules:
+- A `bg-accent` fill always takes `text-accent-foreground`, never `text-white`.
+- Never hard-code a hex colour or `rgba()` glow in a component: use the tokens, or `--shadow-glow-accent` for glows.
+- The admin panel is a fixed Paper surface: it uses `ink` for text and accents and `lime` only on Ink fills.
+
+---
+
+## Typography
+
+| Role | Font | Notes |
+|------|------|-------|
+| Display (titles) | Syne 700–800 | Uppercase on the landing page, tracking −4 % to −2 % |
+| Body and UI | Plus Jakarta Sans | |
+| Labels | Plus Jakarta Sans 700 | Uppercase |
+
+Both fonts are self-hosted in `frontend/public/fonts` and exposed as `--font-syne` and `--font-jakarta`.
 
 ---
 
