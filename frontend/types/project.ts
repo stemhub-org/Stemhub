@@ -81,6 +81,20 @@ export interface ProjectDetail {
     owner: OwnerSummary;
 }
 
+// ── Project list item (GET /projects/, backend `ProjectResponse`) ──
+export interface Project {
+    id: string;
+    owner_id: string;
+    name: string;
+    description: string | null;
+    category: string | null;
+    is_public: boolean;
+    tags: string[] | null;
+    created_at: string;
+    is_deleted: boolean;
+    deleted_at: string | null;
+}
+
 // ── Full summary response ──
 export interface ProjectSummaryResponse {
     project: ProjectDetail;
