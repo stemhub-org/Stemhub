@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     User,
@@ -16,6 +15,9 @@ import {
     CheckCircle2,
     Loader2
 } from "lucide-react";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { useCurrentUser } from "@/lib/queries";
+import type { UserProfile } from "@/types/user";
 
 const TABS = [
     { id: "profile", label: "Profile", icon: User },
@@ -27,33 +29,13 @@ const TABS = [
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState("profile");
-    const [user, setUser] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const router = useRouter();
+    const { data: user, error, refetch } = useCurrentUser();
 
-    const fetchUser = async () => {
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const response = await fetch(`${apiUrl}/auth/me`, {
-                credentials: "include"
-            });
-            if (!response.ok) {
-                throw new Error("Sign-in expired");
-            }
-            const data = await response.json();
-            setUser(data);
-        } catch (err) {
-            router.push("/login");
-        } finally {
-            setLoading(false);
-        }
-    };
+    if (error) {
+        return <ErrorState error={error} title="Couldn't load your settings" onRetry={() => refetch()} className="max-w-xl mx-auto mt-12" />;
+    }
 
-    useEffect(() => {
-        fetchUser();
-    }, [router]);
-
-    if (loading) {
+    if (!user) {
         return (
             <div className="flex h-[50vh] items-center justify-center">
                 <Loader2 size={32} className="animate-spin text-accent" />
@@ -111,8 +93,8 @@ export default function SettingsPage() {
                     className="flex-1 rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 backdrop-blur-xl p-8 min-h-[500px]"
                 >
                     <AnimatePresence mode="wait">
-                        {activeTab === "profile" && <ProfileSettings key="profile" user={user} onUpdate={fetchUser} />}
-                        {activeTab === "account" && <AccountSettings key="account" user={user} onUpdate={fetchUser} />}
+                        {activeTab === "profile" && <ProfileSettings key="profile" user={user} onUpdate={() => refetch()} />}
+                        {activeTab === "account" && <AccountSettings key="account" user={user} onUpdate={() => refetch()} />}
                         {activeTab === "integrations" && <IntegrationSettings key="integrations" user={user} />}
                         {activeTab === "storage" && <StorageSettings key="storage" user={user} />}
                         {activeTab === "notifications" && <NotificationSettings key="notifications" user={user} />}
@@ -123,7 +105,7 @@ export default function SettingsPage() {
     );
 }
 
-function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }) {
+function ProfileSettings({ user, onUpdate }: { user: UserProfile, onUpdate: () => void }) {
     const [form, setForm] = useState({
         username: user?.username || "",
         avatar_url: user?.avatar_url || "",
@@ -265,7 +247,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
     );
 }
 
-function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }) {
+function AccountSettings({ user, onUpdate }: { user: UserProfile, onUpdate: () => void }) {
     const [emailForm, setEmailForm] = useState(user?.email || "");
     const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
     
@@ -448,7 +430,7 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
     );
 }
 
-function IntegrationSettings({ user }: { user: any }) {
+function IntegrationSettings({ user }: { user: UserProfile }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -538,7 +520,7 @@ function IntegrationSettings({ user }: { user: any }) {
     );
 }
 
-function StorageSettings({ user }: { user: any }) {
+function StorageSettings({ user }: { user: UserProfile }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -613,7 +595,7 @@ function StorageSettings({ user }: { user: any }) {
     );
 }
 
-function NotificationSettings({ user }: { user: any }) {
+function NotificationSettings({ user }: { user: UserProfile }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
