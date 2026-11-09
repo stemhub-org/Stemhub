@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ToastProvider";
-import { SITE_URL } from "@/lib/site";
 
 const syne = localFont({
   src: [
