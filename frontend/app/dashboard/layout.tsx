@@ -10,10 +10,7 @@ export default function DashboardLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const [isAuthenticated, setIsAuthenticated] = useState(true);
     const [sidebarOpen, setSidebarOpen] = useState(true);
-
-    if (!isAuthenticated) return null;
 
     return (
         <div
