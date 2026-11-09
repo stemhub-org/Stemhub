@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Bell, Sun, User as UserIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser } from "@/lib/queries";
 
@@ -94,11 +95,12 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                         style={!userData?.avatar_url ? { background: "linear-gradient(to top right, #9C57DF, #C28CF0)" } : {}}
                         title="View profile"
                     >
-                        {userData?.avatar_url ? (
-                            <img src={userData.avatar_url} alt="Profile" className="h-full w-full object-cover" />
-                        ) : (
-                            <UserIcon size={18} />
-                        )}
+                        <Avatar
+                            src={userData?.avatar_url}
+                            alt="Profile"
+                            className="h-full w-full object-cover"
+                            fallback={<UserIcon size={18} />}
+                        />
                     </button>
                 </div>
             </div>
