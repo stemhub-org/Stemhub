@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
 import { authFetch } from "@/lib/api";
 
 interface User {
@@ -34,20 +35,18 @@ function formatDate(iso: string) {
   });
 }
 
-function Avatar({ user }: { user: User }) {
-  if (user.avatar_url) {
-    return (
-      <img
-        src={user.avatar_url}
-        alt={user.username}
-        className="w-8 h-8 rounded-full object-cover"
-      />
-    );
-  }
+function UserAvatar({ user }: { user: User }) {
   return (
-    <div className="w-8 h-8 rounded-full bg-[#9C57DF]/15 text-[#9C57DF] text-xs font-semibold flex items-center justify-center">
-      {user.username.slice(0, 2).toUpperCase()}
-    </div>
+    <Avatar
+      src={user.avatar_url}
+      alt={user.username}
+      className="w-8 h-8 rounded-full object-cover"
+      fallback={
+        <div className="w-8 h-8 rounded-full bg-[#9C57DF]/15 text-[#9C57DF] text-xs font-semibold flex items-center justify-center">
+          {user.username.slice(0, 2).toUpperCase()}
+        </div>
+      }
+    />
   );
 }
 
@@ -245,7 +244,7 @@ export default function AdminUsersPage() {
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <Avatar user={user} />
+                        <UserAvatar user={user} />
                         <span className="font-medium text-[#1A1A1A]">
                           {user.username}
                         </span>
