@@ -157,4 +157,59 @@ describe("SettingsPage account tab", () => {
 
         expect(await screen.findByText("Email already in use")).toBeTruthy();
     });
+
+    function fillPasswords(current: string, next: string, confirm: string) {
+        fireEvent.change(screen.getByLabelText("Current Password"), { target: { value: current } });
+        fireEvent.change(screen.getByLabelText("New Password"), { target: { value: next } });
+        fireEvent.change(screen.getByLabelText("Confirm New Password"), { target: { value: confirm } });
+        fireEvent.click(screen.getByRole("button", { name: "Update Password" }));
+    }
+
+    it("refuses mismatched new passwords without calling the API", async () => {
+        const fetchMock = vi.fn(async (_url: string) => json(user));
+        vi.stubGlobal("fetch", fetchMock);
+        await openAccountTab();
+        await screen.findByLabelText("Current Password");
+
+        fillPasswords("old-secret", "new-secret", "typo-secret");
+
+        expect((await screen.findByRole("alert")).textContent).toBe("The new passwords do not match.");
+        expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/auth/me/password"))).toBe(false);
+    });
+
+    it("changes the password and clears the fields", async () => {
+        const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+            init?.method === "PUT" ? json({ message: "ok" }) : json(user),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        await openAccountTab();
+        await screen.findByLabelText("Current Password");
+
+        fillPasswords("old-secret", "new-secret", "new-secret");
+
+        expect((await screen.findByRole("status")).textContent).toBe("Password updated.");
+        expect((screen.getByLabelText("Current Password") as HTMLInputElement).value).toBe("");
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringMatching(/\/auth\/me\/password$/),
+            expect.objectContaining({
+                method: "PUT",
+                body: JSON.stringify({ current_password: "old-secret", new_password: "new-secret" }),
+            }),
+        );
+    });
+
+    it("shows the backend's message for a wrong current password", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (_url: string, init?: RequestInit) =>
+                init?.method === "PUT" ? json({ detail: "Current password is incorrect" }, 400) : json(user),
+            ),
+        );
+        await openAccountTab();
+        await screen.findByLabelText("Current Password");
+
+        fillPasswords("wrong", "new-secret", "new-secret");
+
+        expect((await screen.findByRole("alert")).textContent).toBe("Current password is incorrect");
+    });
 });
