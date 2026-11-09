@@ -133,3 +133,35 @@ describe("ProfilePage editing", () => {
         expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
     });
 });
+
+describe("ProfilePage production styles", () => {
+    it("saves only the selected styles and closes the picker", async () => {
+        let sent: unknown;
+        stubApi({
+            put: (body) => {
+                sent = body;
+                return json({ ...user, genres: ["house", "techno"] });
+            },
+        });
+        renderPage();
+
+        fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+        fireEvent.click(screen.getByRole("button", { name: "techno" }));
+        fireEvent.click(screen.getByRole("button", { name: "Confirm Selection" }));
+
+        expect(await screen.findByText("Production styles saved.")).toBeTruthy();
+        expect(sent).toEqual({ genres: ["house", "techno"] });
+        expect(screen.queryByRole("button", { name: "Confirm Selection" })).toBeNull();
+    });
+
+    it("keeps the picker open and shows the backend's message on failure", async () => {
+        stubApi({ put: () => json({ detail: "Too many styles" }, 422) });
+        renderPage();
+
+        fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+        fireEvent.click(screen.getByRole("button", { name: "Confirm Selection" }));
+
+        expect(await screen.findByText("Too many styles")).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Confirm Selection" })).toBeTruthy();
+    });
+});

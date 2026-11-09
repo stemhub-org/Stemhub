@@ -2,12 +2,11 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ToastProvider";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { useUpdateProfile } from "@/lib/account";
 import { errorMessage } from "@/lib/api";
-import { queryKeys, useCurrentUser, useProjects } from "@/lib/queries";
+import { useCurrentUser, useProjects } from "@/lib/queries";
 import type { UserProfile } from "@/types/user";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
@@ -66,18 +65,17 @@ function formFromUser(user: UserProfile | undefined): ProfileForm {
 
 export default function ProfilePage() {
     const router = useRouter();
-    const queryClient = useQueryClient();
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
     const { data: user, error: userError, refetch: refetchUser } = useCurrentUser();
     const { data: projects = [] } = useProjects();
     const updateProfile = useUpdateProfile();
     const toast = useToast();
+    const isSaving = updateProfile.isPending;
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editForm, setEditForm] = useState<ProfileForm>(() => formFromUser(undefined));
     const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
     const [genreSearch, setGenreSearch] = useState("");
-    const [isSaving, setIsSaving] = useState(false);
     const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
     const [isSearchingLocation, setIsSearchingLocation] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -177,32 +175,17 @@ export default function ProfilePage() {
         );
     };
 
-    const handleSaveGenres = async () => {
-        setIsSaving(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const response = await fetch(`${apiUrl}/auth/me`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
+    const handleSaveGenres = () => {
+        updateProfile.mutate(
+            { genres: editForm.genres },
+            {
+                onSuccess: () => {
+                    toast.success("Production styles saved.");
+                    setIsGenreModalOpen(false);
                 },
-                body: JSON.stringify({ genres: editForm.genres }),
-                credentials: "include"
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || "Failed to update production styles");
-            }
-
-            const updatedUser = await response.json();
-            queryClient.setQueryData(queryKeys.currentUser, updatedUser);
-            setIsGenreModalOpen(false);
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsSaving(false);
-        }
+                onError: (error) => toast.error(errorMessage(error, "Couldn't save your production styles.")),
+            },
+        );
     };
 
     const { username, email, avatar_url, created_at, location, website, bio } = user;
