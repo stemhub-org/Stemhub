@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ProfileUpdate, UserProfile } from "@/types/user";
+import type { EmailChangeRequest, ProfileUpdate, UserProfile } from "@/types/user";
 import { ApiError, apiFetch } from "./api";
 import { queryKeys } from "./queries";
 
@@ -11,6 +11,18 @@ export function useUpdateProfile() {
     return useMutation<UserProfile, ApiError, ProfileUpdate>({
         mutationFn: (changes) =>
             apiFetch<UserProfile>("/auth/me", { method: "PUT", body: JSON.stringify(changes) }),
+        onSuccess: (user) => {
+            queryClient.setQueryData(queryKeys.currentUser, user);
+        },
+    });
+}
+
+/** Changes the sign-in email (PUT /auth/me/email) and replaces the cached signed-in user. */
+export function useChangeEmail() {
+    const queryClient = useQueryClient();
+    return useMutation<UserProfile, ApiError, EmailChangeRequest>({
+        mutationFn: (request) =>
+            apiFetch<UserProfile>("/auth/me/email", { method: "PUT", body: JSON.stringify(request) }),
         onSuccess: (user) => {
             queryClient.setQueryData(queryKeys.currentUser, user);
         },
