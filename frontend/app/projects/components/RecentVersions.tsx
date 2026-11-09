@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Clock, ChevronRight } from "lucide-react";
 import type { VersionWithAuthor } from "@/types/project";
-import { formatTimeAgo } from "@/lib/time";
+import { formatDateTime, formatTimeAgo } from "@/lib/time";
 
 interface RecentVersionsProps {
     versions: VersionWithAuthor[];
@@ -71,9 +71,13 @@ export function RecentVersions({ versions, projectId, branchId }: RecentVersions
                                                 <span className="font-medium text-foreground">
                                                     {authorName}
                                                 </span>
-                                                <span className="text-foreground/50">
+                                                <time
+                                                    dateTime={version.created_at}
+                                                    title={formatDateTime(version.created_at)}
+                                                    className="text-foreground/50"
+                                                >
                                                     {formatTimeAgo(version.created_at)}
-                                                </span>
+                                                </time>
                                             </div>
                                             <p className="mt-1 text-sm text-foreground/80">
                                                 {version.message || "No message"}
