@@ -10,14 +10,14 @@ export function StudioFigure() {
     <div className="iso lp-figure" data-theme="light">
       <Plate
         fig="Fig. 01"
-        title="StemHub, inside your DAW"
-        hint="Edit the beat · Save · switch branch · Restore"
+        title="StemHub, dans ton DAW"
+        hint="Édite le beat · Enregistre · Branches · Restaure"
         readout={readoutOf(initialStudio())}
         keys={[
-          { mark: "lit", label: "The version selected in the plugin" },
-          { mark: "raised", label: "One disc per saved version, one spindle per branch" },
+          { mark: "lit", label: "La version sélectionnée dans le plugin" },
+          { mark: "raised", label: "Un disque par version enregistrée, un axe par branche" },
         ]}
-        caption="Everything on the screen works. Click the steps to change the beat, save a version with its message, switch to the late-night-idea branch, or restore any version: it opens in your DAW as a separate copy, your project file stays as it is."
+        caption="Tout ce qui est à l’écran fonctionne. Clique sur les pas pour changer le beat, enregistre une version avec son message, passe sur la branche late-night-idea ou restaure n’importe quelle version&nbsp;: elle s’ouvre dans ton DAW comme une copie à part, ton fichier de projet reste tel quel."
       >
         <StudioArt />
       </Plate>
