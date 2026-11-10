@@ -68,6 +68,10 @@ never a branch of the fork:
 - `src/stemhub/parser_version.py` records the full commit as `PYFLP_COMMIT`.
   Bump it together with the submodule pointer:
   `tests/test_parser_version.py` fails while they differ.
+- `tests/test_parser_regressions.py` pins what StemHub needs from the parser
+  (each effect slot's own plugin, slot enabled and dry/wet, the tempo of
+  FL Studio 25.2.3+ projects, insert volume and pan of FL Studio 24.2.99+
+  projects). It fails when the submodule moves to a commit without these fixes.
 
 ## Parser fixture corpus
 

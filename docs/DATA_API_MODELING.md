@@ -345,20 +345,22 @@ Sign-in uses OAuth2 / JWT with an **HttpOnly cookie**; the StemHub plugin sends 
 | `/projects/{id}/pull-requests` | `GET` | `id` | List pull requests of a project. |
 | `/projects/{id}/pull-requests` | `POST` | `id` | Open a pull request (source → target branch, same project). `409` if an `OPEN` one already exists for the same pair. |
 | `/pull-requests/{id}` | `GET` | `id` | Get a pull request. |
-| `/pull-requests/{id}/close` | `POST` | `id` | Close without accepting (`OPEN` → `CLOSED`; `409` if not open). `CLOSED` is terminal — users open a new PR instead of reopening. Accepting is a separate, future endpoint. |
+| `/pull-requests/{id}/close` | `POST` | `id` | Close without accepting (`OPEN` → `CLOSED`; `409` if not open). `CLOSED` is terminal — users open a new PR instead of reopening. |
+| `/pull-requests/{id}/accept` | `POST` | `id` | Accept (`OPEN` → `MERGED`) by promoting the source branch: a new version on the target reuses the source head's manifest (parent: the target head; message `Accept PR: <title>`). Owner or Admin collaborator only (`403` for Editors, `404` for Viewers and non-members). `409` if the PR isn't open, a branch was deleted, the source has no version, or the target got a new version since the PR was opened. |
 
 **Pull requests — state machine and invariants:**
 
 ```
 OPEN ──/close───▶ CLOSED
   │
-  └───accept (#253)──▶ MERGED
+  └───/accept──▶ MERGED
 ```
 
-- Accepting a pull request is branch promotion, with no content merge ([SPECIFICATION.md §8](./SPECIFICATION.md#8--open-technical-decisions)); the stored status is `MERGED`.
+- Accepting a pull request is branch promotion, with no content merge ([SPECIFICATION.md §8](./SPECIFICATION.md#8--open-technical-decisions)); the stored status is `MERGED`. The promoted version copies the source head's manifest, source DAW and file name; blobs are content-addressed, so storage holds no second copy of the files. The latest source version is promoted, even one saved after the PR was opened.
+- Accepting locks the pull request row (`SELECT … FOR UPDATE`), so two concurrent accepts can't both promote: the second one sees `MERGED` and gets `409`.
 - Both `CLOSED` and `MERGED` are terminal (SPECIFICATION.md §19). A closed PR is not reopened — users open a new PR. Any other transition answers `409`.
 - At most one `OPEN` pull request per ordered `(source_branch_id, target_branch_id)` pair, enforced by the partial unique index `uq_pull_request_open_pair` (`WHERE status = 'OPEN' AND is_deleted = false`). Closed, accepted or soft-deleted PRs never block a new one; the reverse direction is a different pair.
-- `source_head_version_id` / `target_head_version_id` record the head (latest live version) of each branch when the PR is opened (`NULL` if the branch had none). `Branch` has no head pointer, so this is the only record of what was proposed. Accepting (#253) compares `target_head_version_id` with the live head of the target to refuse a stale promotion.
+- `source_head_version_id` / `target_head_version_id` record the head (latest live version) of each branch when the PR is opened (`NULL` if the branch had none). `Branch` has no head pointer, so this is the only record of what was proposed. Accepting compares `target_head_version_id` with the live head of the target and refuses (`409`) when the target moved: promoting over versions the reviewer never saw would bury them.
 - `created_by` / `closed_by` record who opened and who closed the PR (nullable: a user may be soft-deleted, and `closed_by` is unset until closure).
 
 ---

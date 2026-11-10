@@ -86,3 +86,23 @@ async def get_project_with_read_access(
     if collab.scalars().first() is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+async def is_project_admin(*, project: Project, user: User, db: AsyncSession) -> bool:
+    """Whether the user may make owner-level decisions on the project, such as
+    accepting a pull request: the owner, or a collaborator with the Admin role.
+
+    Unlike the helpers above it doesn't raise: callers that already gave the
+    user access answer 403 rather than hide a project they can see.
+    """
+    if project.owner_id == user.id:
+        return True
+    collab = await db.execute(
+        select(Collaborator).where(
+            Collaborator.project_id == project.id,
+            Collaborator.user_id == user.id,
+            Collaborator.role == "Admin",
+        )
+    )
+    return collab.scalars().first() is not None
+
