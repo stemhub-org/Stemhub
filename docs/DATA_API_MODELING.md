@@ -365,7 +365,7 @@ OPEN ──/close───▶ CLOSED
 
 ---
 
-### G. Collaborators, stats, discovery
+### G. Collaborators, stats, activity, discovery
 
 | Endpoint | Method | Access | Description |
 | :--- | :--- | :--- | :--- |
@@ -374,11 +374,67 @@ OPEN ──/close───▶ CLOSED
 | `/projects/{id}/collaborators/{user_id}` | `DELETE` | owner | Remove a collaborator. |
 | `/projects/{id}/stats/activity` | `GET` | read | Versions saved per day over 26 weeks: `daily_activity`, `total_versions`, `total_contributors`. |
 | `/projects/{id}/stats/top-contributors` | `GET` | read | `contributors[]` with their number of `versions`. |
+| `/projects/{id}/activity` | `GET` | read | The project's activity, newest first: versions saved and deleted, branches created and deleted, pull requests opened, accepted and closed. `?limit=30&cursor=…&types=…`. |
 | `/explore/projects` | `GET` | | Public projects (`sort_by`, `tags`, `limit`, `offset`); each has `tempo_bpm` (number or `null`) and `key`. |
 | `/explore/feed`, `/explore/producers`, `/explore/changelog` | `GET` | | Activity feed (signed in), producers, platform updates. |
 | `/community/challenges`, `/community/events` | `GET` | | Challenges and events; signed-in users join with `POST /community/challenges/{id}/join` and `POST /community/events/{id}/register`. |
 | `/api/admin/*` | | admin | Users, stats, admin/active toggles. |
 | `/health`, `/ready` | `GET` | | Liveness and readiness probes. |
+
+**Project activity (`GET /projects/{id}/activity`).** The feed is read from the project's versions, branches and pull requests; there is no event table. Each item has a `type` and the time it `occurred_at`:
+
+| `type` | `occurred_at` | `actor` | Details |
+| :--- | :--- | :--- | :--- |
+| `version_saved` | the version's `created_at` (deleted versions too: they were saved) | its author | `branch`, `version` |
+| `version_deleted` | the version's `deleted_at` | `null` (not recorded) | `branch`, `version` |
+| `branch_created` | the branch's `created_at` | `null` (not recorded) | `branch` |
+| `branch_deleted` | the branch's `deleted_at` | `null` (not recorded) | `branch` |
+| `pull_request_opened` | the pull request's `created_at` | who opened it | `pull_request` |
+| `pull_request_merged` | `closed_at` of a pull request accepted (`MERGED`) | who accepted it | `pull_request` |
+| `pull_request_closed` | `closed_at` of a pull request closed without being accepted (`CLOSED`) | who closed it | `pull_request` |
+
+- `id` is `{type}:{id of the version, branch or pull request}`: unique and stable, so a client can de-duplicate on it. `actor` is also `null` when the user isn't known.
+- `branch.is_deleted` and `pull_request.status` are the branch's and pull request's current state, not their state when the event happened. Versions of a deleted branch stay in the feed.
+- Soft-deleted pull requests are left out entirely. A deletion without `deleted_at` has no time, so it isn't listed.
+- Items are ordered by `occurred_at`, then `id`, both descending. A page holds at most `limit` items (1–100, default `30`; out of range: `422`). `next_cursor` is an opaque string: pass it back unchanged as `cursor` to get the next page, which starts right after the last item (items sharing a timestamp are neither skipped nor repeated). It is `null` on the last page. A cursor the server didn't produce answers `400`.
+- `types` keeps only the given types; repeat it for several (`?types=version_saved&types=pull_request_opened`). Keep the same `types` while paging. An unknown type answers `422`.
+
+```json
+{
+  "items": [
+    {
+      "id": "pull_request_merged:6351a6c0-…",
+      "type": "pull_request_merged",
+      "occurred_at": "2026-11-01T09:45:00Z",
+      "actor": { "id": "11b27244-…", "username": "maya" },
+      "branch": null,
+      "version": null,
+      "pull_request": {
+        "id": "6351a6c0-…",
+        "title": "Faster tempo",
+        "status": "MERGED",
+        "source_branch": { "id": "eadd778b-…", "name": "feature-fast-tempo", "is_deleted": false },
+        "target_branch": { "id": "765a6665-…", "name": "main", "is_deleted": false }
+      }
+    },
+    {
+      "id": "version_saved:f01fffbf-…",
+      "type": "version_saved",
+      "occurred_at": "2026-11-01T09:20:00Z",
+      "actor": { "id": "c06598a8-…", "username": "demo" },
+      "branch": { "id": "eadd778b-…", "name": "feature-fast-tempo", "is_deleted": false },
+      "version": {
+        "id": "f01fffbf-…",
+        "message": "Faster hi-hats",
+        "source_daw": "FL Studio",
+        "source_project_filename": "beat.flp"
+      },
+      "pull_request": null
+    }
+  ],
+  "next_cursor": "MjAyNi0xMS0wMVQwOToyMDowMCswMDowMHx2ZXJzaW9uX3NhdmVkOmYwMWZmZmJm…"
+}
+```
 
 ---
 
