@@ -52,7 +52,7 @@ export function AudioUploadButton({ projectId, onSuccess }: AudioUploadButtonPro
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!projectId || isUploading}
-                className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {isUploading ? (
                     <Loader2 className="size-4 animate-spin" aria-hidden />

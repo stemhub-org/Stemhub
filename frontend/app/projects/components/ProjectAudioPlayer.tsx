@@ -46,44 +46,46 @@ interface ProjectAudioPlayerProps {
     hasPreview?: boolean;
 }
 
+/** Loads a project's preview audio while mounted, and frees it on unmount. */
+function usePreviewAudioUrl(projectId: string | null): string | null {
+    const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!projectId) return;
+        let objectUrl: string | null = null;
+        let cancelled = false;
+
+        apiFetchResponse(`/projects/${projectId}/preview`)
+            .then((response) => response.blob())
+            .then((blob) => {
+                if (cancelled) return;
+                objectUrl = URL.createObjectURL(blob);
+                setAudioUrl(objectUrl);
+            })
+            .catch((err) => console.error("Failed to load audio:", err));
+
+        return () => {
+            cancelled = true;
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+    }, [projectId]);
+
+    return audioUrl;
+}
+
 export function ProjectAudioPlayer({ projectId, hasPreview }: ProjectAudioPlayerProps) {
+    // Remount per project and preview, so playback state never leaks between them.
+    const previewProjectId = projectId && hasPreview ? projectId : null;
+    return <PreviewPlayer key={previewProjectId ?? "none"} projectId={previewProjectId} />;
+}
+
+function PreviewPlayer({ projectId }: { projectId: string | null }) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
-    const [audioUrl, setAudioUrl] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (!projectId || !hasPreview) {
-            setAudioUrl(null);
-            setIsPlaying(false);
-            setCurrentTime(0);
-            setDuration(0);
-            return;
-        }
-
-        let objectUrl: string | null = null;
-        
-        async function loadAudio() {
-            try {
-                const response = await apiFetchResponse(`/projects/${projectId}/preview`);
-                const blob = await response.blob();
-                objectUrl = URL.createObjectURL(blob);
-                setAudioUrl(objectUrl);
-            } catch (err) {
-                console.error("Failed to load audio:", err);
-                setAudioUrl(null);
-            }
-        }
-
-        loadAudio();
-
-        return () => {
-            if (objectUrl) {
-                URL.revokeObjectURL(objectUrl);
-            }
-        };
-    }, [projectId, hasPreview]);
+    const audioUrl = usePreviewAudioUrl(projectId);
+    const hasPreview = projectId !== null;
 
     const togglePlay = () => {
         if (!audioRef.current || !hasPreview || !audioUrl) return;
@@ -132,7 +134,7 @@ export function ProjectAudioPlayer({ projectId, hasPreview }: ProjectAudioPlayer
                     type="button"
                     onClick={togglePlay}
                     disabled={!hasPreview || !audioUrl}
-                    className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label={isPlaying ? "Pause" : "Play"}
                 >
                     {isPlaying ? (

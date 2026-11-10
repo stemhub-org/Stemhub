@@ -2,21 +2,22 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { authFetch } from "@/lib/api";
+import { Avatar } from "@/components/ui/Avatar";
+import { useToast } from "@/components/ToastProvider";
+import { authFetch, errorMessage } from "@/lib/api";
 import {
     Play,
     Star,
-    GitFork,
     TrendingUp,
     Clock,
     Activity,
     Users,
     Sparkles,
     Zap,
-    Box,
     Globe,
     Compass
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 interface ExploreProject {
     id: string;
@@ -65,6 +66,14 @@ interface Challenge {
     created_at: string;
 }
 
+interface PlatformUpdate {
+    id: string;
+    version_string: string;
+    title: string;
+    description: string;
+    created_at: string;
+}
+
 interface EventItem {
     id: string;
     type: string;
@@ -81,10 +90,11 @@ export default function ExplorePage() {
     const [trendingProjects, setTrendingProjects] = useState<ExploreProject[]>([]);
     const [challenges, setChallenges] = useState<Challenge[]>([]);
     const [events, setEvents] = useState<EventItem[]>([]);
-    const [changelog, setChangelog] = useState<any[]>([]);
+    const [changelog, setChangelog] = useState<PlatformUpdate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isJoining, setIsJoining] = useState<Record<string, boolean>>({});
     const [isRegistering, setIsRegistering] = useState<Record<string, boolean>>({});
+    const toast = useToast();
 
     useEffect(() => {
         const fetchExploreData = async () => {
@@ -96,7 +106,7 @@ export default function ExplorePage() {
                     authFetch<ExploreProject[]>("/explore/projects?sort_by=trending"),
                     authFetch<Challenge[]>("/community/challenges?status=active"),
                     authFetch<EventItem[]>("/community/events"),
-                    authFetch<any[]>("/explore/changelog").catch(() => [])
+                    authFetch<PlatformUpdate[]>("/explore/changelog").catch((): PlatformUpdate[] => [])
                 ]);
 
                 setFeed(Array.isArray(feedRes) ? feedRes : []);
@@ -115,27 +125,27 @@ export default function ExplorePage() {
         fetchExploreData();
     }, []);
 
-    const handleJoinChallenge = async (challengeId: string) => {
-        setIsJoining(prev => ({ ...prev, [challengeId]: true }));
+    const handleJoinChallenge = async (challenge: Challenge) => {
+        setIsJoining(prev => ({ ...prev, [challenge.id]: true }));
         try {
-            await authFetch(`/community/challenges/${challengeId}/join`, { method: "POST" });
-            alert("Successfully joined challenge!");
-        } catch (err: any) {
-            alert(err.message || "Failed to join challenge");
+            await authFetch(`/community/challenges/${challenge.id}/join`, { method: "POST" });
+            toast.success(`You joined “${challenge.title}”.`);
+        } catch (err) {
+            toast.error(errorMessage(err, "Couldn't join this challenge."));
         } finally {
-            setIsJoining(prev => ({ ...prev, [challengeId]: false }));
+            setIsJoining(prev => ({ ...prev, [challenge.id]: false }));
         }
     };
 
-    const handleRegisterEvent = async (eventId: string) => {
-        setIsRegistering(prev => ({ ...prev, [eventId]: true }));
+    const handleRegisterEvent = async (event: EventItem) => {
+        setIsRegistering(prev => ({ ...prev, [event.id]: true }));
         try {
-            await authFetch(`/community/events/${eventId}/register`, { method: "POST" });
-            alert("Successfully registered for event!");
-        } catch (err: any) {
-            alert(err.message || "Failed to register for event");
+            await authFetch(`/community/events/${event.id}/register`, { method: "POST" });
+            toast.success(`You're registered for “${event.title}”.`);
+        } catch (err) {
+            toast.error(errorMessage(err, "Couldn't register for this event."));
         } finally {
-            setIsRegistering(prev => ({ ...prev, [eventId]: false }));
+            setIsRegistering(prev => ({ ...prev, [event.id]: false }));
         }
     };
 
@@ -180,7 +190,7 @@ export default function ExplorePage() {
                 >
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#9C57DF] to-[#C28CF0] flex items-center justify-center text-white font-bold shadow-lg ring-4 ring-background">
+                            <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold shadow-lg ring-4 ring-background">
                                 {item.producer.username.substring(0, 2).toUpperCase()}
                             </div>
                             <div>
@@ -203,7 +213,7 @@ export default function ExplorePage() {
                                 <h3 className="text-xl font-bold text-foreground hover:text-accent cursor-pointer transition-colors mb-2">{item.project_name}</h3>
                                 <p className="text-sm text-foreground-muted leading-relaxed max-w-lg">Check out this new project by {item.producer.username}.</p>
                             </div>
-                            <button className="bg-accent/10 hover:bg-accent text-accent hover:text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-[0_0_15px_rgba(156,87,223,0.15)] hover:shadow-[0_0_25px_rgba(156,87,223,0.4)] hover:-translate-y-0.5 flex items-center gap-2">
+                            <button className="bg-accent/10 hover:bg-accent text-accent hover:text-accent-foreground px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:shadow-[var(--shadow-glow-accent)] hover:-translate-y-0.5 flex items-center gap-2">
                                 <Play size={16} fill="currentColor" /> Listen
                             </button>
                         </div>
@@ -213,7 +223,7 @@ export default function ExplorePage() {
         </div>
     );
 
-    const renderCardContainer = (Icon: any, title: string, subtitle: string, colorClass: string, children: React.ReactNode) => (
+    const renderCardContainer = (Icon: LucideIcon, title: string, subtitle: string, colorClass: string, children: React.ReactNode) => (
         <div className="bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-2xl p-6 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
             <div className={`absolute top-0 right-0 w-24 h-24 rounded-full blur-3xl -mr-8 -mt-8 pointer-events-none opacity-20 group-hover:opacity-40 transition-opacity ${colorClass.includes('accent') ? 'bg-accent' : colorClass.includes('amber') ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
             <div className="flex items-center gap-3 mb-6 relative z-10">
@@ -239,13 +249,16 @@ export default function ExplorePage() {
                 <div key={producer.id} className="flex items-center justify-between p-3 rounded-xl bg-background border border-border-subtle hover:border-accent/40 hover:shadow-md transition-all cursor-pointer group/item">
                     <div className="flex items-center gap-4">
                         <span className="text-xs font-bold text-foreground-muted w-3">{idx + 1}</span>
-                        {producer.avatar_url ? (
-                            <img src={producer.avatar_url} alt={producer.username} className="h-10 w-10 rounded-full object-cover group-hover/item:scale-110 transition-transform" />
-                        ) : (
-                            <div className={`h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-rose-400 flex items-center justify-center text-white text-xs font-bold shadow-sm group-hover/item:scale-110 group-hover/item:rotate-3 transition-transform`}>
-                                {producer.username.substring(0, 2).toUpperCase()}
-                            </div>
-                        )}
+                        <Avatar
+                            src={producer.avatar_url}
+                            alt={producer.username}
+                            className="h-10 w-10 rounded-full object-cover group-hover/item:scale-110 transition-transform"
+                            fallback={
+                                <div className={`h-10 w-10 rounded-full bg-foreground/10 flex items-center justify-center text-foreground text-xs font-bold shadow-sm group-hover/item:scale-110 group-hover/item:rotate-3 transition-transform`}>
+                                    {producer.username.substring(0, 2).toUpperCase()}
+                                </div>
+                            }
+                        />
                         <div>
                             <div className="font-bold text-foreground group-hover/item:text-accent transition-colors">{producer.username}</div>
                             <div className="text-xs text-foreground-muted">{producer.follower_count} followers</div>
@@ -260,7 +273,7 @@ export default function ExplorePage() {
         Star, "Hot This Week", "Most starred projects", "text-amber-500",
         <div className="space-y-2">
             {trendingProjects.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No trending projects.</p>}
-            {trendingProjects.slice(0, 4).map((project, idx) => (
+            {trendingProjects.slice(0, 4).map((project) => (
                 <div key={project.id} className="flex items-center justify-between p-3 rounded-xl bg-background border border-border-subtle hover:border-amber-500/40 hover:shadow-md transition-all cursor-pointer group/item">
                     <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_currentColor]`} />
@@ -281,16 +294,19 @@ export default function ExplorePage() {
         Users, "Suggested Collabs", "Based on your style", "text-blue-500",
         <div className="space-y-3">
             {producers.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No suggestions available.</p>}
-            {producers.slice(4, 7).map((collab, idx) => (
+            {producers.slice(4, 7).map((collab) => (
                 <div key={collab.id} className="bg-background border border-border-subtle rounded-xl p-4 hover:border-blue-500/40 hover:shadow-md transition-all group/item">
                     <div className="flex items-center gap-3 mb-3 relative">
-                        {collab.avatar_url ? (
-                            <img src={collab.avatar_url} alt={collab.username} className="h-12 w-12 rounded-full object-cover group-hover/item:shadow-lg transition-shadow" />
-                        ) : (
-                            <div className={`h-12 w-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white text-sm font-bold shadow-md group-hover/item:shadow-lg transition-shadow`}>
-                                {collab.username.substring(0, 2).toUpperCase()}
-                            </div>
-                        )}
+                        <Avatar
+                            src={collab.avatar_url}
+                            alt={collab.username}
+                            className="h-12 w-12 rounded-full object-cover group-hover/item:shadow-lg transition-shadow"
+                            fallback={
+                                <div className={`h-12 w-12 rounded-full bg-foreground/10 flex items-center justify-center text-foreground text-sm font-bold shadow-md group-hover/item:shadow-lg transition-shadow`}>
+                                    {collab.username.substring(0, 2).toUpperCase()}
+                                </div>
+                            }
+                        />
                         <div>
                             <h4 className="font-bold text-foreground text-sm group-hover/item:text-blue-500 transition-colors">{collab.username}</h4>
                             <p className="text-[10px] text-foreground-muted mt-0.5">{collab.follower_count} followers</p>
@@ -322,7 +338,7 @@ export default function ExplorePage() {
             </div>
             <div className="space-y-4">
                 {changelog.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No recent updates.</p>}
-                {changelog.slice(0, 4).map((update, idx) => {
+                {changelog.slice(0, 4).map((update) => {
                     return (
                         <div key={update.id} className="relative pl-6 pb-4 last:pb-0 border-l border-border-subtle group">
                             <div className="absolute left-[-17px] top-1 h-8 w-8 rounded-full bg-background border-4 border-background-secondary dark:border-background-tertiary flex items-center justify-center group-hover:bg-accent/10 group-hover:border-accent/20 transition-colors">
@@ -347,7 +363,7 @@ export default function ExplorePage() {
         TrendingUp, "Active Challenges", "Join to win prizes", "text-accent",
         <div className="space-y-4">
             {challenges.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No active challenges right now.</p>}
-            {challenges.map((challenge, idx) => {
+            {challenges.map((challenge) => {
                 const endsAtDate = new Date(challenge.ends_at);
                 const daysLeft = Math.max(0, Math.ceil((endsAtDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24)));
                 
@@ -376,9 +392,9 @@ export default function ExplorePage() {
                                 <span className="font-bold text-accent">{challenge.prize}</span>
                             </div>
                             <button 
-                                onClick={() => handleJoinChallenge(challenge.id)}
+                                onClick={() => handleJoinChallenge(challenge)}
                                 disabled={isJoining[challenge.id]}
-                                className="px-4 py-2 rounded-lg bg-accent text-white font-bold text-xs hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_4px_15px_rgba(156,87,223,0.3)] hover:-translate-y-0.5"
+                                className="px-4 py-2 rounded-lg bg-accent text-accent-foreground font-bold text-xs hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[var(--shadow-glow-accent)] hover:-translate-y-0.5"
                             >
                                 {isJoining[challenge.id] ? "Joining..." : "Join Now"}
                             </button>
@@ -393,7 +409,7 @@ export default function ExplorePage() {
         Clock, "Upcoming Events", "Workshops & Streams", "text-blue-500",
         <div className="space-y-4">
             {events.length === 0 && <p className="text-sm text-foreground-muted text-center py-4">No upcoming events right now.</p>}
-            {events.map((event, idx) => {
+            {events.map((event) => {
                 const eventDate = new Date(event.event_date);
                 const formattedDate = eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 const formattedTime = eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -412,7 +428,7 @@ export default function ExplorePage() {
                             <p className="text-xs font-medium text-foreground-muted flex items-center gap-2"><Users size={14} className="text-blue-500" /> -- attending</p>
                         </div>
                         <button 
-                            onClick={() => handleRegisterEvent(event.id)}
+                            onClick={() => handleRegisterEvent(event)}
                             disabled={isRegistering[event.id]}
                             className="w-full py-2.5 rounded-lg bg-transparent border-2 border-border-subtle text-foreground font-bold text-xs hover:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed hover:text-blue-500 transition-all hover:-translate-y-0.5 shadow-sm"
                         >
@@ -456,17 +472,17 @@ export default function ExplorePage() {
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id)}
                                         className={`relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-full text-sm font-bold transition-colors z-10 ${
-                                            isActive ? 'text-white' : 'text-foreground-muted hover:text-foreground hover:bg-foreground/5'
+                                            isActive ? 'text-accent-foreground' : 'text-foreground-muted hover:text-foreground hover:bg-foreground/5'
                                         }`}
                                     >
                                         {isActive && (
                                             <motion.div
                                                 layoutId="explore-active-tab"
-                                                className="absolute inset-0 bg-accent rounded-full -z-10 shadow-[0_4px_20px_rgba(156,87,223,0.5)]"
+                                                className="absolute inset-0 bg-accent rounded-full -z-10 shadow-[var(--shadow-glow-accent)]"
                                                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                             />
                                         )}
-                                        <Icon size={18} className={isActive ? 'text-white' : ''} />
+                                        <Icon size={18} className={isActive ? 'text-accent-foreground' : ''} />
                                         {tab.label}
                                     </button>
                                 );
