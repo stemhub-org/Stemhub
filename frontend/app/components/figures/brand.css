@@ -1,0 +1,98 @@
+/* The anatomy kit's card, restyled for the 2026 identity: Ink / Paper / Lime, square
+   corners, Plus Jakarta Sans labels. Light figures sit on Paper, dark ones on Ink, where
+   the one lit part turns Lime. */
+
+.lp-figure.iso {
+  --anatomy-mono: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+}
+
+.lp-figure.iso:not([data-theme="light"]) {
+  --anatomy-page: #0a0a0a;
+  --anatomy-card: #0a0a0a;
+  --anatomy-paper: #0a0a0a;
+  --anatomy-text: #ffffff;
+  --anatomy-strong: #ffffff;
+  --anatomy-muted: #bdbdbd;
+  --anatomy-face: #1d1d1d;
+  --anatomy-top: #1f1f1f;
+  --anatomy-shade-0: #111111;
+  --anatomy-shade-1: #151515;
+  --anatomy-shade-2: #191919;
+  --anatomy-shade-3: #1c1c1c;
+  --anatomy-hi: #ececec;
+  --anatomy-mid: #8e8e8e;
+  --anatomy-lo: #5a5a5a;
+  --anatomy-faint: #363636;
+  --anatomy-halo: #000000;
+  --anatomy-lit: #c8ff00;
+  --anatomy-lit-top: #c8ff00;
+  --anatomy-lit-shade: #9fcc00;
+}
+
+.lp-figure.iso[data-theme="light"] {
+  --anatomy-page: #ffffff;
+  --anatomy-card: #ffffff;
+  --anatomy-paper: #ffffff;
+  --anatomy-text: #0a0a0a;
+  --anatomy-strong: #0a0a0a;
+  --anatomy-muted: #4a4a4a;
+  --anatomy-lit: #0a0a0a;
+  --anatomy-lit-top: #c8ff00;
+  --anatomy-lit-shade: #b4e600;
+}
+
+.lp-figure .iso-figure {
+  margin: 0;
+}
+
+.lp-figure .iso-plate {
+  padding: 56px 28px;
+  box-shadow: none;
+  border: 2px solid var(--anatomy-strong);
+}
+
+.lp-figure .iso-plate-corner {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--anatomy-muted);
+}
+
+.lp-figure .iso-plate-corner[data-corner="fig"],
+.lp-figure .iso-plate-corner[data-corner="readout"] {
+  color: var(--anatomy-strong);
+}
+
+.lp-figure .iso-plate-corner[data-corner="readout"] {
+  text-transform: none;
+  font-weight: 600;
+}
+
+.lp-figure .iso-plate .iso-svg {
+  max-width: 960px;
+}
+
+.lp-figure .iso-legend {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--anatomy-muted);
+}
+
+.lp-figure .iso-face-text {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (max-width: 560px) {
+  .lp-figure .iso-plate {
+    padding: 48px 12px 72px;
+  }
+
+  .lp-figure .iso-plate-corner[data-corner="readout"] {
+    max-width: calc(100% - 8px);
+    padding-bottom: 2px;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

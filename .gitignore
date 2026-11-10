@@ -37,3 +37,7 @@ backend/src/*.egg-info/
 htmlcov/
 backend/htmlcov/
 backend/coverage.xml
+
+# Launch video production (local only)
+vidéo/
+docs/brand/

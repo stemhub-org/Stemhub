@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -16,14 +17,15 @@ const syne = localFont({
 
 const jakarta = localFont({
   src: [
-    { path: "../public/fonts/jakarta-latin.woff2", weight: "200 600", style: "normal" },
-    { path: "../public/fonts/jakarta-latin-ext.woff2", weight: "200 600", style: "normal" },
+    { path: "../public/fonts/jakarta-latin.woff2", weight: "200 800", style: "normal" },
+    { path: "../public/fonts/jakarta-latin-ext.woff2", weight: "200 800", style: "normal" },
   ],
   variable: "--font-jakarta",
   display: "swap",
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "StemHub — Your music's memory",
   description:
     "Decentralized versioning designed for music producers. Every project, every version, every decision — preserved.",
