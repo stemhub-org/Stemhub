@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
 import { authFetch } from "@/lib/api";
 
 interface User {
@@ -34,20 +35,18 @@ function formatDate(iso: string) {
   });
 }
 
-function Avatar({ user }: { user: User }) {
-  if (user.avatar_url) {
-    return (
-      <img
-        src={user.avatar_url}
-        alt={user.username}
-        className="w-8 h-8 rounded-full object-cover"
-      />
-    );
-  }
+function UserAvatar({ user }: { user: User }) {
   return (
-    <div className="w-8 h-8 rounded-full bg-[#9C57DF]/15 text-[#9C57DF] text-xs font-semibold flex items-center justify-center">
-      {user.username.slice(0, 2).toUpperCase()}
-    </div>
+    <Avatar
+      src={user.avatar_url}
+      alt={user.username}
+      className="w-8 h-8 rounded-full object-cover"
+      fallback={
+        <div className="w-8 h-8 rounded-full bg-ink text-lime text-xs font-semibold flex items-center justify-center">
+          {user.username.slice(0, 2).toUpperCase()}
+        </div>
+      }
+    />
   );
 }
 
@@ -72,7 +71,7 @@ function ActionButton({
       className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${
         danger
           ? "text-red-400 hover:bg-red-50 hover:text-red-600"
-          : "text-[#1A1A1A]/30 hover:bg-[#9C57DF]/8 hover:text-[#9C57DF]"
+          : "text-ink/30 hover:bg-ink/5 hover:text-ink"
       }`}
     >
       {loading ? (
@@ -163,10 +162,10 @@ export default function AdminUsersPage() {
         className="mb-6 flex items-center justify-between"
       >
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">
             Utilisateurs
           </h1>
-          <p className="text-sm text-[#1A1A1A]/50 mt-1">
+          <p className="text-sm text-ink/50 mt-1">
             {users ? `Page ${page + 1}` : "Chargement…"}
           </p>
         </div>
@@ -175,7 +174,7 @@ export default function AdminUsersPage() {
           placeholder="Rechercher…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="text-sm px-3 py-2 rounded-lg border border-[#1A1A1A]/15 bg-white text-[#1A1A1A] placeholder:text-[#1A1A1A]/30 outline-none focus:ring-2 focus:ring-[#9C57DF]/30 w-52"
+          className="text-sm px-3 py-2 rounded-lg border border-ink/15 bg-white text-ink placeholder:text-ink/30 outline-none focus:ring-2 focus:ring-ink/20 w-52"
         />
       </motion.div>
 
@@ -189,51 +188,51 @@ export default function AdminUsersPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.08 }}
-        className="rounded-2xl border border-[#1A1A1A]/10 bg-white overflow-hidden"
+        className="rounded-2xl border border-ink/10 bg-white overflow-hidden"
         style={{ boxShadow: "0 1px 4px 0 rgba(26,26,26,0.06)" }}
       >
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#1A1A1A]/8">
-              <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">
+            <tr className="border-b border-ink/8">
+              <th className="text-left px-5 py-3.5 font-medium text-ink/40 text-xs uppercase tracking-wider">
                 Utilisateur
               </th>
-              <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">
+              <th className="text-left px-5 py-3.5 font-medium text-ink/40 text-xs uppercase tracking-wider">
                 Email
               </th>
-              <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">
+              <th className="text-left px-5 py-3.5 font-medium text-ink/40 text-xs uppercase tracking-wider">
                 Projets
               </th>
-              <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">
+              <th className="text-left px-5 py-3.5 font-medium text-ink/40 text-xs uppercase tracking-wider">
                 Inscrit le
               </th>
-              <th className="text-left px-5 py-3.5 font-medium text-[#1A1A1A]/40 text-xs uppercase tracking-wider">
+              <th className="text-left px-5 py-3.5 font-medium text-ink/40 text-xs uppercase tracking-wider">
                 Statut
               </th>
               <th className="px-5 py-3.5" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#1A1A1A]/6">
+          <tbody className="divide-y divide-ink/6">
             {filtered === null
               ? Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#1A1A1A]/8 animate-pulse" />
-                        <div className="w-24 h-3.5 rounded bg-[#1A1A1A]/8 animate-pulse" />
+                        <div className="w-8 h-8 rounded-full bg-ink/8 animate-pulse" />
+                        <div className="w-24 h-3.5 rounded bg-ink/8 animate-pulse" />
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="w-36 h-3.5 rounded bg-[#1A1A1A]/8 animate-pulse" />
+                      <div className="w-36 h-3.5 rounded bg-ink/8 animate-pulse" />
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="w-8 h-3.5 rounded bg-[#1A1A1A]/8 animate-pulse" />
+                      <div className="w-8 h-3.5 rounded bg-ink/8 animate-pulse" />
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="w-20 h-3.5 rounded bg-[#1A1A1A]/8 animate-pulse" />
+                      <div className="w-20 h-3.5 rounded bg-ink/8 animate-pulse" />
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="w-16 h-5 rounded-full bg-[#1A1A1A]/8 animate-pulse" />
+                      <div className="w-16 h-5 rounded-full bg-ink/8 animate-pulse" />
                     </td>
                     <td className="px-5 py-3.5" />
                   </tr>
@@ -241,33 +240,33 @@ export default function AdminUsersPage() {
               : filtered.map((user) => (
                   <tr
                     key={user.id}
-                    className="hover:bg-[#1A1A1A]/[0.015] transition-colors"
+                    className="hover:bg-ink/[0.015] transition-colors"
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <Avatar user={user} />
-                        <span className="font-medium text-[#1A1A1A]">
+                        <UserAvatar user={user} />
+                        <span className="font-medium text-ink">
                           {user.username}
                         </span>
                         {user.is_admin && (
                           <ShieldCheck
                             size={13}
-                            className="text-[#9C57DF]"
+                            className="text-ink"
                             aria-label="Administrateur"
                           />
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-[#1A1A1A]/60">
+                    <td className="px-5 py-3.5 text-ink/60">
                       {user.email}
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="flex items-center gap-1.5 text-[#1A1A1A]/50">
+                      <span className="flex items-center gap-1.5 text-ink/50">
                         <FolderGit2 size={13} />
                         {user.project_count}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-[#1A1A1A]/50">
+                    <td className="px-5 py-3.5 text-ink/50">
                       {formatDate(user.created_at)}
                     </td>
                     <td className="px-5 py-3.5">
@@ -275,7 +274,7 @@ export default function AdminUsersPage() {
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           user.is_active
                             ? "bg-emerald-50 text-emerald-600"
-                            : "bg-[#1A1A1A]/6 text-[#1A1A1A]/40"
+                            : "bg-ink/6 text-ink/40"
                         }`}
                       >
                         {user.is_active ? "Actif" : "Inactif"}
@@ -316,7 +315,7 @@ export default function AdminUsersPage() {
               <tr>
                 <td
                   colSpan={6}
-                  className="px-5 py-10 text-center text-sm text-[#1A1A1A]/30"
+                  className="px-5 py-10 text-center text-sm text-ink/30"
                 >
                   Aucun résultat pour « {search} »
                 </td>
@@ -331,16 +330,16 @@ export default function AdminUsersPage() {
         <button
           onClick={() => setPage((p) => Math.max(0, p - 1))}
           disabled={page === 0}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-[#1A1A1A]/60 hover:bg-[#1A1A1A]/5"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-ink/60 hover:bg-ink/5"
         >
           <ChevronLeft size={15} />
           Précédent
         </button>
-        <span className="text-xs text-[#1A1A1A]/40">Page {page + 1}</span>
+        <span className="text-xs text-ink/40">Page {page + 1}</span>
         <button
           onClick={() => setPage((p) => p + 1)}
           disabled={!hasMore}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-[#1A1A1A]/60 hover:bg-[#1A1A1A]/5"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-ink/60 hover:bg-ink/5"
         >
           Suivant
           <ChevronRight size={15} />

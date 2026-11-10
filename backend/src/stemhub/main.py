@@ -5,6 +5,7 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from .auth import router as auth_router
+from .routers.activity import router as activity_router
 from .routers.admin import router as admin_router
 from .routers.blobs import router as blobs_router
 from .routers.branches import router as branches_router
@@ -72,6 +73,7 @@ app.include_router(branches_router)
 app.include_router(versions_router)
 app.include_router(collaborators_router)
 app.include_router(stats_router)
+app.include_router(activity_router)
 app.include_router(admin_router)
 app.include_router(explore_router)
 app.include_router(community_router)

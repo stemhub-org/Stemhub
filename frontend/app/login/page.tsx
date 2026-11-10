@@ -47,7 +47,7 @@ export default function LoginPage() {
           className="h-[800px] w-[800px] rounded-full opacity-20 blur-[150px]"
           style={{
             background:
-              "radial-gradient(circle, rgba(156,87,223,0.3) 0%, transparent 70%)",
+              "radial-gradient(circle, rgba(200,255,0,0.3) 0%, transparent 70%)",
           }}
         />
       </div>

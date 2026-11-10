@@ -61,4 +61,43 @@ describe("ProjectPage", () => {
 
         await waitFor(() => expect(summaryCalls).toBe(2));
     });
+
+    it("shows the project's activity feed next to the overview", async () => {
+        const summary = {
+            project: { id: "p1", name: "Night Drive", description: null, owner: { id: "u1", username: "jb" } },
+            branches: [{ id: "b-main", name: "main" }],
+            recent_versions: [],
+            latest_version_id: null,
+            has_preview: false,
+        };
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string) => {
+                if (url.includes("/summary")) return json(summary);
+                if (url.includes("/activity?")) {
+                    return json({
+                        items: [
+                            {
+                                id: "branch_created:b-main",
+                                type: "branch_created",
+                                occurred_at: new Date().toISOString(),
+                                actor: null,
+                                branch: { id: "b-main", name: "main", is_deleted: false },
+                                version: null,
+                                pull_request: null,
+                            },
+                        ],
+                        next_cursor: null,
+                    });
+                }
+                if (url.endsWith("/auth/me")) return json({ id: "u1", username: "jb" });
+                return json({});
+            }),
+        );
+
+        renderPage();
+
+        expect(await screen.findByRole("heading", { name: "Activity" })).toBeTruthy();
+        expect(await screen.findByText("Branch main was created")).toBeTruthy();
+    });
 });

@@ -116,7 +116,7 @@ export function ProjectSettings({ projectId, ownerId, currentUserId }: ProjectSe
                     <button
                         type="submit"
                         disabled={loading || !inviteUsername.trim()}
-                        className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-accent-foreground px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
                     >
                         <UserPlus className="size-4" />
                         Invite

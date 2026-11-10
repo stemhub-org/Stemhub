@@ -65,7 +65,12 @@ export function BranchPicker({
                         className="absolute left-0 top-full z-10 mt-1 min-w-[12rem] rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle py-1 shadow-lg"
                     >
                         {branches.map((branch) => (
-                            <li key={branch.id} role="option" className="flex items-center justify-between hover:bg-background-tertiary">
+                            <li
+                                key={branch.id}
+                                role="option"
+                                aria-selected={selectedBranchId === branch.id}
+                                className="flex items-center justify-between hover:bg-background-tertiary"
+                            >
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -139,7 +144,7 @@ export function BranchPicker({
                                             <button 
                                                 type="submit" 
                                                 disabled={!newBranchName.trim() || isSubmitting} 
-                                                className="px-3 py-1 text-xs font-medium bg-accent text-white rounded hover:bg-accent/90 disabled:opacity-50 transition-colors"
+                                                className="px-3 py-1 text-xs font-medium bg-accent text-accent-foreground rounded hover:bg-accent/90 disabled:opacity-50 transition-colors"
                                             >
                                                 {isSubmitting ? "Creating..." : "Create"}
                                             </button>

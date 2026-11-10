@@ -39,7 +39,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
     if (!ready) {
         return (
             <div className="flex h-screen items-center justify-center bg-[#F1F1F1]">
-                <div className="w-6 h-6 rounded-full border-2 border-[#9C57DF] border-t-transparent animate-spin" />
+                <div className="w-6 h-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
             </div>
         );
     }
