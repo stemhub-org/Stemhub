@@ -2,7 +2,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Requirements
 
-- **Node 20.** The CI runs on Node 20 and reads the version from `.nvmrc`. Run `nvm use` (or `fnm use`) in `frontend/` so local runs match: a newer Node can pass tests that fail in CI (see #281).
+- **Node 26.** Vercel uses the version in `package.json`, CI reads `.nvmrc`, and Docker uses `node:26-alpine`. Run `nvm use` (or `fnm use`) in `frontend/` so local runs match (see #281).
 - **`NEXT_PUBLIC_SITE_URL`** — public origin of the site, used for the Open Graph image, the sitemap, robots.txt and canonical URLs (`lib/site.ts`). Defaults to `http://localhost:3000` in `.env.example` and Docker Compose; set it per environment (Vercel previews, staging) so their metadata doesn't point at production.
 
 ## Getting Started
