@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ToastProvider";
+import { QueryProvider } from "@/components/QueryProvider";
 
 const syne = localFont({
   src: [
@@ -15,17 +17,18 @@ const syne = localFont({
 
 const jakarta = localFont({
   src: [
-    { path: "../public/fonts/jakarta-latin.woff2", weight: "200 600", style: "normal" },
-    { path: "../public/fonts/jakarta-latin-ext.woff2", weight: "200 600", style: "normal" },
+    { path: "../public/fonts/jakarta-latin.woff2", weight: "200 800", style: "normal" },
+    { path: "../public/fonts/jakarta-latin-ext.woff2", weight: "200 800", style: "normal" },
   ],
   variable: "--font-jakarta",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "StemHub — La mémoire de votre musique",
+  metadataBase: new URL(SITE_URL),
+  title: "StemHub — Your music's memory",
   description:
-    "Le versioning décentralisé pensé pour les producteurs de musique. Chaque session, chaque piste, chaque choix — préservé.",
+    "Decentralized versioning designed for music producers. Every project, every version, every decision — preserved.",
 };
 
 export default function RootLayout({
@@ -34,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${syne.variable} ${jakarta.variable} antialiased`}
         style={{ fontFamily: "var(--font-jakarta)" }}
@@ -45,7 +48,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <ToastProvider>{children}</ToastProvider>
+          <QueryProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

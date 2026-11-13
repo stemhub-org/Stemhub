@@ -4,8 +4,9 @@ import Link from "next/link";
 import { Bell, Sun, User as UserIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useState, useEffect } from "react";
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { useCurrentUser } from "@/lib/queries";
 
 type TopNavProps = {
     onToggleSidebar?: () => void;
@@ -16,28 +17,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
     const router = useRouter();
     const { resolvedTheme, setTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
-    const [userData, setUserData] = useState<any>(null);
-
-    const fetchUser = async () => {
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const response = await fetch(`${apiUrl}/auth/me`, {
-                credentials: "include"
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setUserData(data);
-            }
-        } catch (error) {
-            console.error("Failed to fetch user data", error);
-        }
-    };
-
-    useEffect(() => {
-        fetchUser();
-        window.addEventListener("user-updated", fetchUser);
-        return () => window.removeEventListener("user-updated", fetchUser);
-    }, []);
+    const { data: userData } = useCurrentUser();
 
     return (
         <header className="h-20 border-b border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 backdrop-blur-xl flex items-center justify-between px-6 lg:px-8 z-10 sticky top-0">
@@ -80,7 +60,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                     <input
                         type="text"
                         placeholder="Search users, projects, genres..."
-                        className="w-full h-10 pl-10 pr-4 rounded-xl border border-border-subtle bg-background-secondary dark:bg-background-tertiary text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all outline-none shadow-sm group-focus-within:shadow-[0_0_15px_rgba(156,87,223,0.1)]"
+                        className="w-full h-10 pl-10 pr-4 rounded-xl border border-border-subtle bg-background-secondary dark:bg-background-tertiary text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all outline-none shadow-sm group-focus-within:shadow-[var(--shadow-glow-accent)]"
                     />
                 </div>
             </div>
@@ -111,15 +91,15 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                         onClick={() => {
                             router.push("/dashboard/profile");
                         }}
-                        className={`h-10 w-10 rounded-full flex items-center justify-center text-white border-2 shadow-sm hover:opacity-90 transition-opacity bg-background-secondary dark:bg-background-tertiary overflow-hidden ${isDark ? "border-transparent" : "border-white"}`}
-                        style={!userData?.avatar_url ? { background: "linear-gradient(to top right, #9C57DF, #C28CF0)" } : {}}
+                        className={`h-10 w-10 rounded-full flex items-center justify-center border-2 shadow-sm hover:opacity-90 transition-opacity overflow-hidden ${isDark ? "border-transparent" : "border-white"} ${userData?.avatar_url ? "bg-background-secondary dark:bg-background-tertiary" : "bg-accent text-accent-foreground"}`}
                         title="View profile"
                     >
-                        {userData?.avatar_url ? (
-                            <img src={userData.avatar_url} alt="Profile" className="h-full w-full object-cover" />
-                        ) : (
-                            <UserIcon size={18} />
-                        )}
+                        <Avatar
+                            src={userData?.avatar_url}
+                            alt="Profile"
+                            className="h-full w-full object-cover"
+                            fallback={<UserIcon size={18} />}
+                        />
                     </button>
                 </div>
             </div>

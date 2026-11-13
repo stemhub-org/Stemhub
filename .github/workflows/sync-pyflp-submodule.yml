@@ -14,9 +14,12 @@ jobs:
     if: github.repository == 'stemhub-org/Stemhub'
     runs-on: ubuntu-latest
     steps:
+      # Submodule bumps go to dev, never to main: the pointer is updated on
+      # top of dev, and the pull request below targets dev.
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          ref: dev
           fetch-depth: 0
           submodules: recursive
 
@@ -35,6 +38,13 @@ jobs:
             exit 0
           fi
 
+          # Keep the recorded parser commit in step with the pointer
+          # (backend/tests/test_parser_version.py checks the two match).
+          full_sha="$(git -C backend/vendor/PyFLP_v2 rev-parse HEAD)"
+          version_file=backend/src/stemhub/parser_version.py
+          sed -i -E "s/^PYFLP_COMMIT = \"[0-9a-f]{40}\"$/PYFLP_COMMIT = \"${full_sha}\"/" "$version_file"
+          grep -qx "PYFLP_COMMIT = \"${full_sha}\"" "$version_file"
+
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "new_sha=$(git -C backend/vendor/PyFLP_v2 rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
@@ -47,4 +57,5 @@ jobs:
           body: |
             Automated submodule pointer update triggered by upstream push.
           branch: "chore/update-pyflp-submodule"
+          base: dev
           delete-branch: true

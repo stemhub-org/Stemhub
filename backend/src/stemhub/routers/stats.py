@@ -32,7 +32,7 @@ async def get_activity_stats(
 ):
     """
     Get contribution activity for the last 26 weeks.
-    Returns daily commit counts, total commits, and total unique contributors.
+    Returns daily version counts, total versions, and total unique contributors.
     """
     await get_project_with_read_access(project_id=project_id, current_user=current_user, db=db)
 
@@ -48,7 +48,7 @@ async def get_activity_stats(
     branch_ids = [row[0] for row in branch_result.all()]
 
     if not branch_ids:
-        return ActivityStatsResponse(daily_activity=[], total_commits=0, total_contributors=0)
+        return ActivityStatsResponse(daily_activity=[], total_versions=0, total_contributors=0)
 
     # Daily activity: count versions per day
     daily_query = (
@@ -76,14 +76,14 @@ async def get_activity_stats(
             count=daily_rows.get(str(day), 0),
         ))
 
-    # Total commits (all time for the project)
+    # Total versions (all time for the project)
     total_result = await db.execute(
         select(func.count(Version.id)).where(
             Version.branch_id.in_(branch_ids),
             Version.is_deleted == False,
         )
     )
-    total_commits = total_result.scalar() or 0
+    total_versions = total_result.scalar() or 0
 
     # Total unique contributors
     contributors_result = await db.execute(
@@ -97,7 +97,7 @@ async def get_activity_stats(
 
     return ActivityStatsResponse(
         daily_activity=daily_activity,
-        total_commits=total_commits,
+        total_versions=total_versions,
         total_contributors=total_contributors,
     )
 
@@ -109,7 +109,7 @@ async def get_top_contributors(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Get the top contributors for a project, ranked by number of commits.
+    Get the top contributors for a project, ranked by number of versions saved.
     """
     await get_project_with_read_access(project_id=project_id, current_user=current_user, db=db)
 
@@ -125,12 +125,12 @@ async def get_top_contributors(
     if not branch_ids:
         return TopContributorsResponse(contributors=[])
 
-    # Count commits per user
+    # Count versions per user
     query = (
         select(
             User.id.label("user_id"),
             User.username,
-            func.count(Version.id).label("commits"),
+            func.count(Version.id).label("versions"),
         )
         .join(User, Version.created_by == User.id)
         .where(
@@ -152,7 +152,7 @@ async def get_top_contributors(
             user_id=row.user_id,
             username=username,
             initials=initials,
-            commits=row.commits,
+            versions=row.versions,
         ))
 
     return TopContributorsResponse(contributors=contributors)

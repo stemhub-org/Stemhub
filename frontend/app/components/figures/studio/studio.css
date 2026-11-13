@@ -1,0 +1,103 @@
+.st {
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.st .iso-svg {
+  overflow: visible;
+}
+
+/* The monitor's picture follows the StemHub plugin's own palette: Ink surfaces, Paper text,
+   Lime for what matters. It is a screen, so it stays dark in both themes. */
+.st-screen {
+  --st-ink: #0a0a0a;
+  --st-surface: #121212;
+  --st-raised: #1a1a1a;
+  --st-border: #2a2a2a;
+  --st-text: #f2efe6;
+  --st-subtle: #9c9894;
+  --st-faint: #64615c;
+  --st-lime: #c8ff00;
+}
+
+.st-bg { fill: #050505; }
+.st-bar { fill: var(--st-ink); }
+.st-panel { fill: var(--st-surface); stroke: var(--st-border); stroke-width: 0.3px; }
+.st-name { fill: var(--st-raised); }
+.st-field { fill: var(--st-surface); stroke: var(--st-border); stroke-width: 0.3px; }
+.st-t { fill: var(--st-text); font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif; font-weight: 500; }
+.st-mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.st-bold { font-weight: 700; }
+.st-dim { fill: var(--st-subtle); }
+.st-faint { fill: var(--st-faint); }
+.st-lime { fill: var(--st-lime); }
+.st-ink { fill: var(--st-ink); }
+
+.st-key { fill: var(--st-raised); stroke: var(--st-border); stroke-width: 0.3px; }
+.st-key-on { fill: var(--st-lime); }
+.st-glyph { fill: var(--st-text); }
+.st-key-on + .st-glyph { fill: var(--st-ink); }
+
+.st-step { fill: #262626; transition: fill 120ms ease; }
+.st-step-alt { fill: #1f1f1f; }
+.st-step-on { fill: var(--st-text); }
+.st-hit:hover .st-step:not(.st-step-on) { fill: #3a3a3a; }
+.st-column { fill: none; stroke: var(--st-lime); stroke-width: 0.5px; }
+
+.st-clip { fill: #1d1d1d; stroke: #3a3a3a; stroke-width: 0.3px; }
+.st-clip-audio { fill: #191919; }
+.st-clip-dots { fill: var(--st-subtle); }
+.st-wave { fill: none; stroke: var(--st-subtle); stroke-width: 0.5px; stroke-linecap: round; }
+.st-auto { fill: none; stroke: var(--st-lime); stroke-width: 0.5px; }
+.st-playhead path { fill: none; stroke: var(--st-text); stroke-width: 0.45px; }
+.st-playhead .st-playhead-cap { fill: var(--st-text); stroke: none; }
+
+.st-plugin { fill: var(--st-ink); stroke: var(--st-border); stroke-width: 0.4px; }
+.st-plugin-bar { fill: var(--st-surface); }
+.st-chip { fill: transparent; stroke: var(--st-border); stroke-width: 0.4px; }
+.st-chip-on { fill: var(--st-lime); stroke: var(--st-lime); }
+.st-input { fill: var(--st-surface); stroke: var(--st-border); stroke-width: 0.3px; }
+.st-save { fill: var(--st-lime); }
+.st-save-off { fill: var(--st-raised); }
+.st-save-busy { fill: #a4d100; }
+.st-track { fill: var(--st-border); }
+.st-progress { fill: var(--st-lime); }
+.st-row { fill: transparent; }
+.st-row-on { fill: var(--st-raised); }
+.st-row-bar { fill: var(--st-lime); }
+.st-restore { fill: transparent; stroke: var(--st-text); stroke-width: 0.4px; }
+.st-restore-busy { fill: var(--st-raised); }
+
+.st-hit { cursor: pointer; }
+.st-hit[aria-disabled] { cursor: default; }
+.st-hit:hover .st-chip:not(.st-chip-on),
+.st-hit:hover .st-row:not(.st-row-on),
+.st-hit:hover .st-restore { fill: var(--st-raised); }
+.st-hit:hover .st-save:not(.st-save-off) { fill: #d9ff4d; }
+.st-hit:focus { outline: none; }
+.st-hit:focus-visible > rect:first-child { stroke: var(--st-lime); stroke-width: 0.6px; }
+
+.st-power { fill: #c8ff00; stroke: none; }
+.st-oled { fill: var(--anatomy-shade-0); stroke: none; }
+.st-black > .iso-fill, .st-black > .iso-top { fill: var(--anatomy-hi); }
+.st-black > .iso-shade { fill: #3a3a3e; }
+
+.st-disc { cursor: pointer; }
+.st-disc:hover > .iso-solid > .iso-edge { stroke: var(--anatomy-lit); }
+.st-spindle-on .iso-face-text { fill: var(--anatomy-hi); }
+
+@media (prefers-reduced-motion: reduce) {
+  .st-step { transition: none; }
+}
+
+@media (max-width: 640px) {
+  .st {
+    overflow: hidden;
+  }
+
+  .iso-plate .st .iso-svg {
+    width: 112%;
+    margin: -3% -6% -2%;
+  }
+}

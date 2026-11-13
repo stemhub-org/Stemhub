@@ -50,7 +50,7 @@ async def get_explore_projects(
             category=p.category,
             tags=p.tags,
             like_count=p.like_count,
-            bpm=None,
+            tempo_bpm=None,
             key=None,
             created_at=p.created_at,
             owner={"id": p.owner.id, "username": p.owner.username}

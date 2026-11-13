@@ -5,7 +5,7 @@ import type { DailyActivity } from "@/types/project";
 
 interface ContributionActivityProps {
     dailyActivity: DailyActivity[];
-    totalCommits: number;
+    totalVersions: number;
     totalContributors: number;
 }
 
@@ -17,7 +17,7 @@ const LEGEND_LEVELS = [0, 0.2, 0.45, 0.7, 1];
 
 export function ContributionActivity({
     dailyActivity,
-    totalCommits,
+    totalVersions,
     totalContributors,
 }: ContributionActivityProps) {
     // Compute max count for intensity normalization
@@ -57,7 +57,7 @@ export function ContributionActivity({
                             }}
                             title={
                                 recentDays[i]
-                                    ? `${recentDays[i].date}: ${recentDays[i].count} changes`
+                                    ? `${recentDays[i].date}: ${recentDays[i].count} ${recentDays[i].count === 1 ? "version" : "versions"}`
                                     : "No data"
                             }
                         />
@@ -82,10 +82,10 @@ export function ContributionActivity({
             <div className="mt-1 flex gap-4">
                 <div className="rounded-lg bg-foreground/[0.04] px-3 py-2">
                     <p className="text-[10px] uppercase tracking-wide text-foreground/50">
-                        Total Changes
+                        Total Versions
                     </p>
                     <p className="text-lg font-medium text-foreground">
-                        {totalCommits}
+                        {totalVersions}
                     </p>
                 </div>
                 <div className="rounded-lg bg-foreground/[0.04] px-3 py-2">

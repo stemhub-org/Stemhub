@@ -1,55 +1,69 @@
 #pragma once
 
-#include <JuceHeader.h>
-#include "application/PluginProcessor.hpp"
-#include "ui/Views.hpp"
-#include "ui/PluginTheme.hpp"
+#include <functional>
+#include <memory>
 
+#include <JuceHeader.h>
+
+#include "application/BackgroundJobCoordinator.hpp"
+#include "application/StemhubSession.hpp"
+#include "application/VersionFiles.hpp"
+#include "ui/DashboardView.hpp"
+#include "ui/LoginView.hpp"
+#include "ui/PluginTheme.hpp"
+#include "ui/ProjectSelectionView.hpp"
+#include "ui/SessionPresenter.hpp"
+
+// Shows the session's state through SessionPresenter's models, and turns clicks into the
+// session's intents. Keys it doesn't use, Cmd/Ctrl+S among them, go to the DAW.
 class StemhubAudioProcessorEditor : public juce::AudioProcessorEditor,
                                     private juce::ChangeListener,
-                                    private juce::KeyListener
+                                    private juce::AsyncUpdater
 {
 public:
-    explicit StemhubAudioProcessorEditor(StemhubAudioProcessor& processorToEdit);
+    StemhubAudioProcessorEditor(juce::AudioProcessor& ownerProcessor, StemhubSession& sessionToShow);
     ~StemhubAudioProcessorEditor() override;
 
-    using juce::Component::keyPressed;
     void paint(juce::Graphics&) override;
     void resized() override;
 
 private:
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
-    bool keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) override;
+    // A count of what a save takes finished.
+    void handleAsyncUpdate() override;
     void refreshSessionUi();
-    void refreshProjectSelectionUi();
-    void refreshDashboardUi();
-    void handleChooseProjectFileClick();
-    void handleOpenProjectClick();
-    void handleCreateProjectClick();
-    void handleSignInClick();
-    void handleSignOutClick();
-    void handleSaveChangesClick();
-    void handleSyncClick();
-    void handleChangeBranchClick();
-    void handleVersionSelectionChanged();
-    void handleBackToProjectsClick();
-    void handleRestoreClick();
+    // Counts in the background what a save of the working copy takes, when that file isn't the
+    // one counted last. Clearing countedProjectFile asks for a recount (after a save, on Refresh).
+    void countWorkingCopy(const juce::String& workingFilePath);
+
+    void signIn();
+    void signOut();
+    void chooseProjectFile();
+    void createProject();
+    void save();
+    void refresh();
+    void restore(const juce::String& versionId);
 
     void launchProjectFileChooser(const juce::String& title,
+                                  const juce::File& initialFile,
                                   std::function<void(const juce::File&)> onFileChosen);
     void launchProjectFolderChooser(const juce::String& title,
-                                   std::function<void(const juce::File&)> onFolderChosen);
-    void triggerPushVersion(const juce::String& commitMessage);
-    bool hasActiveProjectSelection() const;
-    juce::File getEffectiveProjectFile() const;
-    void showCommitMessagePopupForSave();
-    void requestSaveWithCommitMessage(juce::String commitMessage);
+                                    std::function<void(const juce::File&)> onFolderChosen);
+
+    StemhubSession& session;
+    SessionPresenter presenter;
+    // Declared before the views: it owns the embedded brand typefaces they build fonts from.
+    stemhub::plugin::theme::StemhubPluginLookAndFeel pluginLookAndFeel;
     LoginView loginView;
     ProjectSelectionView projectSelectionView;
     DashboardView dashboardView;
-    stemhub::plugin::theme::StemhubPluginLookAndFeel pluginLookAndFeel;
-    juce::LookAndFeel* previousLookAndFeel { nullptr };
-    StemhubAudioProcessor& audioProcessor;
-    std::unique_ptr<juce::FileChooser> projectFileChooser;
+    juce::TooltipWindow tooltipWindow { this, 600 };
+    std::unique_ptr<juce::FileChooser> fileChooser;
+    // The working copy whose size the dashboard shows, or is counting.
+    juce::File countedProjectFile;
+
+    // Declared last so it is destroyed first: its worker stops before anything else goes away.
+    BackgroundJobCoordinator<stemhub::versionfiles::Summary> workingCopyCounter { 1, [this] { triggerAsyncUpdate(); } };
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemhubAudioProcessorEditor)
 };

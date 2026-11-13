@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     User,
@@ -16,6 +15,12 @@ import {
     CheckCircle2,
     Loader2
 } from "lucide-react";
+import { useToast } from "@/components/ToastProvider";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { useChangeEmail, useChangePassword, useUpdateProfile } from "@/lib/account";
+import { errorMessage } from "@/lib/api";
+import { useCurrentUser } from "@/lib/queries";
+import type { UserProfile } from "@/types/user";
 
 const TABS = [
     { id: "profile", label: "Profile", icon: User },
@@ -27,33 +32,13 @@ const TABS = [
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState("profile");
-    const [user, setUser] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const router = useRouter();
+    const { data: user, error, refetch } = useCurrentUser();
 
-    const fetchUser = async () => {
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const response = await fetch(`${apiUrl}/auth/me`, {
-                credentials: "include"
-            });
-            if (!response.ok) {
-                throw new Error("Session expirée");
-            }
-            const data = await response.json();
-            setUser(data);
-        } catch (err) {
-            router.push("/login");
-        } finally {
-            setLoading(false);
-        }
-    };
+    if (error) {
+        return <ErrorState error={error} title="Couldn't load your settings" onRetry={() => refetch()} className="max-w-xl mx-auto mt-12" />;
+    }
 
-    useEffect(() => {
-        fetchUser();
-    }, [router]);
-
-    if (loading) {
+    if (!user) {
         return (
             <div className="flex h-[50vh] items-center justify-center">
                 <Loader2 size={32} className="animate-spin text-accent" />
@@ -111,11 +96,11 @@ export default function SettingsPage() {
                     className="flex-1 rounded-2xl border border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 backdrop-blur-xl p-8 min-h-[500px]"
                 >
                     <AnimatePresence mode="wait">
-                        {activeTab === "profile" && <ProfileSettings key="profile" user={user} onUpdate={fetchUser} />}
-                        {activeTab === "account" && <AccountSettings key="account" user={user} onUpdate={fetchUser} />}
+                        {activeTab === "profile" && <ProfileSettings key="profile" user={user} />}
+                        {activeTab === "account" && <AccountSettings key="account" user={user} />}
                         {activeTab === "integrations" && <IntegrationSettings key="integrations" user={user} />}
-                        {activeTab === "storage" && <StorageSettings key="storage" user={user} />}
-                        {activeTab === "notifications" && <NotificationSettings key="notifications" user={user} />}
+                        {activeTab === "storage" && <StorageSettings key="storage" />}
+                        {activeTab === "notifications" && <NotificationSettings key="notifications" />}
                     </AnimatePresence>
                 </motion.div>
             </div>
@@ -123,15 +108,23 @@ export default function SettingsPage() {
     );
 }
 
-function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }) {
+/** Empty text fields are saved as "not set". */
+function orNull(value: string): string | null {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+}
+
+function ProfileSettings({ user }: { user: UserProfile }) {
     const [form, setForm] = useState({
-        username: user?.username || "",
-        avatar_url: user?.avatar_url || "",
-        bio: user?.bio || "",
-        location: user?.location || "",
-        website: user?.website || ""
+        username: user.username,
+        avatar_url: user.avatar_url ?? "",
+        bio: user.bio ?? "",
+        location: user.location ?? "",
+        website: user.website ?? ""
     });
-    const [isSaving, setIsSaving] = useState(false);
+    const updateProfile = useUpdateProfile();
+    const toast = useToast();
+    const isSaving = updateProfile.isPending;
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,26 +138,20 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
         }
     };
 
-    const handleSave = async () => {
-        setIsSaving(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const res = await fetch(`${apiUrl}/auth/me`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(form),
-                credentials: "include"
-            });
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.detail || "Error updating profile");
-            }
-            onUpdate();
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsSaving(false);
-        }
+    const handleSave = () => {
+        updateProfile.mutate(
+            {
+                username: form.username.trim(),
+                avatar_url: orNull(form.avatar_url),
+                bio: orNull(form.bio),
+                location: orNull(form.location),
+                website: orNull(form.website),
+            },
+            {
+                onSuccess: () => toast.success("Profile saved."),
+                onError: (error) => toast.error(errorMessage(error, "Couldn't save your profile.")),
+            },
+        );
     };
 
     return (
@@ -211,18 +198,20 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
 
             <div className="space-y-5">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Username</label>
+                    <label htmlFor="settings-username" className="text-sm font-medium text-foreground/80">Username</label>
                     <input
                         type="text"
+                        id="settings-username"
                         value={form.username}
                         onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                         className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Location</label>
+                    <label htmlFor="settings-location" className="text-sm font-medium text-foreground/80">Location</label>
                     <input
                         type="text"
+                        id="settings-location"
                         value={form.location}
                         onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
                         placeholder="e.g. Paris, France"
@@ -230,9 +219,10 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Website</label>
+                    <label htmlFor="settings-website" className="text-sm font-medium text-foreground/80">Website</label>
                     <input
                         type="url"
+                        id="settings-website"
                         value={form.website}
                         onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
                         placeholder="https://yourwebsite.com"
@@ -240,9 +230,10 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Bio</label>
+                    <label htmlFor="settings-bio" className="text-sm font-medium text-foreground/80">Bio</label>
                     <textarea
                         rows={4}
+                        id="settings-bio"
                         value={form.bio}
                         onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
                         placeholder="Electronic music producer..."
@@ -252,7 +243,7 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
             </div>
 
             <div className="pt-4 flex justify-end">
-                <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-white text-sm font-medium transition-all shadow-lg shadow-accent/20">
+                <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium transition-all shadow-lg shadow-accent/20">
                     {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     Save Changes
                 </button>
@@ -261,80 +252,58 @@ function ProfileSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
     );
 }
 
-function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }) {
-    const [emailForm, setEmailForm] = useState(user?.email || "");
-    const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+function AccountSettings({ user }: { user: UserProfile }) {
+    const [emailForm, setEmailForm] = useState(user.email);
+    const changeEmail = useChangeEmail();
+    const toast = useToast();
+    const isUpdatingEmail = changeEmail.isPending;
     
     const [passwordForm, setPasswordForm] = useState({
         current_password: "",
         new_password: "",
         confirm_password: ""
     });
-    const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+    const changePassword = useChangePassword();
+    const isUpdatingPassword = changePassword.isPending;
     const [passwordError, setPasswordError] = useState("");
     const [passwordSuccess, setPasswordSuccess] = useState("");
 
-    const handleUpdateEmail = async () => {
-        if (!emailForm || emailForm === user?.email) return;
-        setIsUpdatingEmail(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const res = await fetch(`${apiUrl}/auth/me/email`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ new_email: emailForm }),
-                credentials: "include"
-            });
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.detail || "Erreur lors de la mise à jour de l'email");
-            }
-            onUpdate();
-            alert("Email mis à jour !");
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsUpdatingEmail(false);
-        }
+    const handleUpdateEmail = () => {
+        const newEmail = emailForm.trim();
+        if (!newEmail || newEmail === user.email) return;
+        changeEmail.mutate(
+            { new_email: newEmail },
+            {
+                onSuccess: () => toast.success("Email updated."),
+                onError: (error) => toast.error(errorMessage(error, "Couldn't change your email.")),
+            },
+        );
     };
 
-    const handleUpdatePassword = async () => {
+    const handleUpdatePassword = () => {
         setPasswordError("");
         setPasswordSuccess("");
         
         if (!passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password) {
-            setPasswordError("Veuillez remplir tous les champs.");
+            setPasswordError("Please fill in all fields.");
             return;
         }
         
         if (passwordForm.new_password !== passwordForm.confirm_password) {
-            setPasswordError("Les nouveaux mots de passe ne correspondent pas.");
+            setPasswordError("The new passwords do not match.");
             return;
         }
 
-        setIsUpdatingPassword(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const res = await fetch(`${apiUrl}/auth/me/password`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    current_password: passwordForm.current_password,
-                    new_password: passwordForm.new_password
-                }),
-                credentials: "include"
-            });
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.detail || "Erreur lors de la mise à jour du mot de passe");
-            }
-            setPasswordSuccess("Mot de passe mis à jour avec succès !");
-            setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
-        } catch (err: any) {
-            setPasswordError(err.message);
-        } finally {
-            setIsUpdatingPassword(false);
-        }
+        changePassword.mutate(
+            { current_password: passwordForm.current_password, new_password: passwordForm.new_password },
+            {
+                onSuccess: () => {
+                    setPasswordSuccess("Password updated.");
+                    setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+                },
+                onError: (error) => setPasswordError(errorMessage(error, "Couldn't change your password.")),
+            },
+        );
     };
 
     return (
@@ -352,17 +321,18 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
 
             <div className="space-y-5 pb-8 border-b border-foreground/5">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/80">Email Address</label>
+                    <label htmlFor="settings-email" className="text-sm font-medium text-foreground/80">Email Address</label>
                     <div className="flex gap-4">
                         <input
                             type="email"
+                            id="settings-email"
                             value={emailForm}
                             onChange={(e) => setEmailForm(e.target.value)}
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                         />
                         <button 
                             onClick={handleUpdateEmail}
-                            disabled={isUpdatingEmail || emailForm === user?.email}
+                            disabled={isUpdatingEmail || emailForm.trim() === user.email}
                             className="shrink-0 px-4 py-3 rounded-xl bg-foreground/5 hover:bg-foreground/10 text-sm font-medium transition-colors border border-foreground/10 disabled:opacity-50"
                         >
                             {isUpdatingEmail ? <Loader2 size={16} className="animate-spin" /> : "Change"}
@@ -371,10 +341,11 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                 </div>
 
                 <div className="space-y-2 pt-2">
-                    <label className="text-sm font-medium text-foreground/80">Current Password</label>
+                    <label htmlFor="settings-current-password" className="text-sm font-medium text-foreground/80">Current Password</label>
                     <input
                         type="password"
                         placeholder="••••••••"
+                        id="settings-current-password"
                         value={passwordForm.current_password}
                         onChange={(e) => setPasswordForm(f => ({ ...f, current_password: e.target.value }))}
                         className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
@@ -382,20 +353,22 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground/80">New Password</label>
+                        <label htmlFor="settings-new-password" className="text-sm font-medium text-foreground/80">New Password</label>
                         <input
                             type="password"
                             placeholder="••••••••"
+                            id="settings-new-password"
                             value={passwordForm.new_password}
                             onChange={(e) => setPasswordForm(f => ({ ...f, new_password: e.target.value }))}
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground/80">Confirm New Password</label>
+                        <label htmlFor="settings-confirm-password" className="text-sm font-medium text-foreground/80">Confirm New Password</label>
                         <input
                             type="password"
                             placeholder="••••••••"
+                            id="settings-confirm-password"
                             value={passwordForm.confirm_password}
                             onChange={(e) => setPasswordForm(f => ({ ...f, confirm_password: e.target.value }))}
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
@@ -404,10 +377,10 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
                 </div>
                 
                 {passwordError && (
-                    <p className="text-sm text-red-500 font-medium">{passwordError}</p>
+                    <p role="alert" className="text-sm text-red-500 font-medium">{passwordError}</p>
                 )}
                 {passwordSuccess && (
-                    <p className="text-sm text-green-500 font-medium">{passwordSuccess}</p>
+                    <p role="status" className="text-sm text-green-500 font-medium">{passwordSuccess}</p>
                 )}
 
                 <div className="pt-2">
@@ -440,7 +413,7 @@ function AccountSettings({ user, onUpdate }: { user: any, onUpdate: () => void }
     );
 }
 
-function IntegrationSettings({ user }: { user: any }) {
+function IntegrationSettings({ user }: { user: UserProfile }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -485,15 +458,15 @@ function IntegrationSettings({ user }: { user: any }) {
             </div>
 
             <div className="space-y-4 pt-4">
-                <h3 className="text-sm font-medium text-foreground/80 mb-3">DAW Plugins</h3>
+                <h3 className="text-sm font-medium text-foreground/80 mb-3">StemHub plugin</h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Ableton */}
                     <div className="p-5 rounded-xl border border-accent/20 bg-accent/5 flex flex-col justify-between h-32">
                         <div className="flex justify-between items-start">
                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-black rounded-md flex items-center justify-center font-bold text-white text-xs border border-white/10">
-                                    ///
+                                <div aria-hidden="true" className="w-8 h-8 bg-black rounded-md flex items-center justify-center font-bold text-white text-xs border border-white/10">
+                                    {"///"}
                                 </div>
                                 <span className="text-sm font-medium">Ableton Live</span>
                             </div>
@@ -502,7 +475,7 @@ function IntegrationSettings({ user }: { user: any }) {
                             </span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-xs text-foreground/50 font-light">Plugin v1.2.4</span>
+                            <span className="text-xs text-foreground/50 font-light">StemHub plugin v1.2.4</span>
                             <button className="text-xs text-accent hover:underline">Configure</button>
                         </div>
                     </div>
@@ -530,7 +503,7 @@ function IntegrationSettings({ user }: { user: any }) {
     );
 }
 
-function StorageSettings({ user }: { user: any }) {
+function StorageSettings() {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -561,7 +534,7 @@ function StorageSettings({ user }: { user: any }) {
                         <span className="font-medium">25 GB <span className="text-foreground/40 font-light">/ 100 GB</span></span>
                     </div>
                     <div className="w-full bg-background/50 rounded-full h-2 overflow-hidden border border-foreground/5">
-                        <div className="bg-gradient-to-r from-accent to-purple-500 h-full rounded-full w-1/4"></div>
+                        <div className="bg-accent h-full rounded-full w-1/4"></div>
                     </div>
                     <p className="text-xs text-foreground/50 font-light pt-1">Your next billing date is April 4, 2026.</p>
                 </div>
@@ -574,21 +547,21 @@ function StorageSettings({ user }: { user: any }) {
                     <div className="flex items-center justify-between p-3 rounded-lg hover:bg-foreground/5 transition-colors">
                         <div className="flex items-center gap-3">
                             <div className="w-2.5 h-2.5 rounded-full bg-accent"></div>
-                            <span className="text-sm">Audio Files (.wav, .mp3)</span>
+                            <span className="text-sm">Audio &amp; MIDI files (.wav, .mp3, .mid)</span>
                         </div>
                         <span className="text-sm font-medium">18.2 GB</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg hover:bg-foreground/5 transition-colors">
                         <div className="flex items-center gap-3">
-                            <div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div>
-                            <span className="text-sm">Project Files (.als, .flp)</span>
+                            <div className="w-2.5 h-2.5 rounded-full bg-foreground-muted"></div>
+                            <span className="text-sm">Project files (.flp, .als)</span>
                         </div>
                         <span className="text-sm font-medium">5.1 GB</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg hover:bg-foreground/5 transition-colors">
                         <div className="flex items-center gap-3">
                             <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                            <span className="text-sm">Plugin Presets & Meta</span>
+                            <span className="text-sm">Previews (mixdowns)</span>
                         </div>
                         <span className="text-sm font-medium">1.7 GB</span>
                     </div>
@@ -605,7 +578,7 @@ function StorageSettings({ user }: { user: any }) {
     );
 }
 
-function NotificationSettings({ user }: { user: any }) {
+function NotificationSettings() {
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -630,8 +603,8 @@ function NotificationSettings({ user }: { user: any }) {
                             defaultChecked={true}
                         />
                         <ToggleRow
-                            title="Version Updates"
-                            description="When someone pushes to a version you're collaborating on"
+                            title="Branch Updates"
+                            description="When someone saves a version on a branch you're collaborating on"
                             defaultChecked={false}
                         />
                         <ToggleRow
@@ -641,7 +614,7 @@ function NotificationSettings({ user }: { user: any }) {
                         />
                         <ToggleRow
                             title="Marketing & Updates"
-                            description="News about StemHub features and plugins"
+                            description="News about StemHub and the StemHub plugin"
                             defaultChecked={false}
                         />
                     </div>
@@ -653,12 +626,12 @@ function NotificationSettings({ user }: { user: any }) {
                     <div className="space-y-3">
                         <ToggleRow
                             title="Collaborator Activity"
-                            description="Live updates when a collaborator joins a session"
+                            description="Live updates when a collaborator joins a project"
                             defaultChecked={true}
                         />
                         <ToggleRow
-                            title="Sync Status"
-                            description="Alerts when your DAW finishes syncing a version"
+                            title="Save Status"
+                            description="Alerts when the StemHub plugin finishes saving a version"
                             defaultChecked={true}
                         />
                     </div>
@@ -666,7 +639,7 @@ function NotificationSettings({ user }: { user: any }) {
             </div>
 
             <div className="pt-6 flex justify-end">
-                <button className="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-white text-sm font-medium transition-all shadow-lg shadow-accent/20">
+                <button className="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium transition-all shadow-lg shadow-accent/20">
                     Save Preferences
                 </button>
             </div>

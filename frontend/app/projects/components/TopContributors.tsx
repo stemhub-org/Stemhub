@@ -8,7 +8,7 @@ interface TopContributorsProps {
 }
 
 export function TopContributors({ contributors }: TopContributorsProps) {
-    const maxCommits = Math.max(1, ...contributors.map((c) => c.commits));
+    const maxVersions = Math.max(1, ...contributors.map((c) => c.versions));
 
     return (
         <div className="flex flex-col gap-3">
@@ -41,13 +41,13 @@ export function TopContributors({ contributors }: TopContributorsProps) {
                                     <div
                                         className="h-full rounded-full bg-accent"
                                         style={{
-                                            width: `${(contributor.commits / maxCommits) * 100}%`,
+                                            width: `${(contributor.versions / maxVersions) * 100}%`,
                                         }}
                                     />
                                 </div>
                             </div>
                             <span className="shrink-0 text-sm text-foreground/70">
-                                {contributor.commits} changes
+                                {contributor.versions} {contributor.versions === 1 ? "version" : "versions"}
                             </span>
                         </li>
                     ))}

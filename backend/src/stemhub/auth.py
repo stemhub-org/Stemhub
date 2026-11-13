@@ -221,7 +221,7 @@ async def logout(response: RedirectResponse):
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
     # Order of priority for tokens:
     # 1. Query parameter (explicitly passed, e.g. for audio)
-    # 2. HttpOnly Cookie (automatic session)
+    # 2. HttpOnly Cookie (sign-in session, sent automatically)
     # 3. Authorization Header (Standard/Swagger)
     
     token = request.query_params.get("token")

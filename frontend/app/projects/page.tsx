@@ -1,156 +1,104 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Settings, FileText } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
-import { RepositoryHeader } from "./components/RepositoryHeader";
-import { RepositoryPageHeader } from "./components/RepositoryPageHeader";
-import { RepositoryBranchBar } from "./components/RepositoryBranchBar";
-import { RepositoryAudioPlayer } from "./components/RepositoryAudioPlayer";
-import { QuickExport } from "./components/QuickExport";
-import { RecentChanges } from "./components/RecentChanges";
+import { ProjectHeader } from "./components/ProjectHeader";
+import { ProjectPageHeader } from "./components/ProjectPageHeader";
+import { BranchPicker } from "./components/BranchPicker";
+import { ProjectAudioPlayer } from "./components/ProjectAudioPlayer";
+import { PreviewDownload } from "./components/PreviewDownload";
+import { RecentVersions } from "./components/RecentVersions";
+import { ActivityFeed } from "./components/ActivityFeed";
 import { ContributionActivity } from "./components/ContributionActivity";
 import { TopContributors } from "./components/TopContributors";
-import { RepositoryFileList } from "./components/RepositoryFileList";
-import { authFetch } from "@/lib/api";
-import type {
-    ProjectSummaryResponse,
-    ActivityStatsResponse,
-    TopContributorsResponse,
-    TrackSummary,
-} from "@/types/project";
+import { ProjectFileList } from "./components/ProjectFileList";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiFetch, errorMessage } from "@/lib/api";
+import {
+    queryKeys,
+    useCurrentUser,
+    useProjectActivity,
+    useProjectSummary,
+    useTopContributors,
+    useVersionAssets,
+} from "@/lib/queries";
 import { ProjectSettings } from "./components/ProjectSettings";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ToastProvider";
+import { ErrorState } from "@/components/ui/ErrorState";
 
-type CurrentUserSummary = {
-    id: string;
-    avatar_url: string | null;
-    username: string | null;
-};
+function formatFileCount(hasVersion: boolean, count: number, isLoading: boolean, loadError: string | null): string {
+    if (!hasVersion) return "No versions yet";
+    if (isLoading) return "Loading files…";
+    if (loadError) return "File list unavailable";
+    return `${count} audio & MIDI ${count === 1 ? "file" : "files"}`;
+}
 
-function RepositoryPageContent() {
-    const searchParams = useSearchParams();
-    const projectId = searchParams.get("id");
+function FullPageError({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+    return (
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+            <ErrorState title="Couldn't load this project" error={error} onRetry={onRetry} className="max-w-md" />
+        </div>
+    );
+}
+
+function ProjectPageContent() {
+    const projectId = useSearchParams().get("id");
+    if (!projectId) {
+        return <FullPageError error={new Error("No project ID provided. Add ?id=<project-uuid> to the URL.")} />;
+    }
+    // Keyed so that opening another project starts from a clean state (tab, branch).
+    return <ProjectOverview key={projectId} projectId={projectId} />;
+}
+
+function ProjectOverview({ projectId }: { projectId: string }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const toast = useToast();
-
-    // ── Data state ──
-    const [summary, setSummary] = useState<ProjectSummaryResponse | null>(null);
-    const [activity, setActivity] = useState<ActivityStatsResponse | null>(null);
-    const [contributors, setContributors] = useState<TopContributorsResponse | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [selectedBranchId, setSelectedBranchId] = useState<string>("");
-    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-    const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
-    const [currentUsername, setCurrentUsername] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"Project" | "Settings">("Project");
-    const [tracks, setTracks] = useState<TrackSummary[]>([]);
+    // null until the user picks a branch: the summary then shows the first branch.
+    const [requestedBranchId, setRequestedBranchId] = useState<string | null>(null);
+    const toast = useToast();
+    const queryClient = useQueryClient();
 
-    const fetchData = useCallback(async (projectId: string, branchId?: string) => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const summaryPath = branchId
-                ? `/projects/${projectId}/summary?branch_id=${branchId}`
-                : `/projects/${projectId}/summary`;
-            const [summaryData, activityData, contributorsData, userData] = await Promise.all([
-                authFetch<ProjectSummaryResponse>(summaryPath),
-                authFetch<ActivityStatsResponse>(`/projects/${projectId}/stats/activity`),
-                authFetch<TopContributorsResponse>(`/projects/${projectId}/stats/top-contributors`),
-                authFetch<CurrentUserSummary>(`/auth/me`),
-            ]);
-            setSummary(summaryData);
-            setActivity(activityData);
-            setContributors(contributorsData);
-            setCurrentUserId(userData.id);
-            setCurrentUserAvatar(userData.avatar_url || null);
-            setCurrentUsername(userData.username || null);
-            setSelectedBranchId((current) => {
-                if (summaryData.branches.length === 0) return "";
-                if (current && summaryData.branches.some((branch) => branch.id === current)) return current;
-                if (branchId && summaryData.branches.some((branch) => branch.id === branchId)) return branchId;
-                return summaryData.branches[0].id;
-            });
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to load project data");
-        } finally {
-            setIsLoading(false);
-            setHasLoadedOnce(true);
-        }
-    }, []);
+    const summaryQuery = useProjectSummary(projectId, requestedBranchId);
+    const { data: activity } = useProjectActivity(projectId);
+    const { data: contributors } = useTopContributors(projectId);
+    const { data: currentUser } = useCurrentUser();
+    // The latest version's audio & MIDI files, read from its manifest. Loaded
+    // separately so a failure here never blocks the rest of the project overview.
+    const assetsQuery = useVersionAssets(summaryQuery.data?.summary.latest_version_id ?? null);
+
+    const refreshProject = () => queryClient.invalidateQueries({ queryKey: queryKeys.project(projectId) });
 
     const handleDeleteBranch = async (branchId: string) => {
         try {
-            await authFetch(`/branches/${branchId}`, { method: "DELETE" });
-            if (projectId) fetchData(projectId);
+            await apiFetch(`/branches/${branchId}`, { method: "DELETE" });
+            if (branchId === summaryQuery.data?.branchId) setRequestedBranchId(null);
+            await refreshProject();
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Failed to delete workspace");
+            toast.error(errorMessage(err, "Failed to delete branch"));
         }
     };
 
     const handleCreateBranch = async (branchName: string) => {
-        if (!projectId) return;
         try {
-            const createdBranch = await authFetch<{ id: string }>(`/projects/${projectId}/branches/`, {
+            const createdBranch = await apiFetch<{ id: string }>(`/projects/${projectId}/branches/`, {
                 method: "POST",
                 body: JSON.stringify({ name: branchName }),
             });
-            setSelectedBranchId(createdBranch.id);
-            fetchData(projectId, createdBranch.id);
+            setRequestedBranchId(createdBranch.id);
+            void refreshProject();
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Failed to create workspace");
+            toast.error(errorMessage(err, "Failed to create branch"));
             throw err;
         }
     };
 
-    useEffect(() => {
-        // Reset per-project state when navigating to a different project so a stale
-        // summary (or a branch id belonging to the previous project) can't leak into
-        // the new project's render or its next fetch.
-        setHasLoadedOnce(false);
-        setSummary(null);
-        setSelectedBranchId("");
-    }, [projectId]);
-
-    useEffect(() => {
-        if (projectId) {
-            fetchData(projectId, selectedBranchId || undefined);
-        } else {
-            setIsLoading(false);
-            setError("No project ID provided. Add ?id=<project-uuid> to the URL.");
-        }
-    }, [fetchData, projectId, selectedBranchId]);
-
-    // Best-effort: per-stem data only exists for versions created via the
-    // manifest/CAS flow. Fetched separately so a failure here never blocks
-    // the rest of the project overview.
-    useEffect(() => {
-        const versionId = summary?.latest_version_id;
-        if (!versionId) {
-            setTracks([]);
-            return;
-        }
-        let cancelled = false;
-        authFetch<TrackSummary[]>(`/versions/${versionId}/tracks`)
-            .then((data) => {
-                if (!cancelled) setTracks(data);
-            })
-            .catch(() => {
-                if (!cancelled) setTracks([]);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [summary?.latest_version_id]);
-
-    if (isLoading && !hasLoadedOnce) {
+    if (summaryQuery.isPending) {
         return (
             <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
@@ -161,31 +109,30 @@ function RepositoryPageContent() {
         );
     }
 
-    if (error) {
-        return (
-            <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-                <div className="flex flex-col items-center gap-3 text-center max-w-md">
-                    <p className="text-lg font-medium text-red-500">Error</p>
-                    <p className="text-sm text-foreground/60">{error}</p>
-                </div>
-            </div>
-        );
+    if (summaryQuery.isError) {
+        return <FullPageError error={summaryQuery.error} onRetry={() => summaryQuery.refetch()} />;
     }
 
-    if (!summary) return null;
+    const { summary, branchId: selectedBranchId } = summaryQuery.data;
+    const isRefreshing = summaryQuery.isFetching;
+    const currentUserId = currentUser?.id ?? null;
     const selectedBranchName = summary.branches.find((branch) => branch.id === selectedBranchId)?.name || "main";
     const latestVersion = summary.recent_versions?.[0];
+    const hasVersion = Boolean(summary.latest_version_id);
+    // While the summary refreshes (e.g. after a branch switch) the latest version
+    // may change too, so the file list shows as loading rather than stale.
+    const assetsLoading = hasVersion && (isRefreshing || assetsQuery.isPending);
+    const assets = assetsLoading ? [] : (assetsQuery.data ?? []);
+    const assetsError =
+        assetsLoading || !assetsQuery.isError ? null : errorMessage(assetsQuery.error, "Failed to load the file list");
 
     return (
-        <div
-            className="min-h-screen bg-background text-foreground"
-            style={{ "--accent": "#9C57DF" } as React.CSSProperties}
-        >
-            <RepositoryHeader
+        <div className="min-h-screen bg-background text-foreground">
+            <ProjectHeader
                 onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
                 sidebarOpen={sidebarOpen}
-                userAvatarUrl={currentUserAvatar}
-                username={currentUsername || "Producer"}
+                userAvatarUrl={currentUser?.avatar_url ?? null}
+                username={currentUser?.username || "Producer"}
             />
 
             <AnimatePresence>
@@ -216,17 +163,13 @@ function RepositoryPageContent() {
 
             <div className="relative z-0 p-6 space-y-6">
                 <Card interactive padding="none" className="overflow-hidden">
-                    <RepositoryPageHeader
+                    <ProjectPageHeader
                         ownerUsername={summary.project.owner.username}
                         projectName={summary.project.name}
                         branchName={selectedBranchName}
                         description={summary.project.description || ""}
-                        projectId={projectId || undefined}
-                        onUploadSuccess={() => {
-                            if (projectId) {
-                                fetchData(projectId, selectedBranchId || undefined);
-                            }
-                        }}
+                        projectId={projectId}
+                        onUploadSuccess={() => void refreshProject()}
                     />
                 </Card>
 
@@ -271,39 +214,30 @@ function RepositoryPageContent() {
                         >
                             <section className="flex min-w-0 flex-1 flex-col gap-6 self-start">
                                 <div className="flex items-center gap-3">
-                                    <RepositoryBranchBar
+                                    <BranchPicker
                                         branches={summary.branches}
                                         selectedBranchId={selectedBranchId}
-                                        onBranchChange={setSelectedBranchId}
+                                        onBranchChange={setRequestedBranchId}
                                         isOwner={currentUserId === summary.project.owner.id}
                                         onDelete={handleDeleteBranch}
                                         onCreate={currentUserId === summary.project.owner.id ? handleCreateBranch : undefined}
                                     />
-                                    {isLoading && hasLoadedOnce && (
+                                    {isRefreshing && (
                                         <Loader2 className="size-4 text-accent animate-spin shrink-0" aria-label="Refreshing…" />
                                     )}
                                 </div>
                                 <Card interactive padding="none">
                                     <div className="p-8">
-                                        <RepositoryAudioPlayer
+                                        <ProjectAudioPlayer
                                             projectId={projectId}
                                             hasPreview={summary.has_preview}
                                         />
                                     </div>
                                 </Card>
                                 <Card className="flex flex-wrap items-center gap-3">
-                                    {(() => {
-                                        // Two independent "has data" signals coexist:
-                                        //   - has_artifact: pre-manifest full-bundle upload (single blob)
-                                        //   - tracks.length > 0: CAS manifest with per-stem entries (spec §7)
-                                        // A version is "stored" if either is present.
-                                        const hasStoredData = Boolean(latestVersion?.has_artifact) || tracks.length > 0;
-                                        return (
-                                            <Badge tone={hasStoredData ? "success" : "neutral"}>
-                                                {hasStoredData ? "Data stored" : "No artifact"}
-                                            </Badge>
-                                        );
-                                    })()}
+                                    <Badge tone={assets.length > 0 ? "success" : "neutral"}>
+                                        {formatFileCount(hasVersion, assets.length, assetsLoading, assetsError)}
+                                    </Badge>
                                     {latestVersion?.source_daw && (
                                         <Badge tone="accent">{latestVersion.source_daw}</Badge>
                                     )}
@@ -314,20 +248,22 @@ function RepositoryPageContent() {
                                     )}
                                 </Card>
                                 <Card interactive padding="none">
-                                    <RepositoryFileList tracks={tracks} />
-                                </Card>
-                                <Card interactive>
-                                    <QuickExport
-                                        projectId={projectId}
-                                        projectName={summary.project.name}
-                                        branchName={selectedBranchName}
-                                        latestVersionId={summary.latest_version_id}
-                                        hasPreview={summary.has_preview}
-                                        hasArtifact={Boolean(latestVersion?.has_artifact)}
+                                    <ProjectFileList
+                                        assets={assets}
+                                        hasVersion={hasVersion}
+                                        isLoading={assetsLoading}
+                                        loadError={assetsError}
                                     />
                                 </Card>
                                 <Card interactive>
-                                    <RecentChanges
+                                    <PreviewDownload
+                                        projectId={projectId}
+                                        projectName={summary.project.name}
+                                        hasPreview={summary.has_preview}
+                                    />
+                                </Card>
+                                <Card interactive>
+                                    <RecentVersions
                                         versions={summary.recent_versions}
                                         projectId={projectId}
                                         branchId={selectedBranchId || undefined}
@@ -337,9 +273,12 @@ function RepositoryPageContent() {
 
                             <aside className="w-[28rem] shrink-0 flex flex-col gap-6">
                                 <Card interactive className="overflow-hidden">
+                                    <ActivityFeed projectId={projectId} />
+                                </Card>
+                                <Card interactive className="overflow-hidden">
                                     <ContributionActivity
                                         dailyActivity={activity?.daily_activity || []}
-                                        totalCommits={activity?.total_commits || 0}
+                                        totalVersions={activity?.total_versions || 0}
                                         totalContributors={activity?.total_contributors || 0}
                                     />
                                 </Card>
@@ -361,7 +300,7 @@ function RepositoryPageContent() {
                             transition={{ duration: 0.3 }}
                             className="py-6"
                         >
-                            <ProjectSettings projectId={projectId!} ownerId={summary.project.owner.id} currentUserId={currentUserId} />
+                            <ProjectSettings projectId={projectId} ownerId={summary.project.owner.id} currentUserId={currentUserId} />
                         </motion.div>
                     </Card>
                 )}
@@ -370,7 +309,7 @@ function RepositoryPageContent() {
     );
 }
 
-export default function RepositoryPage() {
+export default function ProjectPage() {
     return (
         <Suspense
             fallback={
@@ -379,7 +318,7 @@ export default function RepositoryPage() {
                 </div>
             }
         >
-            <RepositoryPageContent />
+            <ProjectPageContent />
         </Suspense>
     );
 }

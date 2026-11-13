@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ToastProvider";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { useUpdateProfile } from "@/lib/account";
+import { errorMessage } from "@/lib/api";
+import { searchPlaces, type PlaceSuggestion } from "@/lib/places";
+import { useCurrentUser, useProjects } from "@/lib/queries";
+import type { UserProfile } from "@/types/user";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import {
@@ -11,8 +18,6 @@ import {
     Music,
     Heart,
     Headphones,
-    GitBranch,
-    Users,
     Edit2,
     Search,
     X,
@@ -31,37 +36,49 @@ const GENRE_GROUPS = [
     { label: "Other & Moods", genres: ["ambient", "anime", "children", "chill", "classical", "comedy", "country", "disney", "gospel", "happy", "holidays", "honky-tonk", "jazz", "kids", "movies", "mpb", "new-age", "new-release", "opera", "party", "rainy-day", "road-trip", "show-tunes", "sleep", "soundtracks", "study", "summer", "work-out"] }
 ];
 
+interface ProfileForm {
+    username: string;
+    location: string;
+    website: string;
+    avatar_url: string;
+    bio: string;
+    genres: string[];
+}
+
+/** Empty text fields are saved as "not set". */
+function orNull(value: string): string | null {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+}
+
+function formFromUser(user: UserProfile | undefined): ProfileForm {
+    return {
+        username: user?.username ?? "",
+        location: user?.location ?? "",
+        website: user?.website ?? "",
+        avatar_url: user?.avatar_url ?? "",
+        bio: user?.bio ?? "",
+        genres: user?.genres ?? [],
+    };
+}
+
 export default function ProfilePage() {
     const router = useRouter();
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
-    const [user, setUser] = useState<any>(null);
-    const [projects, setProjects] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { data: user, error: userError, refetch: refetchUser } = useCurrentUser();
+    const { data: projects = [] } = useProjects();
+    const updateProfile = useUpdateProfile();
+    const toast = useToast();
+    const isSaving = updateProfile.isPending;
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [editForm, setEditForm] = useState<{
-        username: string;
-        location: string;
-        website: string;
-        avatar_url: string;
-        bio: string;
-        genres: string[];
-    }>({
-        username: "",
-        location: "",
-        website: "",
-        avatar_url: "",
-        bio: "",
-        genres: []
-    });
+    const [editForm, setEditForm] = useState<ProfileForm>(() => formFromUser(undefined));
     const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
     const [genreSearch, setGenreSearch] = useState("");
-    const [isSaving, setIsSaving] = useState(false);
-    const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
+    const [locationSuggestions, setLocationSuggestions] = useState<PlaceSuggestion[]>([]);
     const [isSearchingLocation, setIsSearchingLocation] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [featuredFavorites, setFeaturedFavorites] = useState<Record<string, boolean>>({});
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -74,57 +91,34 @@ export default function ProfilePage() {
         }
     };
 
-    useEffect(() => {
-        const fetchUserAndProjects = async () => {
-            try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    if (userError) {
+        return (
+            <ErrorState
+                error={userError}
+                title="Couldn't load your profile"
+                onRetry={() => refetchUser()}
+                className="max-w-xl mx-auto mt-12"
+            />
+        );
+    }
 
-                // Fetch User
-                const userResponse = await fetch(`${apiUrl}/auth/me`, {
-                    credentials: "include"
-                });
-
-                if (!userResponse.ok) {
-                    throw new Error("Session expirée");
-                }
-
-                const data = await userResponse.json();
-                setUser(data);
-                setEditForm({
-                    username: data.username || "",
-                    location: data.location || "",
-                    website: data.website || "",
-                    avatar_url: data.avatar_url || "",
-                    bio: data.bio || "",
-                    genres: data.genres || []
-                });
-
-                // Fetch Projects
-                const projectsResponse = await fetch(`${apiUrl}/projects/`, {
-                    credentials: "include"
-                });
-
-                if (projectsResponse.ok) {
-                    const projectsData = await projectsResponse.json();
-                    setProjects(projectsData);
-                }
-            } catch (err) {
-                router.push("/login");
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchUserAndProjects();
-    }, [router]);
-
-    if (loading) {
+    if (!user) {
         return (
             <div className="flex h-full min-h-[50vh] items-center justify-center">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
             </div>
         );
     }
+
+    const startEditing = () => {
+        setEditForm(formFromUser(user));
+        setIsEditModalOpen(true);
+    };
+
+    const openGenreModal = () => {
+        setEditForm(formFromUser(user));
+        setIsGenreModalOpen(true);
+    };
 
     const handleLocationSearch = (query: string) => {
         setEditForm({ ...editForm, location: query });
@@ -138,88 +132,56 @@ export default function ProfilePage() {
             return;
         }
 
+        // Nominatim allows one request per second: wait for a pause in typing.
         searchTimeoutRef.current = setTimeout(async () => {
             setIsSearchingLocation(true);
-            try {
-                // Nominatim restricts to 1 request/second.
-                // We also avoid custom headers like User-Agent to prevent CORS preflight blocks in newer browsers.
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=5`);
-                const data = await response.json();
-                setLocationSuggestions(data);
-            } catch (error) {
-                console.error("Error searching location:", error);
-            } finally {
-                setIsSearchingLocation(false);
-            }
-        }, 600); // 600ms debounce
+            setLocationSuggestions(await searchPlaces(query));
+            setIsSearchingLocation(false);
+        }, 600);
     };
 
-    const selectLocation = (suggestion: any) => {
+    const selectLocation = (suggestion: PlaceSuggestion) => {
         setEditForm({ ...editForm, location: suggestion.display_name });
         setLocationSuggestions([]);
     };
 
-    const handleUpdateProfile = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSaving(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const response = await fetch(`${apiUrl}/auth/me`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
+    const handleUpdateProfile = () => {
+        updateProfile.mutate(
+            {
+                username: editForm.username.trim(),
+                location: orNull(editForm.location),
+                website: orNull(editForm.website),
+                avatar_url: orNull(editForm.avatar_url),
+                bio: orNull(editForm.bio),
+                genres: editForm.genres,
+            },
+            {
+                onSuccess: () => {
+                    toast.success("Profile saved.");
+                    setIsEditModalOpen(false);
                 },
-                body: JSON.stringify(editForm),
-                credentials: "include"
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || "Erreur lors de la mise à jour");
-            }
-
-            const updatedUser = await response.json();
-            setUser(updatedUser);
-            window.dispatchEvent(new Event("user-updated"));
-            setIsEditModalOpen(false);
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsSaving(false);
-        }
+                onError: (error) => toast.error(errorMessage(error, "Couldn't save your profile.")),
+            },
+        );
     };
 
-    const handleSaveGenres = async () => {
-        setIsSaving(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const response = await fetch(`${apiUrl}/auth/me`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
+    const handleSaveGenres = () => {
+        updateProfile.mutate(
+            { genres: editForm.genres },
+            {
+                onSuccess: () => {
+                    toast.success("Production styles saved.");
+                    setIsGenreModalOpen(false);
                 },
-                body: JSON.stringify({ genres: editForm.genres }),
-                credentials: "include"
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || "Erreur lors de la mise à jour des styles de production");
-            }
-
-            const updatedUser = await response.json();
-            setUser(updatedUser);
-            setIsGenreModalOpen(false);
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsSaving(false);
-        }
+                onError: (error) => toast.error(errorMessage(error, "Couldn't save your production styles.")),
+            },
+        );
     };
 
-    const { username, email, avatar_url, created_at, location, website, bio } = user || {};
+    const { username, email, avatar_url, created_at, location, website, bio } = user;
     const joinedDate = created_at ? new Date(created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown Date';
     const initials = username ? username.substring(0, 2).toUpperCase() : '??';
+    const shownAvatar = (isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url) || null;
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-12">
             {/* Header Section */}
@@ -232,33 +194,23 @@ export default function ProfilePage() {
                 <div className="absolute right-8 top-8 z-10">
                     {!isEditModalOpen ? (
                         <button
-                            onClick={() => setIsEditModalOpen(true)}
-                            className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 relative"
+                            onClick={startEditing}
+                            className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 relative"
                         >
                             <Edit2 size={16} /> Edit Profile
                         </button>
                     ) : (
                         <div className="flex gap-3">
                             <button
-                                onClick={() => {
-                                    setEditForm({
-                                        username: user?.username || "",
-                                        location: user?.location || "",
-                                        website: user?.website || "",
-                                        avatar_url: user?.avatar_url || "",
-                                        bio: user?.bio || "",
-                                        genres: user?.genres || []
-                                    });
-                                    setIsEditModalOpen(false);
-                                }}
-                                className="px-5 py-2.5 border border-white/10 hover:bg-white/5 text-white text-sm font-medium rounded-xl transition-colors"
+                                onClick={() => setIsEditModalOpen(false)}
+                                className="px-5 py-2.5 border border-foreground/10 hover:bg-foreground/5 text-foreground text-sm font-medium rounded-xl transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleUpdateProfile}
                                 disabled={isSaving}
-                                className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
+                                className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-accent-foreground text-sm font-medium rounded-xl transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
                             >
                                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Save"}
                             </button>
@@ -274,10 +226,12 @@ export default function ProfilePage() {
                         accept="image/*"
                         className="hidden"
                     />
-                    {editForm.avatar_url || avatar_url ? (
+                    {shownAvatar ? (
                         <div className="relative">
+                            {/* A plain img: the picture is any URL or a fresh data URI, which next/image can't optimize. */}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                                src={isEditModalOpen ? editForm.avatar_url || avatar_url : avatar_url}
+                                src={shownAvatar}
                                 alt={username}
                                 className={`h-32 w-32 md:h-40 md:w-40 rounded-full object-cover border-4 shadow-xl transition-all ${isDark ? "border-accent" : "border-white"
                                     } ${isEditModalOpen ? "cursor-pointer hover:brightness-75" : ""}`}
@@ -286,7 +240,7 @@ export default function ProfilePage() {
                             {isEditModalOpen && (
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-white shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
+                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-accent-foreground shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
                                     title="Change picture"
                                 >
                                     <Edit2 size={16} />
@@ -295,7 +249,7 @@ export default function ProfilePage() {
                         </div>
                     ) : (
                         <div
-                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-tr from-accent to-purple-400 flex items-center justify-center text-white text-5xl font-bold shadow-xl relative border-4 ${isDark ? "border-accent" : "border-white"
+                            className={`h-32 w-32 md:h-40 md:w-40 rounded-full bg-accent flex items-center justify-center text-accent-foreground text-5xl font-bold shadow-xl relative border-4 ${isDark ? "border-accent" : "border-white"
                                 } ${isEditModalOpen ? "cursor-pointer hover:brightness-90" : ""}`}
                             onClick={() => isEditModalOpen && fileInputRef.current?.click()}
                         >
@@ -303,7 +257,7 @@ export default function ProfilePage() {
                             {isEditModalOpen && (
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-white shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
+                                    className="absolute bottom-1 right-1 bg-accent p-2 rounded-full text-accent-foreground shadow-lg hover:bg-accent/90 transition-all border-2 border-background-secondary"
                                     title="Change picture"
                                 >
                                     <Edit2 size={16} />
@@ -335,7 +289,7 @@ export default function ProfilePage() {
                             value={editForm.bio}
                             onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
                             placeholder="Write a short summary about yourself..."
-                            className="w-full bg-transparent border border-white/20 rounded-xl p-3 text-sm text-foreground focus:border-accent focus:outline-none placeholder:text-foreground/30 resize-none h-24 max-w-2xl"
+                            className="w-full bg-transparent border border-foreground/20 rounded-xl p-3 text-sm text-foreground focus:border-accent focus:outline-none placeholder:text-foreground/30 resize-none h-24 max-w-2xl"
                         />
                     ) : bio ? (
                         <p className="text-foreground/80 text-sm max-w-2xl leading-relaxed">
@@ -356,18 +310,18 @@ export default function ProfilePage() {
                                         type="text"
                                         value={editForm.location}
                                         onChange={(e) => handleLocationSearch(e.target.value)}
-                                        className="bg-transparent border-b border-white/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
+                                        className="bg-transparent border-b border-foreground/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
                                         placeholder="Location (e.g. Paris, France)"
                                     />
                                     {isSearchingLocation && <Loader2 size={14} className="animate-spin text-accent absolute right-2" />}
                                     {locationSuggestions.length > 0 && (
-                                        <div className="absolute z-[60] left-6 top-8 w-[calc(100%-1.5rem)] bg-black border border-white/20 rounded-xl overflow-hidden shadow-2xl backdrop-blur-3xl">
-                                            {locationSuggestions.map((suggestion: any) => (
+                                        <div className="absolute z-[60] left-6 top-8 w-[calc(100%-1.5rem)] bg-background-secondary dark:bg-background-tertiary border border-foreground/20 rounded-xl overflow-hidden shadow-2xl backdrop-blur-3xl">
+                                            {locationSuggestions.map((suggestion) => (
                                                 <button
                                                     key={suggestion.place_id}
                                                     type="button"
                                                     onClick={() => selectLocation(suggestion)}
-                                                    className="w-full px-4 py-3 text-left hover:bg-white/10 text-sm text-white transition-colors border-b border-white/10 last:border-none"
+                                                    className="w-full px-4 py-3 text-left hover:bg-foreground/10 text-sm text-foreground transition-colors border-b border-foreground/10 last:border-none"
                                                 >
                                                     {suggestion.display_name}
                                                 </button>
@@ -381,7 +335,7 @@ export default function ProfilePage() {
                                         type="text"
                                         value={editForm.website}
                                         onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-                                        className="bg-transparent border-b border-white/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
+                                        className="bg-transparent border-b border-foreground/20 focus:border-accent focus:outline-none w-full text-foreground placeholder:text-foreground/30 py-1"
                                         placeholder="Website URL"
                                     />
                                 </div>
@@ -425,7 +379,7 @@ export default function ProfilePage() {
                         <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>Production Styles</h2>
                     </div>
                     <button
-                        onClick={() => setIsGenreModalOpen(true)}
+                        onClick={openGenreModal}
                         className="flex items-center gap-2 text-xs text-foreground/60 hover:text-foreground border border-foreground/10 px-4 py-2 rounded-xl transition-colors hover:bg-foreground/5"
                     >
                         <Edit2 size={14} /> Edit
@@ -457,29 +411,29 @@ export default function ProfilePage() {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className="relative w-full max-w-4xl max-h-[80vh] bg-background-secondary dark:bg-background-tertiary border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                        className="relative w-full max-w-4xl max-h-[80vh] bg-background-secondary dark:bg-background-tertiary border border-foreground/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                     >
-                        <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                        <div className="p-6 border-b border-foreground/10 flex items-center justify-between">
                             <div>
                                 <h2 className="text-xl font-medium" style={{ fontFamily: "var(--font-syne)" }}>Select Production Styles</h2>
                                 <p className="text-sm text-foreground/50 mt-1">Choose the genres that best describe your music.</p>
                             </div>
                             <button
                                 onClick={() => setIsGenreModalOpen(false)}
-                                className="p-2 hover:bg-white/5 rounded-full transition-colors"
+                                className="p-2 hover:bg-foreground/5 rounded-full transition-colors"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        <div className="px-6 pt-6 pb-2 border-b border-white/10 relative">
+                        <div className="px-6 pt-6 pb-2 border-b border-foreground/10 relative">
                             <Search size={16} className="absolute left-10 top-1/2 -translate-y-1/2 text-foreground/40 mt-2" />
                             <input
                                 type="text"
                                 placeholder="Search styles..."
                                 value={genreSearch}
                                 onChange={(e) => setGenreSearch(e.target.value)}
-                                className="w-full bg-background/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
+                                className="w-full bg-background/50 border border-foreground/10 rounded-xl py-3 pl-11 pr-4 text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
                             />
                         </div>
 
@@ -509,8 +463,8 @@ export default function ProfilePage() {
                                                             setEditForm({ ...editForm, genres: newGenres });
                                                         }}
                                                         className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between border ${isSelected
-                                                            ? "bg-accent border-accent text-white"
-                                                            : "bg-white/5 border-white/10 text-foreground/60 hover:border-white/20 hover:text-foreground"
+                                                            ? "bg-accent border-accent text-accent-foreground"
+                                                            : "bg-foreground/5 border-foreground/10 text-foreground/60 hover:border-foreground/20 hover:text-foreground"
                                                             }`}
                                                     >
                                                         <span className="capitalize text-left">{genre.replace(/-/g, ' ')}</span>
@@ -527,19 +481,18 @@ export default function ProfilePage() {
                                 group.genres.filter(g => g.replace(/-/g, ' ').toLowerCase().includes(genreSearch.toLowerCase())).length === 0
                             ) && (
                                     <div className="text-center py-10 text-foreground/40 text-sm italic">
-                                        No genres found matching "{genreSearch}"
+                                        No genres found matching “{genreSearch}”
                                     </div>
                                 )}
                         </div>
 
-                        <div className="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
+                        <div className="p-6 border-t border-foreground/10 bg-foreground/5 flex justify-end gap-3">
                             <button
                                 onClick={() => {
-                                    setEditForm({ ...editForm, genres: user?.genres || [] });
-                                    setEditForm({ ...editForm, genres: user?.genres || [] });
+                                    setEditForm({ ...editForm, genres: user.genres ?? [] });
                                     setIsGenreModalOpen(false);
                                 }}
-                                className="px-5 py-2 text-sm font-medium hover:bg-white/5 rounded-xl transition-colors disabled:opacity-50"
+                                className="px-5 py-2 text-sm font-medium hover:bg-foreground/5 rounded-xl transition-colors disabled:opacity-50"
                                 disabled={isSaving}
                             >
                                 Cancel
@@ -547,7 +500,7 @@ export default function ProfilePage() {
                             <button
                                 onClick={handleSaveGenres}
                                 disabled={isSaving}
-                                className="px-6 py-2 bg-accent text-white text-sm font-medium rounded-xl hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
+                                className="px-6 py-2 bg-accent text-accent-foreground text-sm font-medium rounded-xl hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2"
                             >
                                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Confirm Selection"}
                             </button>
@@ -626,11 +579,11 @@ export default function ProfilePage() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
                             <span className="text-xs text-foreground/50 font-light">Projects</span>
-                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p: any) => p.owner_id === user?.id).length}</p>
+                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p) => p.owner_id === user.id).length}</p>
                         </div>
                         <div className="flex flex-col rounded-2xl border border-foreground/[0.08] bg-background-secondary dark:bg-background-tertiary p-5 backdrop-blur-xl hover:opacity-95 dark:hover:bg-background-tertiary/60 transition-colors cursor-pointer" onClick={() => router.push("/dashboard")}>
                             <span className="text-xs text-foreground/50 font-light">Collaborations</span>
-                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p: any) => p.owner_id !== user?.id).length}</p>
+                            <p className="text-2xl font-medium mt-1 tracking-tight">{projects.filter((p) => p.owner_id !== user.id).length}</p>
                         </div>
                     </div>
                 </motion.div>
