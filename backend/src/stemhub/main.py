@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+import asyncio
+import contextlib
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -17,7 +19,8 @@ from .routers.project_models import router as project_models_router
 from .routers.pull_requests import router as pull_requests_router
 from .routers.stats import router as stats_router
 from .routers.versions import router as versions_router
-from .database import engine
+from .auth_purge import purge_auth_records_forever
+from .database import AsyncSessionLocal, engine
 from .migrations import check_migrations_async
 from .logging_config import RequestIdMiddleware, configure_logging
 from .validation_errors import install_validation_error_handler
@@ -36,7 +39,11 @@ async def lifespan(app: FastAPI):
         logger.error(f"Startup failed due to pending migrations: {e}")
         raise RuntimeError("Pending migrations found. Please run 'alembic upgrade head' before starting the application.") from e
 
+    purge = asyncio.create_task(purge_auth_records_forever(AsyncSessionLocal))
     yield
+    purge.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await purge
 
 app = FastAPI(title="StemHub API", lifespan=lifespan)
 install_validation_error_handler(app)
