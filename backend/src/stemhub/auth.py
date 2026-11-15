@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
@@ -59,16 +59,31 @@ FRONTEND_URL = ensure_https(os.getenv("FRONTEND_URL", "http://localhost:3000"))
 GOOGLE_REDIRECT_URI = ensure_https(os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_URL}/auth/callback/google"))
 
 SESSION_LIFETIME = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+# "Remember me" at login.
+REMEMBERED_SESSION_LIFETIME = timedelta(days=30)
 
 
-async def _start_session(db: AsyncSession, user: User) -> str:
+async def _start_session(db: AsyncSession, user: User, *, remember: bool = False) -> str:
     """Record a server-side session for `user` and return its access token.
     The token is only accepted while the session lives (see get_current_user)."""
-    expires_at = datetime.now(timezone.utc) + SESSION_LIFETIME
+    expires_at = datetime.now(timezone.utc) + (REMEMBERED_SESSION_LIFETIME if remember else SESSION_LIFETIME)
     session = UserSession(id=uuid.uuid4(), user_id=user.id, expires_at=expires_at)
     db.add(session)
     await db.commit()
     return create_access_token(data={"sub": user.email, "sid": str(session.id)}, expires_at=expires_at)
+
+
+def _set_session_cookie(response: Response, token: str, *, remember: bool = False) -> None:
+    """A remembered session's cookie lasts as long as the session. Otherwise
+    it is a browser-session cookie, gone when the browser closes."""
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        max_age=int(REMEMBERED_SESSION_LIFETIME.total_seconds()) if remember else None,
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
 
 
 def _request_token(request: Request) -> str | None:
@@ -225,14 +240,7 @@ async def register(user: UserCreate, response: RedirectResponse, db: AsyncSessio
     
     # Set cookie on registration too
     access_token = await _start_session(db, db_user)
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=3600 * 24 * 7,
-        secure=ENVIRONMENT != "local",
-        samesite="lax",
-    )
+    _set_session_cookie(response, access_token)
     
     return db_user
 
@@ -264,31 +272,15 @@ async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordReq
     access_token = await _start_session(db, user)
     
     # Also set cookie for easier testing even in Swagger
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=3600 * 24, # 24 hours
-        secure=ENVIRONMENT != "local",
-        samesite="lax",
-    )
+    _set_session_cookie(response, access_token)
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
 async def login(credentials: LoginRequest, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
     user = await _authenticate(db, credentials.email, credentials.password)
 
-    access_token = await _start_session(db, user)
-    
-    # Set HttpOnly Cookie
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=3600 * 24 * 7, # 7 days
-        secure=ENVIRONMENT != "local",
-        samesite="lax",
-    )
+    access_token = await _start_session(db, user, remember=credentials.remember_me)
+    _set_session_cookie(response, access_token, remember=credentials.remember_me)
     
     return {"access_token": access_token, "token_type": "bearer"}
 
