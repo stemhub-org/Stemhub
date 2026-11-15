@@ -24,6 +24,8 @@ from stemhub.security import ALGORITHM, SECRET_KEY, create_access_token, get_pas
 
 PASSWORD = "a-strong-password"
 
+pytestmark = pytest.mark.usefixtures("no_login_throttle")
+
 
 def _user() -> User:
     return User(

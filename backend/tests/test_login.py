@@ -23,6 +23,8 @@ from stemhub.security import UNUSABLE_PASSWORD_HASH, get_password_hash
 PASSWORD = "a-strong-password"
 WRONG = {"status": 401, "detail": "Incorrect email or password"}
 
+pytestmark = pytest.mark.usefixtures("no_login_throttle")
+
 
 def _user(**fields: Any) -> User:
     return User(
