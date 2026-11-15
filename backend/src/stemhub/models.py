@@ -27,6 +27,13 @@ class User(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    __table_args__ = (
+        # Usernames are unique regardless of case, so "Hubert" cannot be
+        # registered next to "hubert". Covers soft-deleted users too, so a
+        # deleted account's name cannot be taken over.
+        Index("uq_users_username_lower", text("lower(username)"), unique=True),
+    )
+
     # ── Relationships ──
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="owner")
     collaborations: Mapped[list["Collaborator"]] = relationship("Collaborator", back_populates="user")
