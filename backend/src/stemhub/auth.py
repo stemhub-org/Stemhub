@@ -13,12 +13,13 @@ import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
+from .account_deletion import schedule_deletion
 from .legal import accept_current_versions, current_acceptances, has_accepted_current_versions
 from .login_throttle import ensure_login_allowed, record_login_attempt
 from .pwned_passwords import BREACHED_PASSWORD_MESSAGE, is_password_pwned
 from .rate_limit import enforce_rate_limit
 from .models import User, UserIdentity, UserSession
-from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, LoginRequest, MeResponse, TermsAcceptanceRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
+from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, AccountDeletionRequest, AccountDeletionResponse, LoginRequest, MeResponse, TermsAcceptanceRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import ACCESS_TOKEN_EXPIRE_MINUTES, UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -450,4 +451,26 @@ async def update_email(email_data: EmailChangeRequest, current_user: User = Depe
     await db.refresh(current_user)
     return current_user
 
+
+@router.post("/me/delete", response_model=AccountDeletionResponse)
+async def delete_account(
+    request_data: AccountDeletionRequest,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ask for the account to be deleted. It is hidden and signed out at
+    once, and erased after the grace period unless the user signs in again
+    (account_deletion.py)."""
+    if request_data.confirm_username != current_user.username:
+        raise HTTPException(status_code=400, detail="The username you typed does not match your account")
+    if current_user.password_hash != UNUSABLE_PASSWORD_HASH and not verify_password(
+        request_data.password or "", current_user.password_hash
+    ):
+        raise HTTPException(status_code=400, detail="Incorrect password")
+
+    erased_at = await schedule_deletion(db, current_user)
+    await db.commit()
+    response.delete_cookie("access_token")
+    return AccountDeletionResponse(erased_at=erased_at)
 
