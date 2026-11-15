@@ -11,7 +11,7 @@ import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
-from .models import User
+from .models import User, UserIdentity
 from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
@@ -107,20 +107,33 @@ async def callback_google(request: Request, code: str, state: str | None = None,
 
         user_info_res = await client.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
         user_info = user_info_res.json()
+        google_id = user_info.get("id")
         email = user_info.get("email")
         name = user_info.get("name")
         avatar_url = user_info.get("picture")
 
-        if not email:
-            raise HTTPException(status_code=400, detail="Failed to get email from Google")
-        # Accounts are matched by email, so an unverified Google address would
-        # let anyone claim the StemHub account that uses it.
+        if not google_id or not email:
+            raise HTTPException(status_code=400, detail="Failed to get account details from Google")
+        # A Google account seen for the first time is linked by email, so an
+        # unverified Google address would let anyone claim the StemHub account
+        # that uses it.
         if user_info.get("verified_email") is not True:
             raise HTTPException(status_code=400, detail="Your Google email address is not verified")
 
-        result = await db.execute(select(User).where(User.email == email))
+        result = await db.execute(
+            select(User)
+            .join(UserIdentity, UserIdentity.user_id == User.id)
+            .where(UserIdentity.provider == "google", UserIdentity.provider_user_id == str(google_id))
+        )
         user = result.scalars().first()
-        reactivated = False
+        needs_commit = False
+
+        if not user:
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalars().first()
+            if user:
+                db.add(UserIdentity(user_id=user.id, provider="google", provider_user_id=str(google_id), email=email))
+                needs_commit = True
 
         if not user:
             base_username = normalize_username(name.replace(" ", "").lower() if name else email.split("@")[0])
@@ -132,15 +145,16 @@ async def callback_google(request: Request, code: str, state: str | None = None,
                 counter += 1
 
             user = User(email=email, username=username, password_hash=UNUSABLE_PASSWORD_HASH, avatar_url=avatar_url)
+            user.identities.append(UserIdentity(provider="google", provider_user_id=str(google_id), email=email))
             db.add(user)
-            reactivated = True
+            needs_commit = True
         else:
             user.avatar_url = avatar_url
             if not user.is_active:
                 user.is_active = True
-                reactivated = True
+                needs_commit = True
 
-        if reactivated:
+        if needs_commit:
             await _commit_user(db)
             await db.refresh(user)
 

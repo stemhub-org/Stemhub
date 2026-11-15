@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,6 +37,34 @@ class User(Base):
     # ── Relationships ──
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="owner")
     collaborations: Mapped[list["Collaborator"]] = relationship("Collaborator", back_populates="user")
+    identities: Mapped[list["UserIdentity"]] = relationship("UserIdentity", back_populates="user")
+
+
+class UserIdentity(Base):
+    """An external account (Google, ...) a user signs in with.
+
+    Social sign-in looks the user up by the provider's stable account id, not
+    by email: the email of an external account can change or be reused, its
+    id cannot.
+    """
+    __tablename__ = "user_identity"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_user_identity_provider_account"),
+        # One account per provider and user, as on GitHub.
+        UniqueConstraint("user_id", "provider", name="uq_user_identity_user_provider"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The provider's email when the identity was linked, for support and auditing.
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    user: Mapped["User"] = relationship("User", back_populates="identities")
 
 
 class Project(Base):
