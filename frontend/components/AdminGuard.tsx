@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/api";
+import { getAccessToken } from "@/lib/authToken";
 
 interface UserMe {
     id: string;
@@ -17,7 +18,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
     const [ready, setReady] = useState(false);
 
     useEffect(() => {
-        const token = localStorage.getItem("access_token");
+        const token = getAccessToken();
         if (!token) {
             router.replace("/login");
             return;

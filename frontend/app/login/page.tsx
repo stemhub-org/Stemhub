@@ -7,11 +7,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { API_URL, ApiError, apiFetch, errorMessage } from "@/lib/api";
+import { saveAccessToken } from "@/lib/authToken";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -22,11 +24,11 @@ export default function LoginPage() {
     try {
       const data = await apiFetch<{ access_token?: string }>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, remember_me: rememberMe }),
         redirectOnUnauthorized: false,
       });
       if (data?.access_token) {
-        localStorage.setItem("access_token", data.access_token);
+        saveAccessToken(data.access_token, { remember: rememberMe });
       }
       // Start the new session without data cached for a previous user.
       queryClient.clear();
@@ -170,7 +172,20 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <div className="text-right">
+          <div className="flex items-center justify-between">
+            <label
+              className="flex cursor-pointer items-center gap-2 text-xs font-light text-foreground/50"
+              style={{ fontFamily: "var(--font-jakarta)" }}
+            >
+              <input
+                type="checkbox"
+                name="remember-me"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-3.5 w-3.5 cursor-pointer accent-current"
+              />
+              Remember me for 30 days
+            </label>
             <a
               href="#"
               className="text-xs font-light text-foreground/40 transition-colors duration-300 hover:text-accent"
