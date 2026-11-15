@@ -31,13 +31,24 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 UNUSABLE_PASSWORD_HASH = "!"
 
 
-def verify_password(plain_password: str, password_hash: str) -> bool:
-    if password_hash == UNUSABLE_PASSWORD_HASH:
-        return False
+# Checked against when there is no real hash to check, so a failed login
+# takes as long whether or not the email has an account with a password.
+_DUMMY_PASSWORD_HASH = bcrypt.hashpw(b"no-account", bcrypt.gensalt()).decode('utf-8')
+
+
+def _checkpw(plain_password: str, password_hash: str) -> bool:
     try:
         return bcrypt.checkpw(plain_password.encode('utf-8'), password_hash.encode('utf-8'))
     except ValueError:
         return False
+
+
+def verify_password(plain_password: str, password_hash: str | None) -> bool:
+    """`password_hash` is None when no account matched the submitted email."""
+    if password_hash is None or password_hash == UNUSABLE_PASSWORD_HASH:
+        _checkpw(plain_password, _DUMMY_PASSWORD_HASH)
+        return False
+    return _checkpw(plain_password, password_hash)
 
 
 def get_password_hash(password: str) -> str:
