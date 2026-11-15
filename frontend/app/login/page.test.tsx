@@ -12,13 +12,14 @@ function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function submitLogin(client = new QueryClient()) {
+function submitLogin(client = new QueryClient(), { rememberMe = false } = {}) {
     const Wrapper = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
     render(<LoginPage />, { wrapper: Wrapper });
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "jb@stemhub.io" } });
     fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "secret" } });
+    if (rememberMe) fireEvent.click(screen.getByLabelText("Remember me for 30 days"));
     fireEvent.click(screen.getByRole("button", { name: "Log in" }));
     return client;
 }
@@ -34,8 +35,41 @@ describe("LoginPage", () => {
         submitLogin(client);
 
         await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"));
-        expect(localStorage.getItem("access_token")).toBe("tok");
         expect(client.getQueryData(queryKeys.currentUser)).toBeUndefined();
+    });
+
+    it("keeps the token for this browser session only by default", async () => {
+        const fetchMock = vi.fn(async () => json({ access_token: "tok", token_type: "bearer" }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        submitLogin();
+
+        await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"));
+        expect(sessionStorage.getItem("access_token")).toBe("tok");
+        expect(localStorage.getItem("access_token")).toBeNull();
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining("/auth/login"),
+            expect.objectContaining({
+                body: JSON.stringify({ email: "jb@stemhub.io", password: "secret", remember_me: false }),
+            }),
+        );
+    });
+
+    it("remembers the sign-in when asked", async () => {
+        const fetchMock = vi.fn(async () => json({ access_token: "tok", token_type: "bearer" }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        submitLogin(new QueryClient(), { rememberMe: true });
+
+        await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"));
+        expect(localStorage.getItem("access_token")).toBe("tok");
+        expect(sessionStorage.getItem("access_token")).toBeNull();
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining("/auth/login"),
+            expect.objectContaining({
+                body: JSON.stringify({ email: "jb@stemhub.io", password: "secret", remember_me: true }),
+            }),
+        );
     });
 
     it("shows the backend's message for wrong credentials without redirecting", async () => {
