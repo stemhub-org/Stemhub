@@ -90,7 +90,7 @@ def _sql(statement: Any) -> str:
 def _register(client: TestClient, username: str):
     return client.post(
         "/auth/register",
-        json={"email": "new@example.com", "username": username, "password": "a-strong-password"},
+        json={"email": "new@example.com", "username": username, "password": "a-strong-password", "accept_terms": True},
     )
 
 
@@ -109,14 +109,14 @@ def _unique_violation(constraint: str) -> IntegrityError:
     ],
 )
 def test_usernames_are_normalized(submitted: str, stored: str) -> None:
-    assert UserCreate(email="a@example.com", username=submitted, password="a-strong-password").username == stored
+    assert UserCreate(email="a@example.com", username=submitted, password="a-strong-password", accept_terms=True).username == stored
     assert UserUpdate(username=submitted).username == stored
 
 
 @pytest.mark.parametrize("username", ["", "   ", "ab", "x" * 33, "bad​name", "bad\x00name"])
 def test_invalid_usernames_are_refused(username: str) -> None:
     with pytest.raises(ValidationError):
-        UserCreate(email="a@example.com", username=username, password="a-strong-password")
+        UserCreate(email="a@example.com", username=username, password="a-strong-password", accept_terms=True)
     with pytest.raises(ValidationError):
         UserUpdate(username=username)
 

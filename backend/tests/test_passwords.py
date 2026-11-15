@@ -27,7 +27,7 @@ TOO_LONG = ["x" * 73, "é" * 37]
 
 
 def _sign_up(password: str) -> UserCreate:
-    return UserCreate(email="a@example.com", username="demo", password=password)
+    return UserCreate(email="a@example.com", username="demo", password=password, accept_terms=True)
 
 
 def _change(password: str) -> PasswordChangeRequest:
@@ -74,7 +74,7 @@ def test_a_too_long_password_at_sign_up_gets_422_not_500() -> None:
     app.dependency_overrides[get_db] = override_db
     response = TestClient(app).post(
         "/auth/register",
-        json={"email": "a@example.com", "username": "demo", "password": "x" * 100},
+        json={"email": "a@example.com", "username": "demo", "password": "x" * 100, "accept_terms": True},
     )
     assert response.status_code == 422
     session.execute.assert_not_awaited()

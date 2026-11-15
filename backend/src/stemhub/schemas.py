@@ -60,6 +60,8 @@ class UserCreate(BaseModel):
     email: NormalizedEmail
     username: str
     password: str
+    # The Terms of Service and Privacy Policy (legal.py); signing up requires it.
+    accept_terms: bool = Field(False, validate_default=True)
 
     @field_validator("username")
     @classmethod
@@ -70,6 +72,13 @@ class UserCreate(BaseModel):
     @classmethod
     def _validate_password(cls, value: str) -> str:
         return validate_new_password(value)
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _require_accepted_terms(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("You must accept the Terms of Service and the Privacy Policy")
+        return value
 
 class UserResponse(BaseModel):
     id: UUID

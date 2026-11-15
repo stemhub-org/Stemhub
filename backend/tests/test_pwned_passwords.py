@@ -111,7 +111,7 @@ def test_sign_up_refuses_a_breached_password(monkeypatch) -> None:
     db = MagicMock()
     db.execute = AsyncMock()
     response = _client(db).post(
-        "/auth/register", json={"email": "a@example.com", "username": "demo", "password": PASSWORD}
+        "/auth/register", json={"email": "a@example.com", "username": "demo", "password": PASSWORD, "accept_terms": True}
     )
     assert response.status_code == 400
     assert response.json()["detail"] == BREACHED_PASSWORD_MESSAGE

@@ -13,6 +13,7 @@ import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
+from .legal import current_acceptances
 from .login_throttle import ensure_login_allowed, record_login_attempt
 from .pwned_passwords import BREACHED_PASSWORD_MESSAGE, is_password_pwned
 from .rate_limit import enforce_rate_limit
@@ -255,6 +256,7 @@ async def register(user: UserCreate, request: Request, response: RedirectRespons
     
     password_hash = get_password_hash(user.password)
     db_user = User(email=user.email, username=user.username, password_hash=password_hash)
+    db_user.legal_acceptances.extend(current_acceptances())
     db.add(db_user)
     await _commit_user(db)
     await db.refresh(db_user)
