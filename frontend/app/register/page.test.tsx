@@ -14,12 +14,14 @@ function submitRegister({
     username = "jboshra",
     password = "secret123",
     confirmPassword = password,
-}: { username?: string; password?: string; confirmPassword?: string } = {}) {
+    acceptTerms = true,
+}: { username?: string; password?: string; confirmPassword?: string; acceptTerms?: boolean } = {}) {
     render(<RegisterPage />);
     fireEvent.change(screen.getByPlaceholderText("Username"), { target: { value: username } });
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "jb@stemhub.io" } });
     fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: password } });
     fireEvent.change(screen.getByPlaceholderText("Confirm password"), { target: { value: confirmPassword } });
+    if (acceptTerms) fireEvent.click(screen.getByRole("checkbox", { name: /I accept the Terms of Service/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create my account" }));
 }
 
@@ -37,7 +39,7 @@ describe("RegisterPage", () => {
             `${API_URL}/auth/register`,
             expect.objectContaining({
                 method: "POST",
-                body: JSON.stringify({ username: "jboshra", email: "jb@stemhub.io", password: "secret123" }),
+                body: JSON.stringify({ username: "jboshra", email: "jb@stemhub.io", password: "secret123", accept_terms: true }),
             }),
         );
     });
@@ -65,6 +67,7 @@ describe("RegisterPage", () => {
         [{ password: "short" }, "Password must be at least 8 characters"],
         [{ password: "x".repeat(73) }, "Password must be at most 72 bytes"],
         [{ username: "jb" }, "Username must be between 3 and 32 characters"],
+        [{ acceptTerms: false }, "Please accept the Terms of Service and the Privacy Policy."],
     ])("refuses %o before calling the server", async (fields, message) => {
         const fetchMock = vi.fn();
         vi.stubGlobal("fetch", fetchMock);
@@ -81,5 +84,14 @@ describe("RegisterPage", () => {
         expect(screen.getByPlaceholderText("Email").getAttribute("autocomplete")).toBe("email");
         expect(screen.getByPlaceholderText("Password").getAttribute("autocomplete")).toBe("new-password");
         expect(screen.getByPlaceholderText("Confirm password").getAttribute("autocomplete")).toBe("new-password");
+    });
+
+    it("links the terms and privacy policy in a new tab, so the form is kept", () => {
+        render(<RegisterPage />);
+        for (const [name, href] of [["Terms of Service", "/terms"], ["Privacy Policy", "/privacy"]]) {
+            const link = screen.getByRole("link", { name });
+            expect(link.getAttribute("href")).toBe(href);
+            expect(link.getAttribute("target")).toBe("_blank");
+        }
     });
 });
