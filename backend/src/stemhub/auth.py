@@ -12,7 +12,7 @@ from fastapi.responses import RedirectResponse
 
 from .database import get_db
 from .models import User, UserIdentity
-from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
+from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -108,7 +108,7 @@ async def callback_google(request: Request, code: str, state: str | None = None,
         user_info_res = await client.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
         user_info = user_info_res.json()
         google_id = user_info.get("id")
-        email = user_info.get("email")
+        email = normalize_email(user_info.get("email") or "")
         name = user_info.get("name")
         avatar_url = user_info.get("picture")
 
@@ -192,7 +192,7 @@ async def register(user: UserCreate, response: RedirectResponse, db: AsyncSessio
 @router.post("/swagger-login", response_model=Token)
 async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     # Swagger sends the user input in the "username" field, but we log in with email
-    result = await db.execute(select(User).where(User.email == form_data.username))
+    result = await db.execute(select(User).where(User.email == normalize_email(form_data.username)))
     user = result.scalars().first()
     if user and not user.is_active:
         raise HTTPException(
@@ -288,7 +288,8 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         
     result = await db.execute(
         select(User).where(
-            User.email == email,
+            # Tokens issued before emails were lowercased may carry capitals.
+            User.email == normalize_email(email),
             User.is_active == True,
             User.is_deleted == False,
         )

@@ -4,9 +4,18 @@ from datetime import datetime
 from typing import Annotated, Any, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, Discriminator, EmailStr, Field, Tag, field_validator, model_validator
+from pydantic import AfterValidator, AliasChoices, BaseModel, Discriminator, EmailStr, Field, Tag, field_validator, model_validator
 
 # ── User Schemas ──
+
+def normalize_email(value: str) -> str:
+    """Emails are stored and compared in lowercase, so Foo@x.com and
+    foo@x.com are the same account (unique index uq_users_email_lower)."""
+    return value.strip().lower()
+
+
+# An email submitted by a client, in its stored (lowercase) form.
+NormalizedEmail = Annotated[EmailStr, AfterValidator(normalize_email)]
 
 USERNAME_MIN_LENGTH = 3
 USERNAME_MAX_LENGTH = 32
@@ -48,7 +57,7 @@ def validate_new_password(value: str) -> str:
 
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     username: str
     password: str
 
@@ -521,7 +530,7 @@ class ProjectSummaryResponse(BaseModel):
 # ── Auth Schemas ──
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     password: str
 
 class PasswordChangeRequest(BaseModel):
@@ -534,7 +543,7 @@ class PasswordChangeRequest(BaseModel):
         return validate_new_password(value)
 
 class EmailChangeRequest(BaseModel):
-    new_email: EmailStr
+    new_email: NormalizedEmail
 
 # ── Explore & Community Schemas ──
 
