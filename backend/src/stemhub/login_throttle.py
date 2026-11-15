@@ -11,14 +11,14 @@ While locked, the password is not checked at all. Emails without an
 account are throttled the same way, so a 429 never reveals whether an
 email is registered.
 """
-import math
 from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import LoginAttempt
+from .rate_limit import too_many_requests
 
 LOCKOUT_THRESHOLD = 5
 FIRST_LOCKOUT = timedelta(minutes=1)
@@ -40,19 +40,7 @@ def lockout_for(failures: int) -> timedelta:
 
 
 def _too_many_attempts(retry_after: timedelta) -> HTTPException:
-    seconds = max(1, math.ceil(retry_after.total_seconds()))
-    return HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail=f"Too many failed sign-in attempts. Try again in {_spoken(seconds)}.",
-        headers={"Retry-After": str(seconds)},
-    )
-
-
-def _spoken(seconds: int) -> str:
-    if seconds < 60:
-        return f"{seconds} second{'s' if seconds != 1 else ''}"
-    minutes = math.ceil(seconds / 60)
-    return f"{minutes} minute{'s' if minutes != 1 else ''}"
+    return too_many_requests("Too many failed sign-in attempts.", retry_after)
 
 
 async def ensure_login_allowed(db: AsyncSession, email: str, ip: str | None) -> None:

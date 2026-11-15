@@ -107,6 +107,20 @@ class LoginAttempt(Base):
     )
 
 
+class RateLimitHit(Base):
+    """One use of a rate-limited action (`action`) by one client (`key`,
+    e.g. an IP). See rate_limit.py."""
+    __tablename__ = "rate_limit_hit"
+    __table_args__ = (Index("ix_rate_limit_hit_action_key_created_at", "action", "key", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    key: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Project(Base):
     __tablename__ = "project"
 
