@@ -564,6 +564,19 @@ class LoginRequest(BaseModel):
     # 30-day session and cookie instead of one day and a browser-session cookie.
     remember_me: bool = False
 
+class AccountDeletionRequest(BaseModel):
+    # Typed by the user, as on GitHub, so an account is never deleted by a
+    # stray click.
+    confirm_username: str
+    # Required when the account has a password (not for Google-only accounts).
+    password: Optional[str] = None
+
+
+class AccountDeletionResponse(BaseModel):
+    # The account can be restored by signing in again until then.
+    erased_at: datetime
+
+
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
