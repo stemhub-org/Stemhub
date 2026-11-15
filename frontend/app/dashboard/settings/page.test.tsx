@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@/components/ToastProvider";
 import { queryKeys } from "@/lib/queries";
 import SettingsPage from "./page";
@@ -227,5 +227,65 @@ describe("SettingsPage account tab", () => {
         fillPasswords("wrong", "new-secret", "new-secret");
 
         expect((await screen.findByRole("alert")).textContent).toBe("Current password is incorrect");
+    });
+});
+
+describe("SettingsPage account deletion", () => {
+    beforeEach(() => push.mockReset());
+
+    async function openDeletion() {
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Account" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Delete Account" }));
+    }
+
+    it("only deletes once the username is typed, then signs out with the date", async () => {
+        const fetchMock = vi.fn(async (url: string) => {
+            if (url.endsWith("/auth/me/delete")) return json({ erased_at: "2026-12-15T14:00:00Z" });
+            if (url.endsWith("/auth/logout")) return new Response(null, { status: 204 });
+            return json(user);
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        await openDeletion();
+
+        const deleteButton = screen.getByRole("button", { name: "Delete my account" }) as HTMLButtonElement;
+        expect(deleteButton.disabled).toBe(true);
+        fireEvent.change(screen.getByLabelText(/Type your username/), { target: { value: user.username } });
+        fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret123" } });
+        expect(deleteButton.disabled).toBe(false);
+        fireEvent.click(deleteButton);
+
+        expect(await screen.findByText("Your account will be deleted on December 15, 2026. Sign in before then to cancel.")).toBeTruthy();
+        await waitFor(() => expect(push).toHaveBeenCalledWith("/login"));
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining("/auth/me/delete"),
+            expect.objectContaining({
+                method: "POST",
+                body: JSON.stringify({ confirm_username: user.username, password: "secret123" }),
+            }),
+        );
+    });
+
+    it("shows why the deletion was refused and stays signed in", async () => {
+        vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+            url.endsWith("/auth/me/delete") ? json({ detail: "Incorrect password" }, 400) : json(user),
+        ));
+        await openDeletion();
+
+        fireEvent.change(screen.getByLabelText(/Type your username/), { target: { value: user.username } });
+        fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+
+        expect((await screen.findByRole("alert")).textContent).toBe("Incorrect password");
+        expect(push).not.toHaveBeenCalled();
+    });
+
+    it("can be cancelled", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => json(user)));
+        await openDeletion();
+
+        fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+        expect(screen.queryByRole("button", { name: "Delete my account" })).toBeNull();
+        expect(screen.getByRole("button", { name: "Delete Account" })).toBeTruthy();
     });
 });

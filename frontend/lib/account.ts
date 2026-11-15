@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { EmailChangeRequest, PasswordChangeRequest, ProfileUpdate, UserProfile } from "@/types/user";
+import type {
+    AccountDeletion,
+    AccountDeletionRequest,
+    EmailChangeRequest,
+    PasswordChangeRequest,
+    ProfileUpdate,
+    UserProfile,
+} from "@/types/user";
 import { ApiError, apiFetch } from "./api";
 import { queryKeys } from "./queries";
 
@@ -49,5 +56,13 @@ export function useAcceptTerms() {
         onSuccess: (user) => {
             queryClient.setQueryData(queryKeys.currentUser, user);
         },
+    });
+}
+
+/** Asks for the account to be deleted (POST /auth/me/delete); it can be restored by signing in within 30 days. */
+export function useDeleteAccount() {
+    return useMutation<AccountDeletion, ApiError, AccountDeletionRequest>({
+        mutationFn: (request) =>
+            apiFetch<AccountDeletion>("/auth/me/delete", { method: "POST", body: JSON.stringify(request) }),
     });
 }

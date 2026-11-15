@@ -35,3 +35,16 @@ export interface PasswordChangeRequest {
     current_password: string;
     new_password: string;
 }
+
+// ── Account deletion (POST /auth/me/delete) ──
+export interface AccountDeletionRequest {
+    confirm_username: string;
+    /** Not needed for accounts that sign in with Google only. */
+    password?: string;
+}
+
+export interface AccountDeletion {
+    /** The data is erased then, unless the user signs in again before. */
+    erased_at: string;
+}
+

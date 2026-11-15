@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { API_URL, ApiError, apiFetch, errorMessage } from "@/lib/api";
 import { saveAccessToken } from "@/lib/authToken";
+import { useToast } from "@/components/ToastProvider";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -18,18 +19,22 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const router = useRouter();
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     try {
-      const data = await apiFetch<{ access_token?: string }>("/auth/login", {
+      const data = await apiFetch<{ access_token?: string; account_restored?: boolean }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password, remember_me: rememberMe }),
         redirectOnUnauthorized: false,
       });
       if (data?.access_token) {
         saveAccessToken(data.access_token, { remember: rememberMe });
+      }
+      if (data?.account_restored) {
+        toast.success("Welcome back! Your account deletion has been cancelled.");
       }
       // Start the new session without data cached for a previous user.
       queryClient.clear();
