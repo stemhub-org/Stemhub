@@ -26,7 +26,14 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 
+# Stored for accounts created through a social login, which have no password.
+# It is not a bcrypt hash, so no password can ever match it.
+UNUSABLE_PASSWORD_HASH = "!"
+
+
 def verify_password(plain_password: str, password_hash: str) -> bool:
+    if password_hash == UNUSABLE_PASSWORD_HASH:
+        return False
     try:
         return bcrypt.checkpw(plain_password.encode('utf-8'), password_hash.encode('utf-8'))
     except ValueError:

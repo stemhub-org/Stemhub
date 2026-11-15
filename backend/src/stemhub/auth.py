@@ -7,14 +7,13 @@ from sqlalchemy.future import select
 import jwt
 import os
 import httpx
-import urllib.parse
 import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
 from .models import User
 from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
-from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
+from .security import UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/swagger-login", auto_error=False)
@@ -128,8 +127,7 @@ async def callback_google(request: Request, code: str, state: str | None = None,
                 username = f"{base_username}{counter}"
                 counter += 1
 
-            password_hash = get_password_hash(urllib.parse.quote(email) + "oauth_dummy")
-            user = User(email=email, username=username, password_hash=password_hash, avatar_url=avatar_url)
+            user = User(email=email, username=username, password_hash=UNUSABLE_PASSWORD_HASH, avatar_url=avatar_url)
             db.add(user)
             reactivated = True
         else:
