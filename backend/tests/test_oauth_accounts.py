@@ -126,8 +126,10 @@ def _google_user(**overrides: Any) -> dict[str, Any]:
     return {"id": "109876543210", "email": "demo@example.com", "name": "Demo User", "verified_email": True, **overrides}
 
 
-def _existing_user(email: str = "demo@example.com") -> User:
-    return User(id=uuid.uuid4(), email=email, username="demo", password_hash="x", is_active=True)
+def _existing_user(email: str = "demo@example.com", **fields: Any) -> User:
+    fields.setdefault("is_active", True)
+    fields.setdefault("is_deleted", False)
+    return User(id=uuid.uuid4(), email=email, username="demo", password_hash="x", **fields)
 
 
 def _token_email(response) -> str:
@@ -181,3 +183,16 @@ def test_google_sign_up_creates_an_account_without_a_usable_password(monkeypatch
     assert created.email == "demo@example.com"
     assert created.password_hash == UNUSABLE_PASSWORD_HASH
     assert [(i.provider, i.provider_user_id) for i in created.identities] == [("google", "109876543210")]
+
+
+@pytest.mark.parametrize("state", [{"is_active": False}, {"is_deleted": True}])
+@pytest.mark.parametrize("linked", [True, False])
+def test_google_sign_in_does_not_bring_back_a_deactivated_or_deleted_account(monkeypatch, state, linked) -> None:
+    user = _existing_user(**state)
+    rows = (user,) if linked else (None, user)
+    response, session = _callback(monkeypatch, _google_user(), *rows)
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Your account is deactivated."
+    assert user.is_active == state.get("is_active", True)
+    session.add.assert_not_called()
+    session.commit.assert_not_awaited()
