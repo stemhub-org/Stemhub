@@ -80,6 +80,22 @@ describe("SettingsPage", () => {
         expect(screen.getByLabelText("New Password")).toBeTruthy();
         expect(screen.getByLabelText("Confirm New Password")).toBeTruthy();
     });
+
+    it("can show the current password, and the new one with its confirmation", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => json(user)));
+
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Account" }));
+        const type = (label: string) => screen.getByLabelText(label).getAttribute("type");
+        await screen.findByLabelText("Current Password");
+        const [showCurrent, showNew] = screen.getAllByRole("button", { name: "Show password" });
+
+        fireEvent.click(showCurrent);
+        expect([type("Current Password"), type("New Password"), type("Confirm New Password")]).toEqual(["text", "password", "password"]);
+
+        fireEvent.click(showNew);
+        expect([type("New Password"), type("Confirm New Password")]).toEqual(["text", "text"]);
+    });
 });
 
 describe("SettingsPage profile tab", () => {
