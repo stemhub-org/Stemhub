@@ -32,6 +32,9 @@ class User(Base):
         # registered next to "hubert". Covers soft-deleted users too, so a
         # deleted account's name cannot be taken over.
         Index("uq_users_username_lower", text("lower(username)"), unique=True),
+        # Emails are stored lowercase (schemas.normalize_email); this keeps a
+        # row written another way from duplicating an account.
+        Index("uq_users_email_lower", text("lower(email)"), unique=True),
     )
 
     # ── Relationships ──
