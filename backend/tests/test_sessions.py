@@ -40,9 +40,12 @@ def _user() -> User:
     )
 
 
-def _session(user: User | None = None) -> MagicMock:
+def _session(user: User | None = None, *live_sessions: uuid.UUID) -> MagicMock:
+    """A fake database: `user` for the login lookup, and `live_sessions`
+    (of `user`) for get_current_user's session lookup."""
     result = MagicMock()
     result.scalars.return_value.first.return_value = user
+    result.all.return_value = [(user, session_id) for session_id in live_sessions]
     session = MagicMock()
     session.execute = AsyncMock(return_value=result)
     session.commit = AsyncMock()
@@ -70,10 +73,17 @@ def _token(sid: Any = None, **claims: Any) -> str:
     return create_access_token(data={"sub": "demo@example.com", **claims})
 
 
+def _request(header_token: str | None = None, cookie_token: str | None = None) -> Request:
+    headers = []
+    if header_token:
+        headers.append((b"authorization", f"Bearer {header_token}".encode()))
+    if cookie_token:
+        headers.append((b"cookie", f"access_token={cookie_token}".encode()))
+    return Request({"type": "http", "headers": headers, "query_string": b""})
+
+
 def _current_user(token: str | None, session: MagicMock) -> User:
-    headers = [(b"authorization", f"Bearer {token}".encode())] if token else []
-    request = Request({"type": "http", "headers": headers, "query_string": b""})
-    return asyncio.run(get_current_user(request, db=session))
+    return asyncio.run(get_current_user(_request(token), db=session))
 
 
 # ── Signing in ──
@@ -97,11 +107,11 @@ def test_login_records_a_session_and_puts_its_id_in_the_token() -> None:
 def test_a_token_is_accepted_only_while_its_session_lives() -> None:
     sid = uuid.uuid4()
     user = _user()
-    db = _session(user)
+    db = _session(user, sid)
     assert _current_user(_token(sid), db) is user
 
     sql = _sql(db.execute.await_args.args[0])
-    assert f"user_session.id = '{sid}'" in sql
+    assert f"user_session.id IN ('{sid}')" in sql
     assert "user_session.revoked_at IS NULL" in sql
     assert "user_session.expires_at > now()" in sql
 
@@ -111,6 +121,29 @@ def test_a_revoked_or_expired_session_is_refused() -> None:
     with pytest.raises(HTTPException) as refused:
         _current_user(_token(uuid.uuid4()), _session(None))
     assert refused.value.status_code == 401
+
+
+def test_a_stale_cookie_does_not_hide_a_valid_header_token() -> None:
+    # A cookie from an older sign-in (its session gone) next to the token the
+    # frontend sends: signing in with Google used to bounce straight back.
+    stale, current = uuid.uuid4(), uuid.uuid4()
+    user = _user()
+    request = _request(header_token=_token(current), cookie_token=_token(stale))
+    assert asyncio.run(get_current_user(request, db=_session(user, current))) is user
+    assert request.state.session_id == current
+
+
+def test_a_cookie_without_a_session_id_does_not_hide_a_valid_header_token() -> None:
+    current = uuid.uuid4()
+    request = _request(header_token=_token(current), cookie_token=_token())
+    assert asyncio.run(get_current_user(request, db=_session(_user(), current))) is not None
+
+
+def test_when_several_tokens_are_live_the_cookie_comes_first() -> None:
+    cookie, header = uuid.uuid4(), uuid.uuid4()
+    request = _request(header_token=_token(header), cookie_token=_token(cookie))
+    asyncio.run(get_current_user(request, db=_session(_user(), header, cookie)))
+    assert request.state.session_id == cookie
 
 
 @pytest.mark.parametrize("token", [None, "not-a-jwt", _token(), _token(sid="not-a-uuid")])
@@ -132,7 +165,7 @@ def test_logout_revokes_the_session_of_the_token() -> None:
 
     sql = _sql(db.execute.await_args.args[0])
     assert sql.startswith("UPDATE user_session SET revoked_at=now()")
-    assert f"user_session.id = '{sid}'" in sql
+    assert f"user_session.id IN ('{sid}')" in sql
     db.commit.assert_awaited_once()
     assert 'access_token=""' in response.headers["set-cookie"]
 
@@ -143,7 +176,17 @@ def test_logout_reads_the_cookie_too() -> None:
     client = _client(db)
     client.cookies.set("access_token", _token(sid))
     assert client.post("/auth/logout").status_code == 200
-    assert f"user_session.id = '{sid}'" in _sql(db.execute.await_args.args[0])
+    assert f"user_session.id IN ('{sid}')" in _sql(db.execute.await_args.args[0])
+
+
+def test_logout_revokes_the_sessions_of_both_the_cookie_and_the_header() -> None:
+    cookie, header = uuid.uuid4(), uuid.uuid4()
+    db = _session()
+    client = _client(db)
+    client.cookies.set("access_token", _token(cookie))
+    client.post("/auth/logout", headers={"Authorization": f"Bearer {_token(header)}"})
+    sql = _sql(db.execute.await_args.args[0])
+    assert f"user_session.id IN ('{cookie}', '{header}')" in sql
 
 
 @pytest.mark.parametrize("headers", [{}, {"Authorization": "Bearer not-a-jwt"}])
@@ -190,7 +233,7 @@ def test_the_plugin_login_body_still_works() -> None:
 
 # ── Changing the password ──
 
-def _change_password(current_password: str, token: str) -> tuple[Any, MagicMock, User]:
+def _change_password(current_password: str, current_session: uuid.UUID) -> tuple[Any, MagicMock, User]:
     user = _user()
     db = _session()
     app = FastAPI()
@@ -199,19 +242,23 @@ def _change_password(current_password: str, token: str) -> tuple[Any, MagicMock,
     async def override_db():
         yield db
 
+    def signed_in(request: Request) -> User:
+        # As get_current_user does: the session that authenticated the request.
+        request.state.session_id = current_session
+        return user
+
     app.dependency_overrides[get_db] = override_db
-    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_current_user] = signed_in
     response = TestClient(app).put(
         "/auth/me/password",
         json={"current_password": current_password, "new_password": "a-new-strong-password"},
-        headers={"Authorization": f"Bearer {token}"},
     )
     return response, db, user
 
 
 def test_changing_the_password_signs_out_the_other_sessions() -> None:
     current = uuid.uuid4()
-    response, db, user = _change_password(PASSWORD, _token(current))
+    response, db, user = _change_password(PASSWORD, current)
     assert response.status_code == 200
 
     sql = _sql(db.execute.await_args.args[0])
@@ -223,7 +270,7 @@ def test_changing_the_password_signs_out_the_other_sessions() -> None:
 
 
 def test_a_wrong_current_password_signs_out_nobody() -> None:
-    response, db, _ = _change_password("wrong-password", _token(uuid.uuid4()))
+    response, db, _ = _change_password("wrong-password", uuid.uuid4())
     assert response.status_code == 400
     db.execute.assert_not_awaited()
     db.commit.assert_not_awaited()

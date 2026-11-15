@@ -214,3 +214,12 @@ def test_google_sign_in_within_the_grace_period_restores_a_deleted_account(monke
     assert response.headers["location"].endswith("&account_restored=1")
     assert user.is_deleted is False
     session.commit.assert_awaited()
+
+
+def test_google_sign_in_sets_the_session_cookie(monkeypatch) -> None:
+    # Replaces any cookie left by an earlier sign-in, which would otherwise
+    # travel next to the new token.
+    response, _ = _callback(monkeypatch, _google_user(), None, None, None)
+    token = response.headers["location"].split("token=")[1]
+    assert f"access_token={token}" in response.headers["set-cookie"]
+    assert "HttpOnly" in response.headers["set-cookie"]
