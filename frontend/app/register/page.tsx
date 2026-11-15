@@ -6,6 +6,13 @@ import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { API_URL, apiFetch, errorMessage } from "@/lib/api";
+import {
+  PASSWORD_MIN_LENGTH,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  newPasswordError,
+  usernameError,
+} from "@/lib/validation";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -20,8 +27,12 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+    const invalid =
+      usernameError(username) ??
+      newPasswordError(password) ??
+      (password !== confirmPassword ? "Passwords do not match" : null);
+    if (invalid) {
+      setError(invalid);
       return;
     }
 
@@ -132,6 +143,11 @@ export default function RegisterPage() {
             />
             <input
               type="text"
+              name="username"
+              autoComplete="username"
+              required
+              minLength={USERNAME_MIN_LENGTH}
+              maxLength={USERNAME_MAX_LENGTH}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Username"
@@ -148,6 +164,9 @@ export default function RegisterPage() {
             />
             <input
               type="email"
+              name="email"
+              autoComplete="email"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
@@ -164,6 +183,11 @@ export default function RegisterPage() {
             />
             <input
               type={showPassword ? "text" : "password"}
+              name="password"
+              autoComplete="new-password"
+              required
+              minLength={PASSWORD_MIN_LENGTH}
+              aria-describedby="register-password-hint"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
@@ -182,6 +206,13 @@ export default function RegisterPage() {
               )}
             </button>
           </div>
+          <p
+            id="register-password-hint"
+            className="-mt-2 pl-1 text-xs font-light text-foreground/30"
+            style={{ fontFamily: "var(--font-jakarta)" }}
+          >
+            At least {PASSWORD_MIN_LENGTH} characters.
+          </p>
 
           <div className="relative">
             <Lock
@@ -191,6 +222,9 @@ export default function RegisterPage() {
             />
             <input
               type={showPassword ? "text" : "password"}
+              name="confirm-password"
+              autoComplete="new-password"
+              required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm password"
