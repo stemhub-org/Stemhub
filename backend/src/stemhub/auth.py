@@ -13,7 +13,7 @@ import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
-from .account_deletion import schedule_deletion
+from .account_deletion import is_restorable, restorable, restore_account, schedule_deletion
 from .legal import accept_current_versions, current_acceptances, has_accepted_current_versions
 from .login_throttle import ensure_login_allowed, record_login_attempt
 from .pwned_passwords import BREACHED_PASSWORD_MESSAGE, is_password_pwned
@@ -117,11 +117,17 @@ def _session_id(token: str | None) -> uuid.UUID | None:
         return None
 
 
-def _ensure_can_sign_in(user: User) -> None:
+async def _admit_social_sign_in(db: AsyncSession, user: User) -> bool:
     """Social sign-in must not bring back an account an admin deactivated
-    (it used to reactivate it) or one that was deleted."""
-    if user.is_deleted or not user.is_active:
+    (it used to reactivate it) nor one past its deletion grace period. Within
+    the grace period it cancels the deletion, like a password sign-in.
+    Returns whether it did; the caller commits."""
+    if not user.is_active or not is_restorable(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=INACTIVE_ACCOUNT_MESSAGE)
+    if not user.is_deleted:
+        return False
+    await restore_account(db, user)
+    return True
 
 
 @router.get("/login/google")
@@ -195,12 +201,15 @@ async def callback_google(request: Request, code: str, state: str | None = None,
         )
         user = result.scalars().first()
         needs_commit = False
+        restored = None  # Set once an existing account is admitted.
 
         if not user:
             result = await db.execute(select(User).where(User.email == email))
             user = result.scalars().first()
             if user:
-                _ensure_can_sign_in(user)
+                # Admitted before linking, so no identity is added to an
+                # account that is refused.
+                restored = await _admit_social_sign_in(db, user)
                 db.add(UserIdentity(user_id=user.id, provider="google", provider_user_id=str(google_id), email=email))
                 needs_commit = True
 
@@ -218,7 +227,9 @@ async def callback_google(request: Request, code: str, state: str | None = None,
             db.add(user)
             needs_commit = True
         else:
-            _ensure_can_sign_in(user)
+            if restored is None:
+                restored = await _admit_social_sign_in(db, user)
+            needs_commit = needs_commit or restored
             user.avatar_url = avatar_url
 
         if needs_commit:
@@ -226,7 +237,8 @@ async def callback_google(request: Request, code: str, state: str | None = None,
             await db.refresh(user)
 
         jwt_token = await _start_session(db, user)
-        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
+        restored_flag = "&account_restored=1" if restored else ""
+        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}{restored_flag}")
 
 REGISTER_LIMIT = 10
 REGISTER_WINDOW = timedelta(hours=1)
@@ -268,15 +280,16 @@ async def register(user: UserCreate, request: Request, response: RedirectRespons
     
     return db_user
 
-async def _authenticate(db: AsyncSession, email: str, password: str, request: Request) -> User:
-    """The user these credentials belong to. Every failure gets the same 401
-    and takes as long, so the response never reveals whether an email has an
-    account. Only someone who knows the password learns the account is
-    deactivated. Repeated failures are throttled (login_throttle.py)."""
+async def _authenticate(db: AsyncSession, email: str, password: str, request: Request) -> tuple[User, bool]:
+    """The user these credentials belong to, and whether signing in cancelled
+    its scheduled deletion. Every failure gets the same 401 and takes as long,
+    so the response never reveals whether an email has an account. Only
+    someone who knows the password learns the account is deactivated.
+    Repeated failures are throttled (login_throttle.py)."""
     ip = request.client.host if request.client else None
     await ensure_login_allowed(db, email, ip)
 
-    result = await db.execute(select(User).where(User.email == email, User.is_deleted == False))
+    result = await db.execute(select(User).where(User.email == email, restorable()))
     user = result.scalars().first()
     password_ok = verify_password(password, user.password_hash if user else None)
     record_login_attempt(db, email, ip, succeeded=password_ok)
@@ -294,27 +307,30 @@ async def _authenticate(db: AsyncSession, email: str, password: str, request: Re
             detail=INACTIVE_ACCOUNT_MESSAGE,
             headers={"WWW-Authenticate": "Bearer"},
         )
-    # The successful attempt is committed with the new session.
-    return user
+    restored = user.is_deleted
+    if restored:
+        await restore_account(db, user)
+    # The successful attempt (and a restoration) is committed with the new session.
+    return user, restored
 
 @router.post("/swagger-login", response_model=Token)
 async def swagger_login(request: Request, response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     # Swagger sends the user input in the "username" field, but we log in with email
-    user = await _authenticate(db, normalize_email(form_data.username), form_data.password, request)
+    user, restored = await _authenticate(db, normalize_email(form_data.username), form_data.password, request)
     access_token = await _start_session(db, user)
     
     # Also set cookie for easier testing even in Swagger
     _set_session_cookie(response, access_token)
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "account_restored": restored}
 
 @router.post("/login", response_model=Token)
 async def login(credentials: LoginRequest, request: Request, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
-    user = await _authenticate(db, credentials.email, credentials.password, request)
+    user, restored = await _authenticate(db, credentials.email, credentials.password, request)
 
     access_token = await _start_session(db, user, remember=credentials.remember_me)
     _set_session_cookie(response, access_token, remember=credentials.remember_me)
     
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "account_restored": restored}
 
 @router.post("/logout")
 async def logout(request: Request, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
