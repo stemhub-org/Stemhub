@@ -13,12 +13,12 @@ import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
-from .legal import current_acceptances
+from .legal import accept_current_versions, current_acceptances, has_accepted_current_versions
 from .login_throttle import ensure_login_allowed, record_login_attempt
 from .pwned_passwords import BREACHED_PASSWORD_MESSAGE, is_password_pwned
 from .rate_limit import enforce_rate_limit
 from .models import User, UserIdentity, UserSession
-from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
+from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, LoginRequest, MeResponse, TermsAcceptanceRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import ACCESS_TOKEN_EXPIRE_MINUTES, UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -369,9 +369,25 @@ async def get_current_admin_user(
     return current_user
 
 
-@router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+async def _me(db: AsyncSession, user: User) -> MeResponse:
+    return MeResponse(
+        **UserResponse.model_validate(user).model_dump(),
+        terms_accepted=await has_accepted_current_versions(db, user.id),
+    )
+
+@router.get("/me", response_model=MeResponse)
+async def get_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await _me(db, current_user)
+
+@router.post("/me/terms", response_model=MeResponse)
+async def accept_terms(
+    _: TermsAcceptanceRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    """Accept the current Terms of Service and Privacy Policy, for users who
+    have not yet (Google sign-up, older accounts, a new version)."""
+    await accept_current_versions(db, current_user.id)
+    await db.commit()
+    return await _me(db, current_user)
 
 @router.put("/me", response_model=UserResponse)
 async def update_me(user_update: UserUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
