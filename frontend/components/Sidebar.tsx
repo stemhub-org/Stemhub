@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
 import { Button } from "@/components/ui/Button";
 import { apiFetch } from "@/lib/api";
+import { clearAccessToken } from "@/lib/authToken";
 import { useHydrated } from "@/lib/useHydrated";
 
 const navigation = [
@@ -40,7 +41,7 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
     const handleLogout = async () => {
         // Sign out locally even when the server can't be reached.
         await apiFetch("/auth/logout", { method: "POST", redirectOnUnauthorized: false }).catch(() => undefined);
-        localStorage.removeItem("access_token");
+        clearAccessToken();
         // Don't show this user's data to whoever signs in next.
         queryClient.clear();
         router.push("/login");

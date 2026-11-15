@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { saveAccessToken } from "@/lib/authToken";
 
 function AuthCallbackContent() {
     const router = useRouter();
@@ -9,7 +10,8 @@ function AuthCallbackContent() {
     useEffect(() => {
         const token = searchParams.get("token");
         if (token) {
-            localStorage.setItem("access_token", token);
+            // Google sign-in has no "remember me": a one-day session.
+            saveAccessToken(token, { remember: false });
         }
         router.push("/dashboard");
     }, [router, searchParams]);
