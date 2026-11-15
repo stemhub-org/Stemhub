@@ -20,6 +20,7 @@ from .routers.versions import router as versions_router
 from .database import engine
 from .migrations import check_migrations_async
 from .logging_config import RequestIdMiddleware, configure_logging
+from .validation_errors import install_validation_error_handler
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="StemHub API", lifespan=lifespan)
+install_validation_error_handler(app)
 
 # CORS should support both local host aliases commonly used during development.
 frontend_origins: list[str] = []
