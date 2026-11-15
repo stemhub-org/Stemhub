@@ -56,6 +56,12 @@ def validate_new_password(value: str) -> str:
     return value
 
 
+def require_accepted_terms(value: bool) -> bool:
+    if not value:
+        raise ValueError("You must accept the Terms of Service and the Privacy Policy")
+    return value
+
+
 class UserCreate(BaseModel):
     email: NormalizedEmail
     username: str
@@ -76,9 +82,7 @@ class UserCreate(BaseModel):
     @field_validator("accept_terms")
     @classmethod
     def _require_accepted_terms(cls, value: bool) -> bool:
-        if not value:
-            raise ValueError("You must accept the Terms of Service and the Privacy Policy")
-        return value
+        return require_accepted_terms(value)
 
 class UserResponse(BaseModel):
     id: UUID
@@ -95,6 +99,22 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class MeResponse(UserResponse):
+    # False until the user has accepted the current versions of the Terms of
+    # Service and the Privacy Policy (legal.py): accounts created with Google
+    # or before acceptance was recorded, and everyone after a new version.
+    terms_accepted: bool
+
+
+class TermsAcceptanceRequest(BaseModel):
+    accept_terms: bool = Field(False, validate_default=True)
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _require_accepted_terms(cls, value: bool) -> bool:
+        return require_accepted_terms(value)
+
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
