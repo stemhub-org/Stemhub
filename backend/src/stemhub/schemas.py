@@ -532,6 +532,8 @@ class ProjectSummaryResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: NormalizedEmail
     password: str
+    # 30-day session and cookie instead of one day and a browser-session cookie.
+    remember_me: bool = False
 
 class PasswordChangeRequest(BaseModel):
     current_password: str

@@ -1,6 +1,8 @@
 """Server-side sessions: every sign-in records a session, its id travels in
 the token ("sid"), a token is only accepted while its session is neither
-revoked nor expired, and logging out revokes it."""
+revoked nor expired, and logging out revokes it. "Remember me" makes the
+session and its cookie last 30 days instead of one day and the browser
+session."""
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +17,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
-from stemhub.auth import SESSION_LIFETIME, get_current_user, router as auth_router
+from stemhub.auth import REMEMBERED_SESSION_LIFETIME, SESSION_LIFETIME, get_current_user, router as auth_router
 from stemhub.database import get_db
 from stemhub.models import User, UserSession
 from stemhub.security import ALGORITHM, SECRET_KEY, create_access_token, get_password_hash
@@ -148,3 +150,37 @@ def test_logout_without_a_valid_token_still_clears_the_cookie(headers: dict[str,
     response = _client(db).post("/auth/logout", headers=headers)
     assert response.status_code == 200
     db.execute.assert_not_awaited()
+
+
+# ── Remember me ──
+
+def _login(remember_me: bool | None) -> tuple[Any, MagicMock]:
+    db = _session(_user())
+    body: dict[str, Any] = {"email": "demo@example.com", "password": PASSWORD}
+    if remember_me is not None:
+        body["remember_me"] = remember_me
+    return _client(db).post("/auth/login", json=body), db
+
+
+@pytest.mark.parametrize(
+    "remember_me, lifetime, cookie_max_age",
+    [(None, SESSION_LIFETIME, None), (False, SESSION_LIFETIME, None), (True, REMEMBERED_SESSION_LIFETIME, 30 * 24 * 3600)],
+)
+def test_remember_me_sets_the_session_and_cookie_lifetime(remember_me, lifetime, cookie_max_age) -> None:
+    response, db = _login(remember_me)
+    assert response.status_code == 200
+
+    recorded = db.add.call_args.args[0]
+    assert abs(recorded.expires_at - datetime.now(timezone.utc) - lifetime) < timedelta(minutes=1)
+    cookie = response.headers["set-cookie"]
+    if cookie_max_age is None:
+        # A browser-session cookie: no lifetime, gone when the browser closes.
+        assert "Max-Age" not in cookie and "expires" not in cookie.lower()
+    else:
+        assert f"Max-Age={cookie_max_age}" in cookie
+
+
+def test_the_plugin_login_body_still_works() -> None:
+    # The DAW plugin sends only email and password.
+    response, _ = _login(None)
+    assert response.json()["token_type"] == "bearer"
