@@ -1,3 +1,5 @@
+import re
+import unicodedata
 from datetime import datetime
 from typing import Annotated, Any, Literal, Optional, Union
 from uuid import UUID
@@ -6,10 +8,38 @@ from pydantic import AliasChoices, BaseModel, Discriminator, EmailStr, Field, Ta
 
 # ── User Schemas ──
 
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 32
+
+
+def normalize_username(value: str) -> str:
+    """Canonical stored form of a username: NFKC-normalized (so fullwidth or
+    ligature variants collapse to their plain form), trimmed, and with inner
+    whitespace runs collapsed to one space. Uniqueness is then enforced
+    case-insensitively on this form (index uq_users_username_lower)."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip()
+
+
+def validate_username(value: str) -> str:
+    username = normalize_username(value)
+    if not USERNAME_MIN_LENGTH <= len(username) <= USERNAME_MAX_LENGTH:
+        raise ValueError(
+            f"Username must be between {USERNAME_MIN_LENGTH} and {USERNAME_MAX_LENGTH} characters"
+        )
+    if any(unicodedata.category(char).startswith("C") for char in username):
+        raise ValueError("Username contains invalid characters")
+    return username
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     username: str
     password: str
+
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, value: str) -> str:
+        return validate_username(value)
 
 class UserResponse(BaseModel):
     id: UUID
@@ -34,6 +64,11 @@ class UserUpdate(BaseModel):
     location: Optional[str] = None
     website: Optional[str] = None
     genres: Optional[list[str]] = None
+
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else validate_username(value)
 
 class Token(BaseModel):
     access_token: str
