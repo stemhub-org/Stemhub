@@ -18,6 +18,7 @@ import {
 import { useToast } from "@/components/ToastProvider";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { PasswordVisibilityToggle } from "@/components/PasswordVisibilityToggle";
 import { useChangeEmail, useChangePassword, useUpdateProfile } from "@/lib/account";
 import { errorMessage } from "@/lib/api";
 import { useCurrentUser } from "@/lib/queries";
@@ -266,6 +267,9 @@ function AccountSettings({ user }: { user: UserProfile }) {
     });
     const changePassword = useChangePassword();
     const isUpdatingPassword = changePassword.isPending;
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    // One toggle for the new password and its confirmation, as on sign-up.
+    const [showNewPassword, setShowNewPassword] = useState(false);
     const [passwordError, setPasswordError] = useState("");
     const [passwordSuccess, setPasswordSuccess] = useState("");
 
@@ -343,28 +347,41 @@ function AccountSettings({ user }: { user: UserProfile }) {
 
                 <div className="space-y-2 pt-2">
                     <label htmlFor="settings-current-password" className="text-sm font-medium text-foreground/80">Current Password</label>
-                    <input
-                        type="password"
-                        placeholder="••••••••"
-                        id="settings-current-password"
-                        value={passwordForm.current_password}
-                        onChange={(e) => setPasswordForm(f => ({ ...f, current_password: e.target.value }))}
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
-                    />
+                    <div className="relative">
+                        <input
+                            type={showCurrentPassword ? "text" : "password"}
+                            placeholder="••••••••"
+                            id="settings-current-password"
+                            autoComplete="current-password"
+                            value={passwordForm.current_password}
+                            onChange={(e) => setPasswordForm(f => ({ ...f, current_password: e.target.value }))}
+                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 pl-4 pr-11 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        />
+                        <PasswordVisibilityToggle
+                            visible={showCurrentPassword}
+                            onToggle={() => setShowCurrentPassword(!showCurrentPassword)}
+                        />
+                    </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
                         <label htmlFor="settings-new-password" className="text-sm font-medium text-foreground/80">New Password</label>
-                        <input
-                            type="password"
-                            placeholder="••••••••"
-                            id="settings-new-password"
-                            autoComplete="new-password"
-                            aria-describedby="settings-new-password-strength"
-                            value={passwordForm.new_password}
-                            onChange={(e) => setPasswordForm(f => ({ ...f, new_password: e.target.value }))}
-                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
-                        />
+                        <div className="relative">
+                            <input
+                                type={showNewPassword ? "text" : "password"}
+                                placeholder="••••••••"
+                                id="settings-new-password"
+                                autoComplete="new-password"
+                                aria-describedby="settings-new-password-strength"
+                                value={passwordForm.new_password}
+                                onChange={(e) => setPasswordForm(f => ({ ...f, new_password: e.target.value }))}
+                                className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 pl-4 pr-11 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                            />
+                            <PasswordVisibilityToggle
+                                visible={showNewPassword}
+                                onToggle={() => setShowNewPassword(!showNewPassword)}
+                            />
+                        </div>
                         <PasswordStrengthMeter
                             id="settings-new-password-strength"
                             password={passwordForm.new_password}
@@ -374,9 +391,10 @@ function AccountSettings({ user }: { user: UserProfile }) {
                     <div className="space-y-2">
                         <label htmlFor="settings-confirm-password" className="text-sm font-medium text-foreground/80">Confirm New Password</label>
                         <input
-                            type="password"
+                            type={showNewPassword ? "text" : "password"}
                             placeholder="••••••••"
                             id="settings-confirm-password"
+                            autoComplete="new-password"
                             value={passwordForm.confirm_password}
                             onChange={(e) => setPasswordForm(f => ({ ...f, confirm_password: e.target.value }))}
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
