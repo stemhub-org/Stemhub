@@ -13,6 +13,7 @@ import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
+from .login_throttle import ensure_login_allowed, record_login_attempt
 from .models import User, UserIdentity, UserSession
 from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import ACCESS_TOKEN_EXPIRE_MINUTES, UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
@@ -244,31 +245,39 @@ async def register(user: UserCreate, response: RedirectResponse, db: AsyncSessio
     
     return db_user
 
-async def _authenticate(db: AsyncSession, email: str, password: str) -> User:
+async def _authenticate(db: AsyncSession, email: str, password: str, request: Request) -> User:
     """The user these credentials belong to. Every failure gets the same 401
     and takes as long, so the response never reveals whether an email has an
     account. Only someone who knows the password learns the account is
-    deactivated."""
+    deactivated. Repeated failures are throttled (login_throttle.py)."""
+    ip = request.client.host if request.client else None
+    await ensure_login_allowed(db, email, ip)
+
     result = await db.execute(select(User).where(User.email == email, User.is_deleted == False))
     user = result.scalars().first()
-    if not verify_password(password, user.password_hash if user else None):
+    password_ok = verify_password(password, user.password_hash if user else None)
+    record_login_attempt(db, email, ip, succeeded=password_ok)
+    if not password_ok:
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user.is_active:
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=INACTIVE_ACCOUNT_MESSAGE,
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # The successful attempt is committed with the new session.
     return user
 
 @router.post("/swagger-login", response_model=Token)
-async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def swagger_login(request: Request, response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     # Swagger sends the user input in the "username" field, but we log in with email
-    user = await _authenticate(db, normalize_email(form_data.username), form_data.password)
+    user = await _authenticate(db, normalize_email(form_data.username), form_data.password, request)
     access_token = await _start_session(db, user)
     
     # Also set cookie for easier testing even in Swagger
@@ -276,8 +285,8 @@ async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordReq
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
-async def login(credentials: LoginRequest, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
-    user = await _authenticate(db, credentials.email, credentials.password)
+async def login(credentials: LoginRequest, request: Request, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
+    user = await _authenticate(db, credentials.email, credentials.password, request)
 
     access_token = await _start_session(db, user, remember=credentials.remember_me)
     _set_session_cookie(response, access_token, remember=credentials.remember_me)

@@ -18,6 +18,8 @@ from stemhub.models import User
 from stemhub.schemas import EmailChangeRequest, LoginRequest, UserCreate
 from stemhub.security import get_password_hash
 
+pytestmark = pytest.mark.usefixtures("no_login_throttle")
+
 
 def _session(*rows: Any) -> MagicMock:
     def lookup(row: Any) -> MagicMock:
