@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ToastProvider } from "@/components/ToastProvider";
 import { queryKeys } from "@/lib/queries";
 import LoginPage from "./page";
 
@@ -14,7 +15,9 @@ function json(body: unknown, status = 200) {
 
 function submitLogin(client = new QueryClient(), { rememberMe = false } = {}) {
     const Wrapper = ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        <QueryClientProvider client={client}>
+            <ToastProvider>{children}</ToastProvider>
+        </QueryClientProvider>
     );
     render(<LoginPage />, { wrapper: Wrapper });
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "jb@stemhub.io" } });
@@ -87,5 +90,22 @@ describe("LoginPage", () => {
         submitLogin();
 
         expect((await screen.findByRole("alert")).textContent).toContain("Unable to reach the server");
+    });
+
+    it("says when signing in cancelled a scheduled account deletion", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => json({ access_token: "tok", token_type: "bearer", account_restored: true })));
+
+        submitLogin();
+
+        expect(await screen.findByText("Welcome back! Your account deletion has been cancelled.")).toBeTruthy();
+    });
+
+    it("says nothing on a normal sign-in", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => json({ access_token: "tok", token_type: "bearer", account_restored: false })));
+
+        submitLogin();
+
+        await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"));
+        expect(screen.queryByText(/account deletion has been cancelled/)).toBeNull();
     });
 });
