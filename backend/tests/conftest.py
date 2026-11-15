@@ -14,6 +14,18 @@ os.environ.setdefault(
 )
 
 
+@pytest.fixture(autouse=True)
+def no_pwned_passwords_lookup(monkeypatch):
+    """Keep tests off the network: no password counts as breached.
+    test_pwned_passwords.py covers the real lookup with a fake API."""
+    from stemhub import auth
+
+    async def never_pwned(password):
+        return False
+
+    monkeypatch.setattr(auth, "is_password_pwned", never_pwned)
+
+
 @pytest.fixture
 def no_login_throttle(monkeypatch):
     """For tests of sign-in itself, whose fake database does not answer the

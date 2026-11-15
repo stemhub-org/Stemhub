@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse
 
 from .database import get_db
 from .login_throttle import ensure_login_allowed, record_login_attempt
+from .pwned_passwords import BREACHED_PASSWORD_MESSAGE, is_password_pwned
 from .models import User, UserIdentity, UserSession
 from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import ACCESS_TOKEN_EXPIRE_MINUTES, UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
@@ -226,6 +227,9 @@ async def callback_google(request: Request, code: str, state: str | None = None,
 
 @router.post("/register", response_model=UserResponse)
 async def register(user: UserCreate, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
+    if await is_password_pwned(user.password):
+        raise HTTPException(status_code=400, detail=BREACHED_PASSWORD_MESSAGE)
+
     result_email = await db.execute(select(User).where(User.email == user.email))
     if result_email.scalars().first():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -380,7 +384,9 @@ async def update_me(user_update: UserUpdate, current_user: User = Depends(get_cu
 async def update_password(password_data: PasswordChangeRequest, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if not verify_password(password_data.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="L'ancien mot de passe est incorrect")
-    
+    if await is_password_pwned(password_data.new_password):
+        raise HTTPException(status_code=400, detail=BREACHED_PASSWORD_MESSAGE)
+
     current_user.password_hash = get_password_hash(password_data.new_password)
     # Sign out every other device: whoever knew the old password and signed
     # in with it loses access. The session making the change stays.
