@@ -13,6 +13,7 @@ import {
     Trash2,
     ShieldAlert,
     CheckCircle2,
+    Download,
     Loader2
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
@@ -20,7 +21,8 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PasswordVisibilityToggle } from "@/components/PasswordVisibilityToggle";
 import { useChangeEmail, useChangePassword, useDeleteAccount, useUpdateProfile } from "@/lib/account";
-import { errorMessage } from "@/lib/api";
+import { apiFetchResponse, errorMessage } from "@/lib/api";
+import { filenameFromContentDisposition, saveBlob } from "@/lib/download";
 import { useCurrentUser } from "@/lib/queries";
 import { useLogout } from "@/lib/useLogout";
 import type { UserProfile } from "@/types/user";
@@ -421,8 +423,50 @@ function AccountSettings({ user }: { user: UserProfile }) {
                 </div>
             </div>
 
+            <ExportData />
+
             <DeleteAccount user={user} />
         </motion.div>
+    );
+}
+
+function ExportData() {
+    const [exporting, setExporting] = useState(false);
+    const toast = useToast();
+
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            const response = await apiFetchResponse("/auth/me/export");
+            const filename = filenameFromContentDisposition(response.headers.get("Content-Disposition")) ?? "stemhub-data.json";
+            saveBlob(await response.blob(), filename);
+        } catch (error) {
+            toast.error(errorMessage(error, "Couldn't export your data."));
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <h2 className="text-xl font-medium tracking-tight" style={{ fontFamily: "var(--font-syne)" }}>Your Data</h2>
+            <div className="p-5 rounded-xl border border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <p className="text-xs text-foreground/60 font-light max-w-md">
+                    Download a copy of everything StemHub holds about you, as a JSON file: your profile, your
+                    projects and their history, your contributions and your sign-in history. Audio files are
+                    listed, and can be downloaded from each project.
+                </p>
+                <button
+                    type="button"
+                    onClick={handleExport}
+                    disabled={exporting}
+                    className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 text-sm font-medium transition-colors border border-foreground/10 disabled:opacity-50"
+                >
+                    {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                    Download my data
+                </button>
+            </div>
+        </div>
     );
 }
 
