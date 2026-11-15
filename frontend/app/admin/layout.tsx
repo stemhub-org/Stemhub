@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Shield } from "lucide-react";
 import AdminGuard from "@/components/AdminGuard";
+import { TermsGate } from "@/components/TermsGate";
 
 const NAV_ITEMS = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -56,12 +57,14 @@ function AdminSidebar() {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     return (
         <AdminGuard>
-            <div className="flex h-screen bg-[#F1F1F1] text-ink overflow-hidden">
-                <AdminSidebar />
-                <main className="flex-1 overflow-y-auto">
-                    {children}
-                </main>
-            </div>
+            <TermsGate>
+                <div className="flex h-screen bg-[#F1F1F1] text-ink overflow-hidden">
+                    <AdminSidebar />
+                    <main className="flex-1 overflow-y-auto">
+                        {children}
+                    </main>
+                </div>
+            </TermsGate>
         </AdminGuard>
     );
 }

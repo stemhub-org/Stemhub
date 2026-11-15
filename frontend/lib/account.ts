@@ -12,7 +12,8 @@ export function useUpdateProfile() {
         mutationFn: (changes) =>
             apiFetch<UserProfile>("/auth/me", { method: "PUT", body: JSON.stringify(changes) }),
         onSuccess: (user) => {
-            queryClient.setQueryData(queryKeys.currentUser, user);
+            // Merged so fields only /auth/me returns (terms_accepted) are kept.
+            queryClient.setQueryData<UserProfile>(queryKeys.currentUser, (cached) => ({ ...cached, ...user }));
         },
     });
 }
@@ -24,7 +25,8 @@ export function useChangeEmail() {
         mutationFn: (request) =>
             apiFetch<UserProfile>("/auth/me/email", { method: "PUT", body: JSON.stringify(request) }),
         onSuccess: (user) => {
-            queryClient.setQueryData(queryKeys.currentUser, user);
+            // Merged so fields only /auth/me returns (terms_accepted) are kept.
+            queryClient.setQueryData<UserProfile>(queryKeys.currentUser, (cached) => ({ ...cached, ...user }));
         },
     });
 }
@@ -34,6 +36,18 @@ export function useChangePassword() {
     return useMutation<void, ApiError, PasswordChangeRequest>({
         mutationFn: async (request) => {
             await apiFetch<unknown>("/auth/me/password", { method: "PUT", body: JSON.stringify(request) });
+        },
+    });
+}
+
+/** Accepts the current Terms of Service and Privacy Policy (POST /auth/me/terms). */
+export function useAcceptTerms() {
+    const queryClient = useQueryClient();
+    return useMutation<UserProfile, ApiError, void>({
+        mutationFn: () =>
+            apiFetch<UserProfile>("/auth/me/terms", { method: "POST", body: JSON.stringify({ accept_terms: true }) }),
+        onSuccess: (user) => {
+            queryClient.setQueryData(queryKeys.currentUser, user);
         },
     });
 }
