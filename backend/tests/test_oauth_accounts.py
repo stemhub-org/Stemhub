@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import urllib.parse
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -201,3 +202,15 @@ def test_google_sign_in_does_not_bring_back_a_deactivated_or_deleted_account(mon
     assert user.is_active == state.get("is_active", True)
     session.add.assert_not_called()
     session.commit.assert_not_awaited()
+
+
+@pytest.mark.parametrize("linked", [True, False])
+def test_google_sign_in_within_the_grace_period_restores_a_deleted_account(monkeypatch, linked) -> None:
+    user = _existing_user(is_deleted=True, deleted_at=datetime.now(timezone.utc) - timedelta(days=3))
+    # The last row answers the UPDATE that restores the projects.
+    rows = (user, None) if linked else (None, user, None)
+    response, session = _callback(monkeypatch, _google_user(), *rows)
+    assert response.status_code == 307
+    assert response.headers["location"].endswith("&account_restored=1")
+    assert user.is_deleted is False
+    session.commit.assert_awaited()

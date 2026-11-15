@@ -103,10 +103,10 @@ def test_a_deactivated_account_is_named_only_with_the_right_password(swagger: bo
     assert outcome == {"status": 403, "detail": "Your account is deactivated."}
 
 
-def test_deleted_accounts_are_not_looked_up() -> None:
+def test_accounts_past_their_deletion_grace_period_are_not_looked_up() -> None:
     _, session = _login(None, PASSWORD)
     sql = str(session.execute.await_args.args[0].compile(dialect=postgresql.dialect()))
-    assert "users.is_deleted = false" in sql
+    assert "users.is_deleted = false OR users.deleted_at >" in sql
 
 
 @pytest.mark.parametrize("password_hash", [None, UNUSABLE_PASSWORD_HASH])
