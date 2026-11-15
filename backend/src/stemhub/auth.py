@@ -113,6 +113,10 @@ async def callback_google(request: Request, code: str, state: str | None = None,
 
         if not email:
             raise HTTPException(status_code=400, detail="Failed to get email from Google")
+        # Accounts are matched by email, so an unverified Google address would
+        # let anyone claim the StemHub account that uses it.
+        if user_info.get("verified_email") is not True:
+            raise HTTPException(status_code=400, detail="Your Google email address is not verified")
 
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalars().first()
