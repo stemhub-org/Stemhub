@@ -122,6 +122,12 @@ def _callback(monkeypatch, user_info: dict[str, Any], *rows: Any):
     return response, session
 
 
+def _added(session: MagicMock, kind: type) -> list[Any]:
+    """What the callback added to the session, of one kind (a sign-in also
+    records a UserSession)."""
+    return [call.args[0] for call in session.add.call_args_list if isinstance(call.args[0], kind)]
+
+
 def _google_user(**overrides: Any) -> dict[str, Any]:
     return {"id": "109876543210", "email": "demo@example.com", "name": "Demo User", "verified_email": True, **overrides}
 
@@ -162,7 +168,7 @@ def test_a_linked_google_account_signs_in_by_its_id_not_its_email(monkeypatch) -
     assert response.status_code == 307
     assert _token_email(response) == "old@example.com"
     assert session.execute.await_count == 1
-    session.add.assert_not_called()
+    assert _added(session, UserIdentity) == []
 
 
 def test_a_first_google_sign_in_links_the_account_with_the_same_email(monkeypatch) -> None:
@@ -170,16 +176,15 @@ def test_a_first_google_sign_in_links_the_account_with_the_same_email(monkeypatc
     response, session = _callback(monkeypatch, _google_user(), None, user)
     assert response.status_code == 307
     assert _token_email(response) == "demo@example.com"
-    identity = session.add.call_args.args[0]
-    assert isinstance(identity, UserIdentity)
+    [identity] = _added(session, UserIdentity)
     assert (identity.user_id, identity.provider, identity.provider_user_id) == (user.id, "google", "109876543210")
-    session.commit.assert_awaited_once()
+    session.commit.assert_awaited()
 
 
 def test_google_sign_up_creates_an_account_without_a_usable_password(monkeypatch) -> None:
     response, session = _callback(monkeypatch, _google_user(), None, None, None)
     assert response.status_code == 307
-    created = session.add.call_args.args[0]
+    [created] = _added(session, User)
     assert created.email == "demo@example.com"
     assert created.password_hash == UNUSABLE_PASSWORD_HASH
     assert [(i.provider, i.provider_user_id) for i in created.identities] == [("google", "109876543210")]

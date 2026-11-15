@@ -1,19 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import jwt
 import os
+import uuid
+from datetime import datetime, timedelta, timezone
 import httpx
 import secrets
 from fastapi.responses import RedirectResponse
 
 from .database import get_db
-from .models import User, UserIdentity
+from .models import User, UserIdentity, UserSession
 from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
-from .security import UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
+from .security import ACCESS_TOKEN_EXPIRE_MINUTES, UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/swagger-login", auto_error=False)
@@ -55,6 +57,45 @@ def ensure_https(url: str) -> str:
 BACKEND_URL = ensure_https(os.getenv("BACKEND_URL", "http://localhost:8000"))
 FRONTEND_URL = ensure_https(os.getenv("FRONTEND_URL", "http://localhost:3000"))
 GOOGLE_REDIRECT_URI = ensure_https(os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_URL}/auth/callback/google"))
+
+SESSION_LIFETIME = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+
+async def _start_session(db: AsyncSession, user: User) -> str:
+    """Record a server-side session for `user` and return its access token.
+    The token is only accepted while the session lives (see get_current_user)."""
+    expires_at = datetime.now(timezone.utc) + SESSION_LIFETIME
+    session = UserSession(id=uuid.uuid4(), user_id=user.id, expires_at=expires_at)
+    db.add(session)
+    await db.commit()
+    return create_access_token(data={"sub": user.email, "sid": str(session.id)}, expires_at=expires_at)
+
+
+def _request_token(request: Request) -> str | None:
+    # Order of priority for tokens:
+    # 1. Query parameter (explicitly passed, e.g. for audio)
+    # 2. HttpOnly Cookie (sign-in session, sent automatically)
+    # 3. Authorization Header (Standard/Swagger)
+    token = request.query_params.get("token")
+    if not token:
+        token = request.cookies.get("access_token")
+    if not token:
+        header_auth = request.headers.get("Authorization")
+        if header_auth and header_auth.startswith("Bearer "):
+            token = header_auth.split(" ")[1]
+    return token
+
+
+def _session_id(token: str | None) -> uuid.UUID | None:
+    """The session a valid, unexpired token belongs to."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return uuid.UUID(str(payload.get("sid")))
+    except (jwt.PyJWTError, ValueError):
+        return None
+
 
 def _ensure_can_sign_in(user: User) -> None:
     """Social sign-in must not bring back an account an admin deactivated
@@ -164,7 +205,7 @@ async def callback_google(request: Request, code: str, state: str | None = None,
             await _commit_user(db)
             await db.refresh(user)
 
-        jwt_token = create_access_token(data={"sub": user.email})
+        jwt_token = await _start_session(db, user)
         return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
 
 @router.post("/register", response_model=UserResponse)
@@ -183,7 +224,7 @@ async def register(user: UserCreate, response: RedirectResponse, db: AsyncSessio
     await db.refresh(db_user)
     
     # Set cookie on registration too
-    access_token = create_access_token(data={"sub": db_user.email})
+    access_token = await _start_session(db, db_user)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -220,7 +261,7 @@ async def _authenticate(db: AsyncSession, email: str, password: str) -> User:
 async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     # Swagger sends the user input in the "username" field, but we log in with email
     user = await _authenticate(db, normalize_email(form_data.username), form_data.password)
-    access_token = create_access_token(data={"sub": user.email})
+    access_token = await _start_session(db, user)
     
     # Also set cookie for easier testing even in Swagger
     response.set_cookie(
@@ -237,7 +278,7 @@ async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordReq
 async def login(credentials: LoginRequest, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
     user = await _authenticate(db, credentials.email, credentials.password)
 
-    access_token = create_access_token(data={"sub": user.email})
+    access_token = await _start_session(db, user)
     
     # Set HttpOnly Cookie
     response.set_cookie(
@@ -252,45 +293,37 @@ async def login(credentials: LoginRequest, response: RedirectResponse, db: Async
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/logout")
-async def logout(response: RedirectResponse):
+async def logout(request: Request, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
+    """Ends the session the request's token belongs to, so the token stops
+    working everywhere, not only in this browser."""
+    session_id = _session_id(_request_token(request))
+    if session_id is not None:
+        await db.execute(
+            update(UserSession)
+            .where(UserSession.id == session_id, UserSession.revoked_at.is_(None))
+            .values(revoked_at=func.now())
+        )
+        await db.commit()
     response.delete_cookie("access_token")
     return {"message": "Logged out successfully"}
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
-    # Order of priority for tokens:
-    # 1. Query parameter (explicitly passed, e.g. for audio)
-    # 2. HttpOnly Cookie (sign-in session, sent automatically)
-    # 3. Authorization Header (Standard/Swagger)
-    
-    token = request.query_params.get("token")
-    if not token:
-        token = request.cookies.get("access_token")
-    if not token:
-        # Fallback to header if neither cookie nor query param exists
-        header_auth = request.headers.get("Authorization")
-        if header_auth and header_auth.startswith("Bearer "):
-            token = header_auth.split(" ")[1]
-
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if not token:
+    session_id = _session_id(_request_token(request))
+    if session_id is None:
         raise credentials_exception
 
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
-        if not isinstance(email, str):
-            raise credentials_exception
-    except jwt.PyJWTError:
-        raise credentials_exception
-        
     result = await db.execute(
-        select(User).where(
-            # Tokens issued before emails were lowercased may carry capitals.
-            User.email == normalize_email(email),
+        select(User)
+        .join(UserSession, UserSession.user_id == User.id)
+        .where(
+            UserSession.id == session_id,
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > func.now(),
             User.is_active == True,
             User.is_deleted == False,
         )
