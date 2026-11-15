@@ -7,7 +7,9 @@ than useful (GDPR).
 - Login attempts: after 30 days; throttling only reads the last 24 hours.
 - Rate limit hits: after 1 day; the longest window is one hour.
 
-The backend runs `purge_auth_records` every hour (see main.py).
+The backend runs `purge_auth_records` every hour (see main.py), together
+with the erasure of accounts whose deletion grace period is over
+(account_deletion.py).
 """
 from __future__ import annotations
 
@@ -19,7 +21,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from .account_deletion import erase_due_accounts
 from .models import LoginAttempt, RateLimitHit, UserSession
+from .storage import get_storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,8 @@ async def purge_auth_records_forever(session_factory: async_sessionmaker[AsyncSe
         try:
             async with session_factory() as db:
                 result = await purge_auth_records(db)
+            async with session_factory() as db:
+                await erase_due_accounts(db, get_storage_service())
             if result.sessions or result.login_attempts or result.rate_limit_hits:
                 logger.info(
                     "Purged %d sessions, %d login attempts and %d rate limit hits",

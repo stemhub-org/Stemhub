@@ -4,6 +4,7 @@ and signs it out everywhere at once; the data is erased 30 days later.
 Signing in again before then (password or Google) cancels the deletion."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -14,11 +15,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
-from stemhub import auth
-from stemhub.account_deletion import DELETION_GRACE, is_restorable
+from stemhub import account_deletion, auth
+from stemhub.account_deletion import DELETION_GRACE, erase_account, is_restorable
 from stemhub.database import get_db
 from stemhub.models import User
 from stemhub.security import UNUSABLE_PASSWORD_HASH, get_password_hash
+from stemhub.storage import StorageError
 
 PASSWORD = "a-strong-password"
 
@@ -149,3 +151,101 @@ def test_a_normal_sign_in_restores_nothing() -> None:
     response, db = _login(_user())
     assert response.json()["account_restored"] is False
     assert not any(sql.startswith("UPDATE project") for sql in _sql(db))
+
+
+# ── Erasure after the grace period ──
+
+def _erase_db(project_ids: list[uuid.UUID], storage_uris: list[str]) -> MagicMock:
+    def answer(rows: list[Any]) -> MagicMock:
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = rows
+        return result
+
+    answers = [answer(project_ids), answer(storage_uris)] if project_ids else [answer(project_ids)]
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=answers + [MagicMock()] * 20)
+    db.commit = AsyncMock()
+    return db
+
+
+def _writes(db: MagicMock) -> list[str]:
+    return [sql for sql in _sql(db) if not sql.startswith("SELECT")]
+
+
+def test_erasing_deletes_the_files_then_the_projects_then_the_account() -> None:
+    user = _deleted_user(days_ago=31)
+    project = uuid.uuid4()
+    storage = MagicMock()
+    db = _erase_db([project], ["projects/p/blobs/ab/abc"])
+
+    assert asyncio.run(erase_account(db, storage, user)) is True
+
+    storage.delete_project_preview.assert_called_once_with(project)
+    storage.delete_blob.assert_called_once_with("projects/p/blobs/ab/abc")
+    writes = _writes(db)
+    assert [sql.split(" WHERE")[0] for sql in writes] == [
+        "DELETE FROM pull_request",
+        "UPDATE version SET parent_version_id=NULL",
+        "DELETE FROM version",
+        "DELETE FROM branch",
+        "DELETE FROM collaborator",
+        "DELETE FROM project",
+        "UPDATE version SET created_by=NULL",
+        "UPDATE pull_request SET created_by=NULL",
+        "UPDATE pull_request SET closed_by=NULL",
+        "DELETE FROM collaborator",
+        "DELETE FROM login_attempt",
+        "DELETE FROM users",
+    ]
+    assert f"project.id IN ('{project}')" in writes[5]
+    assert f"version.created_by = '{user.id}'" in writes[6]
+    assert f"collaborator.user_id = '{user.id}'" in writes[9]
+    assert "login_attempt.email = 'demo@example.com'" in writes[10]
+    assert f"users.id = '{user.id}'" in writes[11]
+    db.commit.assert_awaited_once()
+
+
+def test_an_account_without_projects_only_loses_its_personal_data() -> None:
+    user = _deleted_user(days_ago=31)
+    storage = MagicMock()
+    db = _erase_db([], [])
+
+    assert asyncio.run(erase_account(db, storage, user)) is True
+    storage.delete_blob.assert_not_called()
+    assert not any("project" in sql.split(" WHERE")[0] for sql in _writes(db))
+    assert _writes(db)[-1].startswith("DELETE FROM users")
+
+
+@pytest.mark.parametrize(
+    "failure",
+    # Also errors the storage does not wrap, such as expired bucket credentials.
+    [StorageError("bucket unreachable"), OSError("disk full"), RuntimeError("invalid_grant")],
+)
+def test_a_file_that_cannot_be_deleted_postpones_the_whole_erasure(failure: Exception) -> None:
+    user = _deleted_user(days_ago=31)
+    storage = MagicMock()
+    storage.delete_blob.side_effect = failure
+    db = _erase_db([uuid.uuid4()], ["projects/p/blobs/ab/abc"])
+
+    assert asyncio.run(erase_account(db, storage, user)) is False
+    assert _writes(db) == []
+    db.commit.assert_not_awaited()
+
+
+def test_only_accounts_past_the_grace_period_are_erased(monkeypatch) -> None:
+    due = [_deleted_user(days_ago=31), _deleted_user(days_ago=40)]
+    found = MagicMock()
+    found.scalars.return_value.all.return_value = due
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=found)
+    erased: list[User] = []
+
+    async def erase(db, storage, user):
+        erased.append(user)
+        return True
+
+    monkeypatch.setattr(account_deletion, "erase_account", erase)
+    assert asyncio.run(account_deletion.erase_due_accounts(db, MagicMock())) == 2
+    assert erased == due
+    query = _sql(db)[0]
+    assert "users.is_deleted = true" in query and "users.deleted_at <=" in query
