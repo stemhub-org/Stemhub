@@ -1,6 +1,7 @@
 """Deleting one's account: confirmed by typing the username (and the
 password when the account has one), it hides the account and its projects
-and signs it out everywhere at once; the data is erased 30 days later."""
+and signs it out everywhere at once; the data is erased 30 days later.
+Signing in again before then (password or Google) cancels the deletion."""
 from __future__ import annotations
 
 import uuid
@@ -14,7 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
 from stemhub import auth
-from stemhub.account_deletion import DELETION_GRACE
+from stemhub.account_deletion import DELETION_GRACE, is_restorable
 from stemhub.database import get_db
 from stemhub.models import User
 from stemhub.security import UNUSABLE_PASSWORD_HASH, get_password_hash
@@ -93,3 +94,58 @@ def test_a_google_only_account_confirms_with_its_username_alone() -> None:
     response, _ = _delete(user, {"confirm_username": "demo"})
     assert response.status_code == 200
     assert user.is_deleted is True
+
+
+# ── Cancelling by signing in again ──
+
+def _deleted_user(days_ago: float) -> User:
+    user = _user()
+    user.is_deleted = True
+    user.deleted_at = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    return user
+
+
+@pytest.mark.parametrize("days_ago, restorable", [(0, True), (29.9, True), (30.1, False)])
+def test_an_account_can_be_restored_for_30_days(days_ago: float, restorable: bool) -> None:
+    assert is_restorable(_deleted_user(days_ago)) is restorable
+    assert is_restorable(_user()) is True
+
+
+def _login(user: User | None) -> tuple[Any, MagicMock]:
+    found = MagicMock()
+    found.scalars.return_value.first.return_value = user
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=found)
+    db.commit = AsyncMock()
+    app = FastAPI()
+    app.include_router(auth.router)
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    response = TestClient(app).post("/auth/login", json={"email": "demo@example.com", "password": PASSWORD})
+    return response, db
+
+
+@pytest.mark.usefixtures("no_login_throttle")
+def test_signing_in_within_the_grace_period_restores_the_account_and_its_projects() -> None:
+    user = _deleted_user(days_ago=3)
+    deleted_at = user.deleted_at
+    response, db = _login(user)
+
+    assert response.status_code == 200
+    assert response.json()["account_restored"] is True
+    assert (user.is_deleted, user.deleted_at) == (False, None)
+    restore = next(sql for sql in _sql(db) if sql.startswith("UPDATE project"))
+    assert restore.startswith("UPDATE project SET is_deleted=false, deleted_at=NULL")
+    assert f"project.owner_id = '{user.id}'" in restore
+    # Only the projects the account deletion hid, not ones deleted before.
+    assert f"project.deleted_at = '{deleted_at.isoformat(sep=' ')}'" in restore
+
+
+@pytest.mark.usefixtures("no_login_throttle")
+def test_a_normal_sign_in_restores_nothing() -> None:
+    response, db = _login(_user())
+    assert response.json()["account_restored"] is False
+    assert not any(sql.startswith("UPDATE project") for sql in _sql(db))

@@ -132,6 +132,8 @@ class UserUpdate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    # True when this sign-in cancelled the account's scheduled deletion.
+    account_restored: bool = False
 
 # ── Project Schemas ──
 
