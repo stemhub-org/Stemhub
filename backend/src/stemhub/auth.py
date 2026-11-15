@@ -91,19 +91,25 @@ def _set_session_cookie(response: Response, token: str, *, remember: bool = Fals
     )
 
 
-def _request_token(request: Request) -> str | None:
-    # Order of priority for tokens:
-    # 1. Query parameter (explicitly passed, e.g. for audio)
-    # 2. HttpOnly Cookie (sign-in session, sent automatically)
-    # 3. Authorization Header (Standard/Swagger)
-    token = request.query_params.get("token")
-    if not token:
-        token = request.cookies.get("access_token")
-    if not token:
-        header_auth = request.headers.get("Authorization")
-        if header_auth and header_auth.startswith("Bearer "):
-            token = header_auth.split(" ")[1]
-    return token
+def _request_session_ids(request: Request) -> list[uuid.UUID]:
+    """The sessions of every valid token the request carries, by priority:
+    1. Query parameter (explicitly passed, e.g. for audio)
+    2. HttpOnly Cookie (sign-in session, sent automatically)
+    3. Authorization Header (Standard/Swagger)
+    All are kept, not just the first: a stale cookie from an older sign-in
+    must not hide the valid token in the header."""
+    header_auth = request.headers.get("Authorization") or ""
+    tokens = [
+        request.query_params.get("token"),
+        request.cookies.get("access_token"),
+        header_auth.split(" ", 1)[1] if header_auth.startswith("Bearer ") else None,
+    ]
+    session_ids: list[uuid.UUID] = []
+    for token in tokens:
+        session_id = _session_id(token)
+        if session_id is not None and session_id not in session_ids:
+            session_ids.append(session_id)
+    return session_ids
 
 
 def _session_id(token: str | None) -> uuid.UUID | None:
@@ -238,7 +244,10 @@ async def callback_google(request: Request, code: str, state: str | None = None,
 
         jwt_token = await _start_session(db, user)
         restored_flag = "&account_restored=1" if restored else ""
-        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}{restored_flag}")
+        redirect = RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}{restored_flag}")
+        # Replaces any cookie left by an earlier sign-in, as a password login does.
+        _set_session_cookie(redirect, jwt_token)
+        return redirect
 
 REGISTER_LIMIT = 10
 REGISTER_WINDOW = timedelta(hours=1)
@@ -334,13 +343,13 @@ async def login(credentials: LoginRequest, request: Request, response: RedirectR
 
 @router.post("/logout")
 async def logout(request: Request, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
-    """Ends the session the request's token belongs to, so the token stops
-    working everywhere, not only in this browser."""
-    session_id = _session_id(_request_token(request))
-    if session_id is not None:
+    """Ends the sessions the request's tokens belong to, so they stop working
+    everywhere, not only in this browser."""
+    session_ids = _request_session_ids(request)
+    if session_ids:
         await db.execute(
             update(UserSession)
-            .where(UserSession.id == session_id, UserSession.revoked_at.is_(None))
+            .where(UserSession.id.in_(session_ids), UserSession.revoked_at.is_(None))
             .values(revoked_at=func.now())
         )
         await db.commit()
@@ -353,25 +362,28 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    session_id = _session_id(_request_token(request))
-    if session_id is None:
+    session_ids = _request_session_ids(request)
+    if not session_ids:
         raise credentials_exception
 
     result = await db.execute(
-        select(User)
+        select(User, UserSession.id)
         .join(UserSession, UserSession.user_id == User.id)
         .where(
-            UserSession.id == session_id,
+            UserSession.id.in_(session_ids),
             UserSession.revoked_at.is_(None),
             UserSession.expires_at > func.now(),
             User.is_active == True,
             User.is_deleted == False,
         )
     )
-    user = result.scalars().first()
-    if user is None:
+    live = {session_id: user for user, session_id in result.all()}
+    # The first token, by priority, whose session is still live.
+    session_id = next((session_id for session_id in session_ids if session_id in live), None)
+    if session_id is None:
         raise credentials_exception
-    return user
+    request.state.session_id = session_id
+    return live[session_id]
 
 
 async def get_current_admin_user(
@@ -445,7 +457,7 @@ async def update_password(password_data: PasswordChangeRequest, request: Request
         update(UserSession)
         .where(
             UserSession.user_id == current_user.id,
-            UserSession.id != _session_id(_request_token(request)),
+            UserSession.id != request.state.session_id,
             UserSession.revoked_at.is_(None),
         )
         .values(revoked_at=func.now())
@@ -489,4 +501,3 @@ async def delete_account(
     await db.commit()
     response.delete_cookie("access_token")
     return AccountDeletionResponse(erased_at=erased_at)
-
