@@ -11,6 +11,8 @@ export interface UserProfile {
     created_at: string;
     is_active: boolean;
     is_admin: boolean;
+    /** From GET /auth/me: false until the current Terms of Service and Privacy Policy are accepted. */
+    terms_accepted?: boolean;
 }
 
 // ── Profile edits (PUT /auth/me, backend `UserUpdate`). Omitted fields are left unchanged. ──
