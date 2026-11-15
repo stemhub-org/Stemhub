@@ -10,11 +10,15 @@ function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function submitRegister(confirmPassword = "secret123") {
+function submitRegister({
+    username = "jboshra",
+    password = "secret123",
+    confirmPassword = password,
+}: { username?: string; password?: string; confirmPassword?: string } = {}) {
     render(<RegisterPage />);
-    fireEvent.change(screen.getByPlaceholderText("Username"), { target: { value: "jb" } });
+    fireEvent.change(screen.getByPlaceholderText("Username"), { target: { value: username } });
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "jb@stemhub.io" } });
-    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "secret123" } });
+    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: password } });
     fireEvent.change(screen.getByPlaceholderText("Confirm password"), { target: { value: confirmPassword } });
     fireEvent.click(screen.getByRole("button", { name: "Create my account" }));
 }
@@ -33,7 +37,7 @@ describe("RegisterPage", () => {
             `${API_URL}/auth/register`,
             expect.objectContaining({
                 method: "POST",
-                body: JSON.stringify({ username: "jb", email: "jb@stemhub.io", password: "secret123" }),
+                body: JSON.stringify({ username: "jboshra", email: "jb@stemhub.io", password: "secret123" }),
             }),
         );
     });
@@ -51,9 +55,31 @@ describe("RegisterPage", () => {
         const fetchMock = vi.fn();
         vi.stubGlobal("fetch", fetchMock);
 
-        submitRegister("different");
+        submitRegister({ confirmPassword: "different" });
 
         expect((await screen.findByRole("alert")).textContent).toBe("Passwords do not match");
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [{ password: "short" }, "Password must be at least 8 characters"],
+        [{ password: "x".repeat(73) }, "Password must be at most 72 bytes"],
+        [{ username: "jb" }, "Username must be between 3 and 32 characters"],
+    ])("refuses %o before calling the server", async (fields, message) => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+
+        submitRegister(fields);
+
+        expect((await screen.findByRole("alert")).textContent).toBe(message);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("lets password managers fill and save the account", () => {
+        render(<RegisterPage />);
+        expect(screen.getByPlaceholderText("Username").getAttribute("autocomplete")).toBe("username");
+        expect(screen.getByPlaceholderText("Email").getAttribute("autocomplete")).toBe("email");
+        expect(screen.getByPlaceholderText("Password").getAttribute("autocomplete")).toBe("new-password");
+        expect(screen.getByPlaceholderText("Confirm password").getAttribute("autocomplete")).toBe("new-password");
     });
 });
