@@ -1,6 +1,7 @@
 """Old sign-in records are purged every hour: sessions 30 days after they
 expired or were revoked, login attempts after 30 days, rate limit hits
-after a day."""
+after a day. Accounts past their deletion grace period are erased in the
+same round (test_account_deletion.py)."""
 from __future__ import annotations
 
 import asyncio
@@ -47,9 +48,17 @@ def test_the_retentions_outlast_what_the_checks_read() -> None:
     assert auth_purge.RATE_LIMIT_HIT_RETENTION >= timedelta(hours=1)
 
 
-def _run_forever(monkeypatch, outcomes: list[Any]) -> list[float]:
+def _run_forever(monkeypatch, outcomes: list[Any], erasures: list[int] | None = None) -> list[float]:
     """Run the loop for len(outcomes) rounds; each outcome is a PurgeResult or an exception."""
     sleeps: list[float] = []
+
+    async def erase_due_accounts(db, storage):
+        if erasures is not None:
+            erasures.append(len(sleeps))
+        return 0
+
+    monkeypatch.setattr(auth_purge, "erase_due_accounts", erase_due_accounts)
+    monkeypatch.setattr(auth_purge, "get_storage_service", MagicMock)
 
     async def purge(db):
         outcome = outcomes[len(sleeps)]
@@ -74,8 +83,11 @@ def _run_forever(monkeypatch, outcomes: list[Any]) -> list[float]:
 
 
 def test_the_purge_runs_every_hour(monkeypatch) -> None:
-    sleeps = _run_forever(monkeypatch, [PurgeResult(1, 0, 0), PurgeResult(0, 0, 0)])
+    erasures: list[int] = []
+    sleeps = _run_forever(monkeypatch, [PurgeResult(1, 0, 0), PurgeResult(0, 0, 0)], erasures)
     assert sleeps == [3600, 3600]
+    # Accounts past their deletion grace period are erased each round too.
+    assert erasures == [0, 1]
 
 
 def test_a_failed_purge_is_logged_and_retried(monkeypatch, caplog) -> None:
