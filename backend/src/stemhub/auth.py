@@ -189,23 +189,31 @@ async def register(user: UserCreate, response: RedirectResponse, db: AsyncSessio
     
     return db_user
 
-@router.post("/swagger-login", response_model=Token)
-async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    # Swagger sends the user input in the "username" field, but we log in with email
-    result = await db.execute(select(User).where(User.email == normalize_email(form_data.username)))
+async def _authenticate(db: AsyncSession, email: str, password: str) -> User:
+    """The user these credentials belong to. Every failure gets the same 401
+    and takes as long, so the response never reveals whether an email has an
+    account. Only someone who knows the password learns the account is
+    deactivated."""
+    result = await db.execute(select(User).where(User.email == email, User.is_deleted == False))
     user = result.scalars().first()
-    if user and not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=INACTIVE_ACCOUNT_MESSAGE,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not verify_password(password, user.password_hash if user else None):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=INACTIVE_ACCOUNT_MESSAGE,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+@router.post("/swagger-login", response_model=Token)
+async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    # Swagger sends the user input in the "username" field, but we log in with email
+    user = await _authenticate(db, normalize_email(form_data.username), form_data.password)
     access_token = create_access_token(data={"sub": user.email})
     
     # Also set cookie for easier testing even in Swagger
@@ -221,21 +229,8 @@ async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordReq
 
 @router.post("/login", response_model=Token)
 async def login(credentials: LoginRequest, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == credentials.email))
-    user = result.scalars().first()
-    if user and not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=INACTIVE_ACCOUNT_MESSAGE,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user or not verify_password(credentials.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
+    user = await _authenticate(db, credentials.email, credentials.password)
+
     access_token = create_access_token(data={"sub": user.email})
     
     # Set HttpOnly Cookie
