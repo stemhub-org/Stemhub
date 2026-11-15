@@ -184,3 +184,44 @@ def test_the_plugin_login_body_still_works() -> None:
     # The DAW plugin sends only email and password.
     response, _ = _login(None)
     assert response.json()["token_type"] == "bearer"
+
+
+# ── Changing the password ──
+
+def _change_password(current_password: str, token: str) -> tuple[Any, MagicMock, User]:
+    user = _user()
+    db = _session()
+    app = FastAPI()
+    app.include_router(auth_router)
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: user
+    response = TestClient(app).put(
+        "/auth/me/password",
+        json={"current_password": current_password, "new_password": "a-new-strong-password"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    return response, db, user
+
+
+def test_changing_the_password_signs_out_the_other_sessions() -> None:
+    current = uuid.uuid4()
+    response, db, user = _change_password(PASSWORD, _token(current))
+    assert response.status_code == 200
+
+    sql = _sql(db.execute.await_args.args[0])
+    assert sql.startswith("UPDATE user_session SET revoked_at=now()")
+    assert f"user_session.user_id = '{user.id}'" in sql
+    assert f"user_session.id != '{current}'" in sql
+    assert "user_session.revoked_at IS NULL" in sql
+    db.commit.assert_awaited_once()
+
+
+def test_a_wrong_current_password_signs_out_nobody() -> None:
+    response, db, _ = _change_password("wrong-password", _token(uuid.uuid4()))
+    assert response.status_code == 400
+    db.execute.assert_not_awaited()
+    db.commit.assert_not_awaited()

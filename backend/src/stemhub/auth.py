@@ -368,11 +368,22 @@ async def update_me(user_update: UserUpdate, current_user: User = Depends(get_cu
     return current_user
 
 @router.put("/me/password")
-async def update_password(password_data: PasswordChangeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def update_password(password_data: PasswordChangeRequest, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if not verify_password(password_data.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="L'ancien mot de passe est incorrect")
     
     current_user.password_hash = get_password_hash(password_data.new_password)
+    # Sign out every other device: whoever knew the old password and signed
+    # in with it loses access. The session making the change stays.
+    await db.execute(
+        update(UserSession)
+        .where(
+            UserSession.user_id == current_user.id,
+            UserSession.id != _session_id(_request_token(request)),
+            UserSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=func.now())
+    )
     await db.commit()
     return {"message": "Mot de passe mis à jour avec succès"}
 
