@@ -121,8 +121,9 @@ def test_check_migrations_no_scripts():
 def test_alembic_history_has_a_single_head_after_the_message_rename():
     script = _script_directory()
 
-    assert script.get_heads() == [MESSAGE_RENAME_REVISION]
+    assert len(script.get_heads()) == 1
     assert script.get_revision(MESSAGE_RENAME_REVISION).down_revision == PREVIOUS_HEAD
+    assert MESSAGE_RENAME_REVISION in {rev.revision for rev in script.walk_revisions()}
 
 
 def test_message_rename_migration_renames_the_column_and_clears_the_plugin_placeholder():

@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import jwt
@@ -11,7 +13,7 @@ from fastapi.responses import RedirectResponse
 
 from .database import get_db
 from .models import User
-from .schemas import LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
+from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -22,6 +24,28 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "local").lower()
+
+async def is_username_taken(db: AsyncSession, username: str, *, exclude_user_id=None) -> bool:
+    """Case-insensitive twin of the unique index uq_users_username_lower, so
+    the client gets a 400 rather than a 500. The index remains the actual
+    guarantee under concurrent requests (see `_commit_user`)."""
+    query = select(User.id).where(func.lower(User.username) == func.lower(username))
+    if exclude_user_id is not None:
+        query = query.where(User.id != exclude_user_id)
+    result = await db.execute(query)
+    return result.first() is not None
+
+
+async def _commit_user(db: AsyncSession) -> None:
+    """Commit a new or updated user, turning a unique-index race into a 400."""
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        if "username" in str(exc.orig):
+            raise HTTPException(status_code=400, detail="Username already taken")
+        raise HTTPException(status_code=400, detail="Email already registered")
+
 
 def ensure_https(url: str) -> str:
     """Ensure HTTPS in non-local environments."""
@@ -96,13 +120,11 @@ async def callback_google(request: Request, code: str, state: str | None = None,
         reactivated = False
 
         if not user:
-            base_username = name.replace(" ", "").lower() if name else email.split("@")[0]
+            base_username = normalize_username(name.replace(" ", "").lower() if name else email.split("@")[0])
+            base_username = base_username[:USERNAME_MAX_LENGTH - 6].ljust(USERNAME_MIN_LENGTH, "0")
             username = base_username
             counter = 1
-            while True:
-                existing = await db.execute(select(User).where(User.username == username))
-                if not existing.scalars().first():
-                    break
+            while await is_username_taken(db, username):
                 username = f"{base_username}{counter}"
                 counter += 1
 
@@ -117,7 +139,7 @@ async def callback_google(request: Request, code: str, state: str | None = None,
                 reactivated = True
 
         if reactivated:
-            await db.commit()
+            await _commit_user(db)
             await db.refresh(user)
 
         jwt_token = create_access_token(data={"sub": user.email})
@@ -129,14 +151,13 @@ async def register(user: UserCreate, response: RedirectResponse, db: AsyncSessio
     if result_email.scalars().first():
         raise HTTPException(status_code=400, detail="Email already registered")
         
-    result_username = await db.execute(select(User).where(User.username == user.username))
-    if result_username.scalars().first():
+    if await is_username_taken(db, user.username):
         raise HTTPException(status_code=400, detail="Username already taken")
     
     password_hash = get_password_hash(user.password)
     db_user = User(email=user.email, username=user.username, password_hash=password_hash)
     db.add(db_user)
-    await db.commit()
+    await _commit_user(db)
     await db.refresh(db_user)
     
     # Set cookie on registration too
@@ -281,10 +302,9 @@ async def get_me(current_user: User = Depends(get_current_user)):
 @router.put("/me", response_model=UserResponse)
 async def update_me(user_update: UserUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if user_update.username is not None:
-        if user_update.username != current_user.username:
-            result = await db.execute(select(User).where(User.username == user_update.username))
-            if result.scalars().first():
-                raise HTTPException(status_code=400, detail="Username already taken")
+        # Excluding the user's own row lets them change only the case of their name.
+        if await is_username_taken(db, user_update.username, exclude_user_id=current_user.id):
+            raise HTTPException(status_code=400, detail="Username already taken")
         current_user.username = user_update.username
 
     if user_update.avatar_url is not None:
@@ -300,7 +320,7 @@ async def update_me(user_update: UserUpdate, current_user: User = Depends(get_cu
         current_user.website = user_update.website
     if user_update.genres is not None:
         current_user.genres = user_update.genres
-    await db.commit()
+    await _commit_user(db)
     await db.refresh(current_user)
     return current_user
 
