@@ -15,6 +15,7 @@ from fastapi.responses import RedirectResponse
 from .database import get_db
 from .login_throttle import ensure_login_allowed, record_login_attempt
 from .pwned_passwords import BREACHED_PASSWORD_MESSAGE, is_password_pwned
+from .rate_limit import enforce_rate_limit
 from .models import User, UserIdentity, UserSession
 from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import ACCESS_TOKEN_EXPIRE_MINUTES, UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
@@ -225,8 +226,23 @@ async def callback_google(request: Request, code: str, state: str | None = None,
         jwt_token = await _start_session(db, user)
         return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
 
+REGISTER_LIMIT = 10
+REGISTER_WINDOW = timedelta(hours=1)
+
+
 @router.post("/register", response_model=UserResponse)
-async def register(user: UserCreate, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
+async def register(user: UserCreate, request: Request, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
+    # Every attempt counts, refused ones too, so a script can neither mass
+    # create accounts nor probe which emails are registered.
+    if request.client:
+        await enforce_rate_limit(
+            db,
+            action="register",
+            key=request.client.host,
+            limit=REGISTER_LIMIT,
+            window=REGISTER_WINDOW,
+            message="Too many sign-ups from your network.",
+        )
     if await is_password_pwned(user.password):
         raise HTTPException(status_code=400, detail=BREACHED_PASSWORD_MESSAGE)
 
