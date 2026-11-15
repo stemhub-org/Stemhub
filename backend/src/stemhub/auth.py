@@ -56,6 +56,13 @@ BACKEND_URL = ensure_https(os.getenv("BACKEND_URL", "http://localhost:8000"))
 FRONTEND_URL = ensure_https(os.getenv("FRONTEND_URL", "http://localhost:3000"))
 GOOGLE_REDIRECT_URI = ensure_https(os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_URL}/auth/callback/google"))
 
+def _ensure_can_sign_in(user: User) -> None:
+    """Social sign-in must not bring back an account an admin deactivated
+    (it used to reactivate it) or one that was deleted."""
+    if user.is_deleted or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=INACTIVE_ACCOUNT_MESSAGE)
+
+
 @router.get("/login/google")
 async def login_google():
     if not GOOGLE_CLIENT_ID:
@@ -132,6 +139,7 @@ async def callback_google(request: Request, code: str, state: str | None = None,
             result = await db.execute(select(User).where(User.email == email))
             user = result.scalars().first()
             if user:
+                _ensure_can_sign_in(user)
                 db.add(UserIdentity(user_id=user.id, provider="google", provider_user_id=str(google_id), email=email))
                 needs_commit = True
 
@@ -149,10 +157,8 @@ async def callback_google(request: Request, code: str, state: str | None = None,
             db.add(user)
             needs_commit = True
         else:
+            _ensure_can_sign_in(user)
             user.avatar_url = avatar_url
-            if not user.is_active:
-                user.is_active = True
-                needs_commit = True
 
         if needs_commit:
             await _commit_user(db)
