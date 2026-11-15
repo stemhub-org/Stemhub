@@ -41,6 +41,7 @@ class User(Base):
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="owner")
     collaborations: Mapped[list["Collaborator"]] = relationship("Collaborator", back_populates="user")
     identities: Mapped[list["UserIdentity"]] = relationship("UserIdentity", back_populates="user")
+    sessions: Mapped[list["UserSession"]] = relationship("UserSession", back_populates="user")
 
 
 class UserIdentity(Base):
@@ -68,6 +69,23 @@ class UserIdentity(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     user: Mapped["User"] = relationship("User", back_populates="identities")
+
+
+class UserSession(Base):
+    """A signed-in browser or plugin. Its id travels in the access token
+    ("sid"), and a token is only accepted while its session is neither
+    revoked (logout) nor expired, so signing out really ends it."""
+    __tablename__ = "user_session"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped["User"] = relationship("User", back_populates="sessions")
 
 
 class Project(Base):

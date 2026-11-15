@@ -2,22 +2,21 @@
 so Foo@x.com and foo@x.com are one account and either signs in."""
 from __future__ import annotations
 
-import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
-from stemhub.auth import get_current_user, router as auth_router
+from stemhub.auth import router as auth_router
 from stemhub.database import get_db
 from stemhub.models import User
 from stemhub.schemas import EmailChangeRequest, LoginRequest, UserCreate
-from stemhub.security import create_access_token, get_password_hash
+from stemhub.security import get_password_hash
 
 
 def _session(*rows: Any) -> MagicMock:
@@ -97,11 +96,3 @@ def test_swagger_login_works_whatever_the_capitals() -> None:
     assert response.status_code == 200
     assert _bound_email(session.execute.await_args_list[0].args[0]) == "demo@example.com"
 
-
-def test_a_token_issued_with_capitals_still_works() -> None:
-    session = _session(_user())
-    token = create_access_token(data={"sub": "Demo@Example.com"})
-    request = Request({"type": "http", "headers": [(b"authorization", f"Bearer {token}".encode())], "query_string": b""})
-    user = asyncio.run(get_current_user(request, db=session))
-    assert user.email == "demo@example.com"
-    assert _bound_email(session.execute.await_args_list[0].args[0]) == "demo@example.com"

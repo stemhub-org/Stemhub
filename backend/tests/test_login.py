@@ -43,6 +43,7 @@ def _session(user: User | None) -> MagicMock:
     result.scalars.return_value.first.return_value = user
     session = MagicMock()
     session.execute = AsyncMock(return_value=result)
+    session.commit = AsyncMock()
     return session
 
 
