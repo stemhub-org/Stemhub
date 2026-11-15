@@ -31,6 +31,22 @@ def validate_username(value: str) -> str:
     return username
 
 
+PASSWORD_MIN_LENGTH = 8
+# bcrypt only reads the first 72 bytes of a password and refuses longer ones.
+PASSWORD_MAX_BYTES = 72
+
+
+def validate_new_password(value: str) -> str:
+    """Rules for a password being chosen (not for one being checked at login,
+    so accounts created before these rules can still sign in). Length only,
+    no composition rules, as NIST SP 800-63B recommends."""
+    if len(value) < PASSWORD_MIN_LENGTH:
+        raise ValueError(f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
+    if len(value.encode("utf-8")) > PASSWORD_MAX_BYTES:
+        raise ValueError(f"Password must be at most {PASSWORD_MAX_BYTES} bytes")
+    return value
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     username: str
@@ -40,6 +56,11 @@ class UserCreate(BaseModel):
     @classmethod
     def _validate_username(cls, value: str) -> str:
         return validate_username(value)
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, value: str) -> str:
+        return validate_new_password(value)
 
 class UserResponse(BaseModel):
     id: UUID
@@ -506,6 +527,11 @@ class LoginRequest(BaseModel):
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password(cls, value: str) -> str:
+        return validate_new_password(value)
 
 class EmailChangeRequest(BaseModel):
     new_email: EmailStr
