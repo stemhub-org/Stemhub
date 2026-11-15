@@ -22,6 +22,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
@@ -32,7 +33,8 @@ export default function RegisterPage() {
     const invalid =
       usernameError(username) ??
       newPasswordError(password) ??
-      (password !== confirmPassword ? "Passwords do not match" : null);
+      (password !== confirmPassword ? "Passwords do not match" : null) ??
+      (acceptTerms ? null : "Please accept the Terms of Service and the Privacy Policy.");
     if (invalid) {
       setError(invalid);
       return;
@@ -41,7 +43,7 @@ export default function RegisterPage() {
     try {
       await apiFetch("/auth/register", {
         method: "POST",
-        body: JSON.stringify({ username, email, password }),
+        body: JSON.stringify({ username, email, password, accept_terms: acceptTerms }),
         redirectOnUnauthorized: false,
       });
       router.push("/login");
@@ -230,6 +232,30 @@ export default function RegisterPage() {
             />
           </div>
 
+          <label
+            className="flex cursor-pointer items-start gap-2.5 pl-1 text-xs font-light leading-relaxed text-foreground/50"
+            style={{ fontFamily: "var(--font-jakarta)" }}
+          >
+            <input
+              type="checkbox"
+              name="accept-terms"
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-current"
+            />
+            <span>
+              I accept the{" "}
+              <Link href="/terms" target="_blank" className="text-foreground/70 underline-offset-2 hover:text-accent hover:underline">
+                Terms of Service
+              </Link>{" "}
+              and the{" "}
+              <Link href="/privacy" target="_blank" className="text-foreground/70 underline-offset-2 hover:text-accent hover:underline">
+                Privacy Policy
+              </Link>
+              .
+            </span>
+          </label>
+
           <button
             type="submit"
             className="w-full rounded-xl bg-foreground py-3.5 text-sm font-light tracking-wide text-background transition-all duration-300 hover:bg-accent"
@@ -238,21 +264,6 @@ export default function RegisterPage() {
             Create my account
           </button>
         </form>
-
-        <p
-          className="mt-6 text-center text-xs font-light leading-relaxed text-foreground/30"
-          style={{ fontFamily: "var(--font-jakarta)" }}
-        >
-          By creating an account, you agree to our{" "}
-          <a href="#" className="text-foreground/50 hover:text-accent transition-colors duration-300">
-            Terms of Service
-          </a>{" "}
-          and{" "}
-          <a href="#" className="text-foreground/50 hover:text-accent transition-colors duration-300">
-            Privacy Policy
-          </a>
-          .
-        </p>
 
         <p
           className="mt-6 text-center text-sm font-light text-foreground/40"
