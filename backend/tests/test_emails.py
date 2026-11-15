@@ -66,7 +66,7 @@ def _user(email: str = "demo@example.com") -> User:
 
 @pytest.mark.parametrize("submitted", ["Demo@Example.com", "  DEMO@EXAMPLE.COM ", "demo@example.com"])
 def test_submitted_emails_are_lowercased(submitted: str) -> None:
-    assert UserCreate(email=submitted, username="demo", password="a-strong-password").email == "demo@example.com"
+    assert UserCreate(email=submitted, username="demo", password="a-strong-password", accept_terms=True).email == "demo@example.com"
     assert LoginRequest(email=submitted, password="x").email == "demo@example.com"
     assert EmailChangeRequest(new_email=submitted).new_email == "demo@example.com"
 
@@ -75,7 +75,7 @@ def test_sign_up_refuses_an_email_that_differs_only_by_case() -> None:
     session = _session(_user())
     response = _client(session).post(
         "/auth/register",
-        json={"email": "DEMO@example.com", "username": "other", "password": "a-strong-password"},
+        json={"email": "DEMO@example.com", "username": "other", "password": "a-strong-password", "accept_terms": True},
     )
     assert response.status_code == 400
     assert _bound_email(session.execute.await_args_list[0].args[0]) == "demo@example.com"

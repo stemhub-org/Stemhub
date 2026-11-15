@@ -42,6 +42,7 @@ class User(Base):
     collaborations: Mapped[list["Collaborator"]] = relationship("Collaborator", back_populates="user")
     identities: Mapped[list["UserIdentity"]] = relationship("UserIdentity", back_populates="user")
     sessions: Mapped[list["UserSession"]] = relationship("UserSession", back_populates="user")
+    legal_acceptances: Mapped[list["LegalAcceptance"]] = relationship("LegalAcceptance", back_populates="user")
 
 
 class UserIdentity(Base):
@@ -86,6 +87,28 @@ class UserSession(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="sessions")
+
+
+class LegalAcceptance(Base):
+    """A user accepting one version of a legal document (legal.py), kept as
+    proof of consent: which document, which version, when."""
+    __tablename__ = "legal_acceptance"
+    __table_args__ = (
+        CheckConstraint("document IN ('terms', 'privacy')", name="ck_legal_acceptance_document"),
+        UniqueConstraint("user_id", "document", "version", name="uq_legal_acceptance_user_document_version"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    document: Mapped[str] = mapped_column(String(32), nullable=False)
+    version: Mapped[str] = mapped_column(String(32), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    user: Mapped["User"] = relationship("User", back_populates="legal_acceptances")
 
 
 class LoginAttempt(Base):

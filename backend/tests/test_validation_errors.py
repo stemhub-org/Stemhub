@@ -21,7 +21,7 @@ def _client() -> TestClient:
 
 
 def _register(client: TestClient, **body):
-    return client.post("/auth/register", json={"email": "a@example.com", "username": "demo", **body})
+    return client.post("/auth/register", json={"email": "a@example.com", "username": "demo", "accept_terms": True, **body})
 
 
 def test_a_refused_password_is_not_echoed() -> None:
@@ -34,7 +34,7 @@ def test_a_refused_password_is_not_echoed() -> None:
 
 
 def test_built_in_errors_keep_their_message() -> None:
-    response = _client().post("/auth/register", json={"email": "not-an-email", "username": "demo", "password": "a-strong-password"})
+    response = _client().post("/auth/register", json={"email": "not-an-email", "username": "demo", "password": "a-strong-password", "accept_terms": True})
     assert response.status_code == 422
     assert "not-an-email" not in response.text
     [error] = response.json()["detail"]
@@ -46,7 +46,7 @@ def test_missing_fields_are_still_reported() -> None:
     response = _client().post("/auth/register", json={})
     assert response.status_code == 422
     assert {tuple(error["loc"]) for error in response.json()["detail"]} == {
-        ("body", "email"), ("body", "username"), ("body", "password"),
+        ("body", "email"), ("body", "username"), ("body", "password"), ("body", "accept_terms"),
     }
 
 

@@ -93,7 +93,7 @@ def _register(monkeypatch, *, limited: bool) -> tuple[Any, list[dict[str, Any]]]
     # Past the limiter the fake database has nothing to answer; only the
     # limiter's arguments and a refusal matter here.
     response = TestClient(app, raise_server_exceptions=False).post(
-        "/auth/register", json={"email": "a@example.com", "username": "demo", "password": "a-strong-password"}
+        "/auth/register", json={"email": "a@example.com", "username": "demo", "password": "a-strong-password", "accept_terms": True}
     )
     return response, calls
 
