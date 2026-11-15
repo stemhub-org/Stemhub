@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { useChangeEmail, useChangePassword, useUpdateProfile } from "@/lib/account";
 import { errorMessage } from "@/lib/api";
 import { useCurrentUser } from "@/lib/queries";
@@ -358,9 +359,16 @@ function AccountSettings({ user }: { user: UserProfile }) {
                             type="password"
                             placeholder="••••••••"
                             id="settings-new-password"
+                            autoComplete="new-password"
+                            aria-describedby="settings-new-password-strength"
                             value={passwordForm.new_password}
                             onChange={(e) => setPasswordForm(f => ({ ...f, new_password: e.target.value }))}
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        />
+                        <PasswordStrengthMeter
+                            id="settings-new-password-strength"
+                            password={passwordForm.new_password}
+                            userInputs={[user.username, user.email]}
                         />
                     </div>
                     <div className="space-y-2">

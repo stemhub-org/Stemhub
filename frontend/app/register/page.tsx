@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { API_URL, apiFetch, errorMessage } from "@/lib/api";
 import {
   PASSWORD_MIN_LENGTH,
@@ -187,7 +188,7 @@ export default function RegisterPage() {
               autoComplete="new-password"
               required
               minLength={PASSWORD_MIN_LENGTH}
-              aria-describedby="register-password-hint"
+              aria-describedby="register-password-hint register-password-strength"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
@@ -213,6 +214,11 @@ export default function RegisterPage() {
           >
             At least {PASSWORD_MIN_LENGTH} characters.
           </p>
+          <PasswordStrengthMeter
+            id="register-password-strength"
+            password={password}
+            userInputs={[username, email]}
+          />
 
           <div className="relative">
             <Lock
