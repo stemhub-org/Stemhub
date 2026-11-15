@@ -3,16 +3,23 @@
 Asking to delete an account hides it at once: the user is marked deleted,
 their projects are hidden and every session is revoked. Signing in again
 (password or Google) within DELETION_GRACE cancels the deletion and brings
-them back. After it, the account and its data are erased for good.
+them back. After it, `erase_due_accounts` (run hourly with the sign-in
+purge) erases the account for good: its projects with their files, and its
+personal data. Its versions and pull requests in other people's projects
+stay, without an author, so their history is not broken.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import ColumnElement, or_, update
+from sqlalchemy import ColumnElement, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Project, User, UserSession
+from .models import Blob, Branch, Collaborator, LoginAttempt, Project, PullRequest, User, UserSession, Version
+from .storage import StorageService
+
+logger = logging.getLogger(__name__)
 
 DELETION_GRACE = timedelta(days=30)
 
@@ -60,3 +67,61 @@ async def restore_account(db: AsyncSession, user: User) -> None:
     )
     user.is_deleted = False
     user.deleted_at = None
+
+
+async def erase_due_accounts(db: AsyncSession, storage: StorageService) -> int:
+    """Erase every account whose grace period is over. Returns how many were."""
+    due = await db.execute(
+        select(User).where(User.is_deleted == True, User.deleted_at <= datetime.now(timezone.utc) - DELETION_GRACE)
+    )
+    erased = 0
+    for user in due.scalars().all():
+        if await erase_account(db, storage, user):
+            erased += 1
+    return erased
+
+
+async def erase_account(db: AsyncSession, storage: StorageService, user: User) -> bool:
+    """Delete the account and everything it owns, files first. If a file
+    cannot be deleted, nothing else is and the account is retried at the
+    next run, so no file of it is ever left behind untracked."""
+    project_ids = (await db.execute(select(Project.id).where(Project.owner_id == user.id))).scalars().all()
+    storage_uris = (
+        (await db.execute(select(Blob.storage_uri).where(Blob.project_id.in_(project_ids)))).scalars().all()
+        if project_ids
+        else []
+    )
+    try:
+        for project_id in project_ids:
+            storage.delete_project_preview(project_id)
+        for storage_uri in storage_uris:
+            storage.delete_blob(storage_uri)
+    except Exception:
+        # Any storage failure (bucket credentials, network, disk) postpones
+        # the whole erasure, so no file of the account is left behind.
+        logger.exception("Could not delete the files of account %s; retrying at the next run", user.id)
+        return False
+
+    if project_ids:
+        branch_ids = select(Branch.id).where(Branch.project_id.in_(project_ids))
+        await db.execute(delete(PullRequest).where(PullRequest.project_id.in_(project_ids)))
+        # Versions point at their parent, so the links go before the rows.
+        await db.execute(update(Version).where(Version.branch_id.in_(branch_ids)).values(parent_version_id=None))
+        await db.execute(delete(Version).where(Version.branch_id.in_(branch_ids)))
+        await db.execute(delete(Branch).where(Branch.project_id.in_(project_ids)))
+        await db.execute(delete(Collaborator).where(Collaborator.project_id.in_(project_ids)))
+        # Blob rows go with their project (ON DELETE CASCADE).
+        await db.execute(delete(Project).where(Project.id.in_(project_ids)))
+
+    # Contributions to other people's projects stay, without an author.
+    await db.execute(update(Version).where(Version.created_by == user.id).values(created_by=None))
+    await db.execute(update(PullRequest).where(PullRequest.created_by == user.id).values(created_by=None))
+    await db.execute(update(PullRequest).where(PullRequest.closed_by == user.id).values(closed_by=None))
+    await db.execute(delete(Collaborator).where(Collaborator.user_id == user.id))
+    await db.execute(delete(LoginAttempt).where(LoginAttempt.email == user.email))
+    # Sessions, identities, terms acceptances, follows and event or
+    # challenge sign-ups go with the user (ON DELETE CASCADE).
+    await db.execute(delete(User).where(User.id == user.id))
+    await db.commit()
+    logger.info("Erased account %s and %d projects", user.id, len(project_ids))
+    return True
