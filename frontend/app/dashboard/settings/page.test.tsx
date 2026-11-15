@@ -8,6 +8,11 @@ import SettingsPage from "./page";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+const saveBlob = vi.fn();
+vi.mock("@/lib/download", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/lib/download")>()),
+    saveBlob: (...args: unknown[]) => saveBlob(...args),
+}));
 
 const user = {
     id: "u1",
@@ -289,3 +294,46 @@ describe("SettingsPage account deletion", () => {
         expect(screen.getByRole("button", { name: "Delete Account" })).toBeTruthy();
     });
 });
+
+describe("SettingsPage data export", () => {
+    beforeEach(() => saveBlob.mockReset());
+
+    it("downloads the export under the server's filename", async () => {
+        const fetchMock = vi.fn(async (url: string) =>
+            url.endsWith("/auth/me/export")
+                ? new Response(JSON.stringify({ account: { username: "jb" } }), {
+                      headers: {
+                          "Content-Type": "application/json",
+                          "Content-Disposition": 'attachment; filename="stemhub-data-jb-2026-11-15.json"',
+                      },
+                  })
+                : json(user),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Account" }));
+
+        fireEvent.click(await screen.findByRole("button", { name: "Download my data" }));
+
+        await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+        const [blob, filename] = saveBlob.mock.calls[0];
+        expect(filename).toBe("stemhub-data-jb-2026-11-15.json");
+        expect(JSON.parse(await (blob as Blob).text())).toEqual({ account: { username: "jb" } });
+    });
+
+    it("explains a refused export", async () => {
+        vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+            url.endsWith("/auth/me/export")
+                ? json({ detail: "Too many data exports. Try again in 40 minutes." }, 429)
+                : json(user),
+        ));
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Account" }));
+
+        fireEvent.click(await screen.findByRole("button", { name: "Download my data" }));
+
+        expect(await screen.findByText("Too many data exports. Try again in 40 minutes.")).toBeTruthy();
+        expect(saveBlob).not.toHaveBeenCalled();
+    });
+});
+
