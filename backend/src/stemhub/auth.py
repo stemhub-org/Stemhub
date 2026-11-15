@@ -6,14 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import jwt
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 import httpx
 import secrets
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from .database import get_db
 from .account_deletion import is_restorable, restorable, restore_account, schedule_deletion
+from .data_export import export_user_data
 from .legal import accept_current_versions, current_acceptances, has_accepted_current_versions
 from .login_throttle import ensure_login_allowed, record_login_attempt
 from .pwned_passwords import BREACHED_PASSWORD_MESSAGE, is_password_pwned
@@ -501,3 +503,27 @@ async def delete_account(
     await db.commit()
     response.delete_cookie("access_token")
     return AccountDeletionResponse(erased_at=erased_at)
+
+
+EXPORT_LIMIT = 5
+EXPORT_WINDOW = timedelta(hours=1)
+
+
+@router.get("/me/export")
+async def export_my_data(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Download everything StemHub holds about the account as JSON (GDPR
+    right of access and portability, see data_export.py)."""
+    await enforce_rate_limit(
+        db,
+        action="export",
+        key=str(current_user.id),
+        limit=EXPORT_LIMIT,
+        window=EXPORT_WINDOW,
+        message="Too many data exports.",
+    )
+    data = await export_user_data(db, current_user)
+    # Usernames may hold spaces or accents, which do not belong in a header.
+    safe_username = re.sub(r"[^A-Za-z0-9_.-]+", "_", current_user.username)
+    filename = f"stemhub-data-{safe_username}-{datetime.now(timezone.utc):%Y-%m-%d}.json"
+    return JSONResponse(content=data, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
