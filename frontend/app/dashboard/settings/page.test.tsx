@@ -1,13 +1,18 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@/components/ToastProvider";
 import { queryKeys } from "@/lib/queries";
 import SettingsPage from "./page";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+const saveBlob = vi.fn();
+vi.mock("@/lib/download", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/lib/download")>()),
+    saveBlob: (...args: unknown[]) => saveBlob(...args),
+}));
 
 const user = {
     id: "u1",
@@ -79,6 +84,22 @@ describe("SettingsPage", () => {
         expect(screen.getByLabelText("Current Password")).toBeTruthy();
         expect(screen.getByLabelText("New Password")).toBeTruthy();
         expect(screen.getByLabelText("Confirm New Password")).toBeTruthy();
+    });
+
+    it("can show the current password, and the new one with its confirmation", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => json(user)));
+
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Account" }));
+        const type = (label: string) => screen.getByLabelText(label).getAttribute("type");
+        await screen.findByLabelText("Current Password");
+        const [showCurrent, showNew] = screen.getAllByRole("button", { name: "Show password" });
+
+        fireEvent.click(showCurrent);
+        expect([type("Current Password"), type("New Password"), type("Confirm New Password")]).toEqual(["text", "password", "password"]);
+
+        fireEvent.click(showNew);
+        expect([type("New Password"), type("Confirm New Password")]).toEqual(["text", "text"]);
     });
 });
 
@@ -213,3 +234,106 @@ describe("SettingsPage account tab", () => {
         expect((await screen.findByRole("alert")).textContent).toBe("Current password is incorrect");
     });
 });
+
+describe("SettingsPage account deletion", () => {
+    beforeEach(() => push.mockReset());
+
+    async function openDeletion() {
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Account" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Delete Account" }));
+    }
+
+    it("only deletes once the username is typed, then signs out with the date", async () => {
+        const fetchMock = vi.fn(async (url: string) => {
+            if (url.endsWith("/auth/me/delete")) return json({ erased_at: "2026-12-15T14:00:00Z" });
+            if (url.endsWith("/auth/logout")) return new Response(null, { status: 204 });
+            return json(user);
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        await openDeletion();
+
+        const deleteButton = screen.getByRole("button", { name: "Delete my account" }) as HTMLButtonElement;
+        expect(deleteButton.disabled).toBe(true);
+        fireEvent.change(screen.getByLabelText(/Type your username/), { target: { value: user.username } });
+        fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret123" } });
+        expect(deleteButton.disabled).toBe(false);
+        fireEvent.click(deleteButton);
+
+        expect(await screen.findByText("Your account will be deleted on December 15, 2026. Sign in before then to cancel.")).toBeTruthy();
+        await waitFor(() => expect(push).toHaveBeenCalledWith("/login"));
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining("/auth/me/delete"),
+            expect.objectContaining({
+                method: "POST",
+                body: JSON.stringify({ confirm_username: user.username, password: "secret123" }),
+            }),
+        );
+    });
+
+    it("shows why the deletion was refused and stays signed in", async () => {
+        vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+            url.endsWith("/auth/me/delete") ? json({ detail: "Incorrect password" }, 400) : json(user),
+        ));
+        await openDeletion();
+
+        fireEvent.change(screen.getByLabelText(/Type your username/), { target: { value: user.username } });
+        fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+
+        expect((await screen.findByRole("alert")).textContent).toBe("Incorrect password");
+        expect(push).not.toHaveBeenCalled();
+    });
+
+    it("can be cancelled", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => json(user)));
+        await openDeletion();
+
+        fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+        expect(screen.queryByRole("button", { name: "Delete my account" })).toBeNull();
+        expect(screen.getByRole("button", { name: "Delete Account" })).toBeTruthy();
+    });
+});
+
+describe("SettingsPage data export", () => {
+    beforeEach(() => saveBlob.mockReset());
+
+    it("downloads the export under the server's filename", async () => {
+        const fetchMock = vi.fn(async (url: string) =>
+            url.endsWith("/auth/me/export")
+                ? new Response(JSON.stringify({ account: { username: "jb" } }), {
+                      headers: {
+                          "Content-Type": "application/json",
+                          "Content-Disposition": 'attachment; filename="stemhub-data-jb-2026-11-15.json"',
+                      },
+                  })
+                : json(user),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Account" }));
+
+        fireEvent.click(await screen.findByRole("button", { name: "Download my data" }));
+
+        await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+        const [blob, filename] = saveBlob.mock.calls[0];
+        expect(filename).toBe("stemhub-data-jb-2026-11-15.json");
+        expect(JSON.parse(await (blob as Blob).text())).toEqual({ account: { username: "jb" } });
+    });
+
+    it("explains a refused export", async () => {
+        vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+            url.endsWith("/auth/me/export")
+                ? json({ detail: "Too many data exports. Try again in 40 minutes." }, 429)
+                : json(user),
+        ));
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Account" }));
+
+        fireEvent.click(await screen.findByRole("button", { name: "Download my data" }));
+
+        expect(await screen.findByText("Too many data exports. Try again in 40 minutes.")).toBeTruthy();
+        expect(saveBlob).not.toHaveBeenCalled();
+    });
+});
+

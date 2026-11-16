@@ -136,7 +136,9 @@ def test_alembic_history_has_a_single_head_after_the_actor_columns():
 
     assert script.get_heads() == [ACTORS_REVISION]
     assert script.get_revision(ACTORS_REVISION).down_revision == MESSAGE_RENAME_REVISION
+    assert len(script.get_heads()) == 1
     assert script.get_revision(MESSAGE_RENAME_REVISION).down_revision == PREVIOUS_HEAD
+    assert MESSAGE_RENAME_REVISION in {rev.revision for rev in script.walk_revisions()}
 
 
 def _create_pre_actor_tables(connection) -> None:
