@@ -49,6 +49,23 @@ interface Setup {
     accept?: () => Response;
 }
 
+const mixerDiff = {
+    status: "compared",
+    status_message: null,
+    base_version_id: "v-main",
+    head_version_id: "v-feat",
+    summary: { total_changes: 1, inserts_changed: 1, slots_changed: 0, parameter_changes: 1 },
+    changes: [
+        {
+            type: "insert_volume_changed", insert_index: 1, insert_name: "Kick", slot_index: null,
+            before: 100, after: 120, message: 'Insert 1 "Kick" volume changed: 100 -> 120',
+        },
+    ],
+};
+
+const diffRequests = (fetchMock: ReturnType<typeof renderPage>) =>
+    fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/pull-requests/pr1/diff"));
+
 function renderPage({ me = "owner", collaborators = [], pr = pullRequest(), accept }: Setup = {}) {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
         const path = new URL(url).pathname;
@@ -66,6 +83,7 @@ function renderPage({ me = "owner", collaborators = [], pr = pullRequest(), acce
         if (path === "/pull-requests/pr1/accept" && init?.method === "POST") {
             return accept ? accept() : json(pullRequest({ status: "MERGED", closed_by: me, closed_at: new Date().toISOString() }));
         }
+        if (path === "/pull-requests/pr1/diff") return json(mixerDiff);
         if (path === "/pull-requests/pr1") return json(pr);
         return json({ detail: "Not found" }, 404);
     });
@@ -138,6 +156,43 @@ describe("PullRequestPage", () => {
             "http://localhost:8000/pull-requests/pr1/accept",
             expect.objectContaining({ method: "POST" }),
         );
+    });
+
+    it("shows what accepting an open pull request would change in the mixer", async () => {
+        renderPage();
+
+        expect(await screen.findByRole("heading", { name: "Changes" })).toBeTruthy();
+        expect(await screen.findByRole("row", { name: /Volume/ })).toBeTruthy();
+        expect(screen.getByRole("columnheader", { name: "drop-plus-fort" })).toBeTruthy();
+    });
+
+    it("removes the changes once the pull request is accepted", async () => {
+        renderPage();
+        await screen.findByRole("row", { name: /Volume/ });
+
+        fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+
+        expect(await screen.findByText("MERGED")).toBeTruthy();
+        expect(screen.queryByRole("table")).toBeNull();
+        expect(screen.getByRole("link", { name: "View history" })).toBeTruthy();
+    });
+
+    it("points an accepted pull request to the target branch's history instead of a diff", async () => {
+        const fetchMock = renderPage({ pr: pullRequest({ status: "MERGED", closed_at: new Date().toISOString() }) });
+
+        const link = await screen.findByRole("link", { name: "View history" });
+        expect(link.getAttribute("href")).toBe("/projects/history?id=p1&branch_id=b-main");
+        expect(screen.getByText(/The accepted changes are in the history of main/)).toBeTruthy();
+        expect(screen.queryByRole("heading", { name: "Changes" })).toBeNull();
+        expect(diffRequests(fetchMock)).toHaveLength(0);
+    });
+
+    it("says a closed pull request applied nothing", async () => {
+        const fetchMock = renderPage({ pr: pullRequest({ status: "CLOSED", closed_at: new Date().toISOString() }) });
+
+        expect(await screen.findByText("This pull request was closed: nothing was applied.")).toBeTruthy();
+        expect(screen.queryByRole("link", { name: "View history" })).toBeNull();
+        expect(diffRequests(fetchMock)).toHaveLength(0);
     });
 
     it("shows the server's refusal and keeps the pull request open", async () => {
