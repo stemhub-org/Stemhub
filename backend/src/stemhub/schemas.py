@@ -1,15 +1,88 @@
+import re
+import unicodedata
 from datetime import datetime
 from typing import Annotated, Any, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, Discriminator, EmailStr, Field, Tag, field_validator, model_validator
+from pydantic import AfterValidator, AliasChoices, BaseModel, Discriminator, EmailStr, Field, Tag, field_validator, model_validator
 
 # ── User Schemas ──
 
+def normalize_email(value: str) -> str:
+    """Emails are stored and compared in lowercase, so Foo@x.com and
+    foo@x.com are the same account (unique index uq_users_email_lower)."""
+    return value.strip().lower()
+
+
+# An email submitted by a client, in its stored (lowercase) form.
+NormalizedEmail = Annotated[EmailStr, AfterValidator(normalize_email)]
+
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 32
+
+
+def normalize_username(value: str) -> str:
+    """Canonical stored form of a username: NFKC-normalized (so fullwidth or
+    ligature variants collapse to their plain form), trimmed, and with inner
+    whitespace runs collapsed to one space. Uniqueness is then enforced
+    case-insensitively on this form (index uq_users_username_lower)."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip()
+
+
+def validate_username(value: str) -> str:
+    username = normalize_username(value)
+    if not USERNAME_MIN_LENGTH <= len(username) <= USERNAME_MAX_LENGTH:
+        raise ValueError(
+            f"Username must be between {USERNAME_MIN_LENGTH} and {USERNAME_MAX_LENGTH} characters"
+        )
+    if any(unicodedata.category(char).startswith("C") for char in username):
+        raise ValueError("Username contains invalid characters")
+    return username
+
+
+PASSWORD_MIN_LENGTH = 8
+# bcrypt only reads the first 72 bytes of a password and refuses longer ones.
+PASSWORD_MAX_BYTES = 72
+
+
+def validate_new_password(value: str) -> str:
+    """Rules for a password being chosen (not for one being checked at login,
+    so accounts created before these rules can still sign in). Length only,
+    no composition rules, as NIST SP 800-63B recommends."""
+    if len(value) < PASSWORD_MIN_LENGTH:
+        raise ValueError(f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
+    if len(value.encode("utf-8")) > PASSWORD_MAX_BYTES:
+        raise ValueError(f"Password must be at most {PASSWORD_MAX_BYTES} bytes")
+    return value
+
+
+def require_accepted_terms(value: bool) -> bool:
+    if not value:
+        raise ValueError("You must accept the Terms of Service and the Privacy Policy")
+    return value
+
+
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     username: str
     password: str
+    # The Terms of Service and Privacy Policy (legal.py); signing up requires it.
+    accept_terms: bool = Field(False, validate_default=True)
+
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, value: str) -> str:
+        return validate_username(value)
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, value: str) -> str:
+        return validate_new_password(value)
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _require_accepted_terms(cls, value: bool) -> bool:
+        return require_accepted_terms(value)
 
 class UserResponse(BaseModel):
     id: UUID
@@ -27,6 +100,22 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class MeResponse(UserResponse):
+    # False until the user has accepted the current versions of the Terms of
+    # Service and the Privacy Policy (legal.py): accounts created with Google
+    # or before acceptance was recorded, and everyone after a new version.
+    terms_accepted: bool
+
+
+class TermsAcceptanceRequest(BaseModel):
+    accept_terms: bool = Field(False, validate_default=True)
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _require_accepted_terms(cls, value: bool) -> bool:
+        return require_accepted_terms(value)
+
+
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -35,9 +124,16 @@ class UserUpdate(BaseModel):
     website: Optional[str] = None
     genres: Optional[list[str]] = None
 
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else validate_username(value)
+
 class Token(BaseModel):
     access_token: str
     token_type: str
+    # True when this sign-in cancelled the account's scheduled deletion.
+    account_restored: bool = False
 
 # ── Project Schemas ──
 
@@ -466,15 +562,35 @@ class ProjectSummaryResponse(BaseModel):
 # ── Auth Schemas ──
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     password: str
+    # 30-day session and cookie instead of one day and a browser-session cookie.
+    remember_me: bool = False
+
+class AccountDeletionRequest(BaseModel):
+    # Typed by the user, as on GitHub, so an account is never deleted by a
+    # stray click.
+    confirm_username: str
+    # Required when the account has a password (not for Google-only accounts).
+    password: Optional[str] = None
+
+
+class AccountDeletionResponse(BaseModel):
+    # The account can be restored by signing in again until then.
+    erased_at: datetime
+
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
 
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password(cls, value: str) -> str:
+        return validate_new_password(value)
+
 class EmailChangeRequest(BaseModel):
-    new_email: EmailStr
+    new_email: NormalizedEmail
 
 # ── Explore & Community Schemas ──
 
