@@ -4,11 +4,13 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import type {
     ActivityStatsResponse,
     AssetSummary,
+    Collaborator,
     Project,
     ProjectSummaryResponse,
     TopContributorsResponse,
     VersionDiffHistoryEntry,
 } from "@/types/project";
+import type { NewPullRequest, PullRequest } from "@/types/pullRequest";
 import type { UserProfile } from "@/types/user";
 import { ApiError, apiFetch } from "./api";
 
@@ -27,6 +29,9 @@ export const queryKeys = {
     topContributors: (projectId: string) => ["projects", projectId, "top-contributors"] as const,
     versionAssets: (versionId: string) => ["versions", versionId, "assets"] as const,
     branchDiffHistory: (branchId: string) => ["branches", branchId, "diff-history"] as const,
+    pullRequests: (projectId: string) => ["projects", projectId, "pull-requests"] as const,
+    pullRequest: (pullRequestId: string) => ["pull-requests", pullRequestId] as const,
+    collaborators: (projectId: string) => ["projects", projectId, "collaborators"] as const,
 };
 
 export function useCurrentUser() {
@@ -135,4 +140,67 @@ export function useBranchDiffHistory(branchId: string) {
         queryFn: () => apiFetch<VersionDiffHistoryEntry[]>(`/branches/${branchId}/versions/diff-history`),
         enabled: Boolean(branchId),
     });
+}
+
+// ── Pull requests ──
+
+export function usePullRequests(projectId: string) {
+    return useQuery<PullRequest[], ApiError>({
+        queryKey: queryKeys.pullRequests(projectId),
+        queryFn: () => apiFetch<PullRequest[]>(`/projects/${projectId}/pull-requests`),
+        enabled: Boolean(projectId),
+    });
+}
+
+export function usePullRequest(pullRequestId: string) {
+    return useQuery<PullRequest, ApiError>({
+        queryKey: queryKeys.pullRequest(pullRequestId),
+        queryFn: () => apiFetch<PullRequest>(`/pull-requests/${pullRequestId}`),
+        enabled: Boolean(pullRequestId),
+    });
+}
+
+export function useCollaborators(projectId: string) {
+    return useQuery<Collaborator[], ApiError>({
+        queryKey: queryKeys.collaborators(projectId),
+        queryFn: () => apiFetch<Collaborator[]>(`/projects/${projectId}/collaborators/`),
+        enabled: Boolean(projectId),
+    });
+}
+
+/**
+ * After a change, the pull request's own cache gets the response, and the
+ * whole project is refreshed: its PR list, its activity feed, and (on
+ * accept, which adds a version to the target branch) its summary.
+ */
+function usePullRequestMutation<Variables>(projectId: string, request: (variables: Variables) => Promise<PullRequest>) {
+    const queryClient = useQueryClient();
+    return useMutation<PullRequest, ApiError, Variables>({
+        mutationFn: request,
+        onSuccess: (pullRequest) => {
+            queryClient.setQueryData(queryKeys.pullRequest(pullRequest.id), pullRequest);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.project(projectId) });
+        },
+    });
+}
+
+export function useCreatePullRequest(projectId: string) {
+    return usePullRequestMutation<NewPullRequest>(projectId, (pullRequest) =>
+        apiFetch<PullRequest>(`/projects/${projectId}/pull-requests`, {
+            method: "POST",
+            body: JSON.stringify(pullRequest),
+        }),
+    );
+}
+
+export function useClosePullRequest(projectId: string) {
+    return usePullRequestMutation<string>(projectId, (pullRequestId) =>
+        apiFetch<PullRequest>(`/pull-requests/${pullRequestId}/close`, { method: "POST" }),
+    );
+}
+
+export function useAcceptPullRequest(projectId: string) {
+    return usePullRequestMutation<string>(projectId, (pullRequestId) =>
+        apiFetch<PullRequest>(`/pull-requests/${pullRequestId}/accept`, { method: "POST" }),
+    );
 }
