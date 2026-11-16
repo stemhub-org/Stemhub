@@ -349,8 +349,9 @@ Sign-in uses OAuth2 / JWT with an **HttpOnly cookie**; the StemHub plugin sends 
 | `/projects/{id}/pull-requests` | `GET` | `id` | List pull requests of a project. |
 | `/projects/{id}/pull-requests` | `POST` | `id` | Open a pull request (source → target branch, same project). `409` if an `OPEN` one already exists for the same pair. |
 | `/pull-requests/{id}` | `GET` | `id` | Get a pull request. |
+| `/pull-requests/{id}/diff` | `GET` | `id` | Mixer changes accepting would apply: the target branch's latest version compared with the source branch's latest version. `409` if the PR isn't open. |
 | `/pull-requests/{id}/close` | `POST` | `id` | Close without accepting (`OPEN` → `CLOSED`; `409` if not open). `CLOSED` is terminal — users open a new PR instead of reopening. |
-| `/pull-requests/{id}/accept` | `POST` | `id` | Accept (`OPEN` → `MERGED`) by promoting the source branch: a new version on the target reuses the source head's manifest (parent: the target head; message `Accept PR: <title>`). Owner or Admin collaborator only (`403` for Editors, `404` for Viewers and non-members). `409` if the PR isn't open, a branch was deleted, the source has no version, or the target got a new version since the PR was opened. |
+| `/pull-requests/{id}/accept` | `POST` | `id` | Accept (`OPEN` → `MERGED`) by promoting the source branch: a new version on the target reuses the source head's manifest (parent: the target head; message `Accept PR: <title>`). Owner or Admin collaborator only (`403` for Editors, `404` for Viewers and non-members). `409` if the PR isn't open, a branch was deleted, the source has no version, or the target got a new version since the PR was opened. Optional body `{expected_source_head_version_id}`: the source version the reviewer saw (the diff's `head_version_id`); `409` if the source branch has a newer one. |
 
 **Pull requests — state machine and invariants:**
 
@@ -367,6 +368,7 @@ OPEN ──/close───▶ CLOSED
 - `source_head_version_id` / `target_head_version_id` record the head (latest live version) of each branch when the PR is opened (`NULL` if the branch had none). `Branch` has no head pointer, so this is the only record of what was proposed. Accepting compares `target_head_version_id` with the live head of the target and refuses (`409`) when the target moved: promoting over versions the reviewer never saw would bury them.
 - `created_by` / `closed_by` record who opened and who closed the PR (nullable: a user may be soft-deleted, and `closed_by` is unset until closure).
 - Every pull request response also carries `author` (`{id, username}`, `null` when unknown) and `source_branch` / `target_branch` (`{id, name, is_deleted}`, the branch as it is now, deleted or not), the same shapes as the activity feed. Clients can show names without extra calls; they are loaded in two queries whatever the number of PRs.
+- `GET /pull-requests/{id}/diff` is computed on each call, never stored: the source branch can receive versions while the PR is open, and the diff must show what accepting would promote now. The page sends the diff's `head_version_id` back when accepting, so a version saved between loading the page and clicking Accept is refused instead of being promoted unseen. It reuses the mixer diff of the version history (FL Studio only). A comparison that cannot be made is a `status`, not an error: `compared` (with `summary` and `changes`), `unsupported` (not an FL Studio project, missing file, or a mixer the parser cannot read; `status_message` says which), `no_source_version`, `no_target_version`, `target_moved` (the target got versions since the PR was opened, so accepting would be refused).
 
 ---
 

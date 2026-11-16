@@ -1,6 +1,7 @@
 // ── Pull requests (backend `PullRequestResponse`, routers/pull_requests.py) ──
 
 import type { ActivityActor, ActivityBranch } from "./activity";
+import type { MixerDiffChange, MixerDiffSummary } from "./project";
 
 /** OPEN, then MERGED (accepted) or CLOSED; both are final (SPECIFICATION.md §19). */
 export type PullRequestStatus = "OPEN" | "MERGED" | "CLOSED";
@@ -33,4 +34,31 @@ export interface NewPullRequest {
     target_branch_id: string;
     title: string;
     description?: string;
+}
+
+export interface AcceptPullRequest {
+    pullRequestId: string;
+    /**
+     * The source version whose changes the reviewer saw (the diff's
+     * `head_version_id`). The backend refuses to accept if the branch has a
+     * newer one. Null when no diff was loaded: accepted without that check.
+     */
+    reviewedSourceHeadId: string | null;
+}
+
+// ── Mixer diff (backend `PullRequestDiffResponse`) ──
+
+/** "compared", or the reason there is nothing to compare. */
+export type PullRequestDiffStatus = "compared" | "unsupported" | "no_source_version" | "no_target_version" | "target_moved";
+
+/** What accepting an open pull request would change in the mixer: target head (base) vs source head. */
+export interface PullRequestMixerDiff {
+    status: PullRequestDiffStatus;
+    /** Why the comparison is unsupported; null otherwise. */
+    status_message: string | null;
+    base_version_id: string | null;
+    head_version_id: string | null;
+    /** Set when status is "compared". */
+    summary: MixerDiffSummary | null;
+    changes: MixerDiffChange[];
 }
