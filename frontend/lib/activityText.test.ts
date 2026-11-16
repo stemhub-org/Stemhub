@@ -52,6 +52,16 @@ describe("describeActivity", () => {
         expect(describeActivity(activity({ type: "branch_deleted", branch: feat })).title).toBe("Branch feature-fast-tempo was deleted");
     });
 
+    it("names who created or deleted a branch, or deleted a version, when it is known", () => {
+        const take = { id: "v1", message: "Old take", source_daw: null, source_project_filename: null };
+
+        expect(describeActivity(activity({ type: "version_deleted", actor: jb, branch: feat, version: take })).title).toBe(
+            "jb deleted a version on feature-fast-tempo",
+        );
+        expect(describeActivity(activity({ type: "branch_created", actor: jb, branch: feat })).title).toBe("jb created branch feature-fast-tempo");
+        expect(describeActivity(activity({ type: "branch_deleted", actor: jb, branch: feat })).title).toBe("jb deleted branch feature-fast-tempo");
+    });
+
     it("describes pull requests with their branches", () => {
         const pullRequest = { id: "pr1", title: "Faster tempo", status: "MERGED", source_branch: feat, target_branch: main };
 
