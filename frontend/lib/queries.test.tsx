@@ -3,7 +3,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { API_URL, ApiError } from "./api";
-import { fetchProjectSummary, queryKeys, useCreateProject, useCurrentUser, useProjects } from "./queries";
+import {
+    fetchProjectSummary,
+    queryKeys,
+    useAcceptPullRequest,
+    useCreatePullRequest,
+    useCreateProject,
+    useCurrentUser,
+    useProjects,
+    usePullRequests,
+} from "./queries";
 
 function wrapper() {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -141,5 +150,52 @@ describe("useProjects", () => {
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data?.map((p) => p.id)).toEqual(["p1"]);
         expect(fetchMock).toHaveBeenCalledWith(`${API_URL}/projects/`, expect.anything());
+    });
+});
+
+describe("pull request hooks", () => {
+    it("keep pull requests under the project prefix so a project refresh reloads them", () => {
+        expect(queryKeys.pullRequests("p1")).toEqual(["projects", "p1", "pull-requests"]);
+        expect(queryKeys.pullRequest("pr1")).toEqual(["pull-requests", "pr1"]);
+        expect(queryKeys.collaborators("p1")).toEqual(["projects", "p1", "collaborators"]);
+    });
+
+    it("usePullRequests loads the project's pull requests", async () => {
+        const fetchMock = mockJson([{ id: "pr1" }]);
+
+        const { result } = renderHook(() => usePullRequests("p1"), { wrapper: wrapper() });
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(result.current.data).toEqual([{ id: "pr1" }]);
+        expect(fetchMock).toHaveBeenCalledWith(`${API_URL}/projects/p1/pull-requests`, expect.anything());
+    });
+
+    it("useCreatePullRequest posts the new pull request", async () => {
+        const fetchMock = mockJson({ id: "pr1", status: "OPEN" }, 201);
+        const body = { source_branch_id: "b-feat", target_branch_id: "b-main", title: "Faster tempo" };
+
+        const { result } = renderHook(() => useCreatePullRequest("p1"), { wrapper: wrapper() });
+        const created = await result.current.mutateAsync(body);
+
+        expect(created).toEqual({ id: "pr1", status: "OPEN" });
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toBe(`${API_URL}/projects/p1/pull-requests`);
+        expect(init.method).toBe("POST");
+        expect(JSON.parse(init.body as string)).toEqual(body);
+    });
+
+    it("useAcceptPullRequest posts to accept and exposes a refusal with the backend message", async () => {
+        const fetchMock = mockJson({ detail: "The target branch has new versions" }, 409);
+
+        const { result } = renderHook(() => useAcceptPullRequest("p1"), { wrapper: wrapper() });
+
+        await expect(result.current.mutateAsync("pr1")).rejects.toMatchObject({
+            status: 409,
+            message: "The target branch has new versions",
+        });
+        expect(fetchMock).toHaveBeenCalledWith(
+            `${API_URL}/pull-requests/pr1/accept`,
+            expect.objectContaining({ method: "POST" }),
+        );
     });
 });
