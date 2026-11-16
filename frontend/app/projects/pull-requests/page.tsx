@@ -111,10 +111,11 @@ function PullRequestPageContent() {
     const params = useSearchParams();
     const projectId = params.get("id") ?? "";
     const pullRequestId = params.get("pr");
+    const { data: currentUser } = useCurrentUser();
 
     return (
         <div className="min-h-screen bg-background text-foreground">
-            <ProjectHeader />
+            <ProjectHeader userAvatarUrl={currentUser?.avatar_url ?? null} username={currentUser?.username || "Producer"} />
             <div className="p-6 space-y-6">
                 <Link
                     href={`/projects?id=${projectId}`}
