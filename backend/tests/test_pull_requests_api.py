@@ -11,6 +11,9 @@ Covers:
 - POST /pull-requests/{id}/accept (#253): OPEN → MERGED by promoting the
   source head onto the target; owner or Admin only; 409 when not open, a
   branch was deleted, the source is empty or the target moved; row lock.
+- GET /pull-requests/{id}/diff (#254): mixer changes accepting would apply
+  (target head vs current source head); a status instead of an error when
+  there is nothing to compare; 409 when not open.
 
 CLOSED and MERGED are terminal (SPECIFICATION.md §19): a closed PR is not
 reopened, users open a new one.
@@ -21,15 +24,19 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.sql import operators
 from sqlalchemy.sql.elements import False_, True_
 
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
+from stemhub.fl_mixer import FlMixer, FlMixerInsert
 from stemhub.models import Branch, Collaborator, Project, PullRequest, User, Version
+from stemhub.routers import pull_requests as pull_requests_module
 from stemhub.routers.pull_requests import router as pull_requests_router
+from stemhub.storage import get_storage_service
 
 
 # ── Fixtures ──
@@ -249,6 +256,8 @@ def _make_client(session: FakeSession) -> TestClient:
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_current_user] = override_user
+    # The diff endpoint reads project files through storage; tests stub the read itself.
+    app.dependency_overrides[get_storage_service] = lambda: None
     return TestClient(app)
 
 
@@ -888,3 +897,159 @@ def test_accept_pull_request_locks_the_pull_request_row() -> None:
     ]
     assert pr_reads and pr_reads[0]._for_update_arg is not None
 
+
+# ── Diff (issue #254) ──
+
+
+def _mixer(*, kick_volume: int) -> FlMixer:
+    return FlMixer(
+        inserts=(FlMixerInsert(index=1, name="Kick", enabled=True, volume=kick_volume, pan=0, slots=()),)
+    )
+
+
+def _diff_session(*, target_has_head: bool = True):
+    """`_accept_session` where the target head is an FL Studio project too."""
+    session, project, main, feature, pr, main_head, feature_head = _accept_session(target_has_head=target_has_head)
+    if main_head is not None:
+        main_head.source_daw = "FL Studio"
+    return session, main, feature, pr, main_head, feature_head
+
+
+def _stub_mixers(monkeypatch, mixers: dict[uuid.UUID, FlMixer | Exception]) -> None:
+    """Answer the project-file read with a mixer (or a failure) per version."""
+
+    async def fake_load_mixer_for_compare(*, version, project_id, db, storage):
+        del project_id, db, storage
+        result = mixers[version.id]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    monkeypatch.setattr(pull_requests_module, "load_mixer_for_compare", fake_load_mixer_for_compare)
+
+
+def test_diff_compares_the_target_head_with_the_current_source_head(monkeypatch) -> None:
+    """The diff shows what accepting would apply now, not what the source
+    looked like when the pull request was opened."""
+    session, _, feature, pr, main_head, feature_head = _diff_session()
+    newer = _version(feature.id, created_at=datetime(2026, 11, 5, tzinfo=timezone.utc))
+    newer.source_daw = "FL Studio"
+    session.versions.append(newer)
+    _stub_mixers(
+        monkeypatch,
+        {main_head.id: _mixer(kick_volume=100), feature_head.id: _mixer(kick_volume=110), newer.id: _mixer(kick_volume=120)},
+    )
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "compared"
+    assert body["base_version_id"] == str(main_head.id)
+    assert body["head_version_id"] == str(newer.id)
+    assert body["summary"]["total_changes"] == 1
+    [change] = body["changes"]
+    assert change["type"] == "insert_volume_changed"
+    assert change["insert_name"] == "Kick"
+    assert (change["before"], change["after"]) == (100, 120)
+    assert session.commit_calls == 0
+
+
+def test_diff_reports_a_target_that_moved_since_the_pull_request_was_opened(monkeypatch) -> None:
+    """Accept would refuse, so showing a diff would promise something that cannot happen."""
+    session, main, _, pr, _, _ = _diff_session()
+    session.versions.append(_version(main.id, created_at=datetime(2026, 11, 5, tzinfo=timezone.utc)))
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "target_moved"
+    assert body["summary"] is None
+    assert body["changes"] == []
+
+
+def test_diff_reports_a_source_branch_without_version(monkeypatch) -> None:
+    session, _, _, pr, _, feature_head = _diff_session()
+    feature_head.is_deleted = True
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "no_source_version"
+
+
+def test_diff_reports_a_target_branch_without_version(monkeypatch) -> None:
+    """Nothing to compare with: accepting would start the target's history."""
+    session, _, _, pr, _, feature_head = _diff_session(target_has_head=False)
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "no_target_version"
+    assert body["head_version_id"] == str(feature_head.id)
+    assert body["base_version_id"] is None
+
+
+def test_diff_reports_a_project_that_is_not_fl_studio(monkeypatch) -> None:
+    session, _, _, pr, main_head, _ = _diff_session()
+    main_head.source_daw = "Ableton Live"
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "unsupported"
+    assert body["status_message"] == "Only FL Studio projects can be compared"
+    assert body["changes"] == []
+
+
+def test_diff_reports_an_unreadable_project_file_instead_of_failing(monkeypatch) -> None:
+    session, _, _, pr, main_head, feature_head = _diff_session()
+    reason = "The project file of this version is missing from storage."
+    _stub_mixers(
+        monkeypatch,
+        {main_head.id: _mixer(kick_volume=100), feature_head.id: HTTPException(status_code=422, detail=reason)},
+    )
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "unsupported"
+    assert body["status_message"] == reason
+
+
+@pytest.mark.parametrize("status", ["CLOSED", "MERGED"])
+def test_diff_of_a_pull_request_that_is_not_open_is_409(monkeypatch, status: str) -> None:
+    session, _, _, pr, _, _ = _diff_session()
+    pr.status = status
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Only an open pull request has a diff"
+
+
+def test_diff_returns_404_without_access(monkeypatch) -> None:
+    session, _, _, pr, _, _ = _diff_session()
+    session.user = _user()
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 404
