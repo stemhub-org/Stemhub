@@ -206,7 +206,7 @@ describe("pull request hooks", () => {
 
         const { result } = renderHook(() => useAcceptPullRequest("p1"), { wrapper: wrapper() });
 
-        await expect(result.current.mutateAsync("pr1")).rejects.toMatchObject({
+        await expect(result.current.mutateAsync({ pullRequestId: "pr1", reviewedSourceHeadId: null })).rejects.toMatchObject({
             status: 409,
             message: "The target branch has new versions",
         });
@@ -214,5 +214,15 @@ describe("pull request hooks", () => {
             `${API_URL}/pull-requests/pr1/accept`,
             expect.objectContaining({ method: "POST" }),
         );
+    });
+
+    it("useAcceptPullRequest tells the backend which source version was reviewed", async () => {
+        const fetchMock = mockJson({ id: "pr1", status: "MERGED" });
+
+        const { result } = renderHook(() => useAcceptPullRequest("p1"), { wrapper: wrapper() });
+        await result.current.mutateAsync({ pullRequestId: "pr1", reviewedSourceHeadId: "v-feat" });
+
+        const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(JSON.parse(init.body as string)).toEqual({ expected_source_head_version_id: "v-feat" });
     });
 });

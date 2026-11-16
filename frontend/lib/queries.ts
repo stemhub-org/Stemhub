@@ -10,7 +10,7 @@ import type {
     TopContributorsResponse,
     VersionDiffHistoryEntry,
 } from "@/types/project";
-import type { NewPullRequest, PullRequest, PullRequestMixerDiff } from "@/types/pullRequest";
+import type { AcceptPullRequest, NewPullRequest, PullRequest, PullRequestMixerDiff } from "@/types/pullRequest";
 import type { UserProfile } from "@/types/user";
 import { ApiError, apiFetch } from "./api";
 
@@ -222,8 +222,15 @@ export function useClosePullRequest(projectId: string) {
 }
 
 export function useAcceptPullRequest(projectId: string) {
-    return usePullRequestMutation<string>(projectId, (pullRequestId) =>
-        apiFetch<PullRequest>(`/pull-requests/${pullRequestId}/accept`, { method: "POST" }),
-        (pullRequestId) => pullRequestId,
+    return usePullRequestMutation<AcceptPullRequest>(
+        projectId,
+        ({ pullRequestId, reviewedSourceHeadId }) =>
+            apiFetch<PullRequest>(`/pull-requests/${pullRequestId}/accept`, {
+                method: "POST",
+                ...(reviewedSourceHeadId
+                    ? { body: JSON.stringify({ expected_source_head_version_id: reviewedSourceHeadId }) }
+                    : {}),
+            }),
+        ({ pullRequestId }) => pullRequestId,
     );
 }

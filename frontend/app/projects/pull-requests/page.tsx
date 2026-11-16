@@ -17,6 +17,7 @@ import {
     useClosePullRequest,
     useCollaborators,
     useCurrentUser,
+    usePullRequestDiff,
     usePullRequest,
     useProjectSummary,
 } from "@/lib/queries";
@@ -39,6 +40,8 @@ function PullRequestActions({ projectId, pullRequest }: { projectId: string; pul
     const { data: summary } = useProjectSummary(projectId, null);
     const closePullRequest = useClosePullRequest(projectId);
     const acceptPullRequest = useAcceptPullRequest(projectId);
+    // Same cached request as the "Changes" section: no extra call.
+    const { data: diff } = usePullRequestDiff(pullRequest.id, pullRequest.status === "OPEN");
 
     const ownerId = summary?.summary.project.owner.id;
     const role = ownerId ? projectRole(ownerId, currentUser?.id, collaborators) : null;
@@ -54,7 +57,13 @@ function PullRequestActions({ projectId, pullRequest }: { projectId: string; pul
                     <Button
                         disabled={busy}
                         loading={acceptPullRequest.isPending}
-                        onClick={() => acceptPullRequest.mutate(pullRequest.id)}
+                        // Accept exactly the source version whose changes are on screen.
+                        onClick={() =>
+                            acceptPullRequest.mutate({
+                                pullRequestId: pullRequest.id,
+                                reviewedSourceHeadId: diff?.head_version_id ?? null,
+                            })
+                        }
                     >
                         Accept
                     </Button>
