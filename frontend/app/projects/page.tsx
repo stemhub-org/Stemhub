@@ -4,7 +4,7 @@ import type React from "react";
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Settings, FileText } from "lucide-react";
+import { Loader2, Settings, FileText, GitPullRequest } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import { ProjectHeader } from "./components/ProjectHeader";
 import { ProjectPageHeader } from "./components/ProjectPageHeader";
@@ -27,6 +27,7 @@ import {
     useVersionAssets,
 } from "@/lib/queries";
 import { ProjectSettings } from "./components/ProjectSettings";
+import { PullRequestsTab } from "./components/PullRequestsTab";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ToastProvider";
@@ -58,7 +59,7 @@ function ProjectPageContent() {
 
 function ProjectOverview({ projectId }: { projectId: string }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<"Project" | "Settings">("Project");
+    const [activeTab, setActiveTab] = useState<"Project" | "Pull requests" | "Settings">("Project");
     // null until the user picks a branch: the summary then shows the first branch.
     const [requestedBranchId, setRequestedBranchId] = useState<string | null>(null);
     const toast = useToast();
@@ -187,6 +188,18 @@ function ProjectOverview({ projectId }: { projectId: string }) {
                             <FileText className="size-4" />
                             Project
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("Pull requests")}
+                            className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                                activeTab === "Pull requests"
+                                    ? "border-accent text-foreground"
+                                    : "border-transparent text-foreground/60 hover:text-foreground hover:border-border-subtle"
+                            }`}
+                        >
+                            <GitPullRequest className="size-4" />
+                            Pull requests
+                        </button>
                         {currentUserId && summary.project.owner.id === currentUserId && (
                         <button
                             type="button"
@@ -203,6 +216,15 @@ function ProjectOverview({ projectId }: { projectId: string }) {
                         )}
                     </div>
                 </div>
+
+                {activeTab === "Pull requests" && (
+                    <PullRequestsTab
+                        projectId={projectId}
+                        ownerId={summary.project.owner.id}
+                        currentUserId={currentUserId}
+                        branches={summary.branches.filter((branch) => !branch.is_deleted)}
+                    />
+                )}
 
                 {activeTab === "Project" && (
                     <>
