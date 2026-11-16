@@ -23,13 +23,27 @@ from sqlalchemy.future import select
 
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
+from stemhub.fl_mixer import diff_fl_mixers
+from stemhub.mixer_compare import (
+    is_fl_studio_version,
+    load_mixer_for_compare,
+    mixer_diff_changes,
+    mixer_diff_summary,
+)
 from stemhub.models import Branch, PullRequest, User, Version
 from stemhub.routers._project_access import (
     get_project_with_read_access,
     get_project_with_write_access,
     is_project_admin,
 )
-from stemhub.schemas import ActivityActor, ActivityBranch, PullRequestCreate, PullRequestResponse
+from stemhub.schemas import (
+    ActivityActor,
+    ActivityBranch,
+    PullRequestCreate,
+    PullRequestDiffResponse,
+    PullRequestResponse,
+)
+from stemhub.storage import StorageService, get_storage_service
 
 router = APIRouter(tags=["pull-requests"])
 
@@ -220,6 +234,71 @@ async def get_pull_request(
     pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
     await get_project_with_read_access(project_id=pull_request.project_id, current_user=current_user, db=db)
     return await _to_response(db, pull_request)
+
+
+@router.get("/pull-requests/{pull_request_id}/diff", response_model=PullRequestDiffResponse)
+async def get_pull_request_diff(
+    pull_request_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
+):
+    """Mixer changes accepting this pull request would apply.
+
+    Compares the target branch's head with the source branch's *current* head:
+    the same two versions accept_pull_request works on, so the reviewer never
+    accepts something the diff did not show. Computed on each call rather than
+    stored, because the source branch can receive versions while the pull
+    request is open.
+    """
+    pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
+    await get_project_with_read_access(project_id=pull_request.project_id, current_user=current_user, db=db)
+
+    # A closed pull request applies nothing; an accepted one is already in the
+    # target branch's history. Only an open one has pending changes.
+    if pull_request.status != "OPEN":
+        raise HTTPException(status_code=409, detail="Only an open pull request has a diff")
+
+    source_head = await _branch_head(branch_id=pull_request.source_branch_id, db=db)
+    if source_head is None:
+        return PullRequestDiffResponse(status="no_source_version")
+    target_head = await _branch_head(branch_id=pull_request.target_branch_id, db=db)
+    target_head_id = target_head.id if target_head else None
+    # Same check as accept: it would refuse, so there is no pending change to show.
+    if target_head_id != pull_request.target_head_version_id:
+        return PullRequestDiffResponse(status="target_moved", head_version_id=source_head.id)
+    if target_head is None:
+        return PullRequestDiffResponse(status="no_target_version", head_version_id=source_head.id)
+
+    def unsupported(reason: str) -> PullRequestDiffResponse:
+        return PullRequestDiffResponse(
+            status="unsupported",
+            status_message=reason,
+            base_version_id=target_head.id,
+            head_version_id=source_head.id,
+        )
+
+    if not is_fl_studio_version(target_head) or not is_fl_studio_version(source_head):
+        return unsupported("Only FL Studio projects can be compared")
+    try:
+        base_mixer = await load_mixer_for_compare(
+            version=target_head, project_id=pull_request.project_id, db=db, storage=storage
+        )
+        head_mixer = await load_mixer_for_compare(
+            version=source_head, project_id=pull_request.project_id, db=db, storage=storage
+        )
+    except HTTPException as exc:
+        # A missing or unreadable project file must not break the page.
+        return unsupported(str(exc.detail))
+
+    diff_result = diff_fl_mixers(base_mixer, head_mixer)
+    return PullRequestDiffResponse(
+        status="compared",
+        base_version_id=target_head.id,
+        head_version_id=source_head.id,
+        summary=mixer_diff_summary(diff_result),
+        changes=mixer_diff_changes(diff_result),
+    )
 
 
 @router.post("/pull-requests/{pull_request_id}/close", response_model=PullRequestResponse)
