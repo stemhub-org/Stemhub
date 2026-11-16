@@ -120,6 +120,7 @@ Notes:
 - **A version's files** are not rows: `manifest_json` lists the project file and the assets by SHA-256, and each hash is a `BLOB` row of the same project. The dotted line in the diagram is that reference; it is not a foreign key. `ref_count` counts the live manifests that reference a blob (see [content-addressed-storage.md](./content-addressed-storage.md)).
 - **`message`** was called `commit_message` before; stored placeholder texts ("Save from plugin") were cleared to `NULL`.
 - **`status = 'MERGED'`** is the stored value for an accepted pull request (branch promotion, no content merge).
+- **Actor columns and account erasure.** `branch.created_by`, `branch.deleted_by` and `version.deleted_by` are `ON DELETE SET NULL` foreign keys: if a user's row is ever deleted (account erasure), the branch or version stays and loses its actor, and the deletion is not blocked.
 - The social and community tables (`user_follow`, `platform_update`, `challenge`, `challenge_participant`, `event`, `event_attendee`) back the explore and community pages and are left out of the diagram.
 
 ---
