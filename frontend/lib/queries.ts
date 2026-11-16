@@ -173,13 +173,23 @@ export function useCollaborators(projectId: string) {
  * whole project is refreshed: its PR list, its activity feed, and (on
  * accept, which adds a version to the target branch) its summary.
  */
-function usePullRequestMutation<Variables>(projectId: string, request: (variables: Variables) => Promise<PullRequest>) {
+function usePullRequestMutation<Variables>(
+    projectId: string,
+    request: (variables: Variables) => Promise<PullRequest>,
+    /** For a change to an existing PR: its id, reloaded when the change is refused (it may have been closed meanwhile). */
+    pullRequestIdOf?: (variables: Variables) => string,
+) {
     const queryClient = useQueryClient();
     return useMutation<PullRequest, ApiError, Variables>({
         mutationFn: request,
         onSuccess: (pullRequest) => {
             queryClient.setQueryData(queryKeys.pullRequest(pullRequest.id), pullRequest);
             void queryClient.invalidateQueries({ queryKey: queryKeys.project(projectId) });
+        },
+        onError: (_error, variables) => {
+            if (pullRequestIdOf) {
+                void queryClient.invalidateQueries({ queryKey: queryKeys.pullRequest(pullRequestIdOf(variables)) });
+            }
         },
     });
 }
@@ -196,11 +206,13 @@ export function useCreatePullRequest(projectId: string) {
 export function useClosePullRequest(projectId: string) {
     return usePullRequestMutation<string>(projectId, (pullRequestId) =>
         apiFetch<PullRequest>(`/pull-requests/${pullRequestId}/close`, { method: "POST" }),
+        (pullRequestId) => pullRequestId,
     );
 }
 
 export function useAcceptPullRequest(projectId: string) {
     return usePullRequestMutation<string>(projectId, (pullRequestId) =>
         apiFetch<PullRequest>(`/pull-requests/${pullRequestId}/accept`, { method: "POST" }),
+        (pullRequestId) => pullRequestId,
     );
 }

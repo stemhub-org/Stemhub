@@ -142,6 +142,27 @@ describe("PullRequestPage", () => {
         expect(screen.getByText("OPEN")).toBeTruthy();
     });
 
+    it("reloads the pull request when someone else already closed it", async () => {
+        let closedElsewhere = false;
+        const closed = pullRequest({ status: "CLOSED", closed_by: "ed", closed_at: new Date().toISOString() });
+        renderPage({
+            accept: () => {
+                closedElsewhere = true;
+                return json({ detail: "Pull request is already CLOSED" }, 409);
+            },
+        });
+        // The next read of the pull request sees the other user's close.
+        const original = vi.mocked(fetch).getMockImplementation()!;
+        vi.mocked(fetch).mockImplementation(async (url, init) =>
+            closedElsewhere && new URL(String(url)).pathname === "/pull-requests/pr1" ? json(closed) : original(url, init),
+        );
+
+        fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+
+        expect(await screen.findByText("CLOSED")).toBeTruthy();
+        expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
+    });
+
     it("marks a deleted source branch", async () => {
         renderPage({ pr: pullRequest({ source_branch: { ...feature, is_deleted: true } }) });
         expect(await screen.findByText("drop-plus-fort (deleted) → main")).toBeTruthy();
