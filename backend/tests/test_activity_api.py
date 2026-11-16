@@ -72,14 +72,18 @@ def _branch(
     name: str = "main",
     *,
     created_at: datetime = T0,
+    created_by: User | None = None,
     deleted_at: datetime | None = None,
+    deleted_by: User | None = None,
 ) -> Branch:
     return Branch(
         id=uuid.uuid4(),
         project_id=project_id,
         name=name,
+        created_by=created_by.id if created_by else None,
         created_at=created_at,
         is_deleted=deleted_at is not None,
+        deleted_by=deleted_by.id if deleted_by else None,
         deleted_at=deleted_at,
     )
 
@@ -90,6 +94,7 @@ def _version(
     created_at: datetime,
     created_by: User | None = None,
     deleted_at: datetime | None = None,
+    deleted_by: User | None = None,
     message: str | None = "Mixed the drums",
 ) -> Version:
     return Version(
@@ -99,6 +104,7 @@ def _version(
         message=message,
         created_at=created_at,
         is_deleted=deleted_at is not None,
+        deleted_by=deleted_by.id if deleted_by else None,
         deleted_at=deleted_at,
         source_daw="FL Studio",
         source_project_filename="beat.flp",
@@ -511,7 +517,7 @@ def test_activity_lists_a_deleted_version_as_saved_then_deleted() -> None:
             "id": f"version_deleted:{version.id}",
             "type": "version_deleted",
             "occurred_at": _iso(_at(7)),
-            "actor": None,  # who deleted a version is not recorded
+            "actor": None,  # deleted before deleted_by was recorded (#290)
             "branch": {"id": str(main.id), "name": "main", "is_deleted": False},
             "version": {
                 "id": str(version.id),
@@ -524,6 +530,21 @@ def test_activity_lists_a_deleted_version_as_saved_then_deleted() -> None:
     ]
     assert _ids(_of_type(items, "version_saved")) == [f"version_saved:{version.id}"]
     assert _ids(items)[:2] == [f"version_deleted:{version.id}", f"version_saved:{version.id}"]
+
+
+def test_activity_names_who_deleted_a_version() -> None:
+    session, project, main = _owned_project_session()
+    editor = _user("editor")
+    session.users.append(editor)
+    version = _version(main, created_at=_at(1), created_by=session.user, deleted_at=_at(7), deleted_by=editor)
+    session.versions.append(version)
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    assert _of_type(items, "version_deleted")[0]["actor"] == {"id": str(editor.id), "username": "editor"}
+    # The save keeps its own author.
+    assert _of_type(items, "version_saved")[0]["actor"] == {"id": str(session.user.id), "username": "demo"}
 
 
 def test_activity_skips_a_deletion_without_timestamp() -> None:
@@ -555,7 +576,7 @@ def test_activity_lists_a_created_branch() -> None:
             "id": f"branch_created:{feature.id}",
             "type": "branch_created",
             "occurred_at": _iso(_at(4)),
-            "actor": None,  # Branch records no author
+            "actor": None,  # created before created_by was recorded (#290)
             "branch": {"id": str(feature.id), "name": "feature-fast-tempo", "is_deleted": False},
             "version": None,
             "pull_request": None,
@@ -590,6 +611,24 @@ def test_activity_lists_a_deleted_branch_as_created_then_deleted() -> None:
         "pull_request": None,
     }
     assert f"branch_created:{old.id}" in _ids(_of_type(items, "branch_created"))
+
+
+def test_activity_names_who_created_and_who_deleted_a_branch() -> None:
+    session, project, _ = _owned_project_session()
+    editor = _user("editor")
+    session.users.append(editor)
+    old = _branch(
+        project.id, "old-idea", created_at=_at(2), created_by=editor, deleted_at=_at(9), deleted_by=session.user
+    )
+    session.branches.append(old)
+    client = _make_client(session)
+
+    items = _items(client, project)
+
+    created = next(item for item in items if item["id"] == f"branch_created:{old.id}")
+    deleted = next(item for item in items if item["id"] == f"branch_deleted:{old.id}")
+    assert created["actor"] == {"id": str(editor.id), "username": "editor"}
+    assert deleted["actor"] == {"id": str(session.user.id), "username": "demo"}
 
 
 def test_activity_skips_a_branch_deletion_without_timestamp() -> None:
