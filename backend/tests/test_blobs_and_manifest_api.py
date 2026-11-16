@@ -730,6 +730,7 @@ def test_delete_cas_version_decrements_ref_count(tmp_path) -> None:
     response = client.delete(f"/versions/{version.id}")
     assert response.status_code == 204
     assert version.is_deleted is True
+    assert version.deleted_by == user.id
     assert next(b for b in session.blobs if b.sha256 == proj_sha).ref_count == 0
     assert next(b for b in session.blobs if b.sha256 == asset_sha).ref_count == 1
 

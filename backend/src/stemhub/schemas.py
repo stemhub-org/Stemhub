@@ -177,6 +177,7 @@ class BranchUpdate(BaseModel):
 class BranchResponse(BranchBase):
     id: UUID
     project_id: UUID
+    created_by: Optional[UUID] = None
     created_at: datetime
     is_deleted: bool
     deleted_at: Optional[datetime] = None

@@ -63,8 +63,10 @@ erDiagram
         uuid id PK
         uuid project_id FK
         string name "e.g. main, feature-fast-tempo"
+        uuid created_by FK "who created it, may be null"
         datetime created_at
         boolean is_deleted
+        uuid deleted_by FK "who deleted it, may be null"
         datetime deleted_at
     }
 
@@ -80,6 +82,7 @@ erDiagram
         int manifest_version "2 for new versions, 1 for older ones"
         datetime created_at
         boolean is_deleted
+        uuid deleted_by FK "who deleted it, may be null"
         datetime deleted_at
     }
 
@@ -117,6 +120,7 @@ Notes:
 - **A version's files** are not rows: `manifest_json` lists the project file and the assets by SHA-256, and each hash is a `BLOB` row of the same project. The dotted line in the diagram is that reference; it is not a foreign key. `ref_count` counts the live manifests that reference a blob (see [content-addressed-storage.md](./content-addressed-storage.md)).
 - **`message`** was called `commit_message` before; stored placeholder texts ("Save from plugin") were cleared to `NULL`.
 - **`status = 'MERGED'`** is the stored value for an accepted pull request (branch promotion, no content merge).
+- **Actor columns and account erasure.** `branch.created_by`, `branch.deleted_by` and `version.deleted_by` are `ON DELETE SET NULL` foreign keys: if a user's row is ever deleted (account erasure), the branch or version stays and loses its actor, and the deletion is not blocked.
 - The social and community tables (`user_follow`, `platform_update`, `challenge`, `challenge_participant`, `event`, `event_attendee`) back the explore and community pages and are left out of the diagram.
 
 ---
@@ -386,14 +390,14 @@ OPEN ──/close───▶ CLOSED
 | `type` | `occurred_at` | `actor` | Details |
 | :--- | :--- | :--- | :--- |
 | `version_saved` | the version's `created_at` (deleted versions too: they were saved) | its author | `branch`, `version` |
-| `version_deleted` | the version's `deleted_at` | `null` (not recorded) | `branch`, `version` |
-| `branch_created` | the branch's `created_at` | `null` (not recorded) | `branch` |
-| `branch_deleted` | the branch's `deleted_at` | `null` (not recorded) | `branch` |
+| `version_deleted` | the version's `deleted_at` | who deleted it | `branch`, `version` |
+| `branch_created` | the branch's `created_at` | who created it | `branch` |
+| `branch_deleted` | the branch's `deleted_at` | who deleted it | `branch` |
 | `pull_request_opened` | the pull request's `created_at` | who opened it | `pull_request` |
 | `pull_request_merged` | `closed_at` of a pull request accepted (`MERGED`) | who accepted it | `pull_request` |
 | `pull_request_closed` | `closed_at` of a pull request closed without being accepted (`CLOSED`) | who closed it | `pull_request` |
 
-- `id` is `{type}:{id of the version, branch or pull request}`: unique and stable, so a client can de-duplicate on it. `actor` is also `null` when the user isn't known.
+- `id` is `{type}:{id of the version, branch or pull request}`: unique and stable, so a client can de-duplicate on it. `actor` is also `null` when the user isn't known, and for branches and version deletions from before their creator and deleter were recorded (#290).
 - `branch.is_deleted` and `pull_request.status` are the branch's and pull request's current state, not their state when the event happened. Versions of a deleted branch stay in the feed.
 - Soft-deleted pull requests are left out entirely. A deletion without `deleted_at` has no time, so it isn't listed.
 - Items are ordered by `occurred_at`, then `id`, both descending. A page holds at most `limit` items (1–100, default `30`; out of range: `422`). `next_cursor` is an opaque string: pass it back unchanged as `cursor` to get the next page, which starts right after the last item (items sharing a timestamp are neither skipped nor repeated). It is `null` on the last page. A cursor the server didn't produce answers `400`.
