@@ -93,6 +93,9 @@ def decode_cursor(raw: str) -> Cursor:
 # Column holding the user who did it, for the types that record one.
 _ACTOR_COLUMN = {
     "version_saved": "created_by",
+    "version_deleted": "deleted_by",
+    "branch_created": "created_by",
+    "branch_deleted": "deleted_by",
     "pull_request_opened": "created_by",
     "pull_request_merged": "closed_by",
     "pull_request_closed": "closed_by",
