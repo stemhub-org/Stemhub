@@ -11,6 +11,7 @@ import {
     useCreateProject,
     useCurrentUser,
     useProjects,
+    usePullRequestDiff,
     usePullRequests,
 } from "./queries";
 
@@ -160,6 +161,22 @@ describe("pull request hooks", () => {
         expect(queryKeys.collaborators("p1")).toEqual(["projects", "p1", "collaborators"]);
     });
 
+    it("keeps the diff under its pull request so refreshing one refreshes the other", () => {
+        expect(queryKeys.pullRequestDiff("pr1")).toEqual(["pull-requests", "pr1", "diff"]);
+    });
+
+    it("usePullRequestDiff loads the diff of an open pull request only", async () => {
+        const fetchMock = mockJson({ status: "compared", changes: [] });
+
+        const closed = renderHook(() => usePullRequestDiff("pr1", false), { wrapper: wrapper() });
+        expect(closed.result.current.fetchStatus).toBe("idle");
+        expect(fetchMock).not.toHaveBeenCalled();
+
+        const open = renderHook(() => usePullRequestDiff("pr1", true), { wrapper: wrapper() });
+        await waitFor(() => expect(open.result.current.isSuccess).toBe(true));
+        expect(fetchMock).toHaveBeenCalledWith(`${API_URL}/pull-requests/pr1/diff`, expect.anything());
+    });
+
     it("usePullRequests loads the project's pull requests", async () => {
         const fetchMock = mockJson([{ id: "pr1" }]);
 
@@ -189,7 +206,7 @@ describe("pull request hooks", () => {
 
         const { result } = renderHook(() => useAcceptPullRequest("p1"), { wrapper: wrapper() });
 
-        await expect(result.current.mutateAsync("pr1")).rejects.toMatchObject({
+        await expect(result.current.mutateAsync({ pullRequestId: "pr1", reviewedSourceHeadId: null })).rejects.toMatchObject({
             status: 409,
             message: "The target branch has new versions",
         });
@@ -197,5 +214,15 @@ describe("pull request hooks", () => {
             `${API_URL}/pull-requests/pr1/accept`,
             expect.objectContaining({ method: "POST" }),
         );
+    });
+
+    it("useAcceptPullRequest tells the backend which source version was reviewed", async () => {
+        const fetchMock = mockJson({ id: "pr1", status: "MERGED" });
+
+        const { result } = renderHook(() => useAcceptPullRequest("p1"), { wrapper: wrapper() });
+        await result.current.mutateAsync({ pullRequestId: "pr1", reviewedSourceHeadId: "v-feat" });
+
+        const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(JSON.parse(init.body as string)).toEqual({ expected_source_head_version_id: "v-feat" });
     });
 });
