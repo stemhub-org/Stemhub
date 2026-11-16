@@ -16,6 +16,8 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 MESSAGE_RENAME_REVISION = "316caf0fcfa9"
 PREVIOUS_HEAD = "1ddecc33a8b7"
 ACTORS_REVISION = "c021108cacff"
+AUTH_REVISION = "2a23991f61e9"
+MERGE_REVISION = "d6e7f8a9b0c1"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -131,14 +133,19 @@ def test_check_migrations_no_scripts():
         asyncio.run(check_migrations_async())
 
 
-def test_alembic_history_has_a_single_head_after_the_actor_columns():
+def test_alembic_history_joins_auth_and_actor_migrations_under_a_single_head():
     script = _script_directory()
 
-    assert script.get_heads() == [ACTORS_REVISION]
+    assert script.get_heads() == [MERGE_REVISION]
+    assert script.get_current_head() == MERGE_REVISION
+    assert set(script.get_revision(MERGE_REVISION).down_revision) == {AUTH_REVISION, ACTORS_REVISION}
     assert script.get_revision(ACTORS_REVISION).down_revision == MESSAGE_RENAME_REVISION
-    assert len(script.get_heads()) == 1
     assert script.get_revision(MESSAGE_RENAME_REVISION).down_revision == PREVIOUS_HEAD
-    assert MESSAGE_RENAME_REVISION in {rev.revision for rev in script.walk_revisions()}
+    # Either previously deployed head must have an upgrade path to the merge.
+    for previous_head in (AUTH_REVISION, ACTORS_REVISION):
+        pending = list(script.iterate_revisions(MERGE_REVISION, previous_head))
+        assert pending[0].revision == MERGE_REVISION
+        assert previous_head not in {rev.revision for rev in pending}
 
 
 def _create_pre_actor_tables(connection) -> None:
