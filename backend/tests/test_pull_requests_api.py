@@ -115,6 +115,7 @@ class FakeSession:
 
     def __init__(self, *, user: User) -> None:
         self.user = user
+        self.users: list[User] = [user]
         self.projects: list[Project] = []
         self.collaborators: list[Collaborator] = []
         self.branches: list[Branch] = []
@@ -168,6 +169,7 @@ class _FakeResult:
         entity = self.stmt.column_descriptions[0]["entity"]
         s = self.session
         rows_by_entity = {
+            User: s.users,
             Project: s.projects,
             Collaborator: s.collaborators,
             Branch: s.branches,
@@ -293,6 +295,20 @@ def test_create_pull_request_returns_open_pr() -> None:
     assert body["deleted_at"] is None
     assert len(session.pull_requests) == 1
     assert session.commit_calls == 1
+
+
+def test_create_pull_request_returns_author_and_branches() -> None:
+    session, project, main, feature = _owned_project_session()
+    client = _make_client(session)
+
+    body = client.post(
+        f"/projects/{project.id}/pull-requests",
+        json={"source_branch_id": str(feature.id), "target_branch_id": str(main.id), "title": "Faster tempo"},
+    ).json()
+
+    assert body["author"] == {"id": str(session.user.id), "username": "demo"}
+    assert body["source_branch"] == {"id": str(feature.id), "name": "feature-fast-tempo", "is_deleted": False}
+    assert body["target_branch"] == {"id": str(main.id), "name": "main", "is_deleted": False}
 
 
 def test_create_pull_request_captures_branch_heads() -> None:
@@ -504,6 +520,30 @@ def test_list_pull_requests_returns_404_without_access() -> None:
     assert response.status_code == 404
 
 
+def _statements_on(session: FakeSession, entity: type) -> int:
+    return sum(1 for stmt in session.statements if stmt.column_descriptions[0]["entity"] is entity)
+
+
+def test_list_pull_requests_loads_authors_and_branches_in_two_queries() -> None:
+    session, project, main, feature = _owned_project_session()
+    other = _user()
+    other.username = "jb"
+    session.users.append(other)
+    session.pull_requests.extend([
+        _pull_request(project, feature, main, created_by=session.user.id),
+        _pull_request(project, main, feature, created_by=other.id),
+        _pull_request(project, feature, main, status="CLOSED", created_by=other.id),
+    ])
+    client = _make_client(session)
+
+    body = client.get(f"/projects/{project.id}/pull-requests").json()
+
+    assert sorted(pr["author"]["username"] for pr in body) == ["demo", "jb", "jb"]
+    assert all(pr["source_branch"]["name"] and pr["target_branch"]["name"] for pr in body)
+    assert _statements_on(session, User) == 1
+    assert _statements_on(session, Branch) == 1
+
+
 # ── Get by id ──
 
 
@@ -518,6 +558,30 @@ def test_get_pull_request_returns_pr() -> None:
     assert response.status_code == 200
     assert response.json()["id"] == str(pr.id)
     assert response.json()["status"] == "OPEN"
+
+
+def test_get_pull_request_shows_a_deleted_branch_as_deleted() -> None:
+    session, project, main, feature = _owned_project_session()
+    pr = _pull_request(project, feature, main, created_by=session.user.id)
+    session.pull_requests.append(pr)
+    feature.is_deleted = True
+    client = _make_client(session)
+
+    body = client.get(f"/pull-requests/{pr.id}").json()
+
+    assert body["source_branch"] == {"id": str(feature.id), "name": "feature-fast-tempo", "is_deleted": True}
+
+
+def test_get_pull_request_without_known_author_has_null_author() -> None:
+    session, project, main, feature = _owned_project_session()
+    pr = _pull_request(project, feature, main, created_by=None)
+    session.pull_requests.append(pr)
+    client = _make_client(session)
+
+    body = client.get(f"/pull-requests/{pr.id}").json()
+
+    assert body["author"] is None
+    assert body["target_branch"]["name"] == "main"
 
 
 def test_get_pull_request_returns_404_without_access() -> None:
@@ -568,6 +632,8 @@ def test_close_pull_request_marks_closed_with_timestamp_and_closer() -> None:
     assert body["status"] == "CLOSED"
     assert body["closed_at"] is not None
     assert body["closed_by"] == str(session.user.id)
+    assert body["source_branch"]["name"] == "feature-fast-tempo"
+    assert body["target_branch"]["name"] == "main"
     assert pr.status == "CLOSED"
     assert pr.closed_at is not None
     assert pr.closed_by == session.user.id
@@ -655,6 +721,8 @@ def test_accept_pull_request_promotes_the_source_head_onto_the_target() -> None:
     assert body["status"] == "MERGED"
     assert body["closed_by"] == str(session.user.id)
     assert body["closed_at"] is not None
+    assert body["author"] == {"id": str(session.user.id), "username": "demo"}
+    assert body["target_branch"]["name"] == "main"
     promoted = [v for v in _versions_on(session, main) if v.id != main_head.id]
     assert len(promoted) == 1
     version = promoted[0]
