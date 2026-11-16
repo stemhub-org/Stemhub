@@ -7,6 +7,9 @@ a version. version.created_by already exists (2b7c42ab9a50).
 All three are nullable and existing rows stay NULL: nothing records who did
 those actions before, so there is nothing to backfill from.
 
+The foreign keys are ON DELETE SET NULL: deleting a user (account erasure)
+clears these columns instead of failing, and the branch or version stays.
+
 Batch mode so the migration also runs on SQLite (test_migrations.py), which
 cannot add a foreign key with ALTER TABLE. On PostgreSQL it emits plain
 ALTER TABLE statements. Idempotent in the style of 316caf0fcfa9: a column that
@@ -58,7 +61,9 @@ def upgrade() -> None:
         with op.batch_alter_table(table) as batch:
             for column in missing:
                 batch.add_column(sa.Column(column, sa.UUID(), nullable=True))
-                batch.create_foreign_key(_foreign_key_name(table, column), "users", [column], ["id"])
+                batch.create_foreign_key(
+                    _foreign_key_name(table, column), "users", [column], ["id"], ondelete="SET NULL"
+                )
 
 
 def downgrade() -> None:
