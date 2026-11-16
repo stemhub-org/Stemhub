@@ -27,8 +27,11 @@ from typing import Any
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import operators
 from sqlalchemy.sql.elements import False_, True_
+from sqlalchemy.sql.dml import Update
+from sqlalchemy.sql.selectable import Select
 
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
@@ -918,19 +921,40 @@ def test_accept_pull_request_hides_the_pr_from_viewers_and_strangers() -> None:
         assert pr.status == "OPEN"
 
 
-def test_accept_pull_request_locks_the_pull_request_row() -> None:
-    """Two concurrent accepts must not both promote: the second waits for the
-    first, then sees MERGED and gets a 409."""
+@pytest.mark.parametrize("action", ["accept", "close"])
+def test_terminal_pull_request_actions_lock_the_pull_request_row(action: str) -> None:
+    """Both terminal transitions must serialize before checking OPEN."""
     session, _, _, _, pr, _, _ = _accept_session()
     client = _make_client(session)
 
-    client.post(f"/pull-requests/{pr.id}/accept")
+    client.post(f"/pull-requests/{pr.id}/{action}")
 
     pr_reads = [
         stmt for stmt in session.statements
-        if stmt.column_descriptions[0]["entity"] is PullRequest
+        if isinstance(stmt, Select) and stmt.column_descriptions[0]["entity"] is PullRequest
     ]
     assert pr_reads and pr_reads[0]._for_update_arg is not None
+
+
+@pytest.mark.parametrize("manifest_version, assets_key", [(1, "tracks"), (2, "assets")])
+def test_accept_counts_distinct_project_scoped_blobs_atomically(manifest_version, assets_key) -> None:
+    session, project, _, _, pr, _, source_head = _accept_session()
+    source_head.manifest_json = {
+        "manifest_version": manifest_version,
+        "project_file": {"sha256": "a" * 64},
+        assets_key: [{"sha256": sha} for sha in ("a" * 64, "b" * 64, "b" * 64)],
+    }
+
+    response = _make_client(session).post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    [increment] = [stmt for stmt in session.statements if isinstance(stmt, Update)]
+    compiled = increment.compile(dialect=postgresql.dialect())
+    assert "ref_count=(blob.ref_count +" in str(compiled)
+    assert compiled.params["ref_count_1"] == 1
+    assert compiled.params["project_id_1"] == project.id
+    assert set(compiled.params["sha256_1"]) == {"a" * 64, "b" * 64}
+    assert session.commit_calls == 1
 
 
 # ── Diff (issue #254) ──

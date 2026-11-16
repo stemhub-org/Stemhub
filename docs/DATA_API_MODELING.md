@@ -362,7 +362,7 @@ OPEN ──/close───▶ CLOSED
 ```
 
 - Accepting a pull request is branch promotion, with no content merge ([SPECIFICATION.md §8](./SPECIFICATION.md#8--open-technical-decisions)); the stored status is `MERGED`. The promoted version copies the source head's manifest, source DAW and file name; blobs are content-addressed, so storage holds no second copy of the files. The latest source version is promoted, even one saved after the PR was opened.
-- Accepting locks the pull request row (`SELECT … FOR UPDATE`), so two concurrent accepts can't both promote: the second one sees `MERGED` and gets `409`.
+- Accepting and closing both lock the pull request row (`SELECT … FOR UPDATE`) before checking its status. Concurrent terminal transitions serialize: the second sees `MERGED` or `CLOSED` and gets `409` without promoting or overwriting the first transition.
 - Both `CLOSED` and `MERGED` are terminal (SPECIFICATION.md §19). A closed PR is not reopened — users open a new PR. Any other transition answers `409`.
 - At most one `OPEN` pull request per ordered `(source_branch_id, target_branch_id)` pair, enforced by the partial unique index `uq_pull_request_open_pair` (`WHERE status = 'OPEN' AND is_deleted = false`). Closed, accepted or soft-deleted PRs never block a new one; the reverse direction is a different pair.
 - `source_head_version_id` / `target_head_version_id` record the head (latest live version) of each branch when the PR is opened (`NULL` if the branch had none). `Branch` has no head pointer, so this is the only record of what was proposed. Accepting compares `target_head_version_id` with the live head of the target and refuses (`409`) when the target moved: promoting over versions the reviewer never saw would bury them.
