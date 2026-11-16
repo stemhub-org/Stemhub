@@ -16,6 +16,7 @@ from stemhub.fl_mixer import (
     MixerReadError,
 )
 from stemhub.models import Blob, User, Version
+from stemhub import mixer_compare as mixer_compare_module
 from stemhub.routers import versions as versions_router_module
 from stemhub.routers.versions import router as versions_router
 from stemhub.storage import get_storage_service
@@ -454,7 +455,7 @@ def test_compare_versions_surfaces_mixer_read_errors(monkeypatch) -> None:
         del storage_uri, storage
         raise MixerReadError("This version has no project file to read.")
 
-    monkeypatch.setattr(versions_router_module, "load_fl_mixer", raise_read_error)
+    monkeypatch.setattr(mixer_compare_module, "load_fl_mixer", raise_read_error)
     client = _create_test_client(
         monkeypatch=monkeypatch,
         current_user=current_user,
@@ -482,7 +483,7 @@ def test_compare_versions_wraps_unexpected_read_failures_without_internal_terms(
         del storage_uri, storage
         raise ValueError("bad header")
 
-    monkeypatch.setattr(versions_router_module, "load_fl_mixer", raise_unexpected)
+    monkeypatch.setattr(mixer_compare_module, "load_fl_mixer", raise_unexpected)
     client = _create_test_client(
         monkeypatch=monkeypatch,
         current_user=current_user,
