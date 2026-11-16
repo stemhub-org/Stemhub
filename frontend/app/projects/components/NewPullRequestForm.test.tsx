@@ -27,6 +27,13 @@ function json(body: unknown, status: number) {
     return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+const pickOption = (name: string) => fireEvent.click(screen.getByRole("option", { name }));
+
+function pickBranch(field: "From" | "Into", name: string) {
+    fireEvent.click(screen.getByRole("button", { name: field }));
+    pickOption(name);
+}
+
 const submit = () => screen.getByRole("button", { name: "Open pull request" }) as HTMLButtonElement;
 
 describe("NewPullRequestForm", () => {
@@ -41,11 +48,25 @@ describe("NewPullRequestForm", () => {
         renderForm([main, feature]);
         fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Louder drop" } });
 
-        expect((screen.getByLabelText("Into") as HTMLSelectElement).value).toBe("b-main");
+        expect(screen.getByRole("button", { name: "Into" }).textContent).toContain("main");
         expect(submit().disabled).toBe(false);
 
-        fireEvent.change(screen.getByLabelText("From"), { target: { value: "b-main" } });
+        pickBranch("From", "main");
         expect(submit().disabled).toBe(true);
+    });
+
+    it("uses StemHub's own branch list instead of the browser's menu", () => {
+        renderForm([main, feature]);
+
+        expect(screen.queryByRole("combobox")).toBeNull();
+        expect(screen.queryByRole("listbox")).toBeNull();
+
+        fireEvent.click(screen.getByRole("button", { name: "From" }));
+        expect(screen.getByRole("option", { name: "drop-plus-fort" }).getAttribute("aria-selected")).toBe("true");
+
+        pickOption("main");
+        expect(screen.queryByRole("listbox")).toBeNull();
+        expect(screen.getByRole("button", { name: "From" }).textContent).toContain("main");
     });
 
     it("opens the pull request and hands it back", async () => {

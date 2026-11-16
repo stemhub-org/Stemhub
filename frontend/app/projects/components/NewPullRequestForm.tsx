@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Check, ChevronDown, GitBranch } from "lucide-react";
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -20,10 +20,6 @@ interface NewPullRequestFormProps {
 
 const labelClassName = "text-sm font-medium text-foreground";
 
-// Same look as the Input component; the native arrow is replaced so it sits inside the padding.
-const selectClassName =
-    "w-full appearance-none rounded-lg border border-border-subtle bg-background py-2.5 pl-3 pr-9 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors";
-
 interface BranchSelectProps {
     label: string;
     value: string;
@@ -31,24 +27,80 @@ interface BranchSelectProps {
     onChange: (branchId: string) => void;
 }
 
+/**
+ * A branch dropdown drawn by StemHub (same look as the BranchPicker on the
+ * Project tab) rather than the browser's native menu, which can't be styled.
+ */
 function BranchSelect({ label, value, branches, onChange }: BranchSelectProps) {
+    const [open, setOpen] = useState(false);
+    const rootRef = useRef<HTMLDivElement>(null);
+    const labelId = useId();
+    const selected = branches.find((branch) => branch.id === value);
+
+    useEffect(() => {
+        if (!open) return;
+        const closeOnOutsideClick = (event: MouseEvent) => {
+            if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setOpen(false);
+        };
+        document.addEventListener("mousedown", closeOnOutsideClick);
+        document.addEventListener("keydown", closeOnEscape);
+        return () => {
+            document.removeEventListener("mousedown", closeOnOutsideClick);
+            document.removeEventListener("keydown", closeOnEscape);
+        };
+    }, [open]);
+
     return (
-        <label className="flex min-w-0 flex-col gap-1.5">
-            <span className={labelClassName}>{label}</span>
-            <span className="relative">
-                <select className={selectClassName} value={value} onChange={(e) => onChange(e.target.value)}>
-                    {branches.map((branch) => (
-                        <option key={branch.id} value={branch.id}>
-                            {branch.name}
-                        </option>
-                    ))}
-                </select>
+        <div ref={rootRef} className="relative flex min-w-0 flex-col gap-1.5">
+            <span id={labelId} className={labelClassName}>
+                {label}
+            </span>
+            <button
+                type="button"
+                aria-labelledby={labelId}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                onClick={() => setOpen((wasOpen) => !wasOpen)}
+                className="flex w-full items-center gap-2 rounded-lg border border-border-subtle bg-background px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-background-tertiary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50"
+            >
+                <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{selected?.name ?? "Choose a branch"}</span>
                 <ChevronDown
-                    className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-foreground-muted"
+                    className={`size-4 shrink-0 text-foreground/60 transition-transform ${open ? "rotate-180" : ""}`}
                     aria-hidden="true"
                 />
-            </span>
-        </label>
+            </button>
+            {open && (
+                <ul
+                    role="listbox"
+                    aria-labelledby={labelId}
+                    className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-xl border border-border-subtle bg-background-secondary py-1 shadow-lg dark:bg-background-tertiary"
+                >
+                    {branches.map((branch) => {
+                        const isSelected = branch.id === value;
+                        return (
+                            <li
+                                key={branch.id}
+                                role="option"
+                                aria-selected={isSelected}
+                                onClick={() => {
+                                    onChange(branch.id);
+                                    setOpen(false);
+                                }}
+                                className={`flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-background-tertiary ${isSelected ? "font-medium text-accent" : "text-foreground"}`}
+                            >
+                                <GitBranch className="size-4 shrink-0 text-foreground/60" aria-hidden="true" />
+                                <span className="min-w-0 flex-1 truncate">{branch.name}</span>
+                                {isSelected && <Check className="size-4 shrink-0" aria-hidden="true" />}
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </div>
     );
 }
 
