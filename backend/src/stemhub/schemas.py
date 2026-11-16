@@ -110,6 +110,18 @@ class PullRequestCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: Optional[str] = None
 
+class PullRequestAccept(BaseModel):
+    """Optional body of the accept request.
+
+    `expected_source_head_version_id` is the source version whose changes the
+    reviewer saw (the diff's `head_version_id`). Accepting is refused if the
+    source branch has a newer version, so nobody promotes changes they never
+    reviewed. Omitted: no such check (clients without a diff).
+    """
+
+    expected_source_head_version_id: Optional[UUID] = None
+
+
 class PullRequestResponse(BaseModel):
     id: UUID
     project_id: UUID

@@ -788,6 +788,41 @@ def test_accept_pull_request_refuses_an_empty_source_branch() -> None:
     assert session.commit_calls == 0
 
 
+def test_accept_pull_request_refuses_a_source_version_the_reviewer_has_not_seen() -> None:
+    """The page sends the source version its diff showed. If the branch got a
+    newer one since, accepting would promote changes nobody reviewed."""
+    session, _, _, feature, pr, _, feature_head = _accept_session()
+    session.versions.append(_version(feature.id, created_at=datetime(2026, 11, 5, tzinfo=timezone.utc)))
+    before = list(session.versions)
+    client = _make_client(session)
+
+    response = client.post(
+        f"/pull-requests/{pr.id}/accept",
+        json={"expected_source_head_version_id": str(feature_head.id)},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "The source branch has new versions since you reviewed the changes: review them before accepting"
+    )
+    assert pr.status == "OPEN"
+    assert session.versions == before
+    assert session.commit_calls == 0
+
+
+def test_accept_pull_request_promotes_the_source_version_the_reviewer_saw() -> None:
+    session, _, _, _, pr, _, feature_head = _accept_session()
+    client = _make_client(session)
+
+    response = client.post(
+        f"/pull-requests/{pr.id}/accept",
+        json={"expected_source_head_version_id": str(feature_head.id)},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "MERGED"
+
+
 def test_accept_pull_request_refuses_when_the_target_moved_since_it_was_opened() -> None:
     """Accepting must never hide a target version the reviewer hasn't seen."""
     for target_has_head in (True, False):
@@ -1029,6 +1064,32 @@ def test_diff_reports_an_unreadable_project_file_instead_of_failing(monkeypatch)
     body = response.json()
     assert body["status"] == "unsupported"
     assert body["status_message"] == reason
+
+
+@pytest.mark.parametrize(
+    ("unreadable", "reason"),
+    [
+        ("source", "The mixer of the source branch's FL Studio project could not be read"),
+        ("target", "The mixer of the target branch's FL Studio project could not be read"),
+    ],
+)
+def test_diff_reports_a_project_whose_mixer_cannot_be_parsed(monkeypatch, unreadable: str, reason: str) -> None:
+    """A project file the parser cannot read loads as an empty mixer; comparing
+    it would list every insert of the other side as added or removed."""
+    session, _, _, pr, main_head, feature_head = _diff_session()
+    broken = FlMixer(inserts=(), mixer_supported=False, parse_error="unknown event")
+    mixers = {main_head.id: _mixer(kick_volume=100), feature_head.id: _mixer(kick_volume=110)}
+    mixers[feature_head.id if unreadable == "source" else main_head.id] = broken
+    _stub_mixers(monkeypatch, mixers)
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "unsupported"
+    assert body["status_message"] == reason
+    assert body["changes"] == []
 
 
 @pytest.mark.parametrize("status", ["CLOSED", "MERGED"])
