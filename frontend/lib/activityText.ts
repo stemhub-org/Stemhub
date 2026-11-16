@@ -17,8 +17,6 @@ function joinPresent(parts: (string | null | undefined)[], separator: string): s
 /** Plain-words description of one activity item, using the glossary's terms. */
 export function describeActivity(item: ActivityItem): ActivityText {
     const who = item.actor?.username ?? "Someone";
-    // Branch events and version deletions have no actor on rows from before
-    // it was recorded (#290): those keep the passive wording.
     const actor = item.actor?.username ?? null;
     const branchName = item.branch?.name ?? "a deleted branch";
     const version = item.version;
