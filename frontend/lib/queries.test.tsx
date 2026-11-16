@@ -11,6 +11,7 @@ import {
     useCreateProject,
     useCurrentUser,
     useProjects,
+    usePullRequestDiff,
     usePullRequests,
 } from "./queries";
 
@@ -158,6 +159,22 @@ describe("pull request hooks", () => {
         expect(queryKeys.pullRequests("p1")).toEqual(["projects", "p1", "pull-requests"]);
         expect(queryKeys.pullRequest("pr1")).toEqual(["pull-requests", "pr1"]);
         expect(queryKeys.collaborators("p1")).toEqual(["projects", "p1", "collaborators"]);
+    });
+
+    it("keeps the diff under its pull request so refreshing one refreshes the other", () => {
+        expect(queryKeys.pullRequestDiff("pr1")).toEqual(["pull-requests", "pr1", "diff"]);
+    });
+
+    it("usePullRequestDiff loads the diff of an open pull request only", async () => {
+        const fetchMock = mockJson({ status: "compared", changes: [] });
+
+        const closed = renderHook(() => usePullRequestDiff("pr1", false), { wrapper: wrapper() });
+        expect(closed.result.current.fetchStatus).toBe("idle");
+        expect(fetchMock).not.toHaveBeenCalled();
+
+        const open = renderHook(() => usePullRequestDiff("pr1", true), { wrapper: wrapper() });
+        await waitFor(() => expect(open.result.current.isSuccess).toBe(true));
+        expect(fetchMock).toHaveBeenCalledWith(`${API_URL}/pull-requests/pr1/diff`, expect.anything());
     });
 
     it("usePullRequests loads the project's pull requests", async () => {
