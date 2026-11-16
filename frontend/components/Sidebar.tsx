@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
     LayoutDashboard,
@@ -11,10 +11,9 @@ import {
     ChevronLeft,
     LogOut,
 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
 import { Button } from "@/components/ui/Button";
-import { apiFetch } from "@/lib/api";
+import { useLogout } from "@/lib/useLogout";
 import { useHydrated } from "@/lib/useHydrated";
 
 const navigation = [
@@ -31,20 +30,11 @@ type SidebarProps = {
 
 export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps) {
     const pathname = usePathname();
-    const router = useRouter();
     const { resolvedTheme } = useTheme();
-    const queryClient = useQueryClient();
     const hydrated = useHydrated();
     const isLight = hydrated && resolvedTheme === "light";
 
-    const handleLogout = async () => {
-        // Sign out locally even when the server can't be reached.
-        await apiFetch("/auth/logout", { method: "POST", redirectOnUnauthorized: false }).catch(() => undefined);
-        localStorage.removeItem("access_token");
-        // Don't show this user's data to whoever signs in next.
-        queryClient.clear();
-        router.push("/login");
-    };
+    const handleLogout = useLogout();
 
     return (
         <div

@@ -6,4 +6,5 @@ afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     localStorage.clear();
+    sessionStorage.clear();
 });

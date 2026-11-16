@@ -13,13 +13,18 @@ import {
     Trash2,
     ShieldAlert,
     CheckCircle2,
+    Download,
     Loader2
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { useChangeEmail, useChangePassword, useUpdateProfile } from "@/lib/account";
-import { errorMessage } from "@/lib/api";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { PasswordVisibilityToggle } from "@/components/PasswordVisibilityToggle";
+import { useChangeEmail, useChangePassword, useDeleteAccount, useUpdateProfile } from "@/lib/account";
+import { apiFetchResponse, errorMessage } from "@/lib/api";
+import { filenameFromContentDisposition, saveBlob } from "@/lib/download";
 import { useCurrentUser } from "@/lib/queries";
+import { useLogout } from "@/lib/useLogout";
 import type { UserProfile } from "@/types/user";
 
 const TABS = [
@@ -265,6 +270,9 @@ function AccountSettings({ user }: { user: UserProfile }) {
     });
     const changePassword = useChangePassword();
     const isUpdatingPassword = changePassword.isPending;
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    // One toggle for the new password and its confirmation, as on sign-up.
+    const [showNewPassword, setShowNewPassword] = useState(false);
     const [passwordError, setPasswordError] = useState("");
     const [passwordSuccess, setPasswordSuccess] = useState("");
 
@@ -342,33 +350,54 @@ function AccountSettings({ user }: { user: UserProfile }) {
 
                 <div className="space-y-2 pt-2">
                     <label htmlFor="settings-current-password" className="text-sm font-medium text-foreground/80">Current Password</label>
-                    <input
-                        type="password"
-                        placeholder="••••••••"
-                        id="settings-current-password"
-                        value={passwordForm.current_password}
-                        onChange={(e) => setPasswordForm(f => ({ ...f, current_password: e.target.value }))}
-                        className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
-                    />
+                    <div className="relative">
+                        <input
+                            type={showCurrentPassword ? "text" : "password"}
+                            placeholder="••••••••"
+                            id="settings-current-password"
+                            autoComplete="current-password"
+                            value={passwordForm.current_password}
+                            onChange={(e) => setPasswordForm(f => ({ ...f, current_password: e.target.value }))}
+                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 pl-4 pr-11 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        />
+                        <PasswordVisibilityToggle
+                            visible={showCurrentPassword}
+                            onToggle={() => setShowCurrentPassword(!showCurrentPassword)}
+                        />
+                    </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
                         <label htmlFor="settings-new-password" className="text-sm font-medium text-foreground/80">New Password</label>
-                        <input
-                            type="password"
-                            placeholder="••••••••"
-                            id="settings-new-password"
-                            value={passwordForm.new_password}
-                            onChange={(e) => setPasswordForm(f => ({ ...f, new_password: e.target.value }))}
-                            className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                        <div className="relative">
+                            <input
+                                type={showNewPassword ? "text" : "password"}
+                                placeholder="••••••••"
+                                id="settings-new-password"
+                                autoComplete="new-password"
+                                aria-describedby="settings-new-password-strength"
+                                value={passwordForm.new_password}
+                                onChange={(e) => setPasswordForm(f => ({ ...f, new_password: e.target.value }))}
+                                className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 pl-4 pr-11 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
+                            />
+                            <PasswordVisibilityToggle
+                                visible={showNewPassword}
+                                onToggle={() => setShowNewPassword(!showNewPassword)}
+                            />
+                        </div>
+                        <PasswordStrengthMeter
+                            id="settings-new-password-strength"
+                            password={passwordForm.new_password}
+                            userInputs={[user.username, user.email]}
                         />
                     </div>
                     <div className="space-y-2">
                         <label htmlFor="settings-confirm-password" className="text-sm font-medium text-foreground/80">Confirm New Password</label>
                         <input
-                            type="password"
+                            type={showNewPassword ? "text" : "password"}
                             placeholder="••••••••"
                             id="settings-confirm-password"
+                            autoComplete="new-password"
                             value={passwordForm.confirm_password}
                             onChange={(e) => setPasswordForm(f => ({ ...f, confirm_password: e.target.value }))}
                             className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-accent/40 focus:outline-none transition-all"
@@ -394,22 +423,175 @@ function AccountSettings({ user }: { user: UserProfile }) {
                 </div>
             </div>
 
-            <div className="space-y-4">
-                <div className="flex items-center gap-3 text-red-500">
-                    <ShieldAlert size={20} />
-                    <h2 className="text-xl font-medium tracking-tight" style={{ fontFamily: "var(--font-syne)" }}>Danger Zone</h2>
-                </div>
-                <div className="p-5 rounded-xl border border-red-500/20 bg-red-500/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <ExportData />
+
+            <DeleteAccount user={user} />
+        </motion.div>
+    );
+}
+
+function ExportData() {
+    const [exporting, setExporting] = useState(false);
+    const toast = useToast();
+
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            const response = await apiFetchResponse("/auth/me/export");
+            const filename = filenameFromContentDisposition(response.headers.get("Content-Disposition")) ?? "stemhub-data.json";
+            saveBlob(await response.blob(), filename);
+        } catch (error) {
+            toast.error(errorMessage(error, "Couldn't export your data."));
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <h2 className="text-xl font-medium tracking-tight" style={{ fontFamily: "var(--font-syne)" }}>Your Data</h2>
+            <div className="p-5 rounded-xl border border-foreground/[0.08] bg-background-secondary/30 dark:bg-background-tertiary/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <p className="text-xs text-foreground/60 font-light max-w-md">
+                    Download a copy of everything StemHub holds about you, as a JSON file: your profile, your
+                    projects and their history, your contributions and your sign-in history. Audio files are
+                    listed, and can be downloaded from each project.
+                </p>
+                <button
+                    type="button"
+                    onClick={handleExport}
+                    disabled={exporting}
+                    className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 text-sm font-medium transition-colors border border-foreground/10 disabled:opacity-50"
+                >
+                    {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                    Download my data
+                </button>
+            </div>
+        </div>
+    );
+}
+
+const DELETION_GRACE_DAYS = 30;
+
+function DeleteAccount({ user }: { user: UserProfile }) {
+    const [confirming, setConfirming] = useState(false);
+    const [typedUsername, setTypedUsername] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const deleteAccount = useDeleteAccount();
+    const logout = useLogout();
+    const toast = useToast();
+
+    const handleDelete = () => {
+        deleteAccount.mutate(
+            { confirm_username: typedUsername, password: password || undefined },
+            {
+                onSuccess: ({ erased_at }) => {
+                    const date = new Date(erased_at).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
+                    toast.success(`Your account will be deleted on ${date}. Sign in before then to cancel.`);
+                    void logout();
+                },
+            },
+        );
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center gap-3 text-red-500">
+                <ShieldAlert size={20} />
+                <h2 className="text-xl font-medium tracking-tight" style={{ fontFamily: "var(--font-syne)" }}>Danger Zone</h2>
+            </div>
+            <div className="p-5 rounded-xl border border-red-500/20 bg-red-500/5 space-y-4">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div>
                         <h3 className="text-sm font-medium text-red-400 mb-1">Delete Account</h3>
-                        <p className="text-xs text-foreground/60 font-light">Permanently remove your account and all your projects. This action cannot be undone.</p>
+                        <p className="text-xs text-foreground/60 font-light">
+                            Remove your account and all your projects. You have {DELETION_GRACE_DAYS} days to change your mind.
+                        </p>
                     </div>
-                    <button className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-sm font-medium transition-colors border border-red-500/20">
-                        <Trash2 size={16} /> Delete Account
-                    </button>
+                    {!confirming && (
+                        <button
+                            type="button"
+                            onClick={() => setConfirming(true)}
+                            className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-sm font-medium transition-colors border border-red-500/20"
+                        >
+                            <Trash2 size={16} /> Delete Account
+                        </button>
+                    )}
                 </div>
+
+                {confirming && (
+                    <div className="space-y-4 border-t border-red-500/20 pt-4">
+                        <ul className="list-disc space-y-1 pl-5 text-xs font-light text-foreground/70">
+                            <li>You are signed out everywhere, and your profile and projects are hidden at once.</li>
+                            <li>
+                                After {DELETION_GRACE_DAYS} days, your account and your projects, with their files, are
+                                deleted for good.
+                            </li>
+                            <li>Your versions and pull requests in other people&apos;s projects stay, without your name.</li>
+                            <li>Signing in again within {DELETION_GRACE_DAYS} days cancels the deletion.</li>
+                        </ul>
+                        <div className="space-y-2">
+                            <label htmlFor="delete-confirm-username" className="text-sm font-medium text-foreground/80">
+                                Type your username, <span className="font-semibold">{user.username}</span>, to confirm
+                            </label>
+                            <input
+                                id="delete-confirm-username"
+                                autoComplete="off"
+                                value={typedUsername}
+                                onChange={(e) => setTypedUsername(e.target.value)}
+                                className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 px-4 text-sm font-light text-foreground focus:border-red-500/40 focus:outline-none transition-all"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label htmlFor="delete-password" className="text-sm font-medium text-foreground/80">Password</label>
+                            <div className="relative">
+                                <input
+                                    id="delete-password"
+                                    type={showPassword ? "text" : "password"}
+                                    autoComplete="current-password"
+                                    aria-describedby="delete-password-hint"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3 pl-4 pr-11 text-sm font-light text-foreground focus:border-red-500/40 focus:outline-none transition-all"
+                                />
+                                <PasswordVisibilityToggle visible={showPassword} onToggle={() => setShowPassword(!showPassword)} />
+                            </div>
+                            <p id="delete-password-hint" className="text-xs font-light text-foreground/40">
+                                Leave empty if you only sign in with Google.
+                            </p>
+                        </div>
+                        {deleteAccount.error && (
+                            <p role="alert" className="text-sm text-red-500 font-medium">
+                                {errorMessage(deleteAccount.error, "Couldn't delete your account.")}
+                            </p>
+                        )}
+                        <div className="flex flex-wrap gap-3">
+                            <button
+                                type="button"
+                                onClick={handleDelete}
+                                disabled={typedUsername !== user.username || deleteAccount.isPending}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {deleteAccount.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                Delete my account
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setConfirming(false);
+                                    setTypedUsername("");
+                                    setPassword("");
+                                    deleteAccount.reset();
+                                }}
+                                className="px-5 py-2.5 rounded-xl text-sm font-medium text-foreground/60 hover:text-foreground transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
-        </motion.div>
+        </div>
     );
 }
 
