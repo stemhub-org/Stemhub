@@ -36,6 +36,7 @@ export function PullRequestsTab({ projectId, ownerId, currentUserId, branches }:
                             projectId={projectId}
                             branches={branches}
                             onCreated={(created) => router.push(`/projects/pull-requests?id=${projectId}&pr=${created.id}`)}
+                            onCancel={() => setFormOpen(false)}
                         />
                     ) : (
                         <div>
