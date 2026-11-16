@@ -95,6 +95,13 @@ describe("PullRequestPage", () => {
         expect(screen.getByRole("link", { name: /Back to project/ }).getAttribute("href")).toBe("/projects?id=p1");
     });
 
+    it("shows the signed-in user in the header", async () => {
+        renderPage({ me: "raprap" });
+
+        expect(await screen.findByText("raprap")).toBeTruthy();
+        expect(screen.queryByText("Producer")).toBeNull();
+    });
+
     it("gives the owner Close and Accept", async () => {
         renderPage();
 
