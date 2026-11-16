@@ -362,6 +362,7 @@ OPEN ──/close───▶ CLOSED
 - At most one `OPEN` pull request per ordered `(source_branch_id, target_branch_id)` pair, enforced by the partial unique index `uq_pull_request_open_pair` (`WHERE status = 'OPEN' AND is_deleted = false`). Closed, accepted or soft-deleted PRs never block a new one; the reverse direction is a different pair.
 - `source_head_version_id` / `target_head_version_id` record the head (latest live version) of each branch when the PR is opened (`NULL` if the branch had none). `Branch` has no head pointer, so this is the only record of what was proposed. Accepting compares `target_head_version_id` with the live head of the target and refuses (`409`) when the target moved: promoting over versions the reviewer never saw would bury them.
 - `created_by` / `closed_by` record who opened and who closed the PR (nullable: a user may be soft-deleted, and `closed_by` is unset until closure).
+- Every pull request response also carries `author` (`{id, username}`, `null` when unknown) and `source_branch` / `target_branch` (`{id, name, is_deleted}`, the branch as it is now, deleted or not), the same shapes as the activity feed. Clients can show names without extra calls; they are loaded in two queries whatever the number of PRs.
 
 ---
 
