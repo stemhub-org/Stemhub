@@ -57,7 +57,7 @@ export function PullRequestList({ projectId }: { projectId: string }) {
     }
     if (data.length === 0) {
         return (
-            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
                 <GitPullRequest className="size-6 text-foreground-muted" aria-hidden="true" />
                 <p className="text-sm font-medium">No pull requests yet.</p>
                 <p className="max-w-sm text-sm text-foreground-muted">
