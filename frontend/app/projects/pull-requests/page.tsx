@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { ProjectHeader } from "../components/ProjectHeader";
+import { PullRequestDiff } from "../components/PullRequestDiff";
 import { PullRequestStatusBadge, branchLabel } from "../components/PullRequestList";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -78,6 +79,38 @@ function PullRequestActions({ projectId, pullRequest }: { projectId: string; pul
     );
 }
 
+/**
+ * What the pull request changes. Only an open one has pending changes to
+ * compare: a closed one applied nothing, and an accepted one is already a
+ * version in the target branch's history.
+ */
+function PullRequestChanges({ projectId, pullRequest }: { projectId: string; pullRequest: PullRequest }) {
+    const targetName = branchLabel(pullRequest.target_branch);
+    if (pullRequest.status === "OPEN") {
+        return (
+            <PullRequestDiff
+                pullRequestId={pullRequest.id}
+                targetName={targetName}
+                sourceName={branchLabel(pullRequest.source_branch)}
+            />
+        );
+    }
+    if (pullRequest.status === "CLOSED") {
+        return <p className="text-sm text-foreground-muted">This pull request was closed: nothing was applied.</p>;
+    }
+    return (
+        <p className="text-sm text-foreground-muted">
+            {`The accepted changes are in the history of ${targetName}. `}
+            <Link
+                href={`/projects/history?id=${projectId}&branch_id=${pullRequest.target_branch_id}`}
+                className="text-accent hover:underline"
+            >
+                View history
+            </Link>
+        </p>
+    );
+}
+
 function PullRequestContent({ projectId, pullRequestId }: { projectId: string; pullRequestId: string }) {
     const { data: pullRequest, isPending, isError, error, refetch } = usePullRequest(pullRequestId);
 
@@ -89,21 +122,24 @@ function PullRequestContent({ projectId, pullRequestId }: { projectId: string; p
     }
 
     return (
-        <Card className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <h1 className="text-lg font-medium" style={{ fontFamily: "var(--font-syne)" }}>
-                    {pullRequest.title}
-                </h1>
-                <PullRequestStatusBadge status={pullRequest.status} />
-            </div>
-            <p className="text-sm">{`${branchLabel(pullRequest.source_branch)} → ${branchLabel(pullRequest.target_branch)}`}</p>
-            <p className="text-sm text-foreground-muted" title={formatDateTime(pullRequest.created_at)}>
-                {`${pullRequest.author?.username ?? "Unknown"} opened this ${formatTimeAgo(pullRequest.created_at)}`}
-            </p>
-            <ClosedLine pullRequest={pullRequest} />
-            {pullRequest.description && <p className="whitespace-pre-wrap text-sm">{pullRequest.description}</p>}
-            <PullRequestActions projectId={projectId} pullRequest={pullRequest} />
-        </Card>
+        <>
+            <Card className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h1 className="text-lg font-medium" style={{ fontFamily: "var(--font-syne)" }}>
+                        {pullRequest.title}
+                    </h1>
+                    <PullRequestStatusBadge status={pullRequest.status} />
+                </div>
+                <p className="text-sm">{`${branchLabel(pullRequest.source_branch)} → ${branchLabel(pullRequest.target_branch)}`}</p>
+                <p className="text-sm text-foreground-muted" title={formatDateTime(pullRequest.created_at)}>
+                    {`${pullRequest.author?.username ?? "Unknown"} opened this ${formatTimeAgo(pullRequest.created_at)}`}
+                </p>
+                <ClosedLine pullRequest={pullRequest} />
+                {pullRequest.description && <p className="whitespace-pre-wrap text-sm">{pullRequest.description}</p>}
+                <PullRequestActions projectId={projectId} pullRequest={pullRequest} />
+            </Card>
+            <PullRequestChanges projectId={projectId} pullRequest={pullRequest} />
+        </>
     );
 }
 
