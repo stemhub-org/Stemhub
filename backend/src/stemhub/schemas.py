@@ -185,6 +185,18 @@ class BranchResponse(BranchBase):
     class Config:
         from_attributes = True
 
+# ── User and branch references ──
+# Shared by pull request responses and the activity feed.
+
+class ActivityActor(BaseModel):
+    id: UUID
+    username: str
+
+class ActivityBranch(BaseModel):
+    id: UUID
+    name: str
+    is_deleted: bool
+
 # ── Pull Request Schemas ──
 
 PullRequestStatus = Literal["OPEN", "MERGED", "CLOSED"]
@@ -211,6 +223,11 @@ class PullRequestResponse(BaseModel):
     closed_at: Optional[datetime] = None
     is_deleted: bool
     deleted_at: Optional[datetime] = None
+    # Who opened it (null when unknown) and both branches as they are now, so
+    # clients can show names without extra calls. Deleted branches included.
+    author: Optional[ActivityActor] = None
+    source_branch: ActivityBranch
+    target_branch: ActivityBranch
 
     class Config:
         from_attributes = True
@@ -427,15 +444,6 @@ ActivityType = Literal[
     "pull_request_merged",
     "pull_request_closed",
 ]
-
-class ActivityActor(BaseModel):
-    id: UUID
-    username: str
-
-class ActivityBranch(BaseModel):
-    id: UUID
-    name: str
-    is_deleted: bool
 
 class ActivityVersion(BaseModel):
     id: UUID
