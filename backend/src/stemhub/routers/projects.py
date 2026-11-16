@@ -62,7 +62,7 @@ async def create_project(
     db.add(db_project)
     await db.flush()
 
-    db.add(Branch(project_id=db_project.id, name="main"))
+    db.add(Branch(project_id=db_project.id, name="main", created_by=current_user.id))
 
     await db.commit()
     await db.refresh(db_project)

@@ -49,7 +49,7 @@ async def create_branch(
     project = await get_project_with_write_access(
         project_id=project_id, current_user=current_user, db=db
     )
-    db_branch = Branch(**branch_in.model_dump(), project_id=project.id)
+    db_branch = Branch(**branch_in.model_dump(), project_id=project.id, created_by=current_user.id)
     db.add(db_branch)
     await db.commit()
     await db.refresh(db_branch)
@@ -122,5 +122,6 @@ async def delete_branch(
     """Delete a branch."""
     branch = await _get_owned_branch(branch_id=branch_id, current_user=current_user, db=db)
     branch.is_deleted = True
+    branch.deleted_by = current_user.id
     branch.deleted_at = datetime.now(timezone.utc)
     await db.commit()
