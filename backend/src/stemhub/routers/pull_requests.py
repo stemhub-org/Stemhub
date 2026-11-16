@@ -29,7 +29,7 @@ from stemhub.routers._project_access import (
     get_project_with_write_access,
     is_project_admin,
 )
-from stemhub.schemas import PullRequestCreate, PullRequestResponse
+from stemhub.schemas import ActivityActor, ActivityBranch, PullRequestCreate, PullRequestResponse
 
 router = APIRouter(tags=["pull-requests"])
 
@@ -96,6 +96,50 @@ async def _get_pull_request_or_404(
     return pull_request
 
 
+_REFERENCE_FIELDS = {"author", "source_branch", "target_branch"}
+
+
+def _branch_ref(branch: Branch) -> ActivityBranch:
+    return ActivityBranch(id=branch.id, name=branch.name, is_deleted=branch.is_deleted)
+
+
+async def _to_responses(db: AsyncSession, pull_requests: list[PullRequest]) -> list[PullRequestResponse]:
+    """Responses with each PR's author and branches. Built explicitly rather
+    than from the ORM relationships, whose lazy loads fail on an async session.
+    Two queries whatever the number of pull requests; deleted branches are
+    included, since a PR keeps pointing at them."""
+    if not pull_requests:
+        return []
+
+    branch_ids = {pr.source_branch_id for pr in pull_requests} | {pr.target_branch_id for pr in pull_requests}
+    branch_result = await db.execute(select(Branch).where(Branch.id.in_(branch_ids)))
+    branches = {branch.id: branch for branch in branch_result.scalars().all()}
+
+    author_ids = {pr.created_by for pr in pull_requests if pr.created_by is not None}
+    authors: dict[UUID, User] = {}
+    if author_ids:
+        author_result = await db.execute(select(User).where(User.id.in_(author_ids)))
+        authors = {user.id: user for user in author_result.scalars().all()}
+
+    responses = []
+    for pr in pull_requests:
+        fields = {name: getattr(pr, name) for name in PullRequestResponse.model_fields if name not in _REFERENCE_FIELDS}
+        author = authors.get(pr.created_by) if pr.created_by is not None else None
+        responses.append(
+            PullRequestResponse(
+                **fields,
+                author=ActivityActor(id=author.id, username=author.username) if author else None,
+                source_branch=_branch_ref(branches[pr.source_branch_id]),
+                target_branch=_branch_ref(branches[pr.target_branch_id]),
+            )
+        )
+    return responses
+
+
+async def _to_response(db: AsyncSession, pull_request: PullRequest) -> PullRequestResponse:
+    return (await _to_responses(db, [pull_request]))[0]
+
+
 @router.get("/projects/{project_id}/pull-requests", response_model=List[PullRequestResponse])
 async def list_pull_requests(
     project_id: UUID,
@@ -111,7 +155,7 @@ async def list_pull_requests(
             PullRequest.is_deleted == False,
         )
     )
-    return result.scalars().all()
+    return await _to_responses(db, list(result.scalars().all()))
 
 
 @router.post(
@@ -163,7 +207,7 @@ async def create_pull_request(
     db.add(pull_request)
     await db.commit()
     await db.refresh(pull_request)
-    return pull_request
+    return await _to_response(db, pull_request)
 
 
 @router.get("/pull-requests/{pull_request_id}", response_model=PullRequestResponse)
@@ -175,7 +219,7 @@ async def get_pull_request(
     """Get a pull request by id."""
     pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
     await get_project_with_read_access(project_id=pull_request.project_id, current_user=current_user, db=db)
-    return pull_request
+    return await _to_response(db, pull_request)
 
 
 @router.post("/pull-requests/{pull_request_id}/close", response_model=PullRequestResponse)
@@ -201,7 +245,7 @@ async def close_pull_request(
     pull_request.closed_by = current_user.id
     await db.commit()
     await db.refresh(pull_request)
-    return pull_request
+    return await _to_response(db, pull_request)
 
 
 @router.post("/pull-requests/{pull_request_id}/accept", response_model=PullRequestResponse)
@@ -272,5 +316,5 @@ async def accept_pull_request(
     pull_request.closed_by = current_user.id
     await db.commit()
     await db.refresh(pull_request)
-    return pull_request
+    return await _to_response(db, pull_request)
 
