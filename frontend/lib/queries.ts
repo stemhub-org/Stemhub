@@ -10,7 +10,7 @@ import type {
     TopContributorsResponse,
     VersionDiffHistoryEntry,
 } from "@/types/project";
-import type { NewPullRequest, PullRequest } from "@/types/pullRequest";
+import type { AcceptPullRequest, NewPullRequest, PullRequest, PullRequestMixerDiff } from "@/types/pullRequest";
 import type { UserProfile } from "@/types/user";
 import { ApiError, apiFetch } from "./api";
 
@@ -31,6 +31,8 @@ export const queryKeys = {
     branchDiffHistory: (branchId: string) => ["branches", branchId, "diff-history"] as const,
     pullRequests: (projectId: string) => ["projects", projectId, "pull-requests"] as const,
     pullRequest: (pullRequestId: string) => ["pull-requests", pullRequestId] as const,
+    /** Under its pull request's key: invalidating the pull request reloads its diff too. */
+    pullRequestDiff: (pullRequestId: string) => ["pull-requests", pullRequestId, "diff"] as const,
     collaborators: (projectId: string) => ["projects", projectId, "collaborators"] as const,
 };
 
@@ -160,6 +162,15 @@ export function usePullRequest(pullRequestId: string) {
     });
 }
 
+/** Mixer changes accepting would apply. Only an open pull request has a diff (the backend answers 409 otherwise). */
+export function usePullRequestDiff(pullRequestId: string, enabled: boolean) {
+    return useQuery<PullRequestMixerDiff, ApiError>({
+        queryKey: queryKeys.pullRequestDiff(pullRequestId),
+        queryFn: () => apiFetch<PullRequestMixerDiff>(`/pull-requests/${pullRequestId}/diff`),
+        enabled: enabled && Boolean(pullRequestId),
+    });
+}
+
 export function useCollaborators(projectId: string) {
     return useQuery<Collaborator[], ApiError>({
         queryKey: queryKeys.collaborators(projectId),
@@ -211,8 +222,15 @@ export function useClosePullRequest(projectId: string) {
 }
 
 export function useAcceptPullRequest(projectId: string) {
-    return usePullRequestMutation<string>(projectId, (pullRequestId) =>
-        apiFetch<PullRequest>(`/pull-requests/${pullRequestId}/accept`, { method: "POST" }),
-        (pullRequestId) => pullRequestId,
+    return usePullRequestMutation<AcceptPullRequest>(
+        projectId,
+        ({ pullRequestId, reviewedSourceHeadId }) =>
+            apiFetch<PullRequest>(`/pull-requests/${pullRequestId}/accept`, {
+                method: "POST",
+                ...(reviewedSourceHeadId
+                    ? { body: JSON.stringify({ expected_source_head_version_id: reviewedSourceHeadId }) }
+                    : {}),
+            }),
+        ({ pullRequestId }) => pullRequestId,
     );
 }

@@ -207,6 +207,18 @@ class PullRequestCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: Optional[str] = None
 
+class PullRequestAccept(BaseModel):
+    """Optional body of the accept request.
+
+    `expected_source_head_version_id` is the source version whose changes the
+    reviewer saw (the diff's `head_version_id`). Accepting is refused if the
+    source branch has a newer version, so nobody promotes changes they never
+    reviewed. Omitted: no such check (clients without a diff).
+    """
+
+    expected_source_head_version_id: Optional[UUID] = None
+
+
 class PullRequestResponse(BaseModel):
     id: UUID
     project_id: UUID
@@ -515,6 +527,28 @@ class MixerDiffChange(BaseModel):
 class MixerDiffResponse(BaseModel):
     summary: MixerDiffSummary
     changes: list[MixerDiffChange]
+
+
+class PullRequestDiffResponse(BaseModel):
+    """Mixer changes accepting an open pull request would apply (UI: "Changes").
+
+    `base` is the target branch's latest version, `head` the source branch's
+    latest version. Anything that prevents a comparison is a status, not an
+    error, so the pull request page always renders:
+    - compared: summary and changes are set;
+    - unsupported: not an FL Studio project, or its file cannot be read
+      (status_message says which);
+    - no_source_version / no_target_version: that branch has no version;
+    - target_moved: the target got new versions since the pull request was
+      opened, so accepting it would be refused.
+    """
+
+    status: Literal["compared", "unsupported", "no_source_version", "no_target_version", "target_moved"]
+    status_message: Optional[str] = None
+    base_version_id: Optional[UUID] = None
+    head_version_id: Optional[UUID] = None
+    summary: Optional[MixerDiffSummary] = None
+    changes: list[MixerDiffChange] = []
 
 
 class VersionDiffHistoryEntry(BaseModel):
