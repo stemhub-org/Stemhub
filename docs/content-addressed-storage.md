@@ -156,7 +156,7 @@ version as its parent.
 
 We use **eager ref_count with a periodic sweep as safety net**:
 
-1. **Eager ref_count:** Incremented on version create, decremented on version (soft) delete. Both sides read the manifest through `manifests.blob_shas`, so a v1 and a v2 manifest count the same hashes going up and coming down. Correct as long as every version is created through `from-manifest`.
+1. **Eager ref_count:** Incremented on version create (including PR acceptance), decremented on version (soft) delete. Both sides read the manifest through `manifests.blob_shas`, so a v1 and a v2 manifest count the same hashes going up and coming down. Accepting a PR increments each distinct referenced blob once, in the same transaction as the promoted version and PR status, even though it copies no files.
 2. **Periodic sweep:** `blob_gc.sweep_orphan_blobs` deletes blobs where `ref_count == 0 AND created_at < now() - 24h`: the storage bytes first, then the row. The 24h grace window prevents races where a client uploaded blobs but hasn't created the version yet. It is a callable, not a scheduler: an external scheduler (or an admin) runs it through `POST /api/admin/blobs/gc`.
 
 ## Signed URLs

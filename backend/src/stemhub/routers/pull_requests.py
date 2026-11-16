@@ -18,6 +18,7 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -30,7 +31,8 @@ from stemhub.mixer_compare import (
     mixer_diff_changes,
     mixer_diff_summary,
 )
-from stemhub.models import Branch, PullRequest, User, Version
+from stemhub.manifests import blob_shas
+from stemhub.models import Blob, Branch, PullRequest, User, Version
 from stemhub.routers._project_access import (
     get_project_with_read_access,
     get_project_with_write_access,
@@ -315,7 +317,7 @@ async def close_pull_request(
     db: AsyncSession = Depends(get_db),
 ):
     """Close a pull request without accepting it (OPEN → CLOSED)."""
-    pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db)
+    pull_request = await _get_pull_request_or_404(pull_request_id=pull_request_id, db=db, for_update=True)
     await get_project_with_write_access(project_id=pull_request.project_id, current_user=current_user, db=db)
 
     # 409 rather than 400: the request is well-formed, it is the resource's
@@ -391,6 +393,17 @@ async def accept_pull_request(
                 "The target branch has new versions since this pull request was opened: "
                 "open a new pull request to review them"
             ),
+        )
+
+    # Promotion creates another live manifest. Count each distinct blob once,
+    # through the same reader deletion uses, including legacy v1 manifests.
+    # Increment in SQL so simultaneous promotions cannot lose an increment.
+    referenced_shas = blob_shas(source_head.manifest_json)
+    if referenced_shas:
+        await db.execute(
+            update(Blob)
+            .where(Blob.project_id == project.id, Blob.sha256.in_(referenced_shas))
+            .values(ref_count=Blob.ref_count + 1)
         )
 
     db.add(
