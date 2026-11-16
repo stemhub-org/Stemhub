@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { GitPullRequest, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { usePullRequests } from "@/lib/queries";
@@ -56,7 +56,15 @@ export function PullRequestList({ projectId }: { projectId: string }) {
         return <ErrorState title="Couldn't load the pull requests" error={error} onRetry={() => void refetch()} />;
     }
     if (data.length === 0) {
-        return <p className="py-6 text-center text-sm text-foreground-muted">No pull requests yet.</p>;
+        return (
+            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                <GitPullRequest className="size-6 text-foreground-muted" aria-hidden="true" />
+                <p className="text-sm font-medium">No pull requests yet.</p>
+                <p className="max-w-sm text-sm text-foreground-muted">
+                    Open one to propose bringing a branch into another, then review and accept it here.
+                </p>
+            </div>
+        );
     }
 
     const newestFirst = [...data].sort((a, b) => b.created_at.localeCompare(a.created_at));
