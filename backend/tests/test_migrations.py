@@ -10,10 +10,14 @@ from alembic.script import ScriptDirectory
 from unittest.mock import patch, MagicMock
 
 from stemhub.migrations import check_migrations_async
+from stemhub.models import Branch, Version
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 MESSAGE_RENAME_REVISION = "316caf0fcfa9"
 PREVIOUS_HEAD = "1ddecc33a8b7"
+ACTORS_REVISION = "c021108cacff"
+AUTH_REVISION = "2a23991f61e9"
+MERGE_REVISION = "d6e7f8a9b0c1"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -23,7 +27,18 @@ def _script_directory() -> ScriptDirectory:
 
 
 def _version_columns(connection) -> set[str]:
-    return {column["name"] for column in sa.inspect(connection).get_columns("version")}
+    return _columns(connection, "version")
+
+
+def _columns(connection, table: str) -> set[str]:
+    return {column["name"] for column in sa.inspect(connection).get_columns(table)}
+
+
+def _foreign_keys(connection, table: str) -> set[tuple[str, str]]:
+    return {
+        (key["constrained_columns"][0], key["referred_table"])
+        for key in sa.inspect(connection).get_foreign_keys(table)
+    }
 
 
 def _run(connection, step) -> None:
@@ -118,12 +133,101 @@ def test_check_migrations_no_scripts():
         asyncio.run(check_migrations_async())
 
 
-def test_alembic_history_has_a_single_head_after_the_message_rename():
+def test_alembic_history_joins_auth_and_actor_migrations_under_a_single_head():
     script = _script_directory()
 
-    assert len(script.get_heads()) == 1
+    assert script.get_heads() == [MERGE_REVISION]
+    assert script.get_current_head() == MERGE_REVISION
+    assert set(script.get_revision(MERGE_REVISION).down_revision) == {AUTH_REVISION, ACTORS_REVISION}
+    assert script.get_revision(ACTORS_REVISION).down_revision == MESSAGE_RENAME_REVISION
     assert script.get_revision(MESSAGE_RENAME_REVISION).down_revision == PREVIOUS_HEAD
-    assert MESSAGE_RENAME_REVISION in {rev.revision for rev in script.walk_revisions()}
+    # Either previously deployed head must have an upgrade path to the merge.
+    for previous_head in (AUTH_REVISION, ACTORS_REVISION):
+        pending = list(script.iterate_revisions(MERGE_REVISION, previous_head))
+        assert pending[0].revision == MERGE_REVISION
+        assert previous_head not in {rev.revision for rev in pending}
+
+
+def _create_pre_actor_tables(connection) -> None:
+    connection.execute(sa.text("CREATE TABLE users (id CHAR(32) PRIMARY KEY)"))
+    connection.execute(sa.text("CREATE TABLE branch (id CHAR(32) PRIMARY KEY, name VARCHAR(255))"))
+    connection.execute(sa.text(
+        "CREATE TABLE version (id CHAR(32) PRIMARY KEY, created_by CHAR(32) REFERENCES users (id))"
+    ))
+    connection.execute(sa.text("INSERT INTO branch (id, name) VALUES ('b1', 'main')"))
+    connection.execute(sa.text("INSERT INTO version (id, created_by) VALUES ('v1', NULL)"))
+
+
+def test_actor_migration_adds_nullable_user_foreign_keys_and_keeps_rows():
+    migration = _script_directory().get_revision(ACTORS_REVISION).module
+    engine = sa.create_engine("sqlite://")
+
+    with engine.begin() as connection:
+        _create_pre_actor_tables(connection)
+
+        _run(connection, migration.upgrade)
+
+        assert _columns(connection, "branch") == {"id", "name", "created_by", "deleted_by"}
+        assert _columns(connection, "version") == {"id", "created_by", "deleted_by"}
+        assert _foreign_keys(connection, "branch") == {("created_by", "users"), ("deleted_by", "users")}
+        assert _foreign_keys(connection, "version") == {("created_by", "users"), ("deleted_by", "users")}
+        # Existing rows stay, with no actor: nothing to backfill from.
+        assert connection.execute(sa.text("SELECT id, name, created_by, deleted_by FROM branch")).all() == [
+            ("b1", "main", None, None)
+        ]
+        assert connection.execute(sa.text("SELECT id, deleted_by FROM version")).all() == [("v1", None)]
+
+        # Idempotent: a second run finds the columns already there.
+        _run(connection, migration.upgrade)
+        assert _columns(connection, "branch") == {"id", "name", "created_by", "deleted_by"}
+
+
+def test_actor_migration_lets_a_user_be_deleted_and_clears_their_actor_columns():
+    """Erasing an account deletes its users row. Having created or deleted a
+    branch, or deleted a version, in someone else's project must not block
+    that: the row stays and loses its actor."""
+    migration = _script_directory().get_revision(ACTORS_REVISION).module
+    engine = sa.create_engine("sqlite://")
+
+    with engine.begin() as connection:
+        # SQLite only enforces foreign keys when asked to, before any write.
+        connection.execute(sa.text("PRAGMA foreign_keys = ON"))
+        _create_pre_actor_tables(connection)
+        _run(connection, migration.upgrade)
+        assert connection.execute(sa.text("PRAGMA foreign_keys")).scalar() == 1
+        connection.execute(sa.text("INSERT INTO users (id) VALUES ('u1')"))
+        connection.execute(sa.text("UPDATE branch SET created_by = 'u1', deleted_by = 'u1'"))
+        connection.execute(sa.text("UPDATE version SET deleted_by = 'u1'"))
+
+        connection.execute(sa.text("DELETE FROM users WHERE id = 'u1'"))
+
+        assert connection.execute(sa.text("SELECT id, created_by, deleted_by FROM branch")).all() == [
+            ("b1", None, None)
+        ]
+        assert connection.execute(sa.text("SELECT id, deleted_by FROM version")).all() == [("v1", None)]
+
+
+def test_actor_columns_of_the_models_match_the_migration():
+    """The models must declare the same ON DELETE rule, or the next
+    autogenerated migration would try to undo it."""
+    for column in (Branch.__table__.c.created_by, Branch.__table__.c.deleted_by, Version.__table__.c.deleted_by):
+        [foreign_key] = column.foreign_keys
+        assert foreign_key.ondelete == "SET NULL", column
+
+
+def test_actor_migration_downgrades_back_to_the_previous_columns():
+    migration = _script_directory().get_revision(ACTORS_REVISION).module
+    engine = sa.create_engine("sqlite://")
+
+    with engine.begin() as connection:
+        _create_pre_actor_tables(connection)
+        _run(connection, migration.upgrade)
+
+        _run(connection, migration.downgrade)
+
+        assert _columns(connection, "branch") == {"id", "name"}
+        assert _columns(connection, "version") == {"id", "created_by"}
+        assert _foreign_keys(connection, "version") == {("created_by", "users")}
 
 
 def test_message_rename_migration_renames_the_column_and_clears_the_plugin_placeholder():

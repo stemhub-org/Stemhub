@@ -17,6 +17,7 @@ function joinPresent(parts: (string | null | undefined)[], separator: string): s
 /** Plain-words description of one activity item, using the glossary's terms. */
 export function describeActivity(item: ActivityItem): ActivityText {
     const who = item.actor?.username ?? "Someone";
+    const actor = item.actor?.username ?? null;
     const branchName = item.branch?.name ?? "a deleted branch";
     const version = item.version;
     const pullRequest = item.pull_request;
@@ -32,11 +33,23 @@ export function describeActivity(item: ActivityItem): ActivityText {
                 meta: joinPresent([version?.source_daw, version?.source_project_filename], " · "),
             };
         case "version_deleted":
-            return { title: `A version was deleted on ${branchName}`, detail: version?.message ?? null, meta: null };
+            return {
+                title: actor ? `${actor} deleted a version on ${branchName}` : `A version was deleted on ${branchName}`,
+                detail: version?.message ?? null,
+                meta: null,
+            };
         case "branch_created":
-            return { title: `Branch ${branchName} was created`, detail: null, meta: null };
+            return {
+                title: actor ? `${actor} created branch ${branchName}` : `Branch ${branchName} was created`,
+                detail: null,
+                meta: null,
+            };
         case "branch_deleted":
-            return { title: `Branch ${branchName} was deleted`, detail: null, meta: null };
+            return {
+                title: actor ? `${actor} deleted branch ${branchName}` : `Branch ${branchName} was deleted`,
+                detail: null,
+                meta: null,
+            };
         case "pull_request_opened":
             return { title: `${who} opened a pull request`, detail: pullRequest?.title ?? null, meta: pullRequestMeta };
         case "pull_request_merged":
