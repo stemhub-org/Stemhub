@@ -548,5 +548,6 @@ async def delete_version(
                     blob.ref_count = blob.ref_count - 1
 
     version.is_deleted = True
+    version.deleted_by = current_user.id
     version.deleted_at = datetime.now(timezone.utc)
     await db.commit()
