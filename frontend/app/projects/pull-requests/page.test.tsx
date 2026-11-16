@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PullRequestPage from "./page";
 
@@ -175,6 +175,28 @@ describe("PullRequestPage", () => {
         expect(await screen.findByText("MERGED")).toBeTruthy();
         expect(screen.queryByRole("table")).toBeNull();
         expect(screen.getByRole("link", { name: "View history" })).toBeTruthy();
+    });
+
+    it("accepts the source version whose changes are on screen", async () => {
+        const fetchMock = renderPage();
+        await screen.findByRole("row", { name: /Volume/ });
+
+        fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+
+        await screen.findByText("MERGED");
+        const accept = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/pull-requests/pr1/accept"));
+        expect(JSON.parse(accept?.[1]?.body as string)).toEqual({ expected_source_head_version_id: "v-feat" });
+    });
+
+    it("reloads the changes when the source branch got a new version before accepting", async () => {
+        const refusal = "The source branch has new versions since you reviewed the changes: review them before accepting";
+        const fetchMock = renderPage({ accept: () => json({ detail: refusal }, 409) });
+        await screen.findByRole("row", { name: /Volume/ });
+
+        fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+
+        expect(await screen.findByText(refusal)).toBeTruthy();
+        await waitFor(() => expect(diffRequests(fetchMock)).toHaveLength(2));
     });
 
     it("points an accepted pull request to the target branch's history instead of a diff", async () => {

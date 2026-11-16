@@ -36,6 +36,16 @@ export interface NewPullRequest {
     description?: string;
 }
 
+export interface AcceptPullRequest {
+    pullRequestId: string;
+    /**
+     * The source version whose changes the reviewer saw (the diff's
+     * `head_version_id`). The backend refuses to accept if the branch has a
+     * newer one. Null when no diff was loaded: accepted without that check.
+     */
+    reviewedSourceHeadId: string | null;
+}
+
 // ── Mixer diff (backend `PullRequestDiffResponse`) ──
 
 /** "compared", or the reason there is nothing to compare. */
