@@ -39,6 +39,7 @@ from stemhub.routers._project_access import (
 from stemhub.schemas import (
     ActivityActor,
     ActivityBranch,
+    PullRequestAccept,
     PullRequestCreate,
     PullRequestDiffResponse,
     PullRequestResponse,
@@ -290,6 +291,12 @@ async def get_pull_request_diff(
     except HTTPException as exc:
         # A missing or unreadable project file must not break the page.
         return unsupported(str(exc.detail))
+    # A project file the parser cannot read does not raise: it loads as a mixer
+    # with no insert. Diffing it would report every insert of the other side as
+    # added or removed, which is false.
+    for side, mixer in (("target", base_mixer), ("source", head_mixer)):
+        if not mixer.mixer_supported:
+            return unsupported(f"The mixer of the {side} branch's FL Studio project could not be read")
 
     diff_result = diff_fl_mixers(base_mixer, head_mixer)
     return PullRequestDiffResponse(
@@ -330,6 +337,7 @@ async def close_pull_request(
 @router.post("/pull-requests/{pull_request_id}/accept", response_model=PullRequestResponse)
 async def accept_pull_request(
     pull_request_id: UUID,
+    payload: PullRequestAccept | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -365,6 +373,14 @@ async def accept_pull_request(
     source_head = await _branch_head(branch_id=pull_request.source_branch_id, db=db)
     if source_head is None:
         raise HTTPException(status_code=409, detail="The source branch has no version to promote")
+    # The diff is computed when the page loads, the promotion when the reviewer
+    # clicks. If the source got a version in between, the reviewer never saw it.
+    expected_source_head_id = payload.expected_source_head_version_id if payload else None
+    if expected_source_head_id is not None and source_head.id != expected_source_head_id:
+        raise HTTPException(
+            status_code=409,
+            detail="The source branch has new versions since you reviewed the changes: review them before accepting",
+        )
     target_head_id = await _branch_head_id(branch_id=pull_request.target_branch_id, db=db)
     # The reviewer saw the target as it was when the PR was opened. Promoting
     # over newer versions would bury them without anyone having reviewed them.
