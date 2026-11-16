@@ -1,3 +1,5 @@
+import { getAccessToken } from "@/lib/authToken";
+
 export const API_URL =
     process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -51,7 +53,7 @@ function buildHeaders(init: RequestInit): Headers {
         headers.set("Content-Type", "application/json");
     }
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const token = getAccessToken();
     if (token && !headers.has("Authorization")) {
         headers.set("Authorization", `Bearer ${token}`);
     }
