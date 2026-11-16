@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { EmailChangeRequest, PasswordChangeRequest, ProfileUpdate, UserProfile } from "@/types/user";
+import type {
+    AccountDeletion,
+    AccountDeletionRequest,
+    EmailChangeRequest,
+    PasswordChangeRequest,
+    ProfileUpdate,
+    UserProfile,
+} from "@/types/user";
 import { ApiError, apiFetch } from "./api";
 import { queryKeys } from "./queries";
 
@@ -12,7 +19,8 @@ export function useUpdateProfile() {
         mutationFn: (changes) =>
             apiFetch<UserProfile>("/auth/me", { method: "PUT", body: JSON.stringify(changes) }),
         onSuccess: (user) => {
-            queryClient.setQueryData(queryKeys.currentUser, user);
+            // Merged so fields only /auth/me returns (terms_accepted) are kept.
+            queryClient.setQueryData<UserProfile>(queryKeys.currentUser, (cached) => ({ ...cached, ...user }));
         },
     });
 }
@@ -24,7 +32,8 @@ export function useChangeEmail() {
         mutationFn: (request) =>
             apiFetch<UserProfile>("/auth/me/email", { method: "PUT", body: JSON.stringify(request) }),
         onSuccess: (user) => {
-            queryClient.setQueryData(queryKeys.currentUser, user);
+            // Merged so fields only /auth/me returns (terms_accepted) are kept.
+            queryClient.setQueryData<UserProfile>(queryKeys.currentUser, (cached) => ({ ...cached, ...user }));
         },
     });
 }
@@ -35,5 +44,25 @@ export function useChangePassword() {
         mutationFn: async (request) => {
             await apiFetch<unknown>("/auth/me/password", { method: "PUT", body: JSON.stringify(request) });
         },
+    });
+}
+
+/** Accepts the current Terms of Service and Privacy Policy (POST /auth/me/terms). */
+export function useAcceptTerms() {
+    const queryClient = useQueryClient();
+    return useMutation<UserProfile, ApiError, void>({
+        mutationFn: () =>
+            apiFetch<UserProfile>("/auth/me/terms", { method: "POST", body: JSON.stringify({ accept_terms: true }) }),
+        onSuccess: (user) => {
+            queryClient.setQueryData(queryKeys.currentUser, user);
+        },
+    });
+}
+
+/** Asks for the account to be deleted (POST /auth/me/delete); it can be restored by signing in within 30 days. */
+export function useDeleteAccount() {
+    return useMutation<AccountDeletion, ApiError, AccountDeletionRequest>({
+        mutationFn: (request) =>
+            apiFetch<AccountDeletion>("/auth/me/delete", { method: "POST", body: JSON.stringify(request) }),
     });
 }

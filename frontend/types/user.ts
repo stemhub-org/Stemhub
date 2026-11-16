@@ -11,6 +11,8 @@ export interface UserProfile {
     created_at: string;
     is_active: boolean;
     is_admin: boolean;
+    /** From GET /auth/me: false until the current Terms of Service and Privacy Policy are accepted. */
+    terms_accepted?: boolean;
 }
 
 // ── Profile edits (PUT /auth/me, backend `UserUpdate`). Omitted fields are left unchanged. ──
@@ -33,3 +35,16 @@ export interface PasswordChangeRequest {
     current_password: string;
     new_password: string;
 }
+
+// ── Account deletion (POST /auth/me/delete) ──
+export interface AccountDeletionRequest {
+    confirm_username: string;
+    /** Not needed for accounts that sign in with Google only. */
+    password?: string;
+}
+
+export interface AccountDeletion {
+    /** The data is erased then, unless the user signs in again before. */
+    erased_at: string;
+}
+
