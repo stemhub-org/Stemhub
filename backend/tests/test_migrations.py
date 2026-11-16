@@ -14,6 +14,7 @@ from stemhub.migrations import check_migrations_async
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 MESSAGE_RENAME_REVISION = "316caf0fcfa9"
 PREVIOUS_HEAD = "1ddecc33a8b7"
+ACTORS_REVISION = "c021108cacff"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -23,7 +24,18 @@ def _script_directory() -> ScriptDirectory:
 
 
 def _version_columns(connection) -> set[str]:
-    return {column["name"] for column in sa.inspect(connection).get_columns("version")}
+    return _columns(connection, "version")
+
+
+def _columns(connection, table: str) -> set[str]:
+    return {column["name"] for column in sa.inspect(connection).get_columns(table)}
+
+
+def _foreign_keys(connection, table: str) -> set[tuple[str, str]]:
+    return {
+        (key["constrained_columns"][0], key["referred_table"])
+        for key in sa.inspect(connection).get_foreign_keys(table)
+    }
 
 
 def _run(connection, step) -> None:
@@ -118,11 +130,61 @@ def test_check_migrations_no_scripts():
         asyncio.run(check_migrations_async())
 
 
-def test_alembic_history_has_a_single_head_after_the_message_rename():
+def test_alembic_history_has_a_single_head_after_the_actor_columns():
     script = _script_directory()
 
-    assert script.get_heads() == [MESSAGE_RENAME_REVISION]
+    assert script.get_heads() == [ACTORS_REVISION]
+    assert script.get_revision(ACTORS_REVISION).down_revision == MESSAGE_RENAME_REVISION
     assert script.get_revision(MESSAGE_RENAME_REVISION).down_revision == PREVIOUS_HEAD
+
+
+def _create_pre_actor_tables(connection) -> None:
+    connection.execute(sa.text("CREATE TABLE users (id CHAR(32) PRIMARY KEY)"))
+    connection.execute(sa.text("CREATE TABLE branch (id CHAR(32) PRIMARY KEY, name VARCHAR(255))"))
+    connection.execute(sa.text(
+        "CREATE TABLE version (id CHAR(32) PRIMARY KEY, created_by CHAR(32) REFERENCES users (id))"
+    ))
+    connection.execute(sa.text("INSERT INTO branch (id, name) VALUES ('b1', 'main')"))
+    connection.execute(sa.text("INSERT INTO version (id, created_by) VALUES ('v1', NULL)"))
+
+
+def test_actor_migration_adds_nullable_user_foreign_keys_and_keeps_rows():
+    migration = _script_directory().get_revision(ACTORS_REVISION).module
+    engine = sa.create_engine("sqlite://")
+
+    with engine.begin() as connection:
+        _create_pre_actor_tables(connection)
+
+        _run(connection, migration.upgrade)
+
+        assert _columns(connection, "branch") == {"id", "name", "created_by", "deleted_by"}
+        assert _columns(connection, "version") == {"id", "created_by", "deleted_by"}
+        assert _foreign_keys(connection, "branch") == {("created_by", "users"), ("deleted_by", "users")}
+        assert _foreign_keys(connection, "version") == {("created_by", "users"), ("deleted_by", "users")}
+        # Existing rows stay, with no actor: nothing to backfill from.
+        assert connection.execute(sa.text("SELECT id, name, created_by, deleted_by FROM branch")).all() == [
+            ("b1", "main", None, None)
+        ]
+        assert connection.execute(sa.text("SELECT id, deleted_by FROM version")).all() == [("v1", None)]
+
+        # Idempotent: a second run finds the columns already there.
+        _run(connection, migration.upgrade)
+        assert _columns(connection, "branch") == {"id", "name", "created_by", "deleted_by"}
+
+
+def test_actor_migration_downgrades_back_to_the_previous_columns():
+    migration = _script_directory().get_revision(ACTORS_REVISION).module
+    engine = sa.create_engine("sqlite://")
+
+    with engine.begin() as connection:
+        _create_pre_actor_tables(connection)
+        _run(connection, migration.upgrade)
+
+        _run(connection, migration.downgrade)
+
+        assert _columns(connection, "branch") == {"id", "name"}
+        assert _columns(connection, "version") == {"id", "created_by"}
+        assert _foreign_keys(connection, "version") == {("created_by", "users")}
 
 
 def test_message_rename_migration_renames_the_column_and_clears_the_plugin_placeholder():
