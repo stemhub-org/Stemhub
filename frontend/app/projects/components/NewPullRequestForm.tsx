@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -16,7 +16,6 @@ interface NewPullRequestFormProps {
     /** The project's live branches. */
     branches: Branch[];
     onCreated: (pullRequest: PullRequest) => void;
-    onCancel?: () => void;
 }
 
 const labelClassName = "text-sm font-medium text-foreground";
@@ -34,7 +33,7 @@ interface BranchSelectProps {
 
 function BranchSelect({ label, value, branches, onChange }: BranchSelectProps) {
     return (
-        <label className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <label className="flex min-w-0 flex-col gap-1.5">
             <span className={labelClassName}>{label}</span>
             <span className="relative">
                 <select className={selectClassName} value={value} onChange={(e) => onChange(e.target.value)}>
@@ -54,7 +53,7 @@ function BranchSelect({ label, value, branches, onChange }: BranchSelectProps) {
 }
 
 /** Proposes bringing one branch into another; by default into main. */
-export function NewPullRequestForm({ projectId, branches, onCreated, onCancel }: NewPullRequestFormProps) {
+export function NewPullRequestForm({ projectId, branches, onCreated }: NewPullRequestFormProps) {
     const defaultTarget = branches.find((branch) => branch.name === "main") ?? branches[0];
     const [targetId, setTargetId] = useState(defaultTarget?.id ?? "");
     const [sourceId, setSourceId] = useState(branches.find((branch) => branch.id !== targetId)?.id ?? "");
@@ -83,20 +82,17 @@ export function NewPullRequestForm({ projectId, branches, onCreated, onCancel }:
     };
 
     return (
-        <form onSubmit={handleSubmit} className="flex max-w-3xl flex-col gap-5">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
                 <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>
                     New pull request
                 </h2>
                 <p className="text-sm text-foreground-muted">Propose bringing one branch into another.</p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <BranchSelect label="From" value={sourceId} branches={branches} onChange={setSourceId} />
-                <ArrowRight className="hidden size-4 shrink-0 text-foreground-muted sm:mb-3 sm:block" aria-hidden="true" />
-                <BranchSelect label="Into" value={targetId} branches={branches} onChange={setTargetId} />
-            </div>
+            <BranchSelect label="From" value={sourceId} branches={branches} onChange={setSourceId} />
+            <BranchSelect label="Into" value={targetId} branches={branches} onChange={setTargetId} />
             {sourceId === targetId && (
-                <p className="-mt-2 text-sm text-foreground-muted">Pick two different branches.</p>
+                <p className="-mt-1 text-sm text-foreground-muted">Pick two different branches.</p>
             )}
             <label className="flex flex-col gap-1.5">
                 <span className={labelClassName}>Title</span>
@@ -123,16 +119,9 @@ export function NewPullRequestForm({ projectId, branches, onCreated, onCancel }:
                     {errorMessage(createPullRequest.error, "Couldn't open the pull request")}
                 </p>
             )}
-            <div className="flex justify-end gap-3">
-                {onCancel && (
-                    <Button type="button" variant="ghost" onClick={onCancel}>
-                        Cancel
-                    </Button>
-                )}
-                <Button type="submit" disabled={!canSubmit} loading={createPullRequest.isPending}>
-                    Open pull request
-                </Button>
-            </div>
+            <Button type="submit" className="w-full" disabled={!canSubmit} loading={createPullRequest.isPending}>
+                Open pull request
+            </Button>
         </form>
     );
 }
