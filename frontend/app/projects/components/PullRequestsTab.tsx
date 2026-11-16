@@ -1,12 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { GitPullRequest } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { projectRole } from "@/lib/pullRequestPermissions";
-import { useCollaborators } from "@/lib/queries";
+import { useCollaborators, usePullRequests } from "@/lib/queries";
 import type { Branch } from "@/types/project";
 import { NewPullRequestForm } from "./NewPullRequestForm";
 import { PullRequestList } from "./PullRequestList";
@@ -19,37 +16,41 @@ interface PullRequestsTabProps {
     branches: Branch[];
 }
 
-/** The project's pull requests; owners, Admins and Editors can also open one. */
+/**
+ * The project's pull requests, with the creation form in a side column for
+ * owners, Admins and Editors (the same main + side layout as the Project tab).
+ */
 export function PullRequestsTab({ projectId, ownerId, currentUserId, branches }: PullRequestsTabProps) {
     const router = useRouter();
-    const [formOpen, setFormOpen] = useState(false);
     const { data: collaborators } = useCollaborators(projectId);
+    const { data: pullRequests } = usePullRequests(projectId);
     const role = projectRole(ownerId, currentUserId ?? undefined, collaborators);
     const canOpen = role === "owner" || role === "Admin" || role === "Editor";
 
     return (
-        <div className="flex flex-col gap-6">
-            {canOpen && (
-                <Card className="flex flex-col gap-4">
-                    {formOpen ? (
-                        <NewPullRequestForm
-                            projectId={projectId}
-                            branches={branches}
-                            onCreated={(created) => router.push(`/projects/pull-requests?id=${projectId}&pr=${created.id}`)}
-                            onCancel={() => setFormOpen(false)}
-                        />
-                    ) : (
-                        <div>
-                            <Button icon={<GitPullRequest className="size-4" aria-hidden="true" />} onClick={() => setFormOpen(true)}>
-                                New pull request
-                            </Button>
-                        </div>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+            <Card padding="none" className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2 border-b border-border-subtle px-6 py-4">
+                    <h2 className="text-base font-medium" style={{ fontFamily: "var(--font-syne)" }}>
+                        Pull requests
+                    </h2>
+                    {pullRequests && pullRequests.length > 0 && (
+                        <span className="text-sm text-foreground-muted">{pullRequests.length}</span>
                     )}
+                </div>
+                <div className="py-2">
+                    <PullRequestList projectId={projectId} />
+                </div>
+            </Card>
+            {canOpen && (
+                <Card className="lg:sticky lg:top-6 lg:w-96 lg:shrink-0">
+                    <NewPullRequestForm
+                        projectId={projectId}
+                        branches={branches}
+                        onCreated={(created) => router.push(`/projects/pull-requests?id=${projectId}&pr=${created.id}`)}
+                    />
                 </Card>
             )}
-            <Card padding="none" className="py-2">
-                <PullRequestList projectId={projectId} />
-            </Card>
         </div>
     );
 }

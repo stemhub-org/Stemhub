@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Branch } from "@/types/project";
 import { PullRequestsTab } from "./PullRequestsTab";
@@ -32,18 +32,17 @@ function renderTab(currentUserId: string, collaborators: unknown[]) {
 }
 
 describe("PullRequestsTab", () => {
-    it("lets an Editor open the creation form", async () => {
+    it("shows an Editor the creation form next to the list", async () => {
         renderTab("u2", [{ project_id: "p1", user_id: "u2", role: "Editor", created_at: "", user: null }]);
 
-        fireEvent.click(await screen.findByRole("button", { name: "New pull request" }));
-
-        expect(screen.getByLabelText("Title")).toBeTruthy();
+        expect(await screen.findByLabelText("Title")).toBeTruthy();
+        expect(screen.getByRole("heading", { name: "Pull requests" })).toBeTruthy();
     });
 
     it("only lists pull requests for a Viewer", async () => {
         renderTab("u3", [{ project_id: "p1", user_id: "u3", role: "Viewer", created_at: "", user: null }]);
 
         expect(await screen.findByText("No pull requests yet.")).toBeTruthy();
-        expect(screen.queryByRole("button", { name: "New pull request" })).toBeNull();
+        expect(screen.queryByLabelText("Title")).toBeNull();
     });
 });
