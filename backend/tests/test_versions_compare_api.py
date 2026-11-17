@@ -44,6 +44,9 @@ class BlobLookupSession:
     def __init__(self, blob: Blob | None) -> None:
         self.blob = blob
 
+    async def get(self, model, key):
+        return None
+
     async def execute(self, statement):
         assert "FROM blob" in str(statement), f"Unexpected DB query in compare test: {statement}"
         return _BlobLookupResult(self.blob)
@@ -451,11 +454,11 @@ def test_compare_versions_surfaces_mixer_read_errors(monkeypatch) -> None:
     target_version = _build_version(branch_id=branch_id)
     stored = Blob(project_id=uuid.uuid4(), sha256="a" * 64, size_bytes=1024, storage_uri="projects/x/blobs/aa/a")
 
-    def raise_read_error(*, storage_uri, storage):
-        del storage_uri, storage
-        raise MixerReadError("This version has no project file to read.")
+    async def raise_read_error(**kwargs):
+        from stemhub.project_model.fl_reader import ProjectReadError
+        raise ProjectReadError("This version has no project file to read.")
 
-    monkeypatch.setattr(mixer_compare_module, "load_fl_mixer", raise_read_error)
+    monkeypatch.setattr(mixer_compare_module, "model_for_version", raise_read_error)
     client = _create_test_client(
         monkeypatch=monkeypatch,
         current_user=current_user,
@@ -479,11 +482,10 @@ def test_compare_versions_wraps_unexpected_read_failures_without_internal_terms(
     target_version = _build_version(branch_id=branch_id)
     stored = Blob(project_id=uuid.uuid4(), sha256="a" * 64, size_bytes=1024, storage_uri="projects/x/blobs/aa/a")
 
-    def raise_unexpected(*, storage_uri, storage):
-        del storage_uri, storage
+    async def raise_unexpected(**kwargs):
         raise ValueError("bad header")
 
-    monkeypatch.setattr(mixer_compare_module, "load_fl_mixer", raise_unexpected)
+    monkeypatch.setattr(mixer_compare_module, "model_for_version", raise_unexpected)
     client = _create_test_client(
         monkeypatch=monkeypatch,
         current_user=current_user,
@@ -497,7 +499,7 @@ def test_compare_versions_wraps_unexpected_read_failures_without_internal_terms(
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "Failed to read the FL Studio project file: bad header"
+    assert response.json()["detail"] == "The FL Studio project file could not be read. Retry shortly."
 
 
 def test_compare_versions_detects_fl_studio_from_the_project_file_path_of_v1_and_v2_manifests(monkeypatch) -> None:

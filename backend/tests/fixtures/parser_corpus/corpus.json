@@ -117,6 +117,28 @@
           "message_contains": "Invalid PPQ"
         }
       }
+    },
+    {
+      "id": "fl-24-2-synthetic",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/modern/fl-24-2.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "success",
+        "project": {
+          "version": "24.2.99.4720"
+        }
+      }
+    },
+    {
+      "id": "fl-25-2-synthetic",
+      "path": "backend/tests/fixtures/parser_corpus/assets/fl_studio/modern/fl-25-2.flp",
+      "kind": "fl_studio_project",
+      "expectations": {
+        "parse": "success",
+        "project": {
+          "version": "25.2.4.4960"
+        }
+      }
     }
   ]
 }

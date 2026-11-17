@@ -1,4 +1,5 @@
 import functools
+from contextlib import contextmanager
 import hashlib
 import json
 import logging
@@ -73,14 +74,18 @@ def _hash_stream_to_tempfile(source: BinaryIO) -> tuple[Path, int, str]:
 
     fd, temp_path = tempfile.mkstemp(prefix="stemhub-upload-")
     tmp = Path(temp_path)
-    with os.fdopen(fd, "wb") as output:
-        while True:
-            chunk = source.read(1024 * 1024)
-            if not chunk:
-                break
-            checksum.update(chunk)
-            size_bytes += len(chunk)
-            output.write(chunk)
+    try:
+        with os.fdopen(fd, "wb") as output:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                checksum.update(chunk)
+                size_bytes += len(chunk)
+                output.write(chunk)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
     return tmp, size_bytes, checksum.hexdigest()
 
@@ -98,6 +103,14 @@ def _delete_files_in_directory(directory: Path) -> bool:
 
 
 class StorageService(ABC):
+    def release_download(self, path: Path) -> None:
+        """Local paths are borrowed, so releasing them never deletes storage."""
+
+    @contextmanager
+    def materialize_blob(self, storage_uri: str):
+        """Borrow a local blob path for a synchronous reader."""
+        yield self.resolve_blob_path(storage_uri)
+
     @abstractmethod
     def store_project_preview(
         self,
@@ -152,6 +165,17 @@ class StorageService(ABC):
 
 class GCSStorageService(StorageService):
     _GCS_SCHEME = "gcs://"
+
+    def release_download(self, path: Path) -> None:
+        path.unlink(missing_ok=True)
+
+    @contextmanager
+    def materialize_blob(self, storage_uri: str):
+        path = self.resolve_blob_path(storage_uri)
+        try:
+            yield path
+        finally:
+            path.unlink(missing_ok=True)
 
     def __init__(
         self,
@@ -283,6 +307,8 @@ class GCSStorageService(StorageService):
             gcs_blob.download_to_filename(str(temp_file))
             return temp_file
         except StorageNotFoundError:
+            if temp_file is not None:
+                temp_file.unlink(missing_ok=True)
             raise
         except Exception as exc:
             if temp_file is not None and temp_file.exists():

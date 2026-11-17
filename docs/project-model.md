@@ -2,11 +2,27 @@
 
 The **project model** is the DAW-neutral JSON of a project's musical content: tempo, instruments, patterns and notes, the arrangement with its tracks and clips, the mixer and automation. Terms follow the glossary in [SPECIFICATION.md §19](./SPECIFICATION.md#19--glossary).
 
-This page describes **schema 0.1.0** (#170). Today the backend validates documents (`POST /api/project-models/validate`); reading them from FL Studio project files and writing them back come later (#153).
+This page describes **schema 0.1.0** (#170). The backend validates documents (`POST /api/project-models/validate`) and reads FL Studio project files into this model (#270). Writing FL files remains separate work (#271).
 
 - Models (the source of truth): `backend/src/stemhub/project_model/schema.py`
 - JSON Schema, generated from the models and committed: `backend/src/stemhub/project_model/schema/project-model-0.1.0.schema.json`
 - Example documents: `backend/tests/fixtures/project_model/examples/` (`minimal.json`, `basic-beat.json`, `fl2025-no-tempo.json`)
+
+## Extracted models and cache (#270)
+
+`GET /versions/{id}/project-model` returns the model for a live FL Studio version, with the same read-access checks as its assets (owner, collaborator, or authenticated reader of a public project). Deleted versions, branches and projects are excluded. Non-FL projects, missing files and permanently invalid FL files return `422`; temporary storage/database failures return `503` with a retry message. Responses never include parser exception text.
+
+The `project_model` table is keyed by `(project_id, project_file_sha256, extractor_version)`. Identical project files within one project share a row, regardless of version or branch. Extraction version includes the reader version and pinned PyFLP commit; bump the reader version whenever its semantics change. Structurally invalid files are negatively cached too, so opening history does not repeatedly parse them. Transient storage failures are not cached.
+
+On a cache miss, checksum verification, parsing and model validation run in a bounded worker pool (two extractions per process), away from the event loop. After a version is saved and committed, a best-effort prefetch uses a separate database session; saving never awaits extraction. At most 16 prefetch tasks are retained; lazy reads fill any skipped entries. Cache rows have a cascading foreign key to their blob, never increment its reference count, and disappear when blob GC deletes it.
+
+`POST /api/admin/project-models/backfill?limit=25&project_id=<optional UUID>&after_version_id=<optional UUID>` is admin-only. It processes a bounded batch of live versions and returns `scanned`, `ready`, `failed`, `skipped` and `next_after_version_id`. Repeat with that cursor until it is null. Duplicate project files within a batch are skipped, and individual failures do not abort the batch.
+
+The reader copies only schema fields, never licensee, project comments, URLs, absolute sample paths or plugin installation paths. External samples retain only a safe basename. A typed-event decoder failure leaves that event opaque and reports the affected section, preserving unrelated content. Layer channels, unresolved automation targets, unknown clip mute flags, and audio/automation offsets not yet decoded into ticks are explicitly reported in `unsupported[]`. Placeholder values beneath those reports must not be treated as authoritative.
+
+Committed golden models cover the FL 20 reference and multi-channel projects and **synthetic** FL 24.2/25.2 regression fixtures. These modern fixtures exercise parser layouts; they are not evidence of exhaustive real-world FL 2025 compatibility. Add privately supplied FL saves to the extended corpus before claiming broader coverage.
+
+`test_project_model_cache.py` runs against `STEMHUB_TEST_DATABASE_URL` in a temporary isolated schema. It checks the actual migration upgrade/downgrade, cache reuse and invalidation, concurrent inserts, access control, background failure isolation, GC cascade and warm API p95 below 300 ms on the committed fixture.
 
 ## Shape
 

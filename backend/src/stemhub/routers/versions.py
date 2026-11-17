@@ -20,6 +20,9 @@ from stemhub.mixer_compare import (
     mixer_diff_summary as _mixer_diff_summary,
 )
 from stemhub.models import Blob, Branch, Project, Version, User
+from stemhub.project_model.cache import model_for_version, prefetch_after_save
+from stemhub.project_model.fl_reader import ProjectReadError
+from stemhub.project_model.schema import ProjectModel
 from stemhub.routers._project_access import (
     get_project_with_owner_access,
     get_project_with_read_access,
@@ -194,6 +197,7 @@ async def create_version_from_manifest(
     db.add(db_version)
     await db.commit()
     await db.refresh(db_version)
+    prefetch_after_save(branch.project_id, db_version)
     return db_version
 
 
@@ -412,6 +416,26 @@ async def get_version(
     Get a specific version by ID.
     """
     return await _get_version_with_access(version_id=version_id, current_user=current_user, db=db)
+
+
+@router.get("/versions/{version_id}/project-model", response_model=ProjectModel)
+async def get_version_project_model(
+    version_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
+):
+    version = await _get_version_with_access(version_id=version_id, current_user=current_user, db=db)
+    if not _is_fl_studio_version(version):
+        raise HTTPException(status_code=422, detail="Only FL Studio projects have a project model.")
+    project_id = (await db.execute(select(Branch.project_id).where(Branch.id == version.branch_id))).scalar_one()
+    try:
+        return await model_for_version(version=version, project_id=project_id, db=db, storage=storage)
+    except ProjectReadError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("Project model read failed for version %s", version_id)
+        raise HTTPException(status_code=503, detail="The project model is temporarily unavailable. Retry shortly.") from exc
 
 
 @router.get("/versions/{version_id}/assets", response_model=List[AssetSummary])

@@ -224,3 +224,26 @@ def test_gcs_storage_service_roundtrip(monkeypatch) -> None:
     downloaded = storage.resolve_blob_path(stored.path)
     assert downloaded.read_bytes() == payload
     downloaded.unlink()
+
+    # Scoped reads remove GCS downloads after success and parser failure.
+    with storage.materialize_blob(stored.path) as downloaded:
+        assert downloaded.read_bytes() == payload
+    assert not downloaded.exists()
+    with pytest.raises(ValueError):
+        with storage.materialize_blob(stored.path) as downloaded:
+            raise ValueError("parser failure")
+    assert not downloaded.exists()
+
+    # A missing GCS object used to leak the mkstemp file before re-raising.
+    import tempfile
+    created = []
+    original_mkstemp = tempfile.mkstemp
+    def record_temp(*args, **kwargs):
+        fd, name = original_mkstemp(*args, **kwargs)
+        created.append(Path(name))
+        return fd, name
+    monkeypatch.setattr(tempfile, "mkstemp", record_temp)
+    from stemhub.storage import StorageNotFoundError
+    with pytest.raises(StorageNotFoundError):
+        storage.resolve_blob_path("missing")
+    assert created and all(not path.exists() for path in created)

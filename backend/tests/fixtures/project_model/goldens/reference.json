@@ -1,0 +1,5851 @@
+{
+  "schema": "stemhub.project-model",
+  "schema_version": "0.1.0",
+  "generator": {
+    "name": "stemhub-fl",
+    "version": "0.1.0",
+    "pyflp": "976c2f329672a1e59dc0efaf9ebe0b604571326c"
+  },
+  "source": {
+    "daw": "fl_studio",
+    "daw_version": "20.8.4.2576",
+    "ppq": 96
+  },
+  "project": {
+    "title": "PyFLP Test FLP",
+    "artists": "demberto",
+    "genre": "Testing..."
+  },
+  "tempo_bpm": 69.42,
+  "time_signature": {
+    "numerator": 4,
+    "denominator": 4
+  },
+  "instruments": [
+    {
+      "id": "instrument:0",
+      "kind": "plugin",
+      "name": "BooBass",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": {
+        "format": "fl_native",
+        "name": "BooBass",
+        "vendor": null,
+        "plugin_id": null,
+        "state": {
+          "sha256": "13d908ef5e0dac753e504c1c31b787e8b28f82e15b3e0c8fa0395dd1e4b32eab",
+          "size_bytes": 16
+        }
+      },
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 0
+        }
+      }
+    },
+    {
+      "id": "instrument:1",
+      "kind": "sampler",
+      "name": "Instrument track",
+      "color": "#485156",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:2"
+      },
+      "sample": null,
+      "plugin": null,
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 1
+        }
+      }
+    },
+    {
+      "id": "instrument:3",
+      "kind": "sampler",
+      "name": "Sampler",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": null,
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 3
+        }
+      }
+    },
+    {
+      "id": "instrument:6",
+      "kind": "plugin",
+      "name": "VST2",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": {
+        "format": "vst2",
+        "name": "Sylenth1",
+        "vendor": "LennarDigital",
+        "plugin_id": "1lys",
+        "state": {
+          "sha256": "cd9a1d5abb1ad4485c197e3fac9e993b4b6a08a10159b8066849872bd470328a",
+          "size_bytes": 19882
+        }
+      },
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 6
+        }
+      }
+    },
+    {
+      "id": "instrument:8",
+      "kind": "plugin",
+      "name": "Iconified",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": {
+        "format": "fl_native",
+        "name": "MIDI Out",
+        "vendor": null,
+        "plugin_id": null,
+        "state": {
+          "sha256": "0251d3a5247fb6450aa9ec558412502f38a8c769fb7220bf418d6952d8c1432d",
+          "size_bytes": 383
+        }
+      },
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 8
+        }
+      }
+    },
+    {
+      "id": "instrument:9",
+      "kind": "plugin",
+      "name": "Fruit Kick",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": {
+        "format": "fl_native",
+        "name": "Fruit Kick",
+        "vendor": null,
+        "plugin_id": null,
+        "state": {
+          "sha256": "a7d88deb48dde8ccb2ffe230f7c3e1f9bff5dc0ed979f3b484009f5c03ae94f3",
+          "size_bytes": 32
+        }
+      },
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 9
+        }
+      }
+    },
+    {
+      "id": "instrument:10",
+      "kind": "plugin",
+      "name": "Plucked!",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": {
+        "format": "fl_native",
+        "name": "Plucked!",
+        "vendor": null,
+        "plugin_id": null,
+        "state": {
+          "sha256": "6100c5508dc82a7b1197672054af4d1e2d3e5b7778d96ee130d8f861a9712b19",
+          "size_bytes": 20
+        }
+      },
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 10
+        }
+      }
+    },
+    {
+      "id": "instrument:12",
+      "kind": "sampler",
+      "name": "Zero Volume",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.0,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": null,
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 12
+        }
+      }
+    },
+    {
+      "id": "instrument:13",
+      "kind": "sampler",
+      "name": "Full Volume",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 1.0,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": null,
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 13
+        }
+      }
+    },
+    {
+      "id": "instrument:14",
+      "kind": "sampler",
+      "name": "100% L",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": -1.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": null,
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 14
+        }
+      }
+    },
+    {
+      "id": "instrument:15",
+      "kind": "sampler",
+      "name": "100% R",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 1.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": null,
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 15
+        }
+      }
+    },
+    {
+      "id": "instrument:16",
+      "kind": "sampler",
+      "name": "Disabled",
+      "color": "#5C656A",
+      "enabled": false,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": null,
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 16
+        }
+      }
+    },
+    {
+      "id": "instrument:17",
+      "kind": "sampler",
+      "name": "Locked",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": null,
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 17
+        }
+      }
+    },
+    {
+      "id": "instrument:18",
+      "kind": "sampler",
+      "name": "Zipped",
+      "color": "#5C656A",
+      "enabled": true,
+      "volume": {
+        "fader": 0.78125,
+        "db": null
+      },
+      "pan": 0.0,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "sample": null,
+      "plugin": null,
+      "extensions": {
+        "fl_studio": {
+          "channel_iid": 18
+        }
+      }
+    }
+  ],
+  "audio_sources": [
+    {
+      "id": "audio:4",
+      "name": "Colored",
+      "sample": null,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "extensions": {}
+    },
+    {
+      "id": "audio:7",
+      "name": "Audio Clip",
+      "sample": null,
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "extensions": {}
+    },
+    {
+      "id": "audio:11",
+      "name": "22in Kick",
+      "sample": {
+        "location": "factory",
+        "path": "%FLStudioFactoryData%/Data/Patches/Packs/Drums/Kicks/22in Kick.wav"
+      },
+      "insert": {
+        "status": "known",
+        "insert_id": "insert:0"
+      },
+      "extensions": {}
+    }
+  ],
+  "patterns": [
+    {
+      "id": "pattern:3",
+      "name": "MIDI",
+      "length_ticks": 384,
+      "notes": [
+        {
+          "instrument_id": "instrument:9",
+          "pitch": 60,
+          "start_ticks": 0,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 0
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:1",
+          "pitch": 60,
+          "start_ticks": 0,
+          "length_ticks": 0,
+          "velocity": 0.0,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 2
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:9",
+          "pitch": 60,
+          "start_ticks": 24,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 3
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:1",
+          "pitch": 60,
+          "start_ticks": 24,
+          "length_ticks": 0,
+          "velocity": 1.0,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 5
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:9",
+          "pitch": 60,
+          "start_ticks": 48,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 6
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:1",
+          "pitch": 60,
+          "start_ticks": 48,
+          "length_ticks": 0,
+          "velocity": 0.0,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 8
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:9",
+          "pitch": 60,
+          "start_ticks": 72,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 9
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:1",
+          "pitch": 60,
+          "start_ticks": 72,
+          "length_ticks": 0,
+          "velocity": 1.0,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 11
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:10",
+          "pitch": 60,
+          "start_ticks": 96,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 12
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:6",
+          "pitch": 60,
+          "start_ticks": 96,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 13
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:10",
+          "pitch": 60,
+          "start_ticks": 120,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 15
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:6",
+          "pitch": 60,
+          "start_ticks": 120,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 16
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:10",
+          "pitch": 60,
+          "start_ticks": 144,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 18
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:6",
+          "pitch": 60,
+          "start_ticks": 144,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 19
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:10",
+          "pitch": 60,
+          "start_ticks": 168,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 21
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:6",
+          "pitch": 60,
+          "start_ticks": 168,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 22
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:3",
+          "pitch": 60,
+          "start_ticks": 192,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 26
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:3",
+          "pitch": 60,
+          "start_ticks": 216,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 29
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:3",
+          "pitch": 60,
+          "start_ticks": 240,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 32
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:3",
+          "pitch": 60,
+          "start_ticks": 264,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 35
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:12",
+          "pitch": 60,
+          "start_ticks": 288,
+          "length_ticks": 24,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 36
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:8",
+          "pitch": 60,
+          "start_ticks": 288,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 37
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:12",
+          "pitch": 60,
+          "start_ticks": 312,
+          "length_ticks": 24,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 39
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:8",
+          "pitch": 60,
+          "start_ticks": 312,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 40
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:12",
+          "pitch": 60,
+          "start_ticks": 336,
+          "length_ticks": 24,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 42
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:8",
+          "pitch": 60,
+          "start_ticks": 336,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 43
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:12",
+          "pitch": 60,
+          "start_ticks": 360,
+          "length_ticks": 24,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 45
+            }
+          }
+        },
+        {
+          "instrument_id": "instrument:8",
+          "pitch": 60,
+          "start_ticks": 360,
+          "length_ticks": 0,
+          "velocity": 0.78125,
+          "pan": 0.0,
+          "fine_pitch_cents": 0,
+          "extensions": {
+            "fl_studio": {
+              "ordinal": 46
+            }
+          }
+        }
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "pattern:1",
+      "name": "Default",
+      "length_ticks": 0,
+      "notes": [],
+      "extensions": {}
+    },
+    {
+      "id": "pattern:2",
+      "name": "Colored",
+      "length_ticks": 0,
+      "notes": [],
+      "extensions": {}
+    },
+    {
+      "id": "pattern:4",
+      "name": "Timemarkers",
+      "length_ticks": 1824,
+      "notes": [],
+      "extensions": {}
+    },
+    {
+      "id": "pattern:5",
+      "name": "Selected",
+      "length_ticks": 0,
+      "notes": [],
+      "extensions": {}
+    }
+  ],
+  "arrangements": [
+    {
+      "id": "arrangement:0",
+      "name": "Just tracks",
+      "markers": [],
+      "tracks": [
+        {
+          "id": "track:2",
+          "number": 2,
+          "name": "Enabled",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:3",
+          "number": 3,
+          "name": "Disabled",
+          "enabled": false,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:4",
+          "number": 4,
+          "name": "Locked",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:5",
+          "number": 5,
+          "name": "Red",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:6",
+          "number": 6,
+          "name": "Iconified",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:7",
+          "number": 7,
+          "name": "Grouped",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:8",
+          "number": 8,
+          "name": "Audio track",
+          "enabled": true,
+          "clips": [
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 0,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 0,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 96,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 1,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 192,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 2,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 288,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 3,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 384,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 4,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 480,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 5,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 576,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 6,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 672,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 7,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 768,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 8,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 864,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 9,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 960,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 10,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 1056,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 11,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 1152,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 12,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 1248,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 13,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 1344,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 14,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "audio",
+              "source_id": "audio:11",
+              "start_ticks": 1440,
+              "length_ticks": 27,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 15,
+                  "item_flags": 64
+                }
+              }
+            }
+          ],
+          "extensions": {}
+        },
+        {
+          "id": "track:9",
+          "number": 9,
+          "name": "Instrument track",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:10",
+          "number": 10,
+          "name": "MIDI",
+          "enabled": true,
+          "clips": [
+            {
+              "kind": "pattern",
+              "source_id": "pattern:3",
+              "start_ticks": 0,
+              "length_ticks": 384,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 16,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "pattern",
+              "source_id": "pattern:3",
+              "start_ticks": 384,
+              "length_ticks": 384,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 17,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "pattern",
+              "source_id": "pattern:3",
+              "start_ticks": 768,
+              "length_ticks": 384,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 18,
+                  "item_flags": 64
+                }
+              }
+            },
+            {
+              "kind": "pattern",
+              "source_id": "pattern:3",
+              "start_ticks": 1152,
+              "length_ticks": 384,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 19,
+                  "item_flags": 64
+                }
+              }
+            }
+          ],
+          "extensions": {}
+        },
+        {
+          "id": "track:11",
+          "number": 11,
+          "name": "Cut pattern",
+          "enabled": true,
+          "clips": [
+            {
+              "kind": "pattern",
+              "source_id": "pattern:4",
+              "start_ticks": 0,
+              "length_ticks": 1536,
+              "offset_start_ticks": 0,
+              "offset_end_ticks": 1536,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 20,
+                  "item_flags": 64
+                }
+              }
+            }
+          ],
+          "extensions": {}
+        },
+        {
+          "id": "track:12",
+          "number": 12,
+          "name": "Automation",
+          "enabled": true,
+          "clips": [
+            {
+              "kind": "automation",
+              "source_id": "automation:5",
+              "start_ticks": 0,
+              "length_ticks": 1536,
+              "offset_start_ticks": null,
+              "offset_end_ticks": null,
+              "muted": false,
+              "extensions": {
+                "fl_studio": {
+                  "ordinal": 21,
+                  "item_flags": 64
+                }
+              }
+            }
+          ],
+          "extensions": {}
+        },
+        {
+          "id": "track:13",
+          "number": 13,
+          "name": "Locked to content",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:14",
+          "number": 14,
+          "name": "Locked to size",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:15",
+          "number": 15,
+          "name": "Min Size",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:16",
+          "number": 16,
+          "name": "Max Size",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:17",
+          "number": 17,
+          "name": "Latched",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:18",
+          "number": 18,
+          "name": "Random Motion",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:19",
+          "number": 19,
+          "name": "Trigger Sync OFF",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:20",
+          "number": 20,
+          "name": "Position Sync AUTO",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:21",
+          "number": 21,
+          "name": "Queued",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        },
+        {
+          "id": "track:22",
+          "number": 22,
+          "name": "Intolerant",
+          "enabled": true,
+          "clips": [],
+          "extensions": {}
+        }
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "arrangement:1",
+      "name": "Just timemarkers",
+      "markers": [
+        {
+          "position_ticks": 0,
+          "name": "",
+          "extensions": {
+            "fl_studio": {
+              "action": 5
+            }
+          }
+        },
+        {
+          "position_ticks": 384,
+          "name": "2/8",
+          "extensions": {
+            "fl_studio": {
+              "action": 8
+            }
+          }
+        },
+        {
+          "position_ticks": 768,
+          "name": "4/4",
+          "extensions": {
+            "fl_studio": {
+              "action": 8
+            }
+          }
+        },
+        {
+          "position_ticks": 1152,
+          "name": "3rd bar",
+          "extensions": {
+            "fl_studio": {
+              "action": 0
+            }
+          }
+        },
+        {
+          "position_ticks": 1536,
+          "name": " ",
+          "extensions": {
+            "fl_studio": {
+              "action": 4
+            }
+          }
+        },
+        {
+          "position_ticks": 1920,
+          "name": "Selection Ends",
+          "extensions": {
+            "fl_studio": {
+              "action": 0
+            }
+          }
+        },
+        {
+          "position_ticks": 2304,
+          "name": "",
+          "extensions": {
+            "fl_studio": {
+              "action": 3
+            }
+          }
+        },
+        {
+          "position_ticks": 2688,
+          "name": "",
+          "extensions": {
+            "fl_studio": {
+              "action": 9
+            }
+          }
+        },
+        {
+          "position_ticks": 3072,
+          "name": "",
+          "extensions": {
+            "fl_studio": {
+              "action": 10
+            }
+          }
+        },
+        {
+          "position_ticks": 3456,
+          "name": "",
+          "extensions": {
+            "fl_studio": {
+              "action": 1
+            }
+          }
+        },
+        {
+          "position_ticks": 3840,
+          "name": "",
+          "extensions": {
+            "fl_studio": {
+              "action": 2
+            }
+          }
+        }
+      ],
+      "tracks": [],
+      "extensions": {}
+    }
+  ],
+  "current_arrangement_id": "arrangement:0",
+  "mixer": {
+    "inserts": [
+      {
+        "id": "insert:0",
+        "number": 0,
+        "name": "Master",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:1",
+        "number": 1,
+        "name": "Audio track",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:2",
+        "number": 2,
+        "name": "Instrument track",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:3",
+        "number": 3,
+        "name": "Colored",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:4",
+        "number": 4,
+        "name": "Zero Volume",
+        "enabled": true,
+        "volume": {
+          "fader": 0.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:5",
+        "number": 5,
+        "name": "No routes",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:6",
+        "number": 6,
+        "name": "100% L",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": -1.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:7",
+        "number": 7,
+        "name": "100% R",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 1.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:8",
+        "number": 8,
+        "name": "Separator",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:9",
+        "number": 9,
+        "name": "Locked",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:10",
+        "number": 10,
+        "name": "Disabled",
+        "enabled": false,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:11",
+        "number": 11,
+        "name": "Iconified",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:12",
+        "number": 12,
+        "name": "100% mono",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -1.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:13",
+        "number": 13,
+        "name": "100% separated",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": 1.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:14",
+        "number": 14,
+        "name": "Swap LR",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:15",
+        "number": 15,
+        "name": "Invert Polarity",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:16",
+        "number": 16,
+        "name": "Docked left",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:17",
+        "number": 17,
+        "name": "Docked right",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:18",
+        "number": 18,
+        "name": "Bypassed",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [
+          {
+            "index": 0,
+            "enabled": true,
+            "dry_wet": 0.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity NoteBook 2",
+              "vendor": null,
+              "plugin_id": null,
+              "state": {
+                "sha256": "8f2bdad0d19ea9852ce539df3792a8e057d2f858dc822e638ad214887f7abd26",
+                "size_bytes": 156
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 256,
+                "name": "IGNORE\u2006ME",
+                "internal_name": "Fruity NoteBook 2"
+              }
+            }
+          }
+        ],
+        "extensions": {}
+      },
+      {
+        "id": "insert:19",
+        "number": 19,
+        "name": "Plugin Test",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [
+          {
+            "index": 0,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity Balance",
+              "vendor": null,
+              "plugin_id": null,
+              "state": {
+                "sha256": "be58233c8b1c33d2911eccf0f47364922b872acca2e95e4423bc21820b59ddf6",
+                "size_bytes": 8
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 0,
+                "name": null,
+                "internal_name": "Fruity Balance"
+              }
+            }
+          },
+          {
+            "index": 1,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity Fast Dist",
+              "vendor": null,
+              "plugin_id": null,
+              "state": {
+                "sha256": "3604eb64d6497c0c818367f14dc911c48993a55fab0b04019e5bb6f1fa8f8eb5",
+                "size_bytes": 20
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 1,
+                "name": null,
+                "internal_name": "Fruity Fast Dist"
+              }
+            }
+          },
+          {
+            "index": 2,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity Send",
+              "vendor": null,
+              "plugin_id": null,
+              "state": {
+                "sha256": "1112dd3a4759c6cafc02256b4ac85bf8b159ba14303ca5f01bba5c39486be695",
+                "size_bytes": 16
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 2,
+                "name": null,
+                "internal_name": "Fruity Send"
+              }
+            }
+          },
+          {
+            "index": 3,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity Soft Clipper",
+              "vendor": null,
+              "plugin_id": null,
+              "state": {
+                "sha256": "7b9d3fad16569d2a2c5834c29e94cd9a777d69aff03a300d28e0f47bd5dd8859",
+                "size_bytes": 8
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 3,
+                "name": null,
+                "internal_name": "Fruity Soft Clipper"
+              }
+            }
+          },
+          {
+            "index": 4,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity Stereo Enhancer",
+              "vendor": null,
+              "plugin_id": null,
+              "state": {
+                "sha256": "ff84541d68b4bd0dae988523641b36ce79220b75d2c24d12a0177206a5d3a11d",
+                "size_bytes": 24
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 4,
+                "name": null,
+                "internal_name": "Fruity Stereo Enhancer"
+              }
+            }
+          },
+          {
+            "index": 5,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Soundgoodizer",
+              "vendor": null,
+              "plugin_id": null,
+              "state": {
+                "sha256": "6bad638091c29bf2ea16517f0e2a4f5bc769b9fcad8c4ec68240b2c00980c0f6",
+                "size_bytes": 12
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 5,
+                "name": null,
+                "internal_name": "Soundgoodizer"
+              }
+            }
+          },
+          {
+            "index": 6,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "vst3",
+              "name": "OTT",
+              "vendor": "Xfer Records",
+              "plugin_id": "5845535654666f547474000000000000",
+              "state": {
+                "sha256": "67f8867e8f0cad26643b2d2b2bff09deb44bfb9b87f1cb7754cae5f35af6baa2",
+                "size_bytes": 191
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 6,
+                "name": "OTT (failed to load)",
+                "internal_name": "Fruity Wrapper"
+              }
+            }
+          }
+        ],
+        "extensions": {}
+      },
+      {
+        "id": "insert:20",
+        "number": 20,
+        "name": "Effect slots",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [
+          {
+            "index": 0,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity NoteBook 2",
+              "vendor": null,
+              "plugin_id": null,
+              "state": {
+                "sha256": "216cae050db17e9960b423f02c6708d036b85a8c5f1fb3fa896511a3315c0f7f",
+                "size_bytes": 130
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 0,
+                "name": "Colored",
+                "internal_name": "Fruity NoteBook 2"
+              }
+            }
+          },
+          {
+            "index": 1,
+            "enabled": true,
+            "dry_wet": 1.0,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity NoteBook 2",
+              "vendor": null,
+              "plugin_id": null,
+              "state": {
+                "sha256": "216cae050db17e9960b423f02c6708d036b85a8c5f1fb3fa896511a3315c0f7f",
+                "size_bytes": 130
+              }
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 1,
+                "name": "Iconified",
+                "internal_name": "Fruity NoteBook 2"
+              }
+            }
+          }
+        ],
+        "extensions": {}
+      },
+      {
+        "id": "insert:21",
+        "number": 21,
+        "name": "50ms track latency",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:22",
+        "number": 22,
+        "name": "Armed",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:23",
+        "number": 23,
+        "name": "Post EQ",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:24",
+        "number": 24,
+        "name": "50ms input latency",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:25",
+        "number": 25,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:26",
+        "number": 26,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:27",
+        "number": 27,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:28",
+        "number": 28,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:29",
+        "number": 29,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:30",
+        "number": 30,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:31",
+        "number": 31,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:32",
+        "number": 32,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:33",
+        "number": 33,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:34",
+        "number": 34,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:35",
+        "number": 35,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:36",
+        "number": 36,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:37",
+        "number": 37,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:38",
+        "number": 38,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:39",
+        "number": 39,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:40",
+        "number": 40,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:41",
+        "number": 41,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:42",
+        "number": 42,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:43",
+        "number": 43,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:44",
+        "number": 44,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:45",
+        "number": 45,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:46",
+        "number": 46,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:47",
+        "number": 47,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:48",
+        "number": 48,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:49",
+        "number": 49,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:50",
+        "number": 50,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:51",
+        "number": 51,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:52",
+        "number": 52,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:53",
+        "number": 53,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:54",
+        "number": 54,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:55",
+        "number": 55,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:56",
+        "number": 56,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:57",
+        "number": 57,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:58",
+        "number": 58,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:59",
+        "number": 59,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:60",
+        "number": 60,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:61",
+        "number": 61,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:62",
+        "number": 62,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:63",
+        "number": 63,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:64",
+        "number": 64,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:65",
+        "number": 65,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:66",
+        "number": 66,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:67",
+        "number": 67,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:68",
+        "number": 68,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:69",
+        "number": 69,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:70",
+        "number": 70,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:71",
+        "number": 71,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:72",
+        "number": 72,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:73",
+        "number": 73,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:74",
+        "number": 74,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:75",
+        "number": 75,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:76",
+        "number": 76,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:77",
+        "number": 77,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:78",
+        "number": 78,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:79",
+        "number": 79,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:80",
+        "number": 80,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:81",
+        "number": 81,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:82",
+        "number": 82,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:83",
+        "number": 83,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:84",
+        "number": 84,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:85",
+        "number": 85,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:86",
+        "number": 86,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:87",
+        "number": 87,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:88",
+        "number": 88,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:89",
+        "number": 89,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:90",
+        "number": 90,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:91",
+        "number": 91,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:92",
+        "number": 92,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:93",
+        "number": 93,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:94",
+        "number": 94,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:95",
+        "number": 95,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:96",
+        "number": 96,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:97",
+        "number": 97,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:98",
+        "number": 98,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:99",
+        "number": 99,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          },
+          {
+            "to_insert_id": "insert:100",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:101",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:102",
+            "level": 0.0
+          },
+          {
+            "to_insert_id": "insert:103",
+            "level": 0.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:100",
+        "number": 100,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:101",
+        "number": 101,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:102",
+        "number": 102,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:103",
+        "number": 103,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:104",
+        "number": 104,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:105",
+        "number": 105,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:106",
+        "number": 106,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:107",
+        "number": 107,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:108",
+        "number": 108,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:109",
+        "number": 109,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:110",
+        "number": 110,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:111",
+        "number": 111,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:112",
+        "number": 112,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:113",
+        "number": 113,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:114",
+        "number": 114,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:115",
+        "number": 115,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:116",
+        "number": 116,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:117",
+        "number": 117,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:118",
+        "number": 118,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:119",
+        "number": 119,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:120",
+        "number": 120,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:121",
+        "number": 121,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:122",
+        "number": 122,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:123",
+        "number": 123,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:124",
+        "number": 124,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:125",
+        "number": 125,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [
+          {
+            "to_insert_id": "insert:0",
+            "level": 1.0
+          }
+        ],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:126",
+        "number": 126,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 1.0,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [],
+        "effect_slots": [],
+        "extensions": {}
+      }
+    ],
+    "extensions": {}
+  },
+  "automation": [
+    {
+      "id": "automation:5",
+      "name": "Automation Clip",
+      "target": {
+        "status": "unknown"
+      },
+      "points": [
+        {
+          "position_ticks": 0,
+          "value": 1.0,
+          "tension": 0.0
+        },
+        {
+          "position_ticks": 768,
+          "value": 1.0,
+          "tension": 0.0
+        },
+        {
+          "position_ticks": 768,
+          "value": 0.0,
+          "tension": 0.0
+        },
+        {
+          "position_ticks": 1536,
+          "value": 0.0,
+          "tension": 0.0
+        }
+      ],
+      "extensions": {}
+    }
+  ],
+  "unsupported": [
+    {
+      "path": "/instruments",
+      "reason": "This content could not be decoded."
+    },
+    {
+      "path": "/patterns",
+      "reason": "Notes referencing unsupported channels were omitted."
+    },
+    {
+      "path": "/arrangements",
+      "reason": "Clip mute flags are not decoded; muted is a placeholder."
+    },
+    {
+      "path": "/automation",
+      "reason": "Automation targets are not decoded."
+    }
+  ],
+  "warnings": [],
+  "extensions": {}
+}

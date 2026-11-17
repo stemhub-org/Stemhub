@@ -9,11 +9,64 @@ from sqlalchemy import func, cast, Date
 from ..auth import get_current_admin_user
 from ..blob_gc import sweep_orphan_blobs
 from ..database import get_db
-from ..models import Project, User
+from ..models import Branch, Project, User, Version
+from ..manifests import blob_refs
+from ..project_model.cache import get_project_model
+from ..mixer_compare import is_fl_studio_version
 from ..schemas import UserResponse, DailySignup, AdminStats, UserWithProjects, RecentUser
 from ..storage import StorageService, get_storage_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+@router.post("/project-models/backfill")
+async def backfill_project_models(
+    _: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
+    limit: int = Query(25, ge=1, le=100),
+    after_version_id: UUID | None = None,
+    project_id: UUID | None = None,
+):
+    """Bounded, resumable pass over live versions; cached files are reused.
+
+    Pass next_after_version_id back as after_version_id until it is null.
+    Individual extraction failures do not abort the batch or expose file paths.
+    """
+    query = select(Version, Branch.project_id).join(Branch).join(Project).where(
+        Version.is_deleted == False, Branch.is_deleted == False, Project.is_deleted == False,
+    ).order_by(Version.id).limit(limit + 1)
+    if after_version_id is not None:
+        query = query.where(Version.id > after_version_id)
+    if project_id is not None:
+        query = query.where(Branch.project_id == project_id)
+    rows = list((await db.execute(query)).all())
+    # Rollback on a failed item can expire ORM objects. Snapshot the batch first.
+    batch = []
+    for version, pid in rows[:limit]:
+        project_file, _ = blob_refs(version.manifest_json)
+        batch.append((version.id, pid, project_file, is_fl_studio_version(version)))
+    next_cursor = str(batch[-1][0]) if len(rows) > limit else None
+    scanned = ready = failed = skipped = 0
+    seen = set()
+    for version_id, pid, project_file, supported in batch:
+        scanned += 1
+        if not supported or project_file is None:
+            skipped += 1
+            continue
+        key = (pid, project_file.sha256)
+        if key in seen:
+            skipped += 1
+            continue
+        seen.add(key)
+        try:
+            await get_project_model(project_id=pid, sha256=project_file.sha256, db=db, storage=storage)
+            ready += 1
+        except Exception:
+            await db.rollback()
+            failed += 1
+    return {"scanned": scanned, "ready": ready, "failed": failed, "skipped": skipped,
+            "next_after_version_id": next_cursor}
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

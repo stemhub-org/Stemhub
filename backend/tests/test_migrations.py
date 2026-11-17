@@ -136,8 +136,9 @@ def test_check_migrations_no_scripts():
 def test_alembic_history_joins_auth_and_actor_migrations_under_a_single_head():
     script = _script_directory()
 
-    assert script.get_heads() == [MERGE_REVISION]
-    assert script.get_current_head() == MERGE_REVISION
+    assert script.get_heads() == ["e270a1b2c3d4"]
+    assert script.get_current_head() == "e270a1b2c3d4"
+    assert script.get_revision("e270a1b2c3d4").down_revision == MERGE_REVISION
     assert set(script.get_revision(MERGE_REVISION).down_revision) == {AUTH_REVISION, ACTORS_REVISION}
     assert script.get_revision(ACTORS_REVISION).down_revision == MESSAGE_RENAME_REVISION
     assert script.get_revision(MESSAGE_RENAME_REVISION).down_revision == PREVIOUS_HEAD

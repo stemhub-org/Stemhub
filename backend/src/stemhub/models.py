@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -296,6 +296,20 @@ class Blob(Base):
 
 
 # ── Social & Feed Models ──
+
+class CachedProjectModel(Base):
+    """Derived data owned by a blob; never keeps unreferenced bytes alive."""
+    __tablename__ = "project_model"
+    __table_args__ = (
+        ForeignKeyConstraint(["project_id", "project_file_sha256"], ["blob.project_id", "blob.sha256"], ondelete="CASCADE"),
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    project_file_sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    extractor_version: Mapped[str] = mapped_column(String(96), primary_key=True)
+    model_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
 
 class UserFollow(Base):
     __tablename__ = "user_follow"

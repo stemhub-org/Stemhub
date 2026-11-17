@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import types
 from pathlib import Path
+from contextlib import contextmanager
 
 import pytest
 
@@ -60,6 +61,7 @@ class FakeInsert:
         self.volume = volume
         self.pan = pan
         self._slots = slots or []
+        self.routes = ()
 
     def __iter__(self):
         return iter(self._slots)
@@ -100,6 +102,10 @@ class FakeStorage:
     def resolve_blob_path(self, storage_uri: str) -> Path:
         del storage_uri
         return self.blob_file
+
+    @contextmanager
+    def materialize_blob(self, storage_uri):
+        yield self.resolve_blob_path(storage_uri)
 
 
 def test_parse_fl_mixer_normalizes_inserts_and_effect_slots() -> None:
@@ -223,10 +229,10 @@ def test_load_fl_mixer_reads_project_file_and_records_hash(tmp_path, monkeypatch
 
     def fake_parse(path: Path):
         parsed_paths.append(Path(path))
-        return FakeProject(mixer=[FakeInsert(iid=-1, name="Master")])
+        from stemhub.project_model.fl_reader import model_from_project
+        return model_from_project(FakeProject(mixer=[FakeInsert(iid=-1, name="Master")]), ppq=96)
 
-    monkeypatch.setattr("stemhub.fl_mixer.ensure_pyflp_available", lambda: None)
-    monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=fake_parse))
+    monkeypatch.setattr("stemhub.project_model.fl_reader.read_flp", fake_parse)
 
     storage = FakeStorage(flp_blob)
     mixer = load_fl_mixer(
@@ -235,7 +241,7 @@ def test_load_fl_mixer_reads_project_file_and_records_hash(tmp_path, monkeypatch
     )
 
     assert mixer.inserts == (
-        FlMixerInsert(index=0, name="Master", enabled=None, volume=None, pan=None, slots=()),
+        FlMixerInsert(index=0, name="Master", enabled=True, volume=1.0, pan=0.0, slots=()),
     )
     assert mixer.flp_size_bytes == len(flp_bytes)
     assert mixer.flp_sha256 is not None
@@ -250,10 +256,10 @@ def test_load_fl_mixer_keeps_the_project_file_hash_when_the_parser_fails(tmp_pat
 
     def fake_parse(path: Path):
         del path
-        raise RuntimeError("low-level parser crash")
+        from stemhub.project_model.fl_reader import ProjectReadError
+        raise ProjectReadError("The FL Studio project file could not be decoded.")
 
-    monkeypatch.setattr("stemhub.fl_mixer.ensure_pyflp_available", lambda: None)
-    monkeypatch.setitem(sys.modules, "pyflp", types.SimpleNamespace(parse=fake_parse))
+    monkeypatch.setattr("stemhub.project_model.fl_reader.read_flp", fake_parse)
 
     mixer = load_fl_mixer(
         storage_uri="projects/demo/blobs/00/deadbeef",
@@ -264,7 +270,7 @@ def test_load_fl_mixer_keeps_the_project_file_hash_when_the_parser_fails(tmp_pat
     assert mixer.flp_size_bytes == len(flp_bytes)
     assert mixer.flp_sha256 is not None
     assert mixer.mixer_supported is False
-    assert mixer.parse_error == "low-level parser crash"
+    assert mixer.parse_error is None
 
 
 def test_load_fl_mixer_error_for_a_missing_project_file_does_not_mention_blobs() -> None:

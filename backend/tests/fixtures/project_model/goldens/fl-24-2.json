@@ -1,0 +1,139 @@
+{
+  "schema": "stemhub.project-model",
+  "schema_version": "0.1.0",
+  "generator": {
+    "name": "stemhub-fl",
+    "version": "0.1.0",
+    "pyflp": "976c2f329672a1e59dc0efaf9ebe0b604571326c"
+  },
+  "source": {
+    "daw": "fl_studio",
+    "daw_version": "24.2.99.4720",
+    "ppq": 96
+  },
+  "project": {
+    "title": null,
+    "artists": null,
+    "genre": null
+  },
+  "tempo_bpm": null,
+  "time_signature": {
+    "numerator": 4,
+    "denominator": 4
+  },
+  "instruments": [],
+  "audio_sources": [],
+  "patterns": [],
+  "arrangements": [
+    {
+      "id": "arrangement:0",
+      "name": "",
+      "markers": [],
+      "tracks": [],
+      "extensions": {}
+    }
+  ],
+  "current_arrangement_id": "arrangement:0",
+  "mixer": {
+    "inserts": [
+      {
+        "id": "insert:0",
+        "number": 0,
+        "name": "Master",
+        "enabled": true,
+        "volume": {
+          "fader": 0.9375,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:1",
+        "number": 1,
+        "name": "Drums",
+        "enabled": true,
+        "volume": {
+          "fader": 0.859375,
+          "db": null
+        },
+        "pan": -0.5,
+        "stereo_separation": -0.0,
+        "sends": [],
+        "effect_slots": [
+          {
+            "index": 2,
+            "enabled": false,
+            "dry_wet": 0.5,
+            "plugin": {
+              "format": "fl_native",
+              "name": "Fruity Limiter",
+              "vendor": null,
+              "plugin_id": null,
+              "state": null
+            },
+            "extensions": {
+              "fl_studio": {
+                "raw_index": 2,
+                "name": null,
+                "internal_name": "Fruity Limiter"
+              }
+            }
+          }
+        ],
+        "extensions": {}
+      },
+      {
+        "id": "insert:2",
+        "number": 2,
+        "name": "Bass",
+        "enabled": true,
+        "volume": {
+          "fader": 0.78125,
+          "db": null
+        },
+        "pan": 0.25,
+        "stereo_separation": -0.0,
+        "sends": [],
+        "effect_slots": [],
+        "extensions": {}
+      },
+      {
+        "id": "insert:3",
+        "number": 3,
+        "name": "",
+        "enabled": true,
+        "volume": {
+          "fader": 0.703125,
+          "db": null
+        },
+        "pan": 0.0,
+        "stereo_separation": -0.0,
+        "sends": [],
+        "effect_slots": [],
+        "extensions": {}
+      }
+    ],
+    "extensions": {}
+  },
+  "automation": [],
+  "unsupported": [
+    {
+      "path": "/instruments",
+      "reason": "This content could not be decoded."
+    },
+    {
+      "path": "/arrangements",
+      "reason": "This content could not be decoded."
+    },
+    {
+      "path": "/tempo_bpm",
+      "reason": "This content could not be decoded."
+    }
+  ],
+  "warnings": [],
+  "extensions": {}
+}

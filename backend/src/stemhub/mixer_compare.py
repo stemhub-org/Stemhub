@@ -7,13 +7,14 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
-from stemhub.fl_mixer import FlMixer, MixerDiffResult, MixerReadError, load_fl_mixer
+from stemhub.fl_mixer import FlMixer, MixerDiffResult, mixer_from_project_model
 from stemhub.manifests import FileRef, blob_refs
-from stemhub.models import Blob, Version
+from stemhub.models import Version
 from stemhub.schemas import MixerDiffChange, MixerDiffSummary
-from stemhub.storage import StorageError, StorageService
+from stemhub.storage import StorageService
+from stemhub.project_model.cache import model_for_version
+from stemhub.project_model.fl_reader import ProjectReadError
 
 
 def _project_file_ref(version: Version) -> FileRef | None:
@@ -33,9 +34,9 @@ def is_fl_studio_version(version: Version) -> bool:
 
 
 def _mixer_read_error_detail(exc: Exception) -> str:
-    if isinstance(exc, (MixerReadError, StorageError, RuntimeError)):
+    if isinstance(exc, ProjectReadError):
         return str(exc)
-    return f"Failed to read the FL Studio project file: {exc}"
+    return "The FL Studio project file could not be read. Retry shortly."
 
 
 async def load_mixer_for_compare(
@@ -49,15 +50,9 @@ async def load_mixer_for_compare(
     if project_file is None:
         raise HTTPException(status_code=422, detail="This version has no project file to compare.")
 
-    blob_result = await db.execute(
-        select(Blob).where(Blob.project_id == project_id, Blob.sha256 == project_file.sha256)
-    )
-    blob = blob_result.scalars().first()
-    if blob is None:
-        raise HTTPException(status_code=422, detail="The project file of this version is missing from storage.")
-
     try:
-        return load_fl_mixer(storage_uri=blob.storage_uri, storage=storage)
+        document = await model_for_version(version=version, project_id=project_id, db=db, storage=storage)
+        return mixer_from_project_model(document, sha256=project_file.sha256, size_bytes=project_file.size_bytes)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=_mixer_read_error_detail(exc)) from exc
 

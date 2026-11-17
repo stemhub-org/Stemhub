@@ -6,12 +6,10 @@ index; user-facing messages show them as FL Studio does (index + 1).
 from __future__ import annotations
 
 import hashlib
-import importlib
 import logging
 from dataclasses import dataclass
 from typing import Any
 
-from stemhub.dependency_guard import ensure_pyflp_available
 from stemhub.storage import StorageService
 
 logger = logging.getLogger(__name__)
@@ -32,8 +30,8 @@ class FlEffectSlot:
     name: str | None
     internal_name: str | None
     enabled: bool | None
-    # Raw PyFLP value (slot "mix"); unit normalization is #170's job.
-    dry_wet: int | None
+    # Project model units (0..1) in the production reader/cache path.
+    dry_wet: float | None
     # The third-party or native plugin loaded in the slot.
     plugin_name: str | None
 
@@ -43,8 +41,8 @@ class FlMixerInsert:
     index: int
     name: str | None
     enabled: bool | None
-    volume: int | None
-    pan: int | None
+    volume: float | None
+    pan: float | None
     slots: tuple[FlEffectSlot, ...]
 
 
@@ -55,6 +53,7 @@ class FlMixer:
     flp_size_bytes: int | None = None
     mixer_supported: bool = True
     parse_error: str | None = None
+    default_inserts_implicit: bool = False
 
 
 @dataclass(frozen=True)
@@ -96,27 +95,33 @@ def load_fl_mixer(
     if not storage_uri:
         raise MixerReadError("This version has no project file to read.")
 
-    ensure_pyflp_available()
-    pyflp = importlib.import_module("pyflp")
+    from stemhub.project_model.fl_reader import ProjectReadError, read_flp
 
-    flp_path = storage.resolve_blob_path(storage_uri)
-    flp_bytes = flp_path.read_bytes()
-    try:
-        project = pyflp.parse(flp_path)
-    except Exception as exc:  # pragma: no cover - parser internals vary by FLP shape
-        return FlMixer(
-            inserts=(),
-            flp_sha256=hashlib.sha256(flp_bytes).hexdigest(),
-            flp_size_bytes=len(flp_bytes),
-            mixer_supported=False,
-            parse_error=str(exc),
-        )
+    with storage.materialize_blob(storage_uri) as path:
+        data = path.read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        try:
+            return mixer_from_project_model(read_flp(path).model_dump(mode="json"), sha256=sha, size_bytes=len(data))
+        except ProjectReadError:
+            return FlMixer(inserts=(), flp_sha256=sha, flp_size_bytes=len(data), mixer_supported=False)
 
-    return parse_fl_mixer(
-        project,
-        flp_sha256=hashlib.sha256(flp_bytes).hexdigest(),
-        flp_size_bytes=len(flp_bytes),
-    )
+
+def mixer_from_project_model(document: dict, *, sha256: str | None = None, size_bytes: int | None = None) -> FlMixer:
+    """Project a cached model without invoking PyFLP again. Values use model units."""
+    inserts = []
+    for insert in document["mixer"]["inserts"]:
+        slots = []
+        for slot in insert["effect_slots"]:
+            labels = slot.get("extensions", {}).get("fl_studio", {})
+            slots.append(FlEffectSlot(index=slot["index"], name=labels.get("name"),
+                                      internal_name=labels.get("internal_name"), enabled=slot["enabled"],
+                                      dry_wet=slot["dry_wet"], plugin_name=slot["plugin"]["name"]))
+        inserts.append(FlMixerInsert(index=insert["number"], name=insert["name"] or None,
+                                     enabled=insert["enabled"], volume=insert["volume"]["fader"],
+                                     pan=insert["pan"], slots=tuple(slots)))
+    incomplete = any(e["path"] == "" or e["path"].startswith("/mixer") for e in document["unsupported"])
+    return FlMixer(inserts=tuple(inserts), flp_sha256=sha256, flp_size_bytes=size_bytes,
+                   mixer_supported=not incomplete, default_inserts_implicit=True)
 
 
 def parse_fl_mixer(
@@ -125,6 +130,10 @@ def parse_fl_mixer(
     flp_sha256: str | None = None,
     flp_size_bytes: int | None = None,
 ) -> FlMixer:
+    """Legacy raw-unit parser probe for the pinned-parser regression corpus.
+
+    Production comparisons use mixer_from_project_model and its normalized units.
+    """
     inserts: list[FlMixerInsert] = []
 
     for insert in getattr(project, "mixer", []):
@@ -160,6 +169,15 @@ def diff_fl_mixers(
     changes: list[MixerDiffChange] = []
     base_inserts = {insert.index: insert for insert in base_mixer.inserts}
     target_inserts = {insert.index: insert for insert in target_mixer.inserts}
+    # Unknown content must never look like a mass deletion/addition.
+    if not base_mixer.mixer_supported or not target_mixer.mixer_supported:
+        base_inserts = {}
+        target_inserts = {}
+    elif base_mixer.default_inserts_implicit and target_mixer.default_inserts_implicit:
+        for index in set(base_inserts) | set(target_inserts):
+            default = FlMixerInsert(index=index, name=None, enabled=True, volume=1.0, pan=0.0, slots=())
+            base_inserts.setdefault(index, default)
+            target_inserts.setdefault(index, default)
 
     for insert_index in sorted(set(base_inserts) | set(target_inserts)):
         base_insert = base_inserts.get(insert_index)

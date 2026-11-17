@@ -296,7 +296,7 @@ Sign-in uses OAuth2 / JWT with an **HttpOnly cookie**; the StemHub plugin sends 
 
 `id` is `{sha256}:{index}` (two assets may hold the same bytes); `name` is the file name without its extension, taken from `path` (v1 manifests keep their stored `name`), and `file_type` comes from `path`. A version without a manifest returns `[]`. The project file itself is not listed.
 
-**Mixer diff (`compare` and `diff-history`).** Only FL Studio versions are compared: the backend reads each version's project file with PyFLP (`fl_mixer.py`) and diffs the mixers. `compare` answers `400` when both ids are the same and `422` when a version isn't FL Studio or its project file can't be read; `diff-history` marks such entries `"unsupported"` with a `status_message` instead, and the first version of the branch `"initial"`.
+**Mixer diff (`compare` and `diff-history`).** Only FL Studio versions are compared: the backend projects mixers from the persistent project-model cache, also shared with pull-request diffs. Cache misses extract and validate in worker threads. `compare` answers `400` when both ids are the same and `422` when a version isn't FL Studio or its project file can't be read; `diff-history` marks such entries `"unsupported"` with a `status_message` instead, and the first version of the branch `"initial"`.
 
 ```json
 {
@@ -307,8 +307,8 @@ Sign-in uses OAuth2 / JWT with an **HttpOnly cookie**; the StemHub plugin sends 
       "insert_index": 3,
       "insert_name": "Bass",
       "slot_index": null,
-      "before": 12800,
-      "after": 10240,
+      "before": 1.0,
+      "after": 0.8,
       "message": "…"
     },
     {
@@ -327,7 +327,9 @@ Sign-in uses OAuth2 / JWT with an **HttpOnly cookie**; the StemHub plugin sends 
 - `insert_index` uses FL Studio's numbering: the Master insert is `0`. It is `null` for a project-level change.
 - `slot_index` is the effect slot's 0-based index; messages show it as FL Studio does (index + 1).
 - Change types: `insert_added`, `insert_removed`, `insert_renamed`, `insert_enabled_changed`, `insert_volume_changed`, `insert_pan_changed`, `slot_added`, `slot_removed`, `slot_plugin_changed`, `slot_enabled_changed`, `slot_dry_wet_changed`, and `project_file_changed` (the project file changed but a mixer couldn't be read; `before`/`after` are `{sha256, size_bytes}`).
-- Values are FL Studio's raw ones (volume, pan, dry/wet); normalizing units is part of the project model (#170).
+- **Contract change (#270):** volume, pan and dry/wet now use project-model units instead of raw FL integers: insert volume is a fader position `0…1.25` (`1.0` = 100%), pan is `−1…1`, and slot dry/wet is `0…1`. This applies to scalar changes and nested insert/slot payloads, including pull-request diffs. A raw volume change `12800 → 10240` is now `1.0 → 0.8`. No calibrated dB values are claimed. Sparse default inserts do not appear as deletions, and an unreadable mixer never appears as a mass removal.
+
+**Project models:** `GET /versions/{id}/project-model` (read access) returns schema 0.1.0 musical content. `POST /api/admin/project-models/backfill` (admin only) warms existing live versions in bounded, resumable batches. See [project-model.md](project-model.md#extracted-models-and-cache-270) for cache lifetime, error responses and extraction limitations.
 
 ---
 

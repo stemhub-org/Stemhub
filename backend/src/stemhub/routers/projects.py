@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -230,10 +231,12 @@ async def download_project_preview(
     except StorageNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    from stemhub.storage import GCSStorageService
     return FileResponse(
         path=preview_path,
         media_type=_resolve_media_type(preview_path),
         filename=f"{project.name}-preview{preview_path.suffix or '.wav'}",
+        background=BackgroundTask(storage.release_download, preview_path) if isinstance(storage, GCSStorageService) else None,
     )
 
 
