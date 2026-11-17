@@ -23,6 +23,9 @@ describe("TopNav", () => {
         render(<TopNav />, { wrapper: Wrapper });
 
         expect(await screen.findByText("jb")).toBeTruthy();
+        // No plans exist: the header says beta, not an invented plan.
+        expect(screen.getByText("Beta")).toBeTruthy();
+        expect(screen.queryByText("Free Plan")).toBeNull();
 
         // What the profile page does after a successful save.
         act(() => {
