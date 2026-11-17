@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Bell, Sun, User as UserIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useHydrated } from "@/lib/useHydrated";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser } from "@/lib/queries";
@@ -16,7 +17,10 @@ type TopNavProps = {
 export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavProps) {
     const router = useRouter();
     const { resolvedTheme, setTheme } = useTheme();
-    const isDark = resolvedTheme === "dark";
+    // The server does not know the theme: render as light until hydrated,
+    // like the Sidebar, so the first render matches the server HTML.
+    const hydrated = useHydrated();
+    const isDark = hydrated && resolvedTheme === "dark";
     const { data: userData } = useCurrentUser();
 
     return (
