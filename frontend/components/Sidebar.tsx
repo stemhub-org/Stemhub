@@ -50,17 +50,19 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                             <BrandFigure className="h-7 w-auto" />
                             <Wordmark className="text-xl" />
                         </Link>
-                        {onToggleSidebar && (
-                            <button
-                                type="button"
-                                onClick={onToggleSidebar}
-                                aria-label="Close sidebar"
-                                className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-foreground/5 transition-colors"
-                            >
-                                <ChevronLeft size={18} className="text-foreground" />
-                            </button>
-                        )}
                     </div>
+                    {/* On the sidebar's edge, not next to the logo: the wordmark
+                        alone is wider than the space left between the paddings. */}
+                    {onToggleSidebar && (
+                        <button
+                            type="button"
+                            onClick={onToggleSidebar}
+                            aria-label="Close sidebar"
+                            className="absolute top-[4.25rem] -right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle bg-background-secondary shadow-sm hover:bg-background-tertiary transition-colors"
+                        >
+                            <ChevronLeft size={14} className="text-foreground" />
+                        </button>
+                    )}
 
                     <nav className="flex-1 py-10 px-6 space-y-1.5 overflow-y-auto">
                         {navigation.map((item) => {
