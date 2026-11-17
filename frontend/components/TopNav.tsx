@@ -5,6 +5,7 @@ import { Bell, Sun, User as UserIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useHydrated } from "@/lib/useHydrated";
+import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser } from "@/lib/queries";
@@ -46,12 +47,9 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                     </button>
                 )}
                 {onToggleSidebar && !sidebarOpen && (
-                    <Link
-                        href="/dashboard"
-                        className="text-2xl font-medium tracking-tight text-foreground"
-                        style={{ fontFamily: "var(--font-syne)" }}
-                    >
-                        StemHub<span className="text-accent">.</span>
+                    <Link href="/dashboard" aria-label="StemHub home" className="flex items-center gap-2 text-foreground">
+                        <BrandFigure className="h-7 w-auto" />
+                        <Wordmark className="text-xl" />
                     </Link>
                 )}
             </div>
