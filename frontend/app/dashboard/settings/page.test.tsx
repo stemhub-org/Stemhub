@@ -373,7 +373,9 @@ describe("SettingsPage placeholders", () => {
     });
 
     it("says storage is free during the beta, with no plan or price", async () => {
-        await openTab("Storage");
+        stubRoutes({ "/auth/me/storage": { total_bytes: 0, projects: [] } });
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Storage" }));
 
         expect(await screen.findByText("Free during the beta")).toBeTruthy();
         for (const fake of [/\$9\.99/, /PRO PLAN/, /100 GB/, /billing date/]) {
@@ -389,5 +391,64 @@ describe("SettingsPage placeholders", () => {
         expect(await screen.findByText("Coming soon")).toBeTruthy();
         expect(screen.queryByRole("button", { name: "Save Preferences" })).toBeNull();
         expect(screen.queryByText("New Pull Requests")).toBeNull();
+    });
+});
+
+function stubRoutes(routes: Record<string, unknown>) {
+    // /auth/me answers with the user; other paths with their own body.
+    vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+            const path = new URL(String(input)).pathname;
+            if (path in routes) {
+                const body = routes[path];
+                return body instanceof Response ? body : json(body);
+            }
+            return json(user);
+        }),
+    );
+}
+
+describe("SettingsPage storage", () => {
+    async function openStorage() {
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name: "Storage" }));
+    }
+
+    it("lists the space each project takes, and the total", async () => {
+        stubRoutes({
+            "/auth/me/storage": {
+                total_bytes: 2.5 * 1024 ** 3,
+                projects: [
+                    { id: "p1", name: "Night Drive", size_bytes: 2 * 1024 ** 3, file_count: 212 },
+                    { id: "p2", name: "Lo-fi sketches", size_bytes: 512 * 1024 ** 2, file_count: 1 },
+                ],
+            },
+        });
+        await openStorage();
+
+        expect(await screen.findByText("2.5 GB")).toBeTruthy();
+        expect(screen.getByText("Night Drive")).toBeTruthy();
+        expect(screen.getByText("2.0 GB")).toBeTruthy();
+        expect(screen.getByText("212 files")).toBeTruthy();
+        expect(screen.getByText("Lo-fi sketches")).toBeTruthy();
+        expect(screen.getByText("512.0 MB")).toBeTruthy();
+        expect(screen.getByText("1 file")).toBeTruthy();
+        expect(screen.getByText("Free during the beta")).toBeTruthy();
+    });
+
+    it("says so when the user has no project", async () => {
+        stubRoutes({ "/auth/me/storage": { total_bytes: 0, projects: [] } });
+        await openStorage();
+
+        expect(await screen.findByText("No project yet.")).toBeTruthy();
+    });
+
+    it("shows the error with a retry", async () => {
+        stubRoutes({ "/auth/me/storage": json({ detail: "Database unavailable" }, 503) });
+        await openStorage();
+
+        expect((await screen.findByRole("alert")).textContent).toContain("Database unavailable");
+        expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     });
 });
