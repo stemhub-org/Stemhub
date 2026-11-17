@@ -11,12 +11,13 @@ import type {
     VersionDiffHistoryEntry,
 } from "@/types/project";
 import type { AcceptPullRequest, NewPullRequest, PullRequest, PullRequestMixerDiff } from "@/types/pullRequest";
-import type { UserProfile } from "@/types/user";
+import type { StorageUsage, UserProfile } from "@/types/user";
 import { ApiError, apiFetch } from "./api";
 
 /** Cache keys, shared so mutations can invalidate them (e.g. after a profile update). */
 export const queryKeys = {
     currentUser: ["auth", "me"] as const,
+    storageUsage: ["auth", "me", "storage"] as const,
     projects: ["projects"] as const,
     /** Prefix of everything cached for one project; invalidate it after a branch change. */
     project: (projectId: string) => ["projects", projectId] as const,
@@ -40,6 +41,14 @@ export function useCurrentUser() {
     return useQuery<UserProfile, ApiError>({
         queryKey: queryKeys.currentUser,
         queryFn: () => apiFetch<UserProfile>("/auth/me"),
+    });
+}
+
+/** The space each project the user owns takes (Settings, storage tab). */
+export function useStorageUsage() {
+    return useQuery<StorageUsage, ApiError>({
+        queryKey: queryKeys.storageUsage,
+        queryFn: () => apiFetch<StorageUsage>("/auth/me/storage"),
     });
 }
 

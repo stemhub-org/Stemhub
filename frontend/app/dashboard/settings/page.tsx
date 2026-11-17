@@ -23,7 +23,8 @@ import { PasswordVisibilityToggle } from "@/components/PasswordVisibilityToggle"
 import { useChangeEmail, useChangePassword, useDeleteAccount, useUpdateProfile } from "@/lib/account";
 import { apiFetchResponse, errorMessage } from "@/lib/api";
 import { filenameFromContentDisposition, saveBlob } from "@/lib/download";
-import { useCurrentUser } from "@/lib/queries";
+import { formatBytes } from "@/lib/format";
+import { useCurrentUser, useStorageUsage } from "@/lib/queries";
 import { useLogout } from "@/lib/useLogout";
 import type { UserProfile } from "@/types/user";
 
@@ -682,7 +683,51 @@ function StorageSettings() {
                     Storage is free while StemHub is in beta. No plan, no payment details.
                 </p>
             </div>
+
+            <StorageUsageList />
         </motion.div>
+    );
+}
+
+function StorageUsageList() {
+    const { data: usage, error, refetch } = useStorageUsage();
+
+    if (error) {
+        return <ErrorState error={error} title="Couldn't load your storage" onRetry={() => refetch()} />;
+    }
+    if (!usage) {
+        return <Loader2 size={20} className="animate-spin text-accent" />;
+    }
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-baseline">
+                <h3 className="text-sm font-medium text-foreground/80">Used by your projects</h3>
+                <span className="text-lg font-medium">{formatBytes(usage.total_bytes)}</span>
+            </div>
+
+            {usage.projects.length === 0 ? (
+                <p className="text-sm text-foreground/50 font-light">No project yet.</p>
+            ) : (
+                <ul className="space-y-1">
+                    {usage.projects.map((project) => (
+                        <li key={project.id} className="flex items-center justify-between gap-4 p-3 rounded-lg hover:bg-foreground/5 transition-colors">
+                            <span className="text-sm truncate">{project.name}</span>
+                            <span className="flex items-center gap-4 shrink-0">
+                                <span className="text-xs text-foreground/50 font-light">
+                                    {project.file_count === 1 ? "1 file" : `${project.file_count} files`}
+                                </span>
+                                <span className="text-sm font-medium w-20 text-right">{formatBytes(project.size_bytes)}</span>
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <p className="text-xs text-foreground/50 font-light">
+                Counts the files saved in your projects&apos; versions. A file used by several versions of a project is counted once.
+            </p>
+        </div>
     );
 }
 
