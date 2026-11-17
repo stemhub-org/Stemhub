@@ -35,3 +35,18 @@ describe("TopNav", () => {
         expect(await screen.findByText("jb-renamed")).toBeTruthy();
     });
 });
+
+describe("TopNav brand", () => {
+    it("shows the same StemHub logo as the sidebar when the sidebar is closed", () => {
+        vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
+        render(<TopNav onToggleSidebar={vi.fn()} sidebarOpen={false} />, {
+            wrapper: ({ children }: { children: ReactNode }) => (
+                <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+            ),
+        });
+
+        const home = screen.getByRole("link", { name: "StemHub home" });
+        expect(home.getAttribute("href")).toBe("/dashboard");
+        expect(home.querySelector("svg")).not.toBeNull();
+    });
+});
