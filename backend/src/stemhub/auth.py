@@ -401,9 +401,15 @@ async def get_current_admin_user(
 
 
 async def _me(db: AsyncSession, user: User) -> MeResponse:
+    # A query rather than user.identities: lazy-loading a relationship
+    # fails under async SQLAlchemy.
+    providers = await db.execute(
+        select(UserIdentity.provider).where(UserIdentity.user_id == user.id).order_by(UserIdentity.provider)
+    )
     return MeResponse(
         **UserResponse.model_validate(user).model_dump(),
         terms_accepted=await has_accepted_current_versions(db, user.id),
+        linked_providers=list(providers.scalars().all()),
     )
 
 @router.get("/me", response_model=MeResponse)
