@@ -105,6 +105,9 @@ class MeResponse(UserResponse):
     # Service and the Privacy Policy (legal.py): accounts created with Google
     # or before acceptance was recorded, and everyone after a new version.
     terms_accepted: bool
+    # External accounts the user can sign in with ("google"), from
+    # user_identity, so Settings shows the real link state.
+    linked_providers: list[str] = []
 
 
 class TermsAcceptanceRequest(BaseModel):
