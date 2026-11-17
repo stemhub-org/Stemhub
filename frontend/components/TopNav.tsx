@@ -85,7 +85,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
                         <span className="text-sm font-medium">{userData?.username || "Producer"}</span>
-                        <span className="text-xs text-foreground/50">Free Plan</span>
+                        <span className="text-xs text-foreground/50">Beta</span>
                     </div>
                     <button
                         onClick={() => {
