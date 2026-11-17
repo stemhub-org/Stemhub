@@ -110,6 +110,19 @@ class MeResponse(UserResponse):
     linked_providers: list[str] = []
 
 
+class ProjectStorageUsage(BaseModel):
+    id: UUID
+    name: str
+    size_bytes: int
+    file_count: int
+
+
+class StorageUsageResponse(BaseModel):
+    # GET /auth/me/storage: projects the user owns, largest first.
+    total_bytes: int
+    projects: list[ProjectStorageUsage]
+
+
 class TermsAcceptanceRequest(BaseModel):
     accept_terms: bool = Field(False, validate_default=True)
 
