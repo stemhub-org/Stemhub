@@ -13,6 +13,8 @@ export interface UserProfile {
     is_admin: boolean;
     /** From GET /auth/me: false until the current Terms of Service and Privacy Policy are accepted. */
     terms_accepted?: boolean;
+    /** From GET /auth/me: external accounts the user signs in with, e.g. ["google"]. */
+    linked_providers?: string[];
 }
 
 // ── Profile edits (PUT /auth/me, backend `UserUpdate`). Omitted fields are left unchanged. ──

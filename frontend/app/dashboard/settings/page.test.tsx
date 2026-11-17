@@ -337,3 +337,57 @@ describe("SettingsPage data export", () => {
     });
 });
 
+
+describe("SettingsPage placeholders", () => {
+    async function openTab(name: string, profile: object = user) {
+        vi.stubGlobal("fetch", vi.fn(async () => json(profile)));
+        renderPage();
+        fireEvent.click(await screen.findByRole("button", { name }));
+    }
+
+    it("shows Google as linked when the backend says so", async () => {
+        await openTab("Integrations", { ...user, linked_providers: ["google"] });
+
+        expect(await screen.findByText("Linked")).toBeTruthy();
+        expect(screen.queryByText("Not linked")).toBeNull();
+        expect(screen.queryByRole("button", { name: "Disconnect" })).toBeNull();
+    });
+
+    it("shows Google as not linked otherwise", async () => {
+        // An older backend omits linked_providers: treated as not linked.
+        await openTab("Integrations");
+
+        expect(await screen.findByText("Not linked")).toBeTruthy();
+        expect(screen.queryByText("Connected")).toBeNull();
+    });
+
+    it("announces the plugin instead of inventing an install", async () => {
+        await openTab("Integrations");
+
+        expect(await screen.findByText("Coming soon")).toBeTruthy();
+        for (const fake of [/v1\.2\.4/, /^Active$/, /Not installed/]) {
+            expect(screen.queryByText(fake)).toBeNull();
+        }
+        expect(screen.queryByRole("button", { name: "Configure" })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Install" })).toBeNull();
+    });
+
+    it("says storage is free during the beta, with no plan or price", async () => {
+        await openTab("Storage");
+
+        expect(await screen.findByText("Free during the beta")).toBeTruthy();
+        for (const fake of [/\$9\.99/, /PRO PLAN/, /100 GB/, /billing date/]) {
+            expect(screen.queryByText(fake)).toBeNull();
+        }
+        expect(screen.queryByRole("button", { name: "Manage Plan" })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Upgrade to Studio Plan" })).toBeNull();
+    });
+
+    it("marks notifications as coming soon and saves nothing", async () => {
+        await openTab("Notifications");
+
+        expect(await screen.findByText("Coming soon")).toBeTruthy();
+        expect(screen.queryByRole("button", { name: "Save Preferences" })).toBeNull();
+        expect(screen.queryByText("New Pull Requests")).toBeNull();
+    });
+});
