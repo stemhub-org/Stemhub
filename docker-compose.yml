@@ -51,7 +51,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
-    command: npm run dev
+    command: sh -c "npm ci && npm run dev"
     depends_on:
       - backend
 
