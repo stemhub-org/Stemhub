@@ -539,7 +539,7 @@ Full Gantt + Epitech deliverables table: [ROADMAP.md](./ROADMAP.md).
 | Milestone | Window | Deliverable |
 |---|---|---|
 | **M1** | Sep–Oct 2026 | Canonical JSON schema + PR base |
-| **M2** | Nov–Dec 2026 | Merge engine + Web PR diff |
+| **M2** | Nov–Dec 2026 | Pull requests (accept = branch promotion) + Web PR diff |
 | **M3** | Jan–Feb 2027 | Cloudflare R2 (or GCS) + StemHub plugin packaging |
 | **M4** | Mar–May 2027 | Beta support + hotfixes |
 | **M5** | May–Jun 2027 | Consolidation + optimizations |
@@ -658,3 +658,4 @@ DAW-neutral names for what a project file contains. The FL mixer diff uses them 
 | 2026-09-16 | Erwan (via Claude) | Initial consolidated specification. |
 | 2026-09-29 | Erwan | Vocabulary cleanup: §19 rewritten as the project-wide glossary (project file, asset, stem, mixdown, version, branch, save, restore, refresh, insert… with FL Studio / Ableton equivalents and the words each replaces); its pull request row also writes down the status rule the backend already enforces (`OPEN` until `MERGED` or `CLOSED`, both terminal). Wording elsewhere aligned to it (push/commit → save, pull → restore, session bundles → project file plus audio & MIDI assets stored content-addressed, Track entity removed from §7). Milestone deliverables (§17.1) are unchanged; only M3's "plugin" now reads "StemHub plugin". No decision, priority, KPI or commitment changed. |
 | 2026-09-29 | Erwan | Project model schema 0.1.0 (#170): the §19 Project model row links its format ([project-model.md](./project-model.md)); Volume is stored as a fader position with dB left empty until calibrated (M2), Pan as −1…+1. No decision, priority, KPI or commitment changed. |
+| 2026-11-19 | Raphaël | §17.1 M2 now reads "Pull requests (accept = branch promotion) + Web PR diff" instead of "Merge engine", in line with §2, §3 and §8 (automatic merge stays **Won't** for the school year). Same wording fixed in ROADMAP.md and roadmap.html. No decision changed. |
