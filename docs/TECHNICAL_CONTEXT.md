@@ -2,7 +2,7 @@
 
 ## 1. Data & GDPR (Data Privacy)
 - **Collected Data**: Identity (Name, Email) and Intellectual Property (audio files such as .wav, DAW project files .flp / .als).
-- **Storage & Rights**: Secure hosting in the EU on Google Cloud (Cloud Run, Cloud SQL, Cloud Storage). The user retains 100% ownership of their files.
+- **Storage & Rights**: The user retains 100% ownership of their files. GCS is supported for file storage, with `localfs` available for development. EU hosting of the entire stack on Cloud Run and Cloud SQL is the target architecture, not the current deployment.
 - **Right to be Forgotten**: Deleting an account hides it at once and erases it permanently after a 30-day grace period (signing in again within that window cancels it): the account, its projects and their files. Deleting a single project only hides it (soft delete); its files are kept until the account is erased.
 - **Right to Portability**: Users can download an export of their data from their settings.
 
@@ -113,7 +113,7 @@ For a detailed visual representation and API contract, see the [Data & API Model
 ## 4. Security & DevOps
 - **Authentication**: Custom JWT-based auth with **HttpOnly Cookies**. Supports Google OAuth2.
 - **Encryption**: AES-256 for files at rest on GCS.
-- **CI/CD**: GitHub Actions runs the tests and builds the Docker stack on every pull request. The automated deployment to Cloud Run (staging on `dev`, production on `main` after approval) is planned, see [SPECIFICATION.md §10](./SPECIFICATION.md).
+- **CI/CD**: GitHub Actions runs the tests and Docker build for application changes in pull requests. The current deployment is configured on Vercel (frontend) and Railway (backend/PostgreSQL). Automated deployment to Cloud Run (staging on `dev`, production on `main` after approval) is planned, see [SPECIFICATION.md §10](./SPECIFICATION.md).
 
 ---
 
