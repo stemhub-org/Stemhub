@@ -2,6 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Keep the image's package installers above the audited security fixes.
+RUN python -m pip install --no-cache-dir --upgrade 'pip>=26.2' 'setuptools>=84.1.0'
+
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PullRequestPage from "./page";
 
@@ -47,6 +47,7 @@ interface Setup {
     collaborators?: unknown[];
     pr?: Record<string, unknown>;
     accept?: () => Response;
+    diff?: () => Response | Promise<Response>;
 }
 
 const mixerDiff = {
@@ -66,7 +67,7 @@ const mixerDiff = {
 const diffRequests = (fetchMock: ReturnType<typeof renderPage>) =>
     fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/pull-requests/pr1/diff"));
 
-function renderPage({ me = "owner", collaborators = [], pr = pullRequest(), accept }: Setup = {}) {
+function renderPage({ me = "owner", collaborators = [], pr = pullRequest(), accept, diff }: Setup = {}) {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
         const path = new URL(url).pathname;
         if (path === "/auth/me") return json({ id: me, username: me });
@@ -83,7 +84,7 @@ function renderPage({ me = "owner", collaborators = [], pr = pullRequest(), acce
         if (path === "/pull-requests/pr1/accept" && init?.method === "POST") {
             return accept ? accept() : json(pullRequest({ status: "MERGED", closed_by: me, closed_at: new Date().toISOString() }));
         }
-        if (path === "/pull-requests/pr1/diff") return json(mixerDiff);
+        if (path === "/pull-requests/pr1/diff") return diff ? diff() : json(mixerDiff);
         if (path === "/pull-requests/pr1") return json(pr);
         return json({ detail: "Not found" }, 404);
     });
@@ -186,6 +187,35 @@ describe("PullRequestPage", () => {
         await screen.findByText("MERGED");
         const accept = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/pull-requests/pr1/accept"));
         expect(JSON.parse(accept?.[1]?.body as string)).toEqual({ expected_source_head_version_id: "v-feat" });
+    });
+
+    it("cannot accept before the reviewed source version has loaded", async () => {
+        let resolveDiff!: (response: Response) => void;
+        const pending = new Promise<Response>((resolve) => { resolveDiff = resolve; });
+        const fetchMock = renderPage({ diff: () => pending });
+        const accept = await screen.findByRole("button", { name: "Accept" });
+        expect((accept as HTMLButtonElement).disabled).toBe(true);
+        fireEvent.click(accept);
+        expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/accept"))).toBe(false);
+        await act(async () => { resolveDiff(json(mixerDiff)); });
+        await waitFor(() => expect((accept as HTMLButtonElement).disabled).toBe(false));
+        fireEvent.click(accept);
+        await screen.findByText("MERGED");
+        const request = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/accept"));
+        expect(JSON.parse(request?.[1]?.body as string)).toEqual({ expected_source_head_version_id: "v-feat" });
+    });
+
+    it("cannot accept when loading the review failed", async () => {
+        renderPage({ diff: () => json({ detail: "Diff unavailable" }, 503) });
+        await screen.findByText("Couldn't load the changes");
+        expect((screen.getByRole("button", { name: "Accept" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it.each(["no_source_version", "target_moved"])("cannot accept a review in state %s", async (status) => {
+        renderPage({ diff: () => json({ status, head_version_id: status === "target_moved" ? "v-feat" : null }) });
+        await waitFor(() => expect(screen.queryByLabelText("Loading changes…")).toBeNull());
+        const accept = await screen.findByRole("button", { name: "Accept" });
+        expect((accept as HTMLButtonElement).disabled).toBe(true);
     });
 
     it("reloads the changes when the source branch got a new version before accepting", async () => {
