@@ -1,6 +1,7 @@
 import hashlib
 import io
 import logging
+import tempfile
 import types
 from pathlib import Path
 from uuid import UUID
@@ -224,3 +225,21 @@ def test_gcs_storage_service_roundtrip(monkeypatch) -> None:
     downloaded = storage.resolve_blob_path(stored.path)
     assert downloaded.read_bytes() == payload
     downloaded.unlink()
+
+
+def test_local_blob_upload_when_storage_and_system_temp_are_on_different_filesystems() -> None:
+    mounted_tmp = Path("/dev/shm")
+    if not mounted_tmp.is_dir() or mounted_tmp.stat().st_dev == Path(tempfile.gettempdir()).stat().st_dev:
+        pytest.skip("Requires a second writable filesystem, such as Linux /dev/shm")
+
+    with tempfile.TemporaryDirectory(prefix="stemhub-storage-", dir=mounted_tmp) as root:
+        storage = LocalFilesystemStorageService(Path(root))
+        payload = b"FLP upload across a mounted storage boundary"
+        project_id = UUID("11111111-1111-1111-1111-111111111111")
+        stored = storage.store_blob(project_id=project_id, source=io.BytesIO(payload))
+        assert stored.checksum_sha256 == hashlib.sha256(payload).hexdigest()
+        assert stored.size_bytes == len(payload)
+        assert storage.resolve_blob_path(stored.path).read_bytes() == payload
+        # A retry deduplicates the same content and leaves no staging files.
+        assert storage.store_blob(project_id=project_id, source=io.BytesIO(payload)) == stored
+        assert [p for p in Path(root).rglob("*") if p.is_file()] == [Path(root) / stored.path]

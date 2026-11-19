@@ -67,11 +67,11 @@ def _write_stream_and_hash(source: BinaryIO, destination: Path) -> tuple[int, st
     return size_bytes, checksum.hexdigest()
 
 
-def _hash_stream_to_tempfile(source: BinaryIO) -> tuple[Path, int, str]:
+def _hash_stream_to_tempfile(source: BinaryIO, *, directory: Path | None = None) -> tuple[Path, int, str]:
     checksum = hashlib.sha256()
     size_bytes = 0
 
-    fd, temp_path = tempfile.mkstemp(prefix="stemhub-upload-")
+    fd, temp_path = tempfile.mkstemp(prefix="stemhub-upload-", dir=directory)
     tmp = Path(temp_path)
     with os.fdopen(fd, "wb") as output:
         while True:
@@ -389,7 +389,10 @@ class LocalFilesystemStorageService(StorageService):
         source: BinaryIO,
     ) -> StoredObject:
         _rewind_if_possible(source)
-        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source)
+        # Stage on the storage filesystem so publishing also works on mounts.
+        blob_dir = self.root / "projects" / str(project_id) / "blobs"
+        blob_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path, size_bytes, checksum_sha256 = _hash_stream_to_tempfile(source, directory=blob_dir)
         try:
             relative_path = self._blob_relative_path(project_id, checksum_sha256)
             destination = self.root / relative_path
