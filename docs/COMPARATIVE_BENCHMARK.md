@@ -18,9 +18,9 @@ This document presents the Competitive Benchmark for StemHub. We use a Comparati
 | Specific Version Restoration | ✅ | ⚠️ Samples only | ⚠️ Complex | ⚠️ Limited | ❌ |
 | Branches (Experimentation) | ✅ | ❌ | ✅ | ❌ | ❌ |
 | **Collaboration** | | | | | |
-| Merging Multiple Contributions | ✅ | ❌ | ⚠️ Complex | ❌ | ❌ |
-| Conflict Management | ✅ | ❌ | ⚠️ Complex | ❌ | ❌ |
+| Merging Multiple Contributions | ⚠️ Pull requests (accept = branch promotion, no content merge) | ❌ | ⚠️ Complex | ❌ | ❌ |
+| Conflict Management | ❌ Not in MVP | ❌ | ⚠️ Complex | ❌ | ❌ |
 | Real-time Collaboration | ⚠️ V2 | ❌ | ❌ | ❌ | ✅ |
 | **DAW Support** | | | | | |
-| Multi-DAW Support | ✅ | ❌ | ⚠️ Manual | ⚠️ Manual | ✅ |
+| Multi-DAW Support | ⚠️ FL Studio first (Ableton stretch goal) | ❌ | ⚠️ Manual | ⚠️ Manual | ✅ |
 | Native DAW Plugin | ✅ | ❌ | ❌ | ❌ | ⚠️ External |

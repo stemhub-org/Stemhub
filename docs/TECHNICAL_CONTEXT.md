@@ -1,9 +1,10 @@
 # Compliance, Legal & Security Audit
 
 ## 1. Data & GDPR (Data Privacy)
-- **Collected Data**: Identity (Name, Email) and Intellectual Property (.wav Audio Files, .als Projects).
-- **Storage & Rights**: Secure hosting in EU (AWS/GCP). The user retains 100% ownership of their files.
-- **Right to be Forgotten**: Permanent and irreversible deletion of projects upon simple request.
+- **Collected Data**: Identity (Name, Email) and Intellectual Property (audio files such as .wav, DAW project files .flp / .als).
+- **Storage & Rights**: The user retains 100% ownership of their files. GCS is supported for file storage, with `localfs` available for development. EU hosting of the entire stack on Cloud Run and Cloud SQL is the target architecture, not the current deployment.
+- **Right to be Forgotten**: Deleting an account hides it at once and erases it permanently after a 30-day grace period (signing in again within that window cancels it): the account, its projects and their files. Deleting a single project only hides it (soft delete); its files are kept until the account is erased.
+- **Right to Portability**: Users can download an export of their data from their settings.
 
 ## 2. French Legal Framework (LCEN & CPI)
 - **Host Status (LCEN Law 2004)**: StemHub is not responsible for uploaded content but commits to immediate removal upon reporting (Notice & Takedown).
@@ -43,7 +44,7 @@
 
 - **Organization**: Defined roles (Product Owner / Rotating Scrum Master) and mandatory "Code Reviews" on GitHub.
 - **Legal**: Use of validated open-source ToS templates and consultation with external mentors.
-- **Skill Development**: Self-training (Peer-learning) on AWS optimization and audio algorithms.
+- **Skill Development**: Self-training (Peer-learning) on cloud cost optimization (Google Cloud) and audio algorithms.
 
 ---
 
@@ -94,8 +95,8 @@ For a detailed visual representation and API contract, see the [Data & API Model
 # StemHub Tech Stack Summary
 
 ## 1. Frontend (User Interface)
-- **Technology**: React.js (Single Page Application).
-- **Audio Visualization**: Wavesurfer.js to display waveforms and manage smooth playback.
+- **Technology**: Next.js (App Router, React 19, Tailwind CSS).
+- **Audio Playback**: Native HTML audio player for version mixdowns; the waveform display is a placeholder for now.
 - **UX/UI**: Design inspired by standards (Splice/Drive) for rapid adoption by musicians.
 
 ## 2. Backend (Logic & API)
@@ -112,7 +113,7 @@ For a detailed visual representation and API contract, see the [Data & API Model
 ## 4. Security & DevOps
 - **Authentication**: Custom JWT-based auth with **HttpOnly Cookies**. Supports Google OAuth2.
 - **Encryption**: AES-256 for files at rest on GCS.
-- **CI/CD**: Automated deployment pipeline (GitHub Actions) with Docker.
+- **CI/CD**: GitHub Actions runs the tests and Docker build for application changes in pull requests. The current deployment is configured on Vercel (frontend) and Railway (backend/PostgreSQL). Automated deployment to Cloud Run (staging on `dev`, production on `main` after approval) is planned, see [SPECIFICATION.md §10](./SPECIFICATION.md).
 
 ---
 
