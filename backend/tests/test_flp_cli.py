@@ -28,8 +28,9 @@ from flp_helpers import (
     utf16_text,
     var_event,
 )
-from stemhub.project_model.__main__ import main as cli_main
 from stemhub.project_model.flp_events import NOTE_NAME_NOT_SEARCHED, parse, scrub, serialize
+
+cli_main = cli_module.main
 
 
 def _write(tmp_path: Path, name: str, data: bytes) -> Path:
