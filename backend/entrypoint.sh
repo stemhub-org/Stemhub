@@ -3,22 +3,9 @@ set -e
 
 echo "Waiting for database..."
 
-# Extract host and port from DATABASE_URL for the connectivity check
-# Supports both postgresql:// and postgresql+asyncpg:// formats
-if [ -n "$DATABASE_URL" ]; then
-  DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|^postgresql(\+asyncpg)?://[^@]+@([^:/]+).*|\2|')
-  DB_PORT=$(echo "$DATABASE_URL" | sed -E 's|^postgresql(\+asyncpg)?://[^@]+@[^:]+:([0-9]+).*|\2|')
-  DB_PORT=${DB_PORT:-5432}
-else
-  DB_HOST="db"
-  DB_PORT="5432"
-fi
-
-echo "Connecting to database at ${DB_HOST}:${DB_PORT}..."
-
-while ! python -c "import socket; socket.create_connection(('${DB_HOST}', ${DB_PORT}))" 2>/dev/null; do
-  sleep 0.5
-done
+# Use the same PostgreSQL URL variants as the application, including IPv6 and
+# the default port. Do not interpolate credentials or hostnames into Python code.
+PYTHONPATH=./src python -m stemhub.wait_for_database
 echo "Database is up!"
 
 echo "Running database migrations..."

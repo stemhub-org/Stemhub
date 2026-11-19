@@ -41,7 +41,7 @@ function PullRequestActions({ projectId, pullRequest }: { projectId: string; pul
     const closePullRequest = useClosePullRequest(projectId);
     const acceptPullRequest = useAcceptPullRequest(projectId);
     // Same cached request as the "Changes" section: no extra call.
-    const { data: diff } = usePullRequestDiff(pullRequest.id, pullRequest.status === "OPEN");
+    const { data: diff, isError: diffFailed } = usePullRequestDiff(pullRequest.id, pullRequest.status === "OPEN");
 
     const ownerId = summary?.summary.project.owner.id;
     const role = ownerId ? projectRole(ownerId, currentUser?.id, collaborators) : null;
@@ -55,7 +55,7 @@ function PullRequestActions({ projectId, pullRequest }: { projectId: string; pul
             <div className="flex flex-wrap gap-3">
                 {canAccept && (
                     <Button
-                        disabled={busy}
+                        disabled={busy || diffFailed || !diff?.head_version_id || diff.status === "target_moved"}
                         loading={acceptPullRequest.isPending}
                         // Accept exactly the source version whose changes are on screen.
                         onClick={() =>
