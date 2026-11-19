@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Sun, User } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useHydrated } from "@/lib/useHydrated";
 import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
 import { Avatar } from "@/components/ui/Avatar";
 
@@ -23,7 +24,10 @@ export function ProjectHeader({
 }: ProjectHeaderProps) {
     const router = useRouter();
     const { resolvedTheme, setTheme } = useTheme();
-    const isDark = resolvedTheme === "dark";
+    // The server does not know the theme: render as light until hydrated,
+    // like the Sidebar, so the first render matches the server HTML.
+    const hydrated = useHydrated();
+    const isDark = hydrated && resolvedTheme === "dark";
 
     const handleOpenProfile = () => {
         router.push("/dashboard/profile");
@@ -89,7 +93,7 @@ export function ProjectHeader({
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
                         <span className="text-sm font-medium text-foreground">{username}</span>
-                        <span className="text-xs text-foreground/50">Free Plan</span>
+                        <span className="text-xs text-foreground/50">Beta</span>
                     </div>
                     <button
                         type="button"
