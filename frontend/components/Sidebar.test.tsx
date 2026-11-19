@@ -44,3 +44,22 @@ describe("Sidebar logout", () => {
         expect(localStorage.getItem("access_token")).toBeNull();
     });
 });
+
+describe("Sidebar storage", () => {
+    it("shows the real storage used and no plan to buy", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => new Response(JSON.stringify({ total_bytes: 1.5 * 1024 ** 3, projects: [] }), {
+                headers: { "Content-Type": "application/json" },
+            })),
+        );
+
+        renderSidebar(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+
+        expect(await screen.findByText("1.5 GB used")).toBeTruthy();
+        expect(screen.getByText("Free during the beta")).toBeTruthy();
+        expect(screen.queryByText(/Pro Plan/)).toBeNull();
+        expect(screen.queryByText(/100GB/)).toBeNull();
+        expect(screen.queryByRole("button", { name: "Upgrade Storage" })).toBeNull();
+    });
+});

@@ -159,6 +159,10 @@ We use **eager ref_count with a periodic sweep as safety net**:
 1. **Eager ref_count:** Incremented on version create (including PR acceptance), decremented on version (soft) delete. Both sides read the manifest through `manifests.blob_shas`, so a v1 and a v2 manifest count the same hashes going up and coming down. Accepting a PR increments each distinct referenced blob once, in the same transaction as the promoted version and PR status, even though it copies no files.
 2. **Periodic sweep:** `blob_gc.sweep_orphan_blobs` deletes blobs where `ref_count == 0 AND created_at < now() - 24h`: the storage bytes first, then the row. The 24h grace window prevents races where a client uploaded blobs but hasn't created the version yet. It is a callable, not a scheduler: an external scheduler (or an admin) runs it through `POST /api/admin/blobs/gc`.
 
+## Storage usage
+
+`GET /auth/me/storage` (`storage_usage.py`) reports, for each project the user owns, the sum of its `blob.size_bytes` and its blob count, plus the total; the Settings storage tab shows it. Blobs are deduplicated per project, so the sum is the space actually stored, not the sum of every version's files. Blobs waiting for the GC sweep still count (they are still stored); project preview mixdowns do not (their size is not in the database). There is no quota yet.
+
 ## Signed URLs
 
 **Downloads (GCS):** done. `GET /projects/{pid}/blobs/{sha256}` answers a `307` to `blob.generate_signed_url(expiration=15 min, method="GET")`, so the bytes never pass through the API server. On localfs the API serves the bytes itself.

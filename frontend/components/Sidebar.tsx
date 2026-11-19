@@ -12,7 +12,8 @@ import {
     LogOut,
 } from "lucide-react";
 import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
-import { Button } from "@/components/ui/Button";
+import { formatBytes } from "@/lib/format";
+import { useStorageUsage } from "@/lib/queries";
 import { useLogout } from "@/lib/useLogout";
 import { useHydrated } from "@/lib/useHydrated";
 
@@ -49,17 +50,19 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                             <BrandFigure className="h-7 w-auto" />
                             <Wordmark className="text-xl" />
                         </Link>
-                        {onToggleSidebar && (
-                            <button
-                                type="button"
-                                onClick={onToggleSidebar}
-                                aria-label="Close sidebar"
-                                className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-foreground/5 transition-colors"
-                            >
-                                <ChevronLeft size={18} className="text-foreground" />
-                            </button>
-                        )}
                     </div>
+                    {/* On the sidebar's edge, not next to the logo: the wordmark
+                        alone is wider than the space left between the paddings. */}
+                    {onToggleSidebar && (
+                        <button
+                            type="button"
+                            onClick={onToggleSidebar}
+                            aria-label="Close sidebar"
+                            className="absolute top-[4.25rem] -right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle bg-background-secondary shadow-sm hover:bg-background-tertiary transition-colors"
+                        >
+                            <ChevronLeft size={14} className="text-foreground" />
+                        </button>
+                    )}
 
                     <nav className="flex-1 py-10 px-6 space-y-1.5 overflow-y-auto">
                         {navigation.map((item) => {
@@ -105,22 +108,22 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                             </div>
                         </button>
 
-                        <div className="rounded-lg bg-background-secondary border border-border-subtle p-4">
-                            <p className="text-xs font-semibold text-foreground mb-1">Pro Plan</p>
-                            <p className="text-xs text-foreground-muted mb-3">25GB / 100GB used</p>
-                            <div className="w-full bg-background-tertiary rounded-full h-1 mb-4 overflow-hidden outline outline-1 outline-border-subtle">
-                                <div
-                                    className="bg-accent h-1 rounded-full"
-                                    style={{ width: "25%" }}
-                                ></div>
-                            </div>
-                            <Button variant="solid" size="sm" className="w-full">
-                                Upgrade Storage
-                            </Button>
-                        </div>
+                        <SidebarStorage />
                     </div>
                 </>
             )}
+        </div>
+    );
+}
+
+/** The real space the user's projects take (no plan or quota exists yet). */
+function SidebarStorage() {
+    const { data: usage } = useStorageUsage();
+
+    return (
+        <div className="rounded-lg bg-background-secondary border border-border-subtle p-4">
+            <p className="text-xs font-semibold text-foreground mb-1">Free during the beta</p>
+            {usage && <p className="text-xs text-foreground-muted">{formatBytes(usage.total_bytes)} used</p>}
         </div>
     );
 }

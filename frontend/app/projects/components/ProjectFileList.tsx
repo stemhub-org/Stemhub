@@ -1,14 +1,8 @@
 "use client";
 
 import { FileAudio } from "lucide-react";
+import { formatBytes } from "@/lib/format";
 import type { AssetSummary } from "@/types/project";
-
-function formatSize(bytes: number | null): string {
-    if (bytes == null) return "—";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 // Splits an asset's path so its folder can be shown dimmed before its file
 // name. Uses only `path`: `name` is a display name (no extension), not the
@@ -73,7 +67,7 @@ export function ProjectFileList({ assets, hasVersion, isLoading, loadError }: Pr
                                     </span>
                                 </span>
                                 <span className="text-sm uppercase text-foreground/70">{asset.file_type ?? "—"}</span>
-                                <span className="text-sm text-foreground/60">{formatSize(asset.size_bytes)}</span>
+                                <span className="text-sm text-foreground/60">{formatBytes(asset.size_bytes)}</span>
                             </li>
                         );
                     })}
