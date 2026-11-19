@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import secrets
 from fastapi.responses import JSONResponse, RedirectResponse
+from starlette.concurrency import run_in_threadpool
 
 from .database import get_db
 from .account_deletion import is_restorable, restorable, restore_account, schedule_deletion
@@ -279,7 +280,7 @@ async def register(user: UserCreate, request: Request, response: RedirectRespons
     if await is_username_taken(db, user.username):
         raise HTTPException(status_code=400, detail="Username already taken")
     
-    password_hash = get_password_hash(user.password)
+    password_hash = await run_in_threadpool(get_password_hash, user.password)
     db_user = User(email=user.email, username=user.username, password_hash=password_hash)
     db_user.legal_acceptances.extend(current_acceptances())
     db.add(db_user)
@@ -303,7 +304,8 @@ async def _authenticate(db: AsyncSession, email: str, password: str, request: Re
 
     result = await db.execute(select(User).where(User.email == email, restorable()))
     user = result.scalars().first()
-    password_ok = verify_password(password, user.password_hash if user else None)
+    # Bcrypt is CPU work: keep other users' requests moving while it runs.
+    password_ok = await run_in_threadpool(verify_password, password, user.password_hash if user else None)
     record_login_attempt(db, email, ip, succeeded=password_ok)
     if not password_ok:
         await db.commit()
@@ -454,12 +456,12 @@ async def update_me(user_update: UserUpdate, current_user: User = Depends(get_cu
 
 @router.put("/me/password")
 async def update_password(password_data: PasswordChangeRequest, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    if not verify_password(password_data.current_password, current_user.password_hash):
+    if not await run_in_threadpool(verify_password, password_data.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="L'ancien mot de passe est incorrect")
     if await is_password_pwned(password_data.new_password):
         raise HTTPException(status_code=400, detail=BREACHED_PASSWORD_MESSAGE)
 
-    current_user.password_hash = get_password_hash(password_data.new_password)
+    current_user.password_hash = await run_in_threadpool(get_password_hash, password_data.new_password)
     # Sign out every other device: whoever knew the old password and signed
     # in with it loses access. The session making the change stays.
     await db.execute(
@@ -501,8 +503,8 @@ async def delete_account(
     (account_deletion.py)."""
     if request_data.confirm_username != current_user.username:
         raise HTTPException(status_code=400, detail="The username you typed does not match your account")
-    if current_user.password_hash != UNUSABLE_PASSWORD_HASH and not verify_password(
-        request_data.password or "", current_user.password_hash
+    if current_user.password_hash != UNUSABLE_PASSWORD_HASH and not await run_in_threadpool(
+        verify_password, request_data.password or "", current_user.password_hash
     ):
         raise HTTPException(status_code=400, detail="Incorrect password")
 
