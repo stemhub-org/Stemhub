@@ -16,12 +16,13 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from .database import get_db
 from .account_deletion import is_restorable, restorable, restore_account, schedule_deletion
 from .data_export import export_user_data
+from .storage_usage import storage_usage
 from .legal import accept_current_versions, current_acceptances, has_accepted_current_versions
 from .login_throttle import ensure_login_allowed, record_login_attempt
 from .pwned_passwords import BREACHED_PASSWORD_MESSAGE, is_password_pwned
 from .rate_limit import enforce_rate_limit
 from .models import User, UserIdentity, UserSession
-from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, AccountDeletionRequest, AccountDeletionResponse, LoginRequest, MeResponse, TermsAcceptanceRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
+from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, AccountDeletionRequest, AccountDeletionResponse, LoginRequest, MeResponse, StorageUsageResponse, TermsAcceptanceRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
 from .security import ACCESS_TOKEN_EXPIRE_MINUTES, UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -513,6 +514,12 @@ async def delete_account(
 
 EXPORT_LIMIT = 5
 EXPORT_WINDOW = timedelta(hours=1)
+
+
+@router.get("/me/storage", response_model=StorageUsageResponse)
+async def get_my_storage(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The space each project the user owns takes (Settings, storage tab)."""
+    return await storage_usage(db, current_user)
 
 
 @router.get("/me/export")

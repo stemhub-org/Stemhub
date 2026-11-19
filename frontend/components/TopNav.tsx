@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Bell, Sun, User as UserIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useHydrated } from "@/lib/useHydrated";
+import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser } from "@/lib/queries";
@@ -16,7 +18,10 @@ type TopNavProps = {
 export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavProps) {
     const router = useRouter();
     const { resolvedTheme, setTheme } = useTheme();
-    const isDark = resolvedTheme === "dark";
+    // The server does not know the theme: render as light until hydrated,
+    // like the Sidebar, so the first render matches the server HTML.
+    const hydrated = useHydrated();
+    const isDark = hydrated && resolvedTheme === "dark";
     const { data: userData } = useCurrentUser();
 
     return (
@@ -42,12 +47,9 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                     </button>
                 )}
                 {onToggleSidebar && !sidebarOpen && (
-                    <Link
-                        href="/dashboard"
-                        className="text-2xl font-medium tracking-tight text-foreground"
-                        style={{ fontFamily: "var(--font-syne)" }}
-                    >
-                        StemHub<span className="text-accent">.</span>
+                    <Link href="/dashboard" aria-label="StemHub home" className="flex items-center gap-2 text-foreground">
+                        <BrandFigure className="h-7 w-auto" />
+                        <Wordmark className="text-xl" />
                     </Link>
                 )}
             </div>
@@ -85,7 +87,7 @@ export default function TopNav({ onToggleSidebar, sidebarOpen = true }: TopNavPr
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
                         <span className="text-sm font-medium">{userData?.username || "Producer"}</span>
-                        <span className="text-xs text-foreground/50">Free Plan</span>
+                        <span className="text-xs text-foreground/50">Beta</span>
                     </div>
                     <button
                         onClick={() => {

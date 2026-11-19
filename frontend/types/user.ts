@@ -17,6 +17,20 @@ export interface UserProfile {
     linked_providers?: string[];
 }
 
+// ── Storage used (GET /auth/me/storage, backend `StorageUsageResponse`). ──
+export interface ProjectStorageUsage {
+    id: string;
+    name: string;
+    size_bytes: number;
+    file_count: number;
+}
+
+/** Projects the user owns, largest first. */
+export interface StorageUsage {
+    total_bytes: number;
+    projects: ProjectStorageUsage[];
+}
+
 // ── Profile edits (PUT /auth/me, backend `UserUpdate`). Omitted fields are left unchanged. ──
 export interface ProfileUpdate {
     username?: string;
