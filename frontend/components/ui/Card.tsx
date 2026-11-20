@@ -29,7 +29,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
                     "rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle",
                     paddingClasses[padding],
                     interactive &&
-                        "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[0_0_20px_rgba(156,87,223,0.05)] transition-all duration-300 group",
+                        "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[var(--shadow-glow-accent)] transition-all duration-300 group",
                     isClickable && "cursor-pointer",
                     className
                 )}

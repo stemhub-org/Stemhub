@@ -16,6 +16,7 @@ export function ProjectSettings({ projectId, ownerId, currentUserId }: ProjectSe
     const router = useRouter();
     const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
     const [inviteUsername, setInviteUsername] = useState("");
+    const [inviteRole, setInviteRole] = useState<"Viewer" | "Editor">("Viewer");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export function ProjectSettings({ projectId, ownerId, currentUserId }: ProjectSe
             const data = await authFetch<Collaborator[]>(`/projects/${projectId}/collaborators/`);
             setCollaborators(data);
         } catch (err) {
-            console.error("Failed to load collaborators", err);
+            setError(err instanceof Error ? err.message : "Failed to load collaborators");
         }
     }, [projectId]);
 
@@ -46,11 +47,11 @@ export function ProjectSettings({ projectId, ownerId, currentUserId }: ProjectSe
         try {
             await authFetch(`/projects/${projectId}/collaborators/`, {
                 method: "POST",
-                body: JSON.stringify({ username: inviteUsername.trim() }),
+                body: JSON.stringify({ username: inviteUsername.trim(), role: inviteRole }),
             });
             setSuccessMsg(`User ${inviteUsername} added successfully!`);
             setInviteUsername("");
-            fetchCollaborators();
+            await fetchCollaborators();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to invite user");
         } finally {
@@ -66,7 +67,7 @@ export function ProjectSettings({ projectId, ownerId, currentUserId }: ProjectSe
             await authFetch(`/projects/${projectId}/collaborators/${userId}`, {
                 method: "DELETE",
             });
-            fetchCollaborators();
+            await fetchCollaborators();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to remove collaborator");
         } finally {
@@ -101,10 +102,10 @@ export function ProjectSettings({ projectId, ownerId, currentUserId }: ProjectSe
             </div>
             
             <div className="px-6 flex flex-col gap-4">
-                {error && <div className="text-red-500 text-sm bg-red-500/10 p-3 rounded-md">{error}</div>}
-                {successMsg && <div className="text-green-500 text-sm bg-green-500/10 p-3 rounded-md">{successMsg}</div>}
+                {error && <div role="alert" className="text-red-500 text-sm bg-red-500/10 p-3 rounded-md">{error}</div>}
+                {successMsg && <div role="status" className="text-green-500 text-sm bg-green-500/10 p-3 rounded-md">{successMsg}</div>}
 
-                <form onSubmit={handleInvite} className="flex gap-3">
+                <form onSubmit={handleInvite} className="flex flex-wrap gap-3">
                     <input
                         type="text"
                         placeholder="Username to invite..."
@@ -113,10 +114,20 @@ export function ProjectSettings({ projectId, ownerId, currentUserId }: ProjectSe
                         className="flex-1 bg-background-secondary dark:bg-background-tertiary border border-border-subtle rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
                         disabled={loading}
                     />
+                    <select
+                        aria-label="Collaborator access"
+                        value={inviteRole}
+                        onChange={(event) => setInviteRole(event.target.value as "Viewer" | "Editor")}
+                        disabled={loading}
+                        className="rounded-md border border-border-subtle bg-background-secondary px-3 py-2 text-sm"
+                    >
+                        <option value="Viewer">Viewer · read only</option>
+                        <option value="Editor">Editor · save versions</option>
+                    </select>
                     <button
                         type="submit"
                         disabled={loading || !inviteUsername.trim()}
-                        className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-accent-foreground px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
                     >
                         <UserPlus className="size-4" />
                         Invite
@@ -130,6 +141,7 @@ export function ProjectSettings({ projectId, ownerId, currentUserId }: ProjectSe
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-sm font-medium text-foreground">{c.user?.username || 'Unknown'}</span>
                                     <span className="text-xs text-foreground/60">{c.user?.email}</span>
+                                    <span className="text-xs text-foreground/60">{c.role}</span>
                                 </div>
                                 <button
                                     onClick={() => handleRemoveCollaborator(c.user_id)}

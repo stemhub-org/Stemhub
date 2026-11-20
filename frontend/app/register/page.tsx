@@ -2,9 +2,19 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
+import { Mail, Lock, User } from "lucide-react";
+import { PasswordVisibilityToggle } from "@/components/PasswordVisibilityToggle";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { API_URL, apiFetch, errorMessage } from "@/lib/api";
+import {
+  PASSWORD_MIN_LENGTH,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  newPasswordError,
+  usernameError,
+} from "@/lib/validation";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -12,36 +22,33 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+    const invalid =
+      usernameError(username) ??
+      newPasswordError(password) ??
+      (password !== confirmPassword ? "Passwords do not match" : null) ??
+      (acceptTerms ? null : "Please accept the Terms of Service and the Privacy Policy.");
+    if (invalid) {
+      setError(invalid);
       return;
     }
 
     try {
-      const response = await fetch(`${apiUrl}/auth/register`, {
+      await apiFetch("/auth/register", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, email, password }),
+        body: JSON.stringify({ username, email, password, accept_terms: acceptTerms }),
+        redirectOnUnauthorized: false,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || "Error while creating your account");
-      }
-
       router.push("/login");
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred");
+    } catch (err) {
+      setError(errorMessage(err, "Error while creating your account"));
     }
   };
 
@@ -52,7 +59,7 @@ export default function RegisterPage() {
           className="h-[800px] w-[800px] rounded-full opacity-20 blur-[150px]"
           style={{
             background:
-              "radial-gradient(circle, rgba(156,87,223,0.3) 0%, transparent 70%)",
+              "radial-gradient(circle, rgba(200,255,0,0.3) 0%, transparent 70%)",
           }}
         />
       </div>
@@ -88,14 +95,14 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <p className="mb-4 text-center text-sm font-light text-red-500">
+          <p role="alert" className="mb-4 text-center text-sm font-light text-red-500">
             {error}
           </p>
         )}
 
         <button
           type="button"
-          onClick={() => { window.location.href = `${apiUrl}/auth/login/google`; }}
+          onClick={() => { window.location.href = `${API_URL}/auth/login/google`; }}
           className="flex w-full items-center justify-center gap-3 rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 px-6 py-3.5 text-sm font-light transition-all duration-300 hover:border-foreground/20 hover:bg-background-secondary dark:hover:bg-background-tertiary"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >
@@ -140,6 +147,11 @@ export default function RegisterPage() {
             />
             <input
               type="text"
+              name="username"
+              autoComplete="username"
+              required
+              minLength={USERNAME_MIN_LENGTH}
+              maxLength={USERNAME_MAX_LENGTH}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Username"
@@ -156,6 +168,9 @@ export default function RegisterPage() {
             />
             <input
               type="email"
+              name="email"
+              autoComplete="email"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
@@ -172,24 +187,31 @@ export default function RegisterPage() {
             />
             <input
               type={showPassword ? "text" : "password"}
+              name="password"
+              autoComplete="new-password"
+              required
+              minLength={PASSWORD_MIN_LENGTH}
+              aria-describedby="register-password-hint register-password-strength"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3.5 pr-11 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
               style={{ fontFamily: "var(--font-jakarta)" }}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute top-1/2 right-4 -translate-y-1/2 text-foreground/30 transition-colors hover:text-foreground/60"
-            >
-              {showPassword ? (
-                <EyeOff size={16} strokeWidth={1.5} />
-              ) : (
-                <Eye size={16} strokeWidth={1.5} />
-              )}
-            </button>
+            <PasswordVisibilityToggle visible={showPassword} onToggle={() => setShowPassword(!showPassword)} />
           </div>
+          <p
+            id="register-password-hint"
+            className="-mt-2 pl-1 text-xs font-light text-foreground/30"
+            style={{ fontFamily: "var(--font-jakarta)" }}
+          >
+            At least {PASSWORD_MIN_LENGTH} characters.
+          </p>
+          <PasswordStrengthMeter
+            id="register-password-strength"
+            password={password}
+            userInputs={[username, email]}
+          />
 
           <div className="relative">
             <Lock
@@ -199,6 +221,9 @@ export default function RegisterPage() {
             />
             <input
               type={showPassword ? "text" : "password"}
+              name="confirm-password"
+              autoComplete="new-password"
+              required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm password"
@@ -206,6 +231,30 @@ export default function RegisterPage() {
               style={{ fontFamily: "var(--font-jakarta)" }}
             />
           </div>
+
+          <label
+            className="flex cursor-pointer items-start gap-2.5 pl-1 text-xs font-light leading-relaxed text-foreground/50"
+            style={{ fontFamily: "var(--font-jakarta)" }}
+          >
+            <input
+              type="checkbox"
+              name="accept-terms"
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-current"
+            />
+            <span>
+              I accept the{" "}
+              <Link href="/terms" target="_blank" className="text-foreground/70 underline-offset-2 hover:text-accent hover:underline">
+                Terms of Service
+              </Link>{" "}
+              and the{" "}
+              <Link href="/privacy" target="_blank" className="text-foreground/70 underline-offset-2 hover:text-accent hover:underline">
+                Privacy Policy
+              </Link>
+              .
+            </span>
+          </label>
 
           <button
             type="submit"
@@ -215,21 +264,6 @@ export default function RegisterPage() {
             Create my account
           </button>
         </form>
-
-        <p
-          className="mt-6 text-center text-xs font-light leading-relaxed text-foreground/30"
-          style={{ fontFamily: "var(--font-jakarta)" }}
-        >
-          By creating an account, you agree to our{" "}
-          <a href="#" className="text-foreground/50 hover:text-accent transition-colors duration-300">
-            Terms of Service
-          </a>{" "}
-          and{" "}
-          <a href="#" className="text-foreground/50 hover:text-accent transition-colors duration-300">
-            Privacy Policy
-          </a>
-          .
-        </p>
 
         <p
           className="mt-6 text-center text-sm font-light text-foreground/40"

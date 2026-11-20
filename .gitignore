@@ -30,3 +30,14 @@ backend/.secrets/
 
 # Python packaging build artifacts
 backend/src/*.egg-info/
+
+# Coverage outputs
+.coverage
+.coverage.*
+htmlcov/
+backend/htmlcov/
+backend/coverage.xml
+
+# Launch video production (local only)
+vidéo/
+docs/brand/

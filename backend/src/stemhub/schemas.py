@@ -1,15 +1,88 @@
+import re
+import unicodedata
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import AfterValidator, AliasChoices, BaseModel, Discriminator, EmailStr, Field, Tag, field_validator, model_validator
 
 # ── User Schemas ──
 
+def normalize_email(value: str) -> str:
+    """Emails are stored and compared in lowercase, so Foo@x.com and
+    foo@x.com are the same account (unique index uq_users_email_lower)."""
+    return value.strip().lower()
+
+
+# An email submitted by a client, in its stored (lowercase) form.
+NormalizedEmail = Annotated[EmailStr, AfterValidator(normalize_email)]
+
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 32
+
+
+def normalize_username(value: str) -> str:
+    """Canonical stored form of a username: NFKC-normalized (so fullwidth or
+    ligature variants collapse to their plain form), trimmed, and with inner
+    whitespace runs collapsed to one space. Uniqueness is then enforced
+    case-insensitively on this form (index uq_users_username_lower)."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip()
+
+
+def validate_username(value: str) -> str:
+    username = normalize_username(value)
+    if not USERNAME_MIN_LENGTH <= len(username) <= USERNAME_MAX_LENGTH:
+        raise ValueError(
+            f"Username must be between {USERNAME_MIN_LENGTH} and {USERNAME_MAX_LENGTH} characters"
+        )
+    if any(unicodedata.category(char).startswith("C") for char in username):
+        raise ValueError("Username contains invalid characters")
+    return username
+
+
+PASSWORD_MIN_LENGTH = 8
+# bcrypt only reads the first 72 bytes of a password and refuses longer ones.
+PASSWORD_MAX_BYTES = 72
+
+
+def validate_new_password(value: str) -> str:
+    """Rules for a password being chosen (not for one being checked at login,
+    so accounts created before these rules can still sign in). Length only,
+    no composition rules, as NIST SP 800-63B recommends."""
+    if len(value) < PASSWORD_MIN_LENGTH:
+        raise ValueError(f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
+    if len(value.encode("utf-8")) > PASSWORD_MAX_BYTES:
+        raise ValueError(f"Password must be at most {PASSWORD_MAX_BYTES} bytes")
+    return value
+
+
+def require_accepted_terms(value: bool) -> bool:
+    if not value:
+        raise ValueError("You must accept the Terms of Service and the Privacy Policy")
+    return value
+
+
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     username: str
     password: str
+    # The Terms of Service and Privacy Policy (legal.py); signing up requires it.
+    accept_terms: bool = Field(False, validate_default=True)
+
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, value: str) -> str:
+        return validate_username(value)
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, value: str) -> str:
+        return validate_new_password(value)
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _require_accepted_terms(cls, value: bool) -> bool:
+        return require_accepted_terms(value)
 
 class UserResponse(BaseModel):
     id: UUID
@@ -27,6 +100,38 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class MeResponse(UserResponse):
+    # False until the user has accepted the current versions of the Terms of
+    # Service and the Privacy Policy (legal.py): accounts created with Google
+    # or before acceptance was recorded, and everyone after a new version.
+    terms_accepted: bool
+    # External accounts the user can sign in with ("google"), from
+    # user_identity, so Settings shows the real link state.
+    linked_providers: list[str] = []
+
+
+class ProjectStorageUsage(BaseModel):
+    id: UUID
+    name: str
+    size_bytes: int
+    file_count: int
+
+
+class StorageUsageResponse(BaseModel):
+    # GET /auth/me/storage: projects the user owns, largest first.
+    total_bytes: int
+    projects: list[ProjectStorageUsage]
+
+
+class TermsAcceptanceRequest(BaseModel):
+    accept_terms: bool = Field(False, validate_default=True)
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _require_accepted_terms(cls, value: bool) -> bool:
+        return require_accepted_terms(value)
+
+
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -35,9 +140,16 @@ class UserUpdate(BaseModel):
     website: Optional[str] = None
     genres: Optional[list[str]] = None
 
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else validate_username(value)
+
 class Token(BaseModel):
     access_token: str
     token_type: str
+    # True when this sign-in cancelled the account's scheduled deletion.
+    account_restored: bool = False
 
 # ── Project Schemas ──
 
@@ -81,12 +193,25 @@ class BranchUpdate(BaseModel):
 class BranchResponse(BranchBase):
     id: UUID
     project_id: UUID
+    created_by: Optional[UUID] = None
     created_at: datetime
     is_deleted: bool
     deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+# ── User and branch references ──
+# Shared by pull request responses and the activity feed.
+
+class ActivityActor(BaseModel):
+    id: UUID
+    username: str
+
+class ActivityBranch(BaseModel):
+    id: UUID
+    name: str
+    is_deleted: bool
 
 # ── Pull Request Schemas ──
 
@@ -97,6 +222,18 @@ class PullRequestCreate(BaseModel):
     target_branch_id: UUID
     title: str = Field(min_length=1, max_length=255)
     description: Optional[str] = None
+
+class PullRequestAccept(BaseModel):
+    """Optional body of the accept request.
+
+    `expected_source_head_version_id` is the source version whose changes the
+    reviewer saw (the diff's `head_version_id`). Accepting is refused if the
+    source branch has a newer version, so nobody promotes changes they never
+    reviewed. Omitted: no such check (clients without a diff).
+    """
+
+    expected_source_head_version_id: Optional[UUID] = None
+
 
 class PullRequestResponse(BaseModel):
     id: UUID
@@ -114,6 +251,11 @@ class PullRequestResponse(BaseModel):
     closed_at: Optional[datetime] = None
     is_deleted: bool
     deleted_at: Optional[datetime] = None
+    # Who opened it (null when unknown) and both branches as they are now, so
+    # clients can show names without extra calls. Deleted branches included.
+    author: Optional[ActivityActor] = None
+    source_branch: ActivityBranch
+    target_branch: ActivityBranch
 
     class Config:
         from_attributes = True
@@ -124,7 +266,7 @@ class VersionResponse(BaseModel):
     id: UUID
     branch_id: UUID
     created_by: Optional[UUID] = None
-    commit_message: Optional[str] = None
+    message: Optional[str] = None
     parent_version_id: Optional[UUID] = None
     source_daw: Optional[str] = None
     source_project_filename: Optional[str] = None
@@ -138,46 +280,145 @@ class VersionResponse(BaseModel):
         from_attributes = True
 
 
-# ── Content-Addressed Manifest (v1) ──
+# ── Content-Addressed Manifest (v1 and v2) ──
 #
-# See docs/content-addressed-storage.md. Every blob reference is a hex
+# See docs/content-addressed-storage.md. Every file reference is a hex
 # SHA-256 that must already exist in the project's blob table (uploaded
 # via PUT /projects/{pid}/blobs/{sha256}) before a version can reference it.
+# The plugin writes v2; v1 is still accepted from older plugins. Stored
+# manifests are read back through stemhub.manifests, never through these models.
 
 _SHA256_HEX_RE = "^[0-9a-f]{64}$"
+MAX_MANIFEST_ASSETS = 500
+MAX_MANIFEST_PATH_LENGTH = 255
+
+# The DAWs a version can come from, spelled as stored and shown.
+SUPPORTED_SOURCE_DAWS = ("FL Studio", "Ableton Live")
+_SOURCE_DAW_BY_KEY = {name.casefold(): name for name in SUPPORTED_SOURCE_DAWS}
 
 
-class ManifestBlobRef(BaseModel):
+def normalize_source_daw(value: Optional[str]) -> Optional[str]:
+    """Map a DAW name to its supported spelling, ignoring case and extra spaces.
+
+    Blank means unknown (None). Applied on write only: stored rows are never rewritten.
+    """
+    if value is None:
+        return None
+    key = " ".join(value.split()).casefold()
+    if not key:
+        return None
+    if key not in _SOURCE_DAW_BY_KEY:
+        raise ValueError(f"source_daw must be one of: {', '.join(SUPPORTED_SOURCE_DAWS)}")
+    return _SOURCE_DAW_BY_KEY[key]
+
+
+class _VersionManifestBase(BaseModel):
+    source_daw: Optional[str] = Field(default=None, max_length=50)
+    source_project_filename: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("source_daw")
+    @classmethod
+    def _supported_source_daw(cls, value: Optional[str]) -> Optional[str]:
+        return normalize_source_daw(value)
+
+
+def _reject_other_asset_list(data: Any, *, manifest_version: int, asset_list: str, other_asset_list: str) -> Any:
+    # Other unknown keys are dropped, but a dropped asset list would let its files
+    # skip the existence check and ref counting, so it is refused instead.
+    if isinstance(data, dict) and other_asset_list in data:
+        raise ValueError(
+            f"A v{manifest_version} manifest lists its assets under "
+            f"'{asset_list}', not '{other_asset_list}'."
+        )
+    return data
+
+
+class ManifestFileRefV1(BaseModel):
+    """Legacy v1 file entry: the path is under ``filename``."""
+
     sha256: str = Field(pattern=_SHA256_HEX_RE)
     size_bytes: int = Field(ge=0)
-    filename: str = Field(min_length=1, max_length=255)
+    filename: str = Field(min_length=1, max_length=MAX_MANIFEST_PATH_LENGTH)
 
 
-class ManifestTrack(ManifestBlobRef):
+class ManifestAssetV1(ManifestFileRefV1):
+    """Legacy v1 asset entry, listed under ``tracks``. bpm/key/duration were never filled."""
+
     name: str = Field(min_length=1, max_length=255)
     bpm: Optional[int] = Field(default=None, ge=1, le=1000)
     key: Optional[str] = Field(default=None, max_length=10)
     duration_seconds: Optional[int] = Field(default=None, ge=0)
 
 
-class VersionManifestV1(BaseModel):
-    manifest_version: Literal[1] = 1
-    source_daw: Optional[str] = Field(default=None, max_length=50)
-    source_project_filename: Optional[str] = Field(default=None, max_length=255)
-    project_file: ManifestBlobRef
-    tracks: list[ManifestTrack] = Field(default_factory=list, max_length=500)
-    mixer_state: Optional[dict[str, Any]] = None
+class VersionManifestV1(_VersionManifestBase):
+    """Legacy manifest, still accepted from plugins built before v2."""
 
-    def all_blob_shas(self) -> set[str]:
-        shas = {self.project_file.sha256}
-        shas.update(t.sha256 for t in self.tracks)
-        return shas
+    manifest_version: Literal[1] = 1
+    project_file: ManifestFileRefV1
+    tracks: list[ManifestAssetV1] = Field(default_factory=list, max_length=MAX_MANIFEST_ASSETS)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_v2_asset_list(cls, data: Any) -> Any:
+        return _reject_other_asset_list(data, manifest_version=1, asset_list="tracks", other_asset_list="assets")
+
+
+class ManifestFileRef(BaseModel):
+    """A v2 file entry: the project file or one asset, by path in the project folder."""
+
+    sha256: str = Field(pattern=_SHA256_HEX_RE)
+    size_bytes: int = Field(ge=0)
+    path: str = Field(min_length=1, max_length=MAX_MANIFEST_PATH_LENGTH)
+
+
+class VersionManifestV2(_VersionManifestBase):
+    manifest_version: Literal[2] = 2
+    project_file: ManifestFileRef
+    assets: list[ManifestFileRef] = Field(default_factory=list, max_length=MAX_MANIFEST_ASSETS)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_v1_asset_list(cls, data: Any) -> Any:
+        return _reject_other_asset_list(data, manifest_version=2, asset_list="assets", other_asset_list="tracks")
+
+
+def _manifest_version_tag(value: Any) -> Optional[str]:
+    # manifest_version defaulted to 1 before v2, so older clients may omit it.
+    if isinstance(value, dict):
+        return str(value.get("manifest_version", 1))
+    manifest_version = getattr(value, "manifest_version", None)
+    return None if manifest_version is None else str(manifest_version)
+
+
+VersionManifest = Annotated[
+    Union[
+        Annotated[VersionManifestV1, Tag("1")],
+        Annotated[VersionManifestV2, Tag("2")],
+    ],
+    Discriminator(_manifest_version_tag),
+]
+
+
+# What plugins built before the rename sent when the user wrote no message.
+# Migration 316caf0fcfa9 cleared the stored rows holding it.
+LEGACY_PLUGIN_PLACEHOLDER_MESSAGE = "Save from plugin"
 
 
 class VersionFromManifestCreate(BaseModel):
-    commit_message: Optional[str] = Field(default=None, max_length=500)
+    # "commit_message" is still read so plugins built before the rename keep working.
+    message: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        validation_alias=AliasChoices("message", "commit_message"),
+    )
     parent_version_id: Optional[UUID] = None
-    manifest: VersionManifestV1
+    manifest: VersionManifest
+
+    @field_validator("message")
+    @classmethod
+    def _placeholder_means_no_message(cls, value: Optional[str]) -> Optional[str]:
+        # Exact match, like the migration: anything else is the user's own text.
+        return None if value == LEGACY_PLUGIN_PLACEHOLDER_MESSAGE else value
 
 
 # ── Collaborator Schemas ──
@@ -205,17 +446,62 @@ class DailyActivity(BaseModel):
 
 class ActivityStatsResponse(BaseModel):
     daily_activity: list[DailyActivity]
-    total_commits: int
+    total_versions: int
     total_contributors: int
 
 class ContributorStats(BaseModel):
     user_id: UUID
     username: str
     initials: str
-    commits: int
+    versions: int
 
 class TopContributorsResponse(BaseModel):
     contributors: list[ContributorStats]
+
+# ── Activity Feed Schemas ──
+
+# What happened in a project, derived from its versions, branches and pull
+# requests (issue #217). There is no event table: each type is read from the
+# timestamp that records it (see stemhub.activity).
+ActivityType = Literal[
+    "version_saved",
+    "version_deleted",
+    "branch_created",
+    "branch_deleted",
+    "pull_request_opened",
+    "pull_request_merged",
+    "pull_request_closed",
+]
+
+class ActivityVersion(BaseModel):
+    id: UUID
+    message: Optional[str] = None
+    source_daw: Optional[str] = None
+    source_project_filename: Optional[str] = None
+
+class ActivityPullRequest(BaseModel):
+    id: UUID
+    title: str
+    status: str
+    source_branch: ActivityBranch
+    target_branch: ActivityBranch
+
+class ActivityItem(BaseModel):
+    # "<type>:<entity id>": unique and stable across requests.
+    id: str
+    type: ActivityType
+    occurred_at: datetime
+    # Who did it, when it is recorded (versions saved, pull requests opened,
+    # merged or closed). None for branch events and deleted versions.
+    actor: Optional[ActivityActor] = None
+    branch: Optional[ActivityBranch] = None
+    version: Optional[ActivityVersion] = None
+    pull_request: Optional[ActivityPullRequest] = None
+
+class ActivityFeedResponse(BaseModel):
+    items: list[ActivityItem]
+    # Opaque; pass it back as `cursor` for the next page. None on the last page.
+    next_cursor: Optional[str] = None
 
 # ── Project Summary Schemas ──
 
@@ -228,7 +514,7 @@ class OwnerSummary(BaseModel):
 
 class VersionWithAuthor(BaseModel):
     id: UUID
-    commit_message: Optional[str] = None
+    message: Optional[str] = None
     created_at: datetime
     branch_name: str
     author: Optional[OwnerSummary] = None
@@ -245,7 +531,8 @@ class MixerDiffSummary(BaseModel):
 
 class MixerDiffChange(BaseModel):
     type: str
-    insert_iid: int
+    # FL Studio numbering (Master = 0); None for project-level changes (project_file_changed).
+    insert_index: Optional[int] = None
     insert_name: Optional[str] = None
     slot_index: Optional[int] = None
     before: Any = None
@@ -258,6 +545,28 @@ class MixerDiffResponse(BaseModel):
     changes: list[MixerDiffChange]
 
 
+class PullRequestDiffResponse(BaseModel):
+    """Mixer changes accepting an open pull request would apply (UI: "Changes").
+
+    `base` is the target branch's latest version, `head` the source branch's
+    latest version. Anything that prevents a comparison is a status, not an
+    error, so the pull request page always renders:
+    - compared: summary and changes are set;
+    - unsupported: not an FL Studio project, or its file cannot be read
+      (status_message says which);
+    - no_source_version / no_target_version: that branch has no version;
+    - target_moved: the target got new versions since the pull request was
+      opened, so accepting it would be refused.
+    """
+
+    status: Literal["compared", "unsupported", "no_source_version", "no_target_version", "target_moved"]
+    status_message: Optional[str] = None
+    base_version_id: Optional[UUID] = None
+    head_version_id: Optional[UUID] = None
+    summary: Optional[MixerDiffSummary] = None
+    changes: list[MixerDiffChange] = []
+
+
 class VersionDiffHistoryEntry(BaseModel):
     version: VersionWithAuthor
     compared_to_version_id: UUID | None = None
@@ -267,24 +576,25 @@ class VersionDiffHistoryEntry(BaseModel):
     changes: list[MixerDiffChange] = []
 
 
-class TrackSummary(BaseModel):
-    """A single stem/track surfaced for the repository overview UI.
+class AssetSummary(BaseModel):
+    """One audio or MIDI file of a version (UI: "Audio & MIDI files").
 
-    Sourced from `Version.manifest_json["tracks"]` (content-addressed
-    manifest, spec §7). A version with no manifest yields an empty list —
-    callers should treat that as "no per-track data available", not an error.
+    Read from the version's manifest (spec §7) through stemhub.manifests, in
+    either manifest version. A version with no manifest yields an empty list;
+    callers should treat that as "no file list available", not an error.
 
-    `file_type` is derived from the display filename and is display-only per
-    spec §7 (filenames are not authoritative); nothing downstream should
-    trust it for MIME dispatch or storage decisions.
+    `id` is "{sha256}:{position in the stored asset list}", counting skipped
+    malformed entries: two assets may hold the same bytes. `name` is the file
+    name without its extension, taken from `path` (v1 entries keep their stored
+    `name`), and `file_type` comes from `path`. Both are display-only per
+    spec §7 (filenames are not authoritative); nothing downstream should trust
+    them for MIME dispatch or storage decisions.
     """
 
     id: str
+    path: str
     name: str
     file_type: Optional[str] = None
-    bpm: Optional[int] = None
-    key: Optional[str] = None
-    duration_seconds: Optional[int] = None
     size_bytes: Optional[int] = None
 
 
@@ -310,15 +620,35 @@ class ProjectSummaryResponse(BaseModel):
 # ── Auth Schemas ──
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     password: str
+    # 30-day session and cookie instead of one day and a browser-session cookie.
+    remember_me: bool = False
+
+class AccountDeletionRequest(BaseModel):
+    # Typed by the user, as on GitHub, so an account is never deleted by a
+    # stray click.
+    confirm_username: str
+    # Required when the account has a password (not for Google-only accounts).
+    password: Optional[str] = None
+
+
+class AccountDeletionResponse(BaseModel):
+    # The account can be restored by signing in again until then.
+    erased_at: datetime
+
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
 
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password(cls, value: str) -> str:
+        return validate_new_password(value)
+
 class EmailChangeRequest(BaseModel):
-    new_email: EmailStr
+    new_email: NormalizedEmail
 
 # ── Explore & Community Schemas ──
 
@@ -329,7 +659,7 @@ class ExploreProjectResponse(BaseModel):
     category: str
     tags: Optional[list[str]] = None
     like_count: int = 0
-    bpm: Optional[int] = None
+    tempo_bpm: Optional[float] = None
     key: Optional[str] = None
     created_at: datetime
     owner: OwnerSummary

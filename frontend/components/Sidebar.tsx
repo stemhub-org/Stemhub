@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useState, useEffect } from "react";
 import {
     LayoutDashboard,
     Compass,
@@ -12,7 +11,11 @@ import {
     ChevronLeft,
     LogOut,
 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { BrandFigure, Wordmark } from "@/app/components/BrandMark";
+import { formatBytes } from "@/lib/format";
+import { useStorageUsage } from "@/lib/queries";
+import { useLogout } from "@/lib/useLogout";
+import { useHydrated } from "@/lib/useHydrated";
 
 const navigation = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -28,33 +31,11 @@ type SidebarProps = {
 
 export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps) {
     const pathname = usePathname();
-    const router = useRouter();
     const { resolvedTheme } = useTheme();
-    const [mounted, setMounted] = useState(false);
+    const hydrated = useHydrated();
+    const isLight = hydrated && resolvedTheme === "light";
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    const isLight = mounted && resolvedTheme === "light";
-
-    const handleLogout = async () => {
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            await fetch(`${apiUrl}/auth/logout`, {
-                method: "POST",
-                credentials: "include",
-            }).catch(() => {
-                // Ignore network errors to still allow client-side logout
-            });
-
-            if (typeof window !== "undefined") {
-                localStorage.removeItem("access_token");
-            }
-        } finally {
-            router.push("/login");
-        }
-    };
+    const handleLogout = useLogout();
 
     return (
         <div
@@ -65,25 +46,23 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
             {isOpen && (
                 <>
                     <div className="h-20 flex items-center justify-between px-8 border-b border-border-subtle">
-                        <Link href="/dashboard">
-                            <span
-                                className="text-2xl font-medium tracking-tight text-foreground"
-                                style={{ fontFamily: "var(--font-syne)" }}
-                            >
-                                StemHub<span className="text-accent">.</span>
-                            </span>
+                        <Link href="/dashboard" aria-label="StemHub home" className="flex items-center gap-2 text-foreground">
+                            <BrandFigure className="h-7 w-auto" />
+                            <Wordmark className="text-xl" />
                         </Link>
-                        {onToggleSidebar && (
-                            <button
-                                type="button"
-                                onClick={onToggleSidebar}
-                                aria-label="Close sidebar"
-                                className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-foreground/5 transition-colors"
-                            >
-                                <ChevronLeft size={18} className="text-foreground" />
-                            </button>
-                        )}
                     </div>
+                    {/* On the sidebar's edge, not next to the logo: the wordmark
+                        alone is wider than the space left between the paddings. */}
+                    {onToggleSidebar && (
+                        <button
+                            type="button"
+                            onClick={onToggleSidebar}
+                            aria-label="Close sidebar"
+                            className="absolute top-[4.25rem] -right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle bg-background-secondary shadow-sm hover:bg-background-tertiary transition-colors"
+                        >
+                            <ChevronLeft size={14} className="text-foreground" />
+                        </button>
+                    )}
 
                     <nav className="flex-1 py-10 px-6 space-y-1.5 overflow-y-auto">
                         {navigation.map((item) => {
@@ -94,7 +73,7 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                                     key={item.name}
                                     href={item.href}
                                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 group ${isActive
-                                            ? "bg-accent/10 text-accent border border-accent/20 shadow-[0_0_15px_rgba(156,87,223,0.1)]"
+                                            ? "bg-accent/10 text-accent border border-accent/20 shadow-[var(--shadow-glow-accent)]"
                                             : "text-foreground-muted hover:text-foreground hover:bg-gradient-to-r hover:from-background-secondary hover:to-accent/5 border border-transparent hover:border-accent/20"
                                         }`}
                                 >
@@ -129,22 +108,22 @@ export default function Sidebar({ isOpen = true, onToggleSidebar }: SidebarProps
                             </div>
                         </button>
 
-                        <div className="rounded-lg bg-background-secondary border border-border-subtle p-4">
-                            <p className="text-xs font-semibold text-foreground mb-1">Pro Plan</p>
-                            <p className="text-xs text-foreground-muted mb-3">25GB / 100GB used</p>
-                            <div className="w-full bg-background-tertiary rounded-full h-1 mb-4 overflow-hidden outline outline-1 outline-border-subtle">
-                                <div
-                                    className="bg-accent h-1 rounded-full"
-                                    style={{ width: "25%" }}
-                                ></div>
-                            </div>
-                            <Button variant="solid" size="sm" className="w-full">
-                                Upgrade Storage
-                            </Button>
-                        </div>
+                        <SidebarStorage />
                     </div>
                 </>
             )}
+        </div>
+    );
+}
+
+/** The real space the user's projects take (no plan or quota exists yet). */
+function SidebarStorage() {
+    const { data: usage } = useStorageUsage();
+
+    return (
+        <div className="rounded-lg bg-background-secondary border border-border-subtle p-4">
+            <p className="text-xs font-semibold text-foreground mb-1">Free during the beta</p>
+            {usage && <p className="text-xs text-foreground-muted">{formatBytes(usage.total_bytes)} used</p>}
         </div>
     );
 }

@@ -1,9 +1,10 @@
 # Compliance, Legal & Security Audit
 
 ## 1. Data & GDPR (Data Privacy)
-- **Collected Data**: Identity (Name, Email) and Intellectual Property (.wav Audio Files, .als Projects).
-- **Storage & Rights**: Secure hosting in EU (AWS/GCP). The user retains 100% ownership of their files.
-- **Right to be Forgotten**: Permanent and irreversible deletion of projects upon simple request.
+- **Collected Data**: Identity (Name, Email) and Intellectual Property (audio files such as .wav, DAW project files .flp / .als).
+- **Storage & Rights**: The user retains 100% ownership of their files. GCS is supported for file storage, with `localfs` available for development. EU hosting of the entire stack on Cloud Run and Cloud SQL is the target architecture, not the current deployment.
+- **Right to be Forgotten**: Deleting an account hides it at once and erases it permanently after a 30-day grace period (signing in again within that window cancels it): the account, its projects and their files. Deleting a single project only hides it (soft delete); its files are kept until the account is erased.
+- **Right to Portability**: Users can download an export of their data from their settings.
 
 ## 2. French Legal Framework (LCEN & CPI)
 - **Host Status (LCEN Law 2004)**: StemHub is not responsible for uploaded content but commits to immediate removal upon reporting (Notice & Takedown).
@@ -15,7 +16,7 @@
 - **Benchmark (Our Choices)**:
     - **Storage**: **Google Cloud Storage (GCS)** preferred over "Self-hosted" for its resilience and ISO 27001 certification. Supports local storage (`localfs`) for development.
     - **Encryption**: AES-256 (Banking Standard) for files at rest.
-    - **Access Control**: HttpOnly Cookies + JWT for secure session management. MFA (Strong Authentication) planned to counter account theft.
+    - **Access Control**: HttpOnly Cookies + JWT for secure sign-in sessions. MFA (Strong Authentication) planned to counter account theft.
 
 ---
 
@@ -27,7 +28,7 @@
     - Backend: Python (FastAPI)
     - Database: PostgreSQL
     - Storage: Google Cloud Storage (GCS)
-    - DAW Plugin: C++
+    - StemHub plugin (in the DAW): C++ (JUCE)
 
 ---
 
@@ -43,7 +44,7 @@
 
 - **Organization**: Defined roles (Product Owner / Rotating Scrum Master) and mandatory "Code Reviews" on GitHub.
 - **Legal**: Use of validated open-source ToS templates and consultation with external mentors.
-- **Skill Development**: Self-training (Peer-learning) on AWS optimization and audio algorithms.
+- **Skill Development**: Self-training (Peer-learning) on cloud cost optimization (Google Cloud) and audio algorithms.
 
 ---
 
@@ -52,11 +53,11 @@
 For a detailed visual representation and API contract, see the [Data & API Modeling](./DATA_API_MODELING.md).
 
 ## Database (Metadata): PostgreSQL
-- **Why?** Need for strict relations (A Project has multiple Versions, a Version has multiple Tracks). NoSQL (Mongo) would be too messy to manage precise versioning history (Git-like).
+- **Why?** Need for strict relations (a Project has Branches, a Branch has Versions, a Version references its files' blobs). NoSQL (Mongo) would be too messy to manage precise versioning history (Git-like).
 
 ## File Storage (Audio): Google Cloud Storage
 
-- **Imperative**: Heavy audio and snapshots files should be stored securely in the Cloud.
+- **Imperative**: Project files and their heavy audio & MIDI assets should be stored securely in the Cloud, each unique file once per project (see [content-addressed-storage.md](./content-addressed-storage.md)).
 - **Upload Architecture**: Uploads are now routed through the Python server which streams/stores them to the Cloud storage service (GCS), giving the backend more control over validation and metadata generation.
 
 ---
@@ -94,8 +95,8 @@ For a detailed visual representation and API contract, see the [Data & API Model
 # StemHub Tech Stack Summary
 
 ## 1. Frontend (User Interface)
-- **Technology**: React.js (Single Page Application).
-- **Audio Visualization**: Wavesurfer.js to display waveforms and manage smooth playback.
+- **Technology**: Next.js (App Router, React 19, Tailwind CSS).
+- **Audio Playback**: Native HTML audio player for version mixdowns; the waveform display is a placeholder for now.
 - **UX/UI**: Design inspired by standards (Splice/Drive) for rapid adoption by musicians.
 
 ## 2. Backend (Logic & API)
@@ -107,12 +108,12 @@ For a detailed visual representation and API contract, see the [Data & API Model
 ## 3. Infrastructure & Storage (Cloud)
 - **Database**: PostgreSQL (Relational) to store links between Artists, Projects, and Versions.
 - **Heavy File Storage**: Google Cloud Storage.
-- **Upload Architecture**: Direct upload to FastAPI which proxies/streams the snapshot artifact to Cloud Storage.
+- **Upload Architecture**: Files (blobs) are uploaded to FastAPI, which streams them to Cloud Storage; downloads use signed GCS URLs.
 
 ## 4. Security & DevOps
 - **Authentication**: Custom JWT-based auth with **HttpOnly Cookies**. Supports Google OAuth2.
 - **Encryption**: AES-256 for files at rest on GCS.
-- **CI/CD**: Automated deployment pipeline (GitHub Actions) with Docker.
+- **CI/CD**: GitHub Actions runs the tests and Docker build for application changes in pull requests. The current deployment is configured on Vercel (frontend) and Railway (backend/PostgreSQL). Automated deployment to Cloud Run (staging on `dev`, production on `main` after approval) is planned, see [SPECIFICATION.md §10](./SPECIFICATION.md).
 
 ---
 
@@ -123,7 +124,7 @@ For a detailed visual representation and API contract, see the [Data & API Model
 ## Scrum Rituals
 - **Sprint Planning**: Defining objectives every 15 days.
 - **Daily Stand-up**: Synchronization point several times a week.
-- **Sprint Review**: Mandatory functional demo at the end of each sprint (e.g., "The plugin opens", "The push works").
+- **Sprint Review**: Mandatory functional demo at the end of each sprint (e.g., "The StemHub plugin opens", "Saving a version works").
 
 ## Adaptation to "Destinations"
 - **Asynchronous Communication**: Use of Discord for daily updates to counter potential time zones.

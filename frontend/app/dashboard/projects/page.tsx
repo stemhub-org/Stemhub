@@ -1,114 +1,53 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { Heart, GitBranch, Clock, Activity, Folder, Search, Plus, User, Loader2 } from "lucide-react";
-import { authFetch } from "@/lib/api";
+import { Heart, History, Clock, Activity, Folder, Search, Plus, User, Loader2 } from "lucide-react";
+import { errorMessage } from "@/lib/api";
+import { useCreateProject, useCurrentUser, useProjects } from "@/lib/queries";
 import { useToast } from "@/components/ToastProvider";
-import { Button } from "@/components/ui/Button";
+import { Avatar } from "@/components/ui/Avatar";
+import { ErrorState } from "@/components/ui/ErrorState";
 import NewProjectModal from "@/components/NewProjectModal";
 
-interface UserProfile {
-    id: string;
-    email: string;
-    username: string;
-    avatar_url?: string | null;
-    bio?: string | null;
-    location?: string | null;
-    website?: string | null;
-    genres?: string[] | null;
-    created_at: string;
-    is_active: boolean;
-}
-
-interface Project {
-    id: string;
-    owner_id: string;
-    name: string;
-    description?: string | null;
-    category?: string;
-    is_public: boolean;
-    created_at: string;
-    is_deleted: boolean;
-    deleted_at?: string | null;
-}
-
 export default function DashboardProjectsPage() {
-    const [user, setUser] = useState<UserProfile | null>(null);
-    const [projects, setProjects] = useState<Project[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const userQuery = useCurrentUser();
+    const projectsQuery = useProjects();
+    const createProject = useCreateProject();
     const [searchQuery, setSearchQuery] = useState("");
     const [favorites, setFavorites] = useState<Record<string, boolean>>({});
     const [showNewProject, setShowNewProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState("");
     const [newProjectDesc, setNewProjectDesc] = useState("");
     const [newProjectCategory, setNewProjectCategory] = useState("General");
-    const [creating, setCreating] = useState(false);
 
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
     const toast = useToast();
 
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            const [userRes, projectsRes] = await Promise.all([
-                authFetch<UserProfile>("/auth/me"),
-                authFetch<Project[]>("/projects/")
-            ]);
-
-            setUser(userRes);
-
-            const projectsData = Array.isArray(projectsRes)
-                ? projectsRes.filter((p: Project) => !p.is_deleted)
-                : [];
-
-            projectsData.sort(
-                (a, b) =>
-                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-            );
-
-            setProjects(projectsData);
-        } catch (err: any) {
-            console.error("Error fetching dashboard data:", err);
-            setError(err.message || "An error occurred while fetching data.");
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
     const handleCreateProject = async () => {
         if (!newProjectName.trim()) return;
-        setCreating(true);
         try {
-            const created = await authFetch<Project>("/projects/", {
-                method: "POST",
-                body: JSON.stringify({
-                    name: newProjectName.trim(),
-                    description: newProjectDesc.trim() || null,
-                    category: newProjectCategory,
-                }),
+            await createProject.mutateAsync({
+                name: newProjectName.trim(),
+                description: newProjectDesc.trim() || null,
+                category: newProjectCategory,
             });
-            setProjects((prev) => [created, ...prev]);
             setShowNewProject(false);
             setNewProjectName("");
             setNewProjectDesc("");
             setNewProjectCategory("General");
-        } catch (err: any) {
-            toast.error(err.message || "Failed to create project");
-        } finally {
-            setCreating(false);
+        } catch (err) {
+            toast.error(errorMessage(err, "Failed to create project"));
         }
     };
+
+    const user = userQuery.data;
+    const projects = [...(projectsQuery.data ?? [])].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
 
     const filteredProjects = projects.filter(p => 
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -132,42 +71,45 @@ export default function DashboardProjectsPage() {
         }).format(date);
     };
 
-    if (isLoading) {
+    if (userQuery.isPending || projectsQuery.isPending) {
         return (
             <div className="flex justify-center items-center min-h-[60vh]">
                 <Loader2 className="size-10 animate-spin text-accent" />
             </div>
         );
     }
-    
-    if (error) {
+
+    if (userQuery.isError || projectsQuery.isError) {
         return (
-            <div className="flex flex-col justify-center items-center min-h-[60vh] gap-4">
-                <p className="text-red-500 font-medium">Error loading dashboard</p>
-                <p className="text-foreground-muted text-sm">{error}</p>
-                <Button variant="outline" onClick={() => fetchData()}>
-                    Retry
-                </Button>
+            <div className="max-w-6xl mx-auto pt-6">
+                <ErrorState
+                    title="Error loading your projects"
+                    error={userQuery.error ?? projectsQuery.error}
+                    onRetry={() => {
+                        userQuery.refetch();
+                        projectsQuery.refetch();
+                    }}
+                />
             </div>
         );
     }
 
     return (
-        <div
-            className="max-w-6xl mx-auto pt-6 pb-10"
-            style={{ "--accent": "#9C57DF" } as React.CSSProperties}
-        >
+        <div className="max-w-6xl mx-auto pt-6 pb-10">
             <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10">
                 <aside className="w-full md:w-62 flex-shrink-0">
                     <div className="flex flex-col items-center md:items-start gap-4">
-                        <div className={`h-60 w-60 overflow-hidden rounded-full bg-gradient-to-tr from-accent to-accent/40 flex items-center justify-center border-2 ${isDark ? "border-transparent" : "border-white"}`}>
-                            {user?.avatar_url ? (
-                                <img src={user.avatar_url} alt={`${user.username}'s avatar`} className="h-full w-full object-cover rounded-full" />
-                            ) : (
-                                <span className="flex h-24 w-24 items-center justify-center rounded-full bg-black/15">
-                                    <User className="h-14 w-14 text-white/90" aria-hidden />
-                                </span>
-                            )}
+                        <div className={`h-60 w-60 overflow-hidden rounded-full bg-accent flex items-center justify-center border-2 ${isDark ? "border-transparent" : "border-white"}`}>
+                            <Avatar
+                                src={user?.avatar_url}
+                                alt={`${user?.username ?? "Your"}'s avatar`}
+                                className="h-full w-full object-cover rounded-full"
+                                fallback={
+                                    <span className="flex h-24 w-24 items-center justify-center rounded-full bg-accent-foreground/15">
+                                        <User className="h-14 w-14 text-accent-foreground" aria-hidden />
+                                    </span>
+                                }
+                            />
                         </div>
                         <div className="space-y-2 text-center md:text-left">
                             <h1
@@ -210,7 +152,7 @@ export default function DashboardProjectsPage() {
                         <button
                             type="button"
                             onClick={() => setShowNewProject(true)}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 text-base font-medium text-foreground dark:text-white bg-accent/25 border border-accent/35 backdrop-blur-xl shadow-[0_0_24px_rgba(156,87,223,0.18)] hover:bg-accent/35 hover:border-accent/50 transition-all duration-300"
+                            className="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 text-base font-medium text-foreground bg-accent/15 border border-accent/35 backdrop-blur-xl shadow-[var(--shadow-glow-accent)] hover:bg-accent/35 hover:border-accent/50 transition-all duration-300"
                         >
                             <Plus className="size-4" aria-hidden />
                             New
@@ -257,7 +199,7 @@ export default function DashboardProjectsPage() {
                                                         {formatDate(project.created_at)}
                                                     </span>
                                                     <span className="inline-flex items-center gap-1">
-                                                        <GitBranch className="size-3.5" aria-hidden />
+                                                        <History className="size-3.5" aria-hidden />
                                                         0 versions
                                                     </span>
                                                     <span className="inline-flex items-center gap-1">
@@ -304,7 +246,7 @@ export default function DashboardProjectsPage() {
                 onDescriptionChange={setNewProjectDesc}
                 category={newProjectCategory}
                 onCategoryChange={setNewProjectCategory}
-                creating={creating}
+                creating={createProject.isPending}
                 onCreate={handleCreateProject}
             />
         </div>

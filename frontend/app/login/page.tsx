@@ -2,51 +2,49 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock } from "lucide-react";
+import { PasswordVisibilityToggle } from "@/components/PasswordVisibilityToggle";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { API_URL, ApiError, apiFetch, errorMessage } from "@/lib/api";
+import { saveAccessToken } from "@/lib/authToken";
+import { useToast } from "@/components/ToastProvider";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
-
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const queryClient = useQueryClient();
+  const toast = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     try {
-      const response = await fetch(`${apiUrl}/auth/login`, {
+      const data = await apiFetch<{ access_token?: string; account_restored?: boolean }>("/auth/login", {
         method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, remember_me: rememberMe }),
+        redirectOnUnauthorized: false,
       });
-
-      if (!response.ok) {
-        throw new Error("Invalid credentials");
+      if (data?.access_token) {
+        saveAccessToken(data.access_token, { remember: rememberMe });
       }
-
-      const data = await response.json();
-      if (data.access_token) {
-        localStorage.setItem("access_token", data.access_token);
+      if (data?.account_restored) {
+        toast.success("Welcome back! Your account deletion has been cancelled.");
       }
+      // Start the new session without data cached for a previous user.
+      queryClient.clear();
       router.push("/dashboard");
     } catch (err: unknown) {
-      const isNetworkError =
-        err instanceof TypeError ||
-        (err instanceof Error && (err.message === "Failed to fetch" || err.message.includes("fetch")));
-      const message = isNetworkError
-        ? "Unable to reach the server. Make sure the backend is running and NEXT_PUBLIC_API_URL is correct."
-        : err instanceof Error
-          ? err.message
-          : "An unexpected error occurred";
-      setError(message);
+      setError(
+        err instanceof ApiError && err.isNetworkError
+          ? "Unable to reach the server. Make sure the backend is running and NEXT_PUBLIC_API_URL is correct."
+          : errorMessage(err, "Invalid credentials"),
+      );
     }
   };
 
@@ -57,7 +55,7 @@ export default function LoginPage() {
           className="h-[800px] w-[800px] rounded-full opacity-20 blur-[150px]"
           style={{
             background:
-              "radial-gradient(circle, rgba(156,87,223,0.3) 0%, transparent 70%)",
+              "radial-gradient(circle, rgba(200,255,0,0.3) 0%, transparent 70%)",
           }}
         />
       </div>
@@ -93,14 +91,14 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <p className="mb-4 text-center text-sm font-light text-red-500">
+          <p role="alert" className="mb-4 text-center text-sm font-light text-red-500">
             {error}
           </p>
         )}
 
         <button
           type="button"
-          onClick={() => { window.location.href = `${apiUrl}/auth/login/google`; }}
+          onClick={() => { window.location.href = `${API_URL}/auth/login/google`; }}
           className="flex w-full items-center justify-center gap-3 rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 px-6 py-3.5 text-sm font-light transition-all duration-300 hover:border-foreground/20 hover:bg-background-secondary dark:hover:bg-background-tertiary"
           style={{ fontFamily: "var(--font-jakarta)" }}
         >
@@ -167,20 +165,23 @@ export default function LoginPage() {
               className="w-full rounded-xl border border-foreground/[0.08] bg-background-secondary/50 dark:bg-background-tertiary/50 py-3.5 pr-11 pl-11 text-sm font-light text-foreground placeholder:text-foreground/30 transition-all duration-300 focus:border-accent/40 focus:outline-none"
               style={{ fontFamily: "var(--font-jakarta)" }}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute top-1/2 right-4 -translate-y-1/2 text-foreground/30 transition-colors hover:text-foreground/60"
-            >
-              {showPassword ? (
-                <EyeOff size={16} strokeWidth={1.5} />
-              ) : (
-                <Eye size={16} strokeWidth={1.5} />
-              )}
-            </button>
+            <PasswordVisibilityToggle visible={showPassword} onToggle={() => setShowPassword(!showPassword)} />
           </div>
 
-          <div className="text-right">
+          <div className="flex items-center justify-between">
+            <label
+              className="flex cursor-pointer items-center gap-2 text-xs font-light text-foreground/50"
+              style={{ fontFamily: "var(--font-jakarta)" }}
+            >
+              <input
+                type="checkbox"
+                name="remember-me"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-3.5 w-3.5 cursor-pointer accent-current"
+              />
+              Remember me for 30 days
+            </label>
             <a
               href="#"
               className="text-xs font-light text-foreground/40 transition-colors duration-300 hover:text-accent"

@@ -1,10 +1,14 @@
 import hashlib
 import io
+import logging
+import tempfile
 import types
+from pathlib import Path
 from uuid import UUID
 
 import pytest
 
+from stemhub import storage as storage_module
 from stemhub.storage import (
     GCSStorageService,
     LocalFilesystemStorageService,
@@ -12,6 +16,14 @@ from stemhub.storage import (
     StorageNotFoundError,
     get_storage_service,
 )
+
+
+@pytest.fixture
+def fresh_deprecation_warning():
+    # The deprecated root variable is warned about once per process; start from scratch.
+    storage_module._warn_that_the_legacy_root_env_is_deprecated.cache_clear()
+    yield
+    storage_module._warn_that_the_legacy_root_env_is_deprecated.cache_clear()
 
 
 def test_local_filesystem_storage_persists_blob_with_content_addressed_path(tmp_path) -> None:
@@ -39,20 +51,83 @@ def test_local_filesystem_storage_rejects_path_traversal(tmp_path) -> None:
 
 def test_get_storage_service_defaults_to_localfs(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("STEMHUB_STORAGE_PROVIDER", raising=False)
-    monkeypatch.setenv("STEMHUB_ARTIFACTS_ROOT", str(tmp_path / "artifacts"))
+    monkeypatch.delenv("STEMHUB_ARTIFACTS_ROOT", raising=False)
+    monkeypatch.setenv("STEMHUB_STORAGE_ROOT", str(tmp_path / "storage"))
     storage = get_storage_service()
     assert isinstance(storage, LocalFilesystemStorageService)
-    assert storage.root.name == "artifacts"
+    assert storage.root.name == "storage"
 
 
 def test_get_storage_service_localfs_uses_configured_root(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("STEMHUB_STORAGE_PROVIDER", "localfs")
-    monkeypatch.setenv("STEMHUB_ARTIFACTS_ROOT", str(tmp_path / "custom-artifacts"))
+    monkeypatch.delenv("STEMHUB_ARTIFACTS_ROOT", raising=False)
+    monkeypatch.setenv("STEMHUB_STORAGE_ROOT", str(tmp_path / "custom-storage"))
 
     storage = get_storage_service()
 
     assert isinstance(storage, LocalFilesystemStorageService)
-    assert storage.root == (tmp_path / "custom-artifacts").resolve()
+    assert storage.root == (tmp_path / "custom-storage").resolve()
+
+
+def test_get_storage_service_falls_back_to_the_deprecated_root_variable(tmp_path, monkeypatch, caplog, fresh_deprecation_warning) -> None:
+    monkeypatch.setenv("STEMHUB_STORAGE_PROVIDER", "localfs")
+    monkeypatch.delenv("STEMHUB_STORAGE_ROOT", raising=False)
+    monkeypatch.setenv("STEMHUB_ARTIFACTS_ROOT", str(tmp_path / "legacy-root"))
+
+    with caplog.at_level(logging.WARNING, logger="stemhub.storage"):
+        storage = get_storage_service()
+
+    assert isinstance(storage, LocalFilesystemStorageService)
+    assert storage.root == (tmp_path / "legacy-root").resolve()
+    assert any(
+        "STEMHUB_ARTIFACTS_ROOT" in record.getMessage() and "STEMHUB_STORAGE_ROOT" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_the_deprecated_root_variable_is_warned_about_once_per_process(tmp_path, monkeypatch, caplog, fresh_deprecation_warning) -> None:
+    # get_storage_service runs on every request, so warning each time would flood the logs.
+    monkeypatch.setenv("STEMHUB_STORAGE_PROVIDER", "localfs")
+    monkeypatch.delenv("STEMHUB_STORAGE_ROOT", raising=False)
+    monkeypatch.setenv("STEMHUB_ARTIFACTS_ROOT", str(tmp_path / "legacy-root"))
+
+    with caplog.at_level(logging.WARNING, logger="stemhub.storage"):
+        first = get_storage_service()
+        second = get_storage_service()
+
+    assert first.root == second.root == (tmp_path / "legacy-root").resolve()
+    deprecation_warnings = [
+        record for record in caplog.records if "STEMHUB_ARTIFACTS_ROOT" in record.getMessage()
+    ]
+    assert len(deprecation_warnings) == 1
+
+
+def test_get_storage_service_prefers_the_new_root_variable(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("STEMHUB_STORAGE_PROVIDER", "localfs")
+    monkeypatch.setenv("STEMHUB_STORAGE_ROOT", str(tmp_path / "new-root"))
+    monkeypatch.setenv("STEMHUB_ARTIFACTS_ROOT", str(tmp_path / "legacy-root"))
+
+    storage = get_storage_service()
+
+    assert storage.root == (tmp_path / "new-root").resolve()
+
+
+def test_get_storage_service_keeps_the_default_directory_so_existing_blobs_are_found(monkeypatch) -> None:
+    # Blobs already stored under the historical default must stay reachable.
+    backend_root = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(LocalFilesystemStorageService, "__init__", _record_root_only)
+    monkeypatch.setenv("STEMHUB_STORAGE_PROVIDER", "localfs")
+    monkeypatch.delenv("STEMHUB_STORAGE_ROOT", raising=False)
+    monkeypatch.delenv("STEMHUB_ARTIFACTS_ROOT", raising=False)
+
+    storage = get_storage_service()
+
+    assert storage.root == backend_root / "data" / "artifacts"
+
+
+def _record_root_only(self, root: Path) -> None:
+    # Skips the mkdir so the test never creates the real default directory.
+    self.root = root
 
 
 def test_get_storage_service_rejects_unknown_provider(monkeypatch) -> None:
@@ -150,3 +225,21 @@ def test_gcs_storage_service_roundtrip(monkeypatch) -> None:
     downloaded = storage.resolve_blob_path(stored.path)
     assert downloaded.read_bytes() == payload
     downloaded.unlink()
+
+
+def test_local_blob_upload_when_storage_and_system_temp_are_on_different_filesystems() -> None:
+    mounted_tmp = Path("/dev/shm")
+    if not mounted_tmp.is_dir() or mounted_tmp.stat().st_dev == Path(tempfile.gettempdir()).stat().st_dev:
+        pytest.skip("Requires a second writable filesystem, such as Linux /dev/shm")
+
+    with tempfile.TemporaryDirectory(prefix="stemhub-storage-", dir=mounted_tmp) as root:
+        storage = LocalFilesystemStorageService(Path(root))
+        payload = b"FLP upload across a mounted storage boundary"
+        project_id = UUID("11111111-1111-1111-1111-111111111111")
+        stored = storage.store_blob(project_id=project_id, source=io.BytesIO(payload))
+        assert stored.checksum_sha256 == hashlib.sha256(payload).hexdigest()
+        assert stored.size_bytes == len(payload)
+        assert storage.resolve_blob_path(stored.path).read_bytes() == payload
+        # A retry deduplicates the same content and leaves no staging files.
+        assert storage.store_blob(project_id=project_id, source=io.BytesIO(payload)) == stored
+        assert [p for p in Path(root).rglob("*") if p.is_file()] == [Path(root) / stored.path]

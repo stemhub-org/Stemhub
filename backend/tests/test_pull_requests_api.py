@@ -1,4 +1,4 @@
-"""Tests for the pull-request lifecycle endpoints (issue #250).
+"""Tests for the pull-request lifecycle endpoints (issues #250 and #253).
 
 Covers:
 - POST /projects/{pid}/pull-requests: create (captures both branch heads),
@@ -8,9 +8,15 @@ Covers:
 - GET /pull-requests/{id}: get by id, 404 without project access.
 - POST /pull-requests/{id}/close: OPEN → CLOSED with closed_at/closed_by; non-OPEN → 409.
 
-CLOSED is terminal (SPECIFICATION.md §7, §19): a closed PR is not reopened,
-users open a new one. The merge engine (issue #253) is out of scope: there is
-no /merge endpoint here.
+- POST /pull-requests/{id}/accept (#253): OPEN → MERGED by promoting the
+  source head onto the target; owner or Admin only; 409 when not open, a
+  branch was deleted, the source is empty or the target moved; row lock.
+- GET /pull-requests/{id}/diff (#254): mixer changes accepting would apply
+  (target head vs current source head); a status instead of an error when
+  there is nothing to compare; 409 when not open.
+
+CLOSED and MERGED are terminal (SPECIFICATION.md §19): a closed PR is not
+reopened, users open a new one.
 """
 from __future__ import annotations
 
@@ -18,15 +24,22 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import operators
 from sqlalchemy.sql.elements import False_, True_
+from sqlalchemy.sql.dml import Update
+from sqlalchemy.sql.selectable import Select
 
 from stemhub.auth import get_current_user
 from stemhub.database import get_db
+from stemhub.fl_mixer import FlMixer, FlMixerInsert
 from stemhub.models import Branch, Collaborator, Project, PullRequest, User, Version
+from stemhub.routers import pull_requests as pull_requests_module
 from stemhub.routers.pull_requests import router as pull_requests_router
+from stemhub.storage import get_storage_service
 
 
 # ── Fixtures ──
@@ -69,7 +82,7 @@ def _version(branch_id: uuid.UUID, *, created_at: datetime, is_deleted: bool = F
     return Version(
         id=uuid.uuid4(),
         branch_id=branch_id,
-        commit_message="v",
+        message="v",
         created_at=created_at,
         is_deleted=is_deleted,
     )
@@ -112,16 +125,19 @@ class FakeSession:
 
     def __init__(self, *, user: User) -> None:
         self.user = user
+        self.users: list[User] = [user]
         self.projects: list[Project] = []
         self.collaborators: list[Collaborator] = []
         self.branches: list[Branch] = []
         self.versions: list[Version] = []
         self.pull_requests: list[PullRequest] = []
         self.commit_calls = 0
+        self.statements: list[Any] = []
 
     # ── SQLAlchemy surface ──
 
     async def execute(self, stmt):
+        self.statements.append(stmt)
         return _FakeResult(self, stmt)
 
     def add(self, obj) -> None:
@@ -136,6 +152,14 @@ class FakeSession:
             if obj.is_deleted is None:
                 obj.is_deleted = False
             self.pull_requests.append(obj)
+        elif isinstance(obj, Version):
+            if obj.id is None:
+                obj.id = uuid.uuid4()
+            if obj.created_at is None:
+                obj.created_at = datetime.now(timezone.utc)
+            if obj.is_deleted is None:
+                obj.is_deleted = False
+            self.versions.append(obj)
         else:
             raise TypeError(f"FakeSession does not track {type(obj).__name__}")
 
@@ -155,6 +179,7 @@ class _FakeResult:
         entity = self.stmt.column_descriptions[0]["entity"]
         s = self.session
         rows_by_entity = {
+            User: s.users,
             Project: s.projects,
             Collaborator: s.collaborators,
             Branch: s.branches,
@@ -234,6 +259,8 @@ def _make_client(session: FakeSession) -> TestClient:
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_current_user] = override_user
+    # The diff endpoint reads project files through storage; tests stub the read itself.
+    app.dependency_overrides[get_storage_service] = lambda: None
     return TestClient(app)
 
 
@@ -282,9 +309,23 @@ def test_create_pull_request_returns_open_pr() -> None:
     assert session.commit_calls == 1
 
 
+def test_create_pull_request_returns_author_and_branches() -> None:
+    session, project, main, feature = _owned_project_session()
+    client = _make_client(session)
+
+    body = client.post(
+        f"/projects/{project.id}/pull-requests",
+        json={"source_branch_id": str(feature.id), "target_branch_id": str(main.id), "title": "Faster tempo"},
+    ).json()
+
+    assert body["author"] == {"id": str(session.user.id), "username": "demo"}
+    assert body["source_branch"] == {"id": str(feature.id), "name": "feature-fast-tempo", "is_deleted": False}
+    assert body["target_branch"] == {"id": str(main.id), "name": "main", "is_deleted": False}
+
+
 def test_create_pull_request_captures_branch_heads() -> None:
-    """The head of each branch (latest live version) is snapshotted at open time
-    so the merge engine can later detect that the target moved (issue #253)."""
+    """The head of each branch (latest live version) is recorded at open time
+    so accepting the pull request can later detect that the target moved (issue #253)."""
     session, project, main, feature = _owned_project_session()
     old = datetime(2026, 1, 1, tzinfo=timezone.utc)
     new = datetime(2026, 2, 1, tzinfo=timezone.utc)
@@ -375,7 +416,7 @@ def test_create_pull_request_rejects_same_source_and_target() -> None:
         json={
             "source_branch_id": str(main.id),
             "target_branch_id": str(main.id),
-            "title": "Self merge",
+            "title": "Into itself",
         },
     )
 
@@ -491,6 +532,30 @@ def test_list_pull_requests_returns_404_without_access() -> None:
     assert response.status_code == 404
 
 
+def _statements_on(session: FakeSession, entity: type) -> int:
+    return sum(1 for stmt in session.statements if stmt.column_descriptions[0]["entity"] is entity)
+
+
+def test_list_pull_requests_loads_authors_and_branches_in_two_queries() -> None:
+    session, project, main, feature = _owned_project_session()
+    other = _user()
+    other.username = "jb"
+    session.users.append(other)
+    session.pull_requests.extend([
+        _pull_request(project, feature, main, created_by=session.user.id),
+        _pull_request(project, main, feature, created_by=other.id),
+        _pull_request(project, feature, main, status="CLOSED", created_by=other.id),
+    ])
+    client = _make_client(session)
+
+    body = client.get(f"/projects/{project.id}/pull-requests").json()
+
+    assert sorted(pr["author"]["username"] for pr in body) == ["demo", "jb", "jb"]
+    assert all(pr["source_branch"]["name"] and pr["target_branch"]["name"] for pr in body)
+    assert _statements_on(session, User) == 1
+    assert _statements_on(session, Branch) == 1
+
+
 # ── Get by id ──
 
 
@@ -505,6 +570,30 @@ def test_get_pull_request_returns_pr() -> None:
     assert response.status_code == 200
     assert response.json()["id"] == str(pr.id)
     assert response.json()["status"] == "OPEN"
+
+
+def test_get_pull_request_shows_a_deleted_branch_as_deleted() -> None:
+    session, project, main, feature = _owned_project_session()
+    pr = _pull_request(project, feature, main, created_by=session.user.id)
+    session.pull_requests.append(pr)
+    feature.is_deleted = True
+    client = _make_client(session)
+
+    body = client.get(f"/pull-requests/{pr.id}").json()
+
+    assert body["source_branch"] == {"id": str(feature.id), "name": "feature-fast-tempo", "is_deleted": True}
+
+
+def test_get_pull_request_without_known_author_has_null_author() -> None:
+    session, project, main, feature = _owned_project_session()
+    pr = _pull_request(project, feature, main, created_by=None)
+    session.pull_requests.append(pr)
+    client = _make_client(session)
+
+    body = client.get(f"/pull-requests/{pr.id}").json()
+
+    assert body["author"] is None
+    assert body["target_branch"]["name"] == "main"
 
 
 def test_get_pull_request_returns_404_without_access() -> None:
@@ -555,6 +644,8 @@ def test_close_pull_request_marks_closed_with_timestamp_and_closer() -> None:
     assert body["status"] == "CLOSED"
     assert body["closed_at"] is not None
     assert body["closed_by"] == str(session.user.id)
+    assert body["source_branch"]["name"] == "feature-fast-tempo"
+    assert body["target_branch"]["name"] == "main"
     assert pr.status == "CLOSED"
     assert pr.closed_at is not None
     assert pr.closed_by == session.user.id
@@ -600,3 +691,450 @@ def test_close_pull_request_requires_write_access() -> None:
 
     assert response.status_code == 404
     assert pr.status == "OPEN"
+
+
+# ── Accept (issue #253) ──
+
+
+_MANIFEST = {"manifest_version": 2, "project_file": {"sha256": "a" * 64}, "assets": []}
+
+
+def _accept_session(*, target_has_head: bool = True):
+    """Owned project with an open PR from `feature` into `main`, whose heads
+    were captured when it was opened."""
+    session, project, main, feature = _owned_project_session()
+    opened = datetime(2026, 11, 1, tzinfo=timezone.utc)
+    main_head = _version(main.id, created_at=opened) if target_has_head else None
+    feature_head = _version(feature.id, created_at=opened)
+    feature_head.manifest_json = _MANIFEST
+    feature_head.manifest_version = 2
+    feature_head.source_daw = "FL Studio"
+    feature_head.source_project_filename = "beat.flp"
+    session.versions.extend([v for v in (main_head, feature_head) if v is not None])
+    pr = _pull_request(project, feature, main, created_by=session.user.id)
+    pr.source_head_version_id = feature_head.id
+    pr.target_head_version_id = main_head.id if main_head else None
+    session.pull_requests.append(pr)
+    return session, project, main, feature, pr, main_head, feature_head
+
+
+def _versions_on(session: FakeSession, branch: Branch) -> list[Version]:
+    return [v for v in session.versions if v.branch_id == branch.id]
+
+
+def test_accept_pull_request_promotes_the_source_head_onto_the_target() -> None:
+    session, _, main, _, pr, main_head, feature_head = _accept_session()
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "MERGED"
+    assert body["closed_by"] == str(session.user.id)
+    assert body["closed_at"] is not None
+    assert body["author"] == {"id": str(session.user.id), "username": "demo"}
+    assert body["target_branch"]["name"] == "main"
+    promoted = [v for v in _versions_on(session, main) if v.id != main_head.id]
+    assert len(promoted) == 1
+    version = promoted[0]
+    assert version.parent_version_id == main_head.id
+    assert version.created_by == session.user.id
+    assert version.message == "Accept PR: Faster tempo"
+    assert version.manifest_json == _MANIFEST
+    assert version.manifest_json is not feature_head.manifest_json
+    assert version.manifest_version == 2
+    assert version.source_daw == "FL Studio"
+    assert version.source_project_filename == "beat.flp"
+    assert session.commit_calls == 1
+
+
+def test_accept_pull_request_onto_an_empty_target_starts_its_history() -> None:
+    session, _, main, _, pr, _, _ = _accept_session(target_has_head=False)
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    [version] = _versions_on(session, main)
+    assert version.parent_version_id is None
+    assert version.manifest_json == _MANIFEST
+
+
+
+def test_accept_pull_request_refuses_one_that_is_not_open() -> None:
+    for status in ("CLOSED", "MERGED"):
+        session, _, main, _, pr, _, _ = _accept_session()
+        pr.status = status
+        before = list(session.versions)
+        client = _make_client(session)
+
+        response = client.post(f"/pull-requests/{pr.id}/accept")
+
+        assert response.status_code == 409, status
+        assert response.json()["detail"] == f"Pull request is already {status}"
+        assert pr.status == status
+        assert session.versions == before
+        assert session.commit_calls == 0
+
+
+def test_accept_pull_request_refuses_an_empty_source_branch() -> None:
+    session, _, _, feature, pr, _, feature_head = _accept_session()
+    feature_head.is_deleted = True  # the source's only version was deleted
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "The source branch has no version to promote"
+    assert pr.status == "OPEN"
+    assert session.commit_calls == 0
+
+
+def test_accept_pull_request_refuses_a_source_version_the_reviewer_has_not_seen() -> None:
+    """The page sends the source version its diff showed. If the branch got a
+    newer one since, accepting would promote changes nobody reviewed."""
+    session, _, _, feature, pr, _, feature_head = _accept_session()
+    session.versions.append(_version(feature.id, created_at=datetime(2026, 11, 5, tzinfo=timezone.utc)))
+    before = list(session.versions)
+    client = _make_client(session)
+
+    response = client.post(
+        f"/pull-requests/{pr.id}/accept",
+        json={"expected_source_head_version_id": str(feature_head.id)},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "The source branch has new versions since you reviewed the changes: review them before accepting"
+    )
+    assert pr.status == "OPEN"
+    assert session.versions == before
+    assert session.commit_calls == 0
+
+
+def test_accept_pull_request_promotes_the_source_version_the_reviewer_saw() -> None:
+    session, _, _, _, pr, _, feature_head = _accept_session()
+    client = _make_client(session)
+
+    response = client.post(
+        f"/pull-requests/{pr.id}/accept",
+        json={"expected_source_head_version_id": str(feature_head.id)},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "MERGED"
+
+
+def test_accept_pull_request_refuses_when_the_target_moved_since_it_was_opened() -> None:
+    """Accepting must never hide a target version the reviewer hasn't seen."""
+    for target_has_head in (True, False):
+        session, _, main, _, pr, _, _ = _accept_session(target_has_head=target_has_head)
+        newer = _version(main.id, created_at=datetime(2026, 11, 5, tzinfo=timezone.utc))
+        session.versions.append(newer)
+        client = _make_client(session)
+
+        response = client.post(f"/pull-requests/{pr.id}/accept")
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == (
+            "The target branch has new versions since this pull request was opened: "
+            "open a new pull request to review them"
+        )
+        assert pr.status == "OPEN"
+        assert session.commit_calls == 0
+
+
+def test_accept_pull_request_promotes_the_latest_source_version() -> None:
+    """New versions on the source after opening are part of what gets accepted."""
+    session, _, main, feature, pr, main_head, _ = _accept_session()
+    latest = _version(feature.id, created_at=datetime(2026, 11, 6, tzinfo=timezone.utc))
+    latest.manifest_json = {"manifest_version": 2, "project_file": {"sha256": "b" * 64}, "assets": []}
+    session.versions.append(latest)
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    [promoted] = [v for v in _versions_on(session, main) if v.id != main_head.id]
+    assert promoted.manifest_json == latest.manifest_json
+
+
+def test_accept_pull_request_refuses_when_a_branch_was_deleted() -> None:
+    for deleted in ("source", "target"):
+        session, _, main, feature, pr, _, _ = _accept_session()
+        (feature if deleted == "source" else main).is_deleted = True
+        before = list(session.versions)
+        client = _make_client(session)
+
+        response = client.post(f"/pull-requests/{pr.id}/accept")
+
+        assert response.status_code == 409, deleted
+        assert response.json()["detail"] == "The source or target branch was deleted"
+        assert pr.status == "OPEN"
+        assert session.versions == before
+
+
+def _as_collaborator(session: FakeSession, project: Project, role: str) -> User:
+    member = _user()
+    session.collaborators.append(Collaborator(project_id=project.id, user_id=member.id, role=role))
+    session.user = member
+    return member
+
+
+def test_accept_pull_request_is_open_to_admin_collaborators() -> None:
+    session, project, _, _, pr, _, _ = _accept_session()
+    admin = _as_collaborator(session, project, "Admin")
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    assert pr.closed_by == admin.id
+
+
+def test_accept_pull_request_is_forbidden_to_editors() -> None:
+    """Editors can open and close pull requests, but accepting is the owner's review."""
+    session, project, _, _, pr, _, _ = _accept_session()
+    _as_collaborator(session, project, "Editor")
+    client = _make_client(session)
+
+    response = client.post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only the project owner or an Admin can accept a pull request"
+    assert pr.status == "OPEN"
+
+
+def test_accept_pull_request_hides_the_pr_from_viewers_and_strangers() -> None:
+    for role in ("Viewer", None):
+        session, project, _, _, pr, _, _ = _accept_session()
+        if role:
+            _as_collaborator(session, project, role)
+        else:
+            session.user = _user()
+        client = _make_client(session)
+
+        response = client.post(f"/pull-requests/{pr.id}/accept")
+
+        assert response.status_code == 404, role
+        assert pr.status == "OPEN"
+
+
+@pytest.mark.parametrize("action", ["accept", "close"])
+def test_terminal_pull_request_actions_lock_the_pull_request_row(action: str) -> None:
+    """Both terminal transitions must serialize before checking OPEN."""
+    session, _, _, _, pr, _, _ = _accept_session()
+    client = _make_client(session)
+
+    client.post(f"/pull-requests/{pr.id}/{action}")
+
+    pr_reads = [
+        stmt for stmt in session.statements
+        if isinstance(stmt, Select) and stmt.column_descriptions[0]["entity"] is PullRequest
+    ]
+    assert pr_reads and pr_reads[0]._for_update_arg is not None
+
+
+@pytest.mark.parametrize("manifest_version, assets_key", [(1, "tracks"), (2, "assets")])
+def test_accept_counts_distinct_project_scoped_blobs_atomically(manifest_version, assets_key) -> None:
+    session, project, _, _, pr, _, source_head = _accept_session()
+    source_head.manifest_json = {
+        "manifest_version": manifest_version,
+        "project_file": {"sha256": "a" * 64},
+        assets_key: [{"sha256": sha} for sha in ("a" * 64, "b" * 64, "b" * 64)],
+    }
+
+    response = _make_client(session).post(f"/pull-requests/{pr.id}/accept")
+
+    assert response.status_code == 200, response.text
+    [increment] = [stmt for stmt in session.statements if isinstance(stmt, Update)]
+    compiled = increment.compile(dialect=postgresql.dialect())
+    assert "ref_count=(blob.ref_count +" in str(compiled)
+    assert compiled.params["ref_count_1"] == 1
+    assert compiled.params["project_id_1"] == project.id
+    assert set(compiled.params["sha256_1"]) == {"a" * 64, "b" * 64}
+    assert session.commit_calls == 1
+
+
+# ── Diff (issue #254) ──
+
+
+def _mixer(*, kick_volume: int) -> FlMixer:
+    return FlMixer(
+        inserts=(FlMixerInsert(index=1, name="Kick", enabled=True, volume=kick_volume, pan=0, slots=()),)
+    )
+
+
+def _diff_session(*, target_has_head: bool = True):
+    """`_accept_session` where the target head is an FL Studio project too."""
+    session, project, main, feature, pr, main_head, feature_head = _accept_session(target_has_head=target_has_head)
+    if main_head is not None:
+        main_head.source_daw = "FL Studio"
+    return session, main, feature, pr, main_head, feature_head
+
+
+def _stub_mixers(monkeypatch, mixers: dict[uuid.UUID, FlMixer | Exception]) -> None:
+    """Answer the project-file read with a mixer (or a failure) per version."""
+
+    async def fake_load_mixer_for_compare(*, version, project_id, db, storage):
+        del project_id, db, storage
+        result = mixers[version.id]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    monkeypatch.setattr(pull_requests_module, "load_mixer_for_compare", fake_load_mixer_for_compare)
+
+
+def test_diff_compares_the_target_head_with_the_current_source_head(monkeypatch) -> None:
+    """The diff shows what accepting would apply now, not what the source
+    looked like when the pull request was opened."""
+    session, _, feature, pr, main_head, feature_head = _diff_session()
+    newer = _version(feature.id, created_at=datetime(2026, 11, 5, tzinfo=timezone.utc))
+    newer.source_daw = "FL Studio"
+    session.versions.append(newer)
+    _stub_mixers(
+        monkeypatch,
+        {main_head.id: _mixer(kick_volume=100), feature_head.id: _mixer(kick_volume=110), newer.id: _mixer(kick_volume=120)},
+    )
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "compared"
+    assert body["base_version_id"] == str(main_head.id)
+    assert body["head_version_id"] == str(newer.id)
+    assert body["summary"]["total_changes"] == 1
+    [change] = body["changes"]
+    assert change["type"] == "insert_volume_changed"
+    assert change["insert_name"] == "Kick"
+    assert (change["before"], change["after"]) == (100, 120)
+    assert session.commit_calls == 0
+
+
+def test_diff_reports_a_target_that_moved_since_the_pull_request_was_opened(monkeypatch) -> None:
+    """Accept would refuse, so showing a diff would promise something that cannot happen."""
+    session, main, _, pr, _, _ = _diff_session()
+    session.versions.append(_version(main.id, created_at=datetime(2026, 11, 5, tzinfo=timezone.utc)))
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "target_moved"
+    assert body["summary"] is None
+    assert body["changes"] == []
+
+
+def test_diff_reports_a_source_branch_without_version(monkeypatch) -> None:
+    session, _, _, pr, _, feature_head = _diff_session()
+    feature_head.is_deleted = True
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "no_source_version"
+
+
+def test_diff_reports_a_target_branch_without_version(monkeypatch) -> None:
+    """Nothing to compare with: accepting would start the target's history."""
+    session, _, _, pr, _, feature_head = _diff_session(target_has_head=False)
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "no_target_version"
+    assert body["head_version_id"] == str(feature_head.id)
+    assert body["base_version_id"] is None
+
+
+def test_diff_reports_a_project_that_is_not_fl_studio(monkeypatch) -> None:
+    session, _, _, pr, main_head, _ = _diff_session()
+    main_head.source_daw = "Ableton Live"
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "unsupported"
+    assert body["status_message"] == "Only FL Studio projects can be compared"
+    assert body["changes"] == []
+
+
+def test_diff_reports_an_unreadable_project_file_instead_of_failing(monkeypatch) -> None:
+    session, _, _, pr, main_head, feature_head = _diff_session()
+    reason = "The project file of this version is missing from storage."
+    _stub_mixers(
+        monkeypatch,
+        {main_head.id: _mixer(kick_volume=100), feature_head.id: HTTPException(status_code=422, detail=reason)},
+    )
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "unsupported"
+    assert body["status_message"] == reason
+
+
+@pytest.mark.parametrize(
+    ("unreadable", "reason"),
+    [
+        ("source", "The mixer of the source branch's FL Studio project could not be read"),
+        ("target", "The mixer of the target branch's FL Studio project could not be read"),
+    ],
+)
+def test_diff_reports_a_project_whose_mixer_cannot_be_parsed(monkeypatch, unreadable: str, reason: str) -> None:
+    """A project file the parser cannot read loads as an empty mixer; comparing
+    it would list every insert of the other side as added or removed."""
+    session, _, _, pr, main_head, feature_head = _diff_session()
+    broken = FlMixer(inserts=(), mixer_supported=False, parse_error="unknown event")
+    mixers = {main_head.id: _mixer(kick_volume=100), feature_head.id: _mixer(kick_volume=110)}
+    mixers[feature_head.id if unreadable == "source" else main_head.id] = broken
+    _stub_mixers(monkeypatch, mixers)
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "unsupported"
+    assert body["status_message"] == reason
+    assert body["changes"] == []
+
+
+@pytest.mark.parametrize("status", ["CLOSED", "MERGED"])
+def test_diff_of_a_pull_request_that_is_not_open_is_409(monkeypatch, status: str) -> None:
+    session, _, _, pr, _, _ = _diff_session()
+    pr.status = status
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Only an open pull request has a diff"
+
+
+def test_diff_returns_404_without_access(monkeypatch) -> None:
+    session, _, _, pr, _, _ = _diff_session()
+    session.user = _user()
+    _stub_mixers(monkeypatch, {})
+    client = _make_client(session)
+
+    response = client.get(f"/pull-requests/{pr.id}/diff")
+
+    assert response.status_code == 404

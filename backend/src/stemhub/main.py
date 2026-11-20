@@ -1,10 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+import asyncio
+import contextlib
 import os
 import logging
 from contextlib import asynccontextmanager
 from .auth import router as auth_router
+from .routers.activity import router as activity_router
 from .routers.admin import router as admin_router
 from .routers.blobs import router as blobs_router
 from .routers.branches import router as branches_router
@@ -12,12 +15,15 @@ from .routers.collaborators import router as collaborators_router
 from .routers.community import router as community_router
 from .routers.explore import router as explore_router
 from .routers.projects import router as projects_router
+from .routers.project_models import router as project_models_router
 from .routers.pull_requests import router as pull_requests_router
 from .routers.stats import router as stats_router
 from .routers.versions import router as versions_router
-from .database import engine
+from .auth_purge import purge_auth_records_forever
+from .database import AsyncSessionLocal, engine
 from .migrations import check_migrations_async
 from .logging_config import RequestIdMiddleware, configure_logging
+from .validation_errors import install_validation_error_handler
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -33,9 +39,14 @@ async def lifespan(app: FastAPI):
         logger.error(f"Startup failed due to pending migrations: {e}")
         raise RuntimeError("Pending migrations found. Please run 'alembic upgrade head' before starting the application.") from e
 
+    purge = asyncio.create_task(purge_auth_records_forever(AsyncSessionLocal))
     yield
+    purge.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await purge
 
 app = FastAPI(title="StemHub API", lifespan=lifespan)
+install_validation_error_handler(app)
 
 # CORS should support both local host aliases commonly used during development.
 frontend_origins: list[str] = []
@@ -60,6 +71,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The web app names downloaded previews from this header.
+    expose_headers=["Content-Disposition"],
 )
 app.add_middleware(RequestIdMiddleware)
 
@@ -69,11 +82,13 @@ app.include_router(branches_router)
 app.include_router(versions_router)
 app.include_router(collaborators_router)
 app.include_router(stats_router)
+app.include_router(activity_router)
 app.include_router(admin_router)
 app.include_router(explore_router)
 app.include_router(community_router)
 app.include_router(blobs_router)
 app.include_router(pull_requests_router)
+app.include_router(project_models_router)
 
 
 @app.get("/")

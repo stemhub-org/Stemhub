@@ -1,0 +1,108 @@
+"use client";
+
+import Link from "next/link";
+import { Clock, ChevronRight } from "lucide-react";
+import type { VersionWithAuthor } from "@/types/project";
+import { formatDateTime, formatTimeAgo } from "@/lib/time";
+
+interface RecentVersionsProps {
+    versions: VersionWithAuthor[];
+    projectId?: string | null;
+    branchId?: string | null;
+}
+
+function getInitials(username: string): string {
+    return username.slice(0, 2).toUpperCase();
+}
+
+export function RecentVersions({ versions, projectId, branchId }: RecentVersionsProps) {
+    const historyHref = projectId
+        ? `/projects/history?id=${projectId}${branchId ? `&branch_id=${branchId}` : ""}`
+        : "/projects/history";
+
+    return (
+        <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <Clock className="size-4 text-foreground/60" aria-hidden />
+                    <h3
+                        className="pb-1 text-sm font-medium leading-relaxed text-foreground"
+                        style={{ fontFamily: "var(--font-syne)" }}
+                    >
+                        Recent Versions
+                    </h3>
+                    <span className="text-xs text-foreground/50">
+                        • {versions.length} recent
+                    </span>
+                </div>
+                <Link
+                    href={historyHref}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
+                    aria-label="View branch history"
+                >
+                    View all
+                    <ChevronRight className="size-3.5" aria-hidden />
+                </Link>
+            </div>
+            {versions.length === 0 ? (
+                <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-6 text-center">
+                    <p className="text-sm text-foreground/50">No versions yet</p>
+                </div>
+            ) : (
+                <ul className="flex flex-col gap-3" role="list">
+                    {versions.map((version) => {
+                        const authorName = version.author?.username || "Unknown";
+                        const initials = version.author
+                            ? getInitials(version.author.username)
+                            : "??";
+
+                        return (
+                            <li key={version.id}>
+                                <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] p-4">
+                                    <div className="flex gap-3">
+                                        <div
+                                            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground"
+                                            aria-hidden
+                                        >
+                                            {initials}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-2 text-sm">
+                                                <span className="font-medium text-foreground">
+                                                    {authorName}
+                                                </span>
+                                                <time
+                                                    dateTime={version.created_at}
+                                                    title={formatDateTime(version.created_at)}
+                                                    className="text-foreground/50"
+                                                >
+                                                    {formatTimeAgo(version.created_at)}
+                                                </time>
+                                            </div>
+                                            <p className="mt-1 text-sm text-foreground/80">
+                                                {version.message || "No message"}
+                                            </p>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                                                <span className="font-mono text-foreground/60">{version.branch_name}</span>
+                                                {version.source_daw && (
+                                                    <span className="rounded-md border border-border-subtle px-1.5 py-0.5 font-medium text-foreground/70">
+                                                        {version.source_daw}
+                                                    </span>
+                                                )}
+                                                {version.source_project_filename && (
+                                                    <span className="truncate font-mono text-foreground-muted">
+                                                        {version.source_project_filename}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </div>
+    );
+}

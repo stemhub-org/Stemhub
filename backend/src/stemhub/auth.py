@@ -1,18 +1,30 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy import func, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import jwt
 import os
+import re
+import uuid
+from datetime import datetime, timedelta, timezone
 import httpx
-import urllib.parse
 import secrets
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from starlette.concurrency import run_in_threadpool
 
 from .database import get_db
-from .models import User
-from .schemas import LoginRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
-from .security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
+from .account_deletion import is_restorable, restorable, restore_account, schedule_deletion
+from .data_export import export_user_data
+from .storage_usage import storage_usage
+from .legal import accept_current_versions, current_acceptances, has_accepted_current_versions
+from .login_throttle import ensure_login_allowed, record_login_attempt
+from .pwned_passwords import BREACHED_PASSWORD_MESSAGE, is_password_pwned
+from .rate_limit import enforce_rate_limit
+from .models import User, UserIdentity, UserSession
+from .schemas import USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, normalize_email, normalize_username, AccountDeletionRequest, AccountDeletionResponse, LoginRequest, MeResponse, StorageUsageResponse, TermsAcceptanceRequest, UserCreate, UserResponse, Token, UserUpdate, PasswordChangeRequest, EmailChangeRequest
+from .security import ACCESS_TOKEN_EXPIRE_MINUTES, UNUSABLE_PASSWORD_HASH, get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/swagger-login", auto_error=False)
@@ -23,6 +35,28 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "local").lower()
 
+async def is_username_taken(db: AsyncSession, username: str, *, exclude_user_id=None) -> bool:
+    """Case-insensitive twin of the unique index uq_users_username_lower, so
+    the client gets a 400 rather than a 500. The index remains the actual
+    guarantee under concurrent requests (see `_commit_user`)."""
+    query = select(User.id).where(func.lower(User.username) == func.lower(username))
+    if exclude_user_id is not None:
+        query = query.where(User.id != exclude_user_id)
+    result = await db.execute(query)
+    return result.first() is not None
+
+
+async def _commit_user(db: AsyncSession) -> None:
+    """Commit a new or updated user, turning a unique-index race into a 400."""
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        if "username" in str(exc.orig):
+            raise HTTPException(status_code=400, detail="Username already taken")
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+
 def ensure_https(url: str) -> str:
     """Ensure HTTPS in non-local environments."""
     if ENVIRONMENT != "local" and url.startswith("http://"):
@@ -32,6 +66,79 @@ def ensure_https(url: str) -> str:
 BACKEND_URL = ensure_https(os.getenv("BACKEND_URL", "http://localhost:8000"))
 FRONTEND_URL = ensure_https(os.getenv("FRONTEND_URL", "http://localhost:3000"))
 GOOGLE_REDIRECT_URI = ensure_https(os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_URL}/auth/callback/google"))
+
+SESSION_LIFETIME = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+# "Remember me" at login.
+REMEMBERED_SESSION_LIFETIME = timedelta(days=30)
+
+
+async def _start_session(db: AsyncSession, user: User, *, remember: bool = False) -> str:
+    """Record a server-side session for `user` and return its access token.
+    The token is only accepted while the session lives (see get_current_user)."""
+    expires_at = datetime.now(timezone.utc) + (REMEMBERED_SESSION_LIFETIME if remember else SESSION_LIFETIME)
+    session = UserSession(id=uuid.uuid4(), user_id=user.id, expires_at=expires_at)
+    db.add(session)
+    await db.commit()
+    return create_access_token(data={"sub": user.email, "sid": str(session.id)}, expires_at=expires_at)
+
+
+def _set_session_cookie(response: Response, token: str, *, remember: bool = False) -> None:
+    """A remembered session's cookie lasts as long as the session. Otherwise
+    it is a browser-session cookie, gone when the browser closes."""
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        max_age=int(REMEMBERED_SESSION_LIFETIME.total_seconds()) if remember else None,
+        secure=ENVIRONMENT != "local",
+        samesite="lax",
+    )
+
+
+def _request_session_ids(request: Request) -> list[uuid.UUID]:
+    """The sessions of every valid token the request carries, by priority:
+    1. Query parameter (explicitly passed, e.g. for audio)
+    2. HttpOnly Cookie (sign-in session, sent automatically)
+    3. Authorization Header (Standard/Swagger)
+    All are kept, not just the first: a stale cookie from an older sign-in
+    must not hide the valid token in the header."""
+    header_auth = request.headers.get("Authorization") or ""
+    tokens = [
+        request.query_params.get("token"),
+        request.cookies.get("access_token"),
+        header_auth.split(" ", 1)[1] if header_auth.startswith("Bearer ") else None,
+    ]
+    session_ids: list[uuid.UUID] = []
+    for token in tokens:
+        session_id = _session_id(token)
+        if session_id is not None and session_id not in session_ids:
+            session_ids.append(session_id)
+    return session_ids
+
+
+def _session_id(token: str | None) -> uuid.UUID | None:
+    """The session a valid, unexpired token belongs to."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return uuid.UUID(str(payload.get("sid")))
+    except (jwt.PyJWTError, ValueError):
+        return None
+
+
+async def _admit_social_sign_in(db: AsyncSession, user: User) -> bool:
+    """Social sign-in must not bring back an account an admin deactivated
+    (it used to reactivate it) nor one past its deletion grace period. Within
+    the grace period it cancels the deletion, like a password sign-in.
+    Returns whether it did; the caller commits."""
+    if not user.is_active or not is_restorable(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=INACTIVE_ACCOUNT_MESSAGE)
+    if not user.is_deleted:
+        return False
+    await restore_account(db, user)
+    return True
+
 
 @router.get("/login/google")
 async def login_google():
@@ -84,182 +191,204 @@ async def callback_google(request: Request, code: str, state: str | None = None,
 
         user_info_res = await client.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
         user_info = user_info_res.json()
-        email = user_info.get("email")
+        google_id = user_info.get("id")
+        email = normalize_email(user_info.get("email") or "")
         name = user_info.get("name")
         avatar_url = user_info.get("picture")
 
-        if not email:
-            raise HTTPException(status_code=400, detail="Failed to get email from Google")
+        if not google_id or not email:
+            raise HTTPException(status_code=400, detail="Failed to get account details from Google")
+        # A Google account seen for the first time is linked by email, so an
+        # unverified Google address would let anyone claim the StemHub account
+        # that uses it.
+        if user_info.get("verified_email") is not True:
+            raise HTTPException(status_code=400, detail="Your Google email address is not verified")
 
-        result = await db.execute(select(User).where(User.email == email))
+        result = await db.execute(
+            select(User)
+            .join(UserIdentity, UserIdentity.user_id == User.id)
+            .where(UserIdentity.provider == "google", UserIdentity.provider_user_id == str(google_id))
+        )
         user = result.scalars().first()
-        reactivated = False
+        needs_commit = False
+        restored = None  # Set once an existing account is admitted.
 
         if not user:
-            base_username = name.replace(" ", "").lower() if name else email.split("@")[0]
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalars().first()
+            if user:
+                # Admitted before linking, so no identity is added to an
+                # account that is refused.
+                restored = await _admit_social_sign_in(db, user)
+                db.add(UserIdentity(user_id=user.id, provider="google", provider_user_id=str(google_id), email=email))
+                needs_commit = True
+
+        if not user:
+            base_username = normalize_username(name.replace(" ", "").lower() if name else email.split("@")[0])
+            base_username = base_username[:USERNAME_MAX_LENGTH - 6].ljust(USERNAME_MIN_LENGTH, "0")
             username = base_username
             counter = 1
-            while True:
-                existing = await db.execute(select(User).where(User.username == username))
-                if not existing.scalars().first():
-                    break
+            while await is_username_taken(db, username):
                 username = f"{base_username}{counter}"
                 counter += 1
 
-            password_hash = get_password_hash(urllib.parse.quote(email) + "oauth_dummy")
-            user = User(email=email, username=username, password_hash=password_hash, avatar_url=avatar_url)
+            user = User(email=email, username=username, password_hash=UNUSABLE_PASSWORD_HASH, avatar_url=avatar_url)
+            user.identities.append(UserIdentity(provider="google", provider_user_id=str(google_id), email=email))
             db.add(user)
-            reactivated = True
+            needs_commit = True
         else:
+            if restored is None:
+                restored = await _admit_social_sign_in(db, user)
+            needs_commit = needs_commit or restored
             user.avatar_url = avatar_url
-            if not user.is_active:
-                user.is_active = True
-                reactivated = True
 
-        if reactivated:
-            await db.commit()
+        if needs_commit:
+            await _commit_user(db)
             await db.refresh(user)
 
-        jwt_token = create_access_token(data={"sub": user.email})
-        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
+        jwt_token = await _start_session(db, user)
+        restored_flag = "&account_restored=1" if restored else ""
+        redirect = RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}{restored_flag}")
+        # Replaces any cookie left by an earlier sign-in, as a password login does.
+        _set_session_cookie(redirect, jwt_token)
+        return redirect
+
+REGISTER_LIMIT = 10
+REGISTER_WINDOW = timedelta(hours=1)
+
 
 @router.post("/register", response_model=UserResponse)
-async def register(user: UserCreate, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
+async def register(user: UserCreate, request: Request, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
+    # Every attempt counts, refused ones too, so a script can neither mass
+    # create accounts nor probe which emails are registered.
+    if request.client:
+        await enforce_rate_limit(
+            db,
+            action="register",
+            key=request.client.host,
+            limit=REGISTER_LIMIT,
+            window=REGISTER_WINDOW,
+            message="Too many sign-ups from your network.",
+        )
+    if await is_password_pwned(user.password):
+        raise HTTPException(status_code=400, detail=BREACHED_PASSWORD_MESSAGE)
+
     result_email = await db.execute(select(User).where(User.email == user.email))
     if result_email.scalars().first():
         raise HTTPException(status_code=400, detail="Email already registered")
         
-    result_username = await db.execute(select(User).where(User.username == user.username))
-    if result_username.scalars().first():
+    if await is_username_taken(db, user.username):
         raise HTTPException(status_code=400, detail="Username already taken")
     
-    password_hash = get_password_hash(user.password)
+    password_hash = await run_in_threadpool(get_password_hash, user.password)
     db_user = User(email=user.email, username=user.username, password_hash=password_hash)
+    db_user.legal_acceptances.extend(current_acceptances())
     db.add(db_user)
-    await db.commit()
+    await _commit_user(db)
     await db.refresh(db_user)
     
     # Set cookie on registration too
-    access_token = create_access_token(data={"sub": db_user.email})
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=3600 * 24 * 7,
-        secure=ENVIRONMENT != "local",
-        samesite="lax",
-    )
+    access_token = await _start_session(db, db_user)
+    _set_session_cookie(response, access_token)
     
     return db_user
 
-@router.post("/swagger-login", response_model=Token)
-async def swagger_login(response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    # Swagger sends the user input in the "username" field, but we log in with email
-    result = await db.execute(select(User).where(User.email == form_data.username))
+async def _authenticate(db: AsyncSession, email: str, password: str, request: Request) -> tuple[User, bool]:
+    """The user these credentials belong to, and whether signing in cancelled
+    its scheduled deletion. Every failure gets the same 401 and takes as long,
+    so the response never reveals whether an email has an account. Only
+    someone who knows the password learns the account is deactivated.
+    Repeated failures are throttled (login_throttle.py)."""
+    ip = request.client.host if request.client else None
+    await ensure_login_allowed(db, email, ip)
+
+    result = await db.execute(select(User).where(User.email == email, restorable()))
     user = result.scalars().first()
-    if user and not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=INACTIVE_ACCOUNT_MESSAGE,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user or not verify_password(form_data.password, user.password_hash):
+    # Bcrypt is CPU work: keep other users' requests moving while it runs.
+    password_ok = await run_in_threadpool(verify_password, password, user.password_hash if user else None)
+    record_login_attempt(db, email, ip, succeeded=password_ok)
+    if not password_ok:
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = create_access_token(data={"sub": user.email})
+    if not user.is_active:
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=INACTIVE_ACCOUNT_MESSAGE,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    restored = user.is_deleted
+    if restored:
+        await restore_account(db, user)
+    # The successful attempt (and a restoration) is committed with the new session.
+    return user, restored
+
+@router.post("/swagger-login", response_model=Token)
+async def swagger_login(request: Request, response: RedirectResponse, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    # Swagger sends the user input in the "username" field, but we log in with email
+    user, restored = await _authenticate(db, normalize_email(form_data.username), form_data.password, request)
+    access_token = await _start_session(db, user)
     
     # Also set cookie for easier testing even in Swagger
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=3600 * 24, # 24 hours
-        secure=ENVIRONMENT != "local",
-        samesite="lax",
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+    _set_session_cookie(response, access_token)
+    return {"access_token": access_token, "token_type": "bearer", "account_restored": restored}
 
 @router.post("/login", response_model=Token)
-async def login(credentials: LoginRequest, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == credentials.email))
-    user = result.scalars().first()
-    if user and not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=INACTIVE_ACCOUNT_MESSAGE,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user or not verify_password(credentials.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+async def login(credentials: LoginRequest, request: Request, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
+    user, restored = await _authenticate(db, credentials.email, credentials.password, request)
+
+    access_token = await _start_session(db, user, remember=credentials.remember_me)
+    _set_session_cookie(response, access_token, remember=credentials.remember_me)
     
-    access_token = create_access_token(data={"sub": user.email})
-    
-    # Set HttpOnly Cookie
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=3600 * 24 * 7, # 7 days
-        secure=ENVIRONMENT != "local",
-        samesite="lax",
-    )
-    
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "account_restored": restored}
 
 @router.post("/logout")
-async def logout(response: RedirectResponse):
+async def logout(request: Request, response: RedirectResponse, db: AsyncSession = Depends(get_db)):
+    """Ends the sessions the request's tokens belong to, so they stop working
+    everywhere, not only in this browser."""
+    session_ids = _request_session_ids(request)
+    if session_ids:
+        await db.execute(
+            update(UserSession)
+            .where(UserSession.id.in_(session_ids), UserSession.revoked_at.is_(None))
+            .values(revoked_at=func.now())
+        )
+        await db.commit()
     response.delete_cookie("access_token")
     return {"message": "Logged out successfully"}
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
-    # Order of priority for tokens:
-    # 1. Query parameter (explicitly passed, e.g. for audio)
-    # 2. HttpOnly Cookie (automatic session)
-    # 3. Authorization Header (Standard/Swagger)
-    
-    token = request.query_params.get("token")
-    if not token:
-        token = request.cookies.get("access_token")
-    if not token:
-        # Fallback to header if neither cookie nor query param exists
-        header_auth = request.headers.get("Authorization")
-        if header_auth and header_auth.startswith("Bearer "):
-            token = header_auth.split(" ")[1]
-
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if not token:
+    session_ids = _request_session_ids(request)
+    if not session_ids:
         raise credentials_exception
 
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
-        if not isinstance(email, str):
-            raise credentials_exception
-    except jwt.PyJWTError:
-        raise credentials_exception
-        
     result = await db.execute(
-        select(User).where(
-            User.email == email,
+        select(User, UserSession.id)
+        .join(UserSession, UserSession.user_id == User.id)
+        .where(
+            UserSession.id.in_(session_ids),
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > func.now(),
             User.is_active == True,
             User.is_deleted == False,
         )
     )
-    user = result.scalars().first()
-    if user is None:
+    live = {session_id: user for user, session_id in result.all()}
+    # The first token, by priority, whose session is still live.
+    session_id = next((session_id for session_id in session_ids if session_id in live), None)
+    if session_id is None:
         raise credentials_exception
-    return user
+    request.state.session_id = session_id
+    return live[session_id]
 
 
 async def get_current_admin_user(
@@ -274,17 +403,38 @@ async def get_current_admin_user(
     return current_user
 
 
-@router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+async def _me(db: AsyncSession, user: User) -> MeResponse:
+    # A query rather than user.identities: lazy-loading a relationship
+    # fails under async SQLAlchemy.
+    providers = await db.execute(
+        select(UserIdentity.provider).where(UserIdentity.user_id == user.id).order_by(UserIdentity.provider)
+    )
+    return MeResponse(
+        **UserResponse.model_validate(user).model_dump(),
+        terms_accepted=await has_accepted_current_versions(db, user.id),
+        linked_providers=list(providers.scalars().all()),
+    )
+
+@router.get("/me", response_model=MeResponse)
+async def get_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await _me(db, current_user)
+
+@router.post("/me/terms", response_model=MeResponse)
+async def accept_terms(
+    _: TermsAcceptanceRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    """Accept the current Terms of Service and Privacy Policy, for users who
+    have not yet (Google sign-up, older accounts, a new version)."""
+    await accept_current_versions(db, current_user.id)
+    await db.commit()
+    return await _me(db, current_user)
 
 @router.put("/me", response_model=UserResponse)
 async def update_me(user_update: UserUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if user_update.username is not None:
-        if user_update.username != current_user.username:
-            result = await db.execute(select(User).where(User.username == user_update.username))
-            if result.scalars().first():
-                raise HTTPException(status_code=400, detail="Username already taken")
+        # Excluding the user's own row lets them change only the case of their name.
+        if await is_username_taken(db, user_update.username, exclude_user_id=current_user.id):
+            raise HTTPException(status_code=400, detail="Username already taken")
         current_user.username = user_update.username
 
     if user_update.avatar_url is not None:
@@ -300,16 +450,29 @@ async def update_me(user_update: UserUpdate, current_user: User = Depends(get_cu
         current_user.website = user_update.website
     if user_update.genres is not None:
         current_user.genres = user_update.genres
-    await db.commit()
+    await _commit_user(db)
     await db.refresh(current_user)
     return current_user
 
 @router.put("/me/password")
-async def update_password(password_data: PasswordChangeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    if not verify_password(password_data.current_password, current_user.password_hash):
+async def update_password(password_data: PasswordChangeRequest, request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if not await run_in_threadpool(verify_password, password_data.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="L'ancien mot de passe est incorrect")
-    
-    current_user.password_hash = get_password_hash(password_data.new_password)
+    if await is_password_pwned(password_data.new_password):
+        raise HTTPException(status_code=400, detail=BREACHED_PASSWORD_MESSAGE)
+
+    current_user.password_hash = await run_in_threadpool(get_password_hash, password_data.new_password)
+    # Sign out every other device: whoever knew the old password and signed
+    # in with it loses access. The session making the change stays.
+    await db.execute(
+        update(UserSession)
+        .where(
+            UserSession.user_id == current_user.id,
+            UserSession.id != request.state.session_id,
+            UserSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=func.now())
+    )
     await db.commit()
     return {"message": "Mot de passe mis à jour avec succès"}
 
@@ -327,4 +490,55 @@ async def update_email(email_data: EmailChangeRequest, current_user: User = Depe
     await db.refresh(current_user)
     return current_user
 
+
+@router.post("/me/delete", response_model=AccountDeletionResponse)
+async def delete_account(
+    request_data: AccountDeletionRequest,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ask for the account to be deleted. It is hidden and signed out at
+    once, and erased after the grace period unless the user signs in again
+    (account_deletion.py)."""
+    if request_data.confirm_username != current_user.username:
+        raise HTTPException(status_code=400, detail="The username you typed does not match your account")
+    if current_user.password_hash != UNUSABLE_PASSWORD_HASH and not await run_in_threadpool(
+        verify_password, request_data.password or "", current_user.password_hash
+    ):
+        raise HTTPException(status_code=400, detail="Incorrect password")
+
+    erased_at = await schedule_deletion(db, current_user)
+    await db.commit()
+    response.delete_cookie("access_token")
+    return AccountDeletionResponse(erased_at=erased_at)
+
+
+EXPORT_LIMIT = 5
+EXPORT_WINDOW = timedelta(hours=1)
+
+
+@router.get("/me/storage", response_model=StorageUsageResponse)
+async def get_my_storage(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The space each project the user owns takes (Settings, storage tab)."""
+    return await storage_usage(db, current_user)
+
+
+@router.get("/me/export")
+async def export_my_data(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Download everything StemHub holds about the account as JSON (GDPR
+    right of access and portability, see data_export.py)."""
+    await enforce_rate_limit(
+        db,
+        action="export",
+        key=str(current_user.id),
+        limit=EXPORT_LIMIT,
+        window=EXPORT_WINDOW,
+        message="Too many data exports.",
+    )
+    data = await export_user_data(db, current_user)
+    # Usernames may hold spaces or accents, which do not belong in a header.
+    safe_username = re.sub(r"[^A-Za-z0-9_.-]+", "_", current_user.username)
+    filename = f"stemhub-data-{safe_username}-{datetime.now(timezone.utc):%Y-%m-%d}.json"
+    return JSONResponse(content=data, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
