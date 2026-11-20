@@ -62,9 +62,12 @@ never a branch of the fork:
 
 - Local setups and CI install PyFLP from the submodule.
 - The Docker image copies the submodule into the build and installs it
-  (non-editable), so a CI or `docker compose` build needs the submodule checked
-  out (`git submodule update --init --recursive`), and the image must be
-  rebuilt after a bump.
+  (non-editable), so a CI or `docker compose` build should have the submodule
+  checked out (`git submodule update --init --recursive`), and the image must be
+  rebuilt after a bump. When the build context has an empty
+  `vendor/PyFLP_v2` (Railway does not include submodule contents), the image
+  fetches the `PYFLP_COMMIT` commit from GitHub instead, so deployed images
+  still run the pinned parser.
 - `src/stemhub/parser_version.py` records the full commit as `PYFLP_COMMIT`.
   Bump it together with the submodule pointer:
   `tests/test_parser_version.py` fails while they differ.
