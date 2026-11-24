@@ -4,4 +4,4 @@
 # commit as the submodule pointer: tests/test_parser_version.py fails while
 # the two differ. The backend image installs PyFLP from that submodule, so
 # this is also the parser that runs in production.
-PYFLP_COMMIT = "ff869060ac852d54ed71fcffab6b1c856c2f4d3e"
+PYFLP_COMMIT = "71e9a38f07756cfd38751be5649d3169d45aad4d"
