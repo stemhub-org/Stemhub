@@ -5,9 +5,12 @@ An FLP file is a 22-byte header followed by events::
     'FLhd'  u32 6  i16 format  u16 channel_count  u16 ppq
     'FLdt'  u32 data_len  events (data_len bytes)
 
-Each event is one id byte and a payload. Ids 0-63 carry 1 byte, 64-127 2 bytes,
+Each event is an id and a payload. Ids 0-63 carry 1 byte, 64-127 2 bytes,
 128-191 4 bytes, and 192-255 a LEB128 length then that many bytes (text and
-data). FL Studio has one exception so far, in ``PAYLOAD_SIZE_RULES``.
+data). An id above 255 is written as the byte 0xAC then the id as a u32, and
+its top 4 bits give the payload size the same way (``payload_size``): this is
+how FLEngine's event writer and reader handle every id (FL Studio 2026, checked
+in its arm64 code), and FL 25.2.3 and later write such ids.
 
 ``parse`` keeps every event as ``(id, payload)`` and ``serialize`` writes them
 back: ``serialize(parse(data)) == data`` for every file ``parse`` accepts. Values
@@ -29,12 +32,14 @@ from typing import FrozenSet, Iterable, Iterator, List, Mapping, Optional, Tuple
 
 Version = Tuple[int, ...]
 
-EVENT_0XAC = 0xAC  # 3 bytes, meaning unknown; FL 25.2.3+ writes it just before FL_STUDIO_TEXT_ID
-FL_STUDIO_TEXT_ID = 192  # "FL Studio <version>.<build>", only ever seen right after EVENT_0XAC
+EXTENDED_ID_ESCAPE = 0xAC  # written before an id above 255, itself a u32; never an event id
+MAX_EVENT_ID = 0xFFFFFFFF
+FL_STUDIO_TEXT_ID = 0xC0000101  # extended text event "FL Studio <version>.<build>", FL 25.2.3+
+EVENT_0X100 = 0x100  # extended 1-byte event, FL 26+, after the comments; 0 in every file seen
 FL_VERSION_ID = 199  # ASCII, e.g. "25.2.4.4960"
 LICENSEE_ID = 200  # the registered name, scrambled: personal data
 DATA_PATH_ID = 202  # the project's data folder, an absolute path
-TEXT_EVENT_IDS = frozenset((*range(192, 208), 231, 239, 241))
+TEXT_EVENT_IDS = frozenset((*range(192, 208), 231, 239, 241, FL_STUDIO_TEXT_ID))
 UNICODE_TEXT_SINCE: Version = (11, 5)  # text events are UTF-16LE from FL 11.5 on
 
 MAX_LENGTH_PREFIX_BYTES = 5  # a u32 in LEB128
@@ -42,20 +47,19 @@ _HEADER = struct.Struct("<4sIhHH4sI")
 _HEADER_CHUNK_SIZE = 6
 _MAX_U32 = 0xFFFFFFFF
 
-# How FL writes each event's payload: (first id, last id, payload size in bytes or
+# How FL reads each event's payload: (first id, last id, payload size in bytes or
 # None for a LEB128 length prefix). The last row that applies wins, so an exception
-# is one more row.
+# is one more row. 0xAC is not an event id (EXTENDED_ID_ESCAPE).
 PAYLOAD_SIZE_RULES: Tuple[Tuple[int, int, Optional[int]], ...] = (
     (0, 63, 1),
     (64, 127, 2),
     (128, 191, 4),
     (192, 255, None),
-    # 01 01 00, just before the "FL Studio <version>" text event 192. Seen in every
-    # FL 25.2.3 and 25.2.4 file and in no earlier one (12.9 to 25.2.0); neither PyFLP
-    # nor FLPEdit names it, so the rule holds whatever the version. check_structure()
-    # warns when the text event doesn't follow, i.e. when this rule misreads a file.
-    (EVENT_0XAC, EVENT_0XAC, 3),
 )
+# An extended id's payload, by its top 4 bits. FL reads no payload for the other values;
+# no file seen holds one, so check_structure() warns about them.
+EXTENDED_PAYLOAD_SIZES: Mapping[int, Optional[int]] = {0x0: 1, 0x4: 2, 0x8: 4, 0xC: None}
+_EXTENDED_ID = struct.Struct("<I")
 
 
 class FlpFormatError(ValueError):
@@ -93,8 +97,7 @@ class Event:
     def __post_init__(self) -> None:
         if not _is_int(self.id):
             raise TypeError("event id must be an int")
-        if not 0 <= self.id <= 0xFF:
-            raise FlpFormatError(f"event id {self.id} is outside 0..255")
+        _check_event_id(self.id)
         if not isinstance(self.payload, bytes):
             raise TypeError("event payload must be bytes")
         if self.length_width is None:
@@ -144,10 +147,32 @@ _PAYLOAD_SIZES: Tuple[Optional[int], ...] = tuple(
 
 
 def payload_size(event_id: int) -> Optional[int]:
-    """The payload size of an event in bytes; None: a LEB128 length prefix, then the payload."""
-    if not 0 <= event_id <= 0xFF:
-        raise FlpFormatError(f"event id {event_id} is outside 0..255")
-    return _PAYLOAD_SIZES[event_id]
+    """The payload size of an event in bytes; None: a LEB128 length prefix, then the payload.
+
+    Ids 0..255 follow PAYLOAD_SIZE_RULES; an extended id (above 255) follows its top
+    4 bits (EXTENDED_PAYLOAD_SIZES), and FL reads no payload (0) for the other values.
+    """
+    _check_event_id(event_id)
+    if event_id <= 0xFF:
+        return _PAYLOAD_SIZES[event_id]
+    return EXTENDED_PAYLOAD_SIZES.get(event_id >> 28, 0)
+
+
+def is_extended(event_id: int) -> bool:
+    """Whether FL writes the id as EXTENDED_ID_ESCAPE then a u32 (ids above 255)."""
+    return event_id > 0xFF
+
+
+def format_event_id(event_id: int) -> str:
+    """How tools show an id: decimal up to 255, 8-digit hex above (``0xc0000101``)."""
+    return f"0x{event_id:08x}" if is_extended(event_id) else str(event_id)
+
+
+def _check_event_id(event_id: int) -> None:
+    if not 0 <= event_id <= MAX_EVENT_ID:
+        raise FlpFormatError(f"event id {event_id} is outside 0..{MAX_EVENT_ID}")
+    if event_id == EXTENDED_ID_ESCAPE:
+        raise FlpFormatError(f"{EXTENDED_ID_ESCAPE} is the extended id escape, not an event id")
 
 
 def fl_version(file: FlpFile) -> Optional[Version]:
@@ -203,18 +228,37 @@ def _read_events(data: bytes, position: int, max_events: Optional[int]) -> Tuple
             raise FlpFormatError(f"more than {max_events} events: the event at offset {position} is past the cap")
         offset, event_id = position, data[position]
         position += 1
-        size = _PAYLOAD_SIZES[event_id]
+        if event_id == EXTENDED_ID_ESCAPE:
+            event_id, position = _read_extended_id(data, position, offset)
+        size = payload_size(event_id)
         width = None
         if size is None:
             size, width, position = _read_length(data, position, event_id, offset)
         if size > end - position:
             raise FlpFormatError(
-                f"event {event_id} at offset {offset} needs {size} bytes, {end - position} left"
+                f"event {format_event_id(event_id)} at offset {offset} needs {size} bytes, {end - position} left"
             )
         payload = data[position : position + size]
         position += size
         events.append(Event(event_id, payload, width))
     return tuple(events)
+
+
+def _read_extended_id(data: bytes, position: int, offset: int) -> Tuple[int, int]:
+    """The u32 id after EXTENDED_ID_ESCAPE, and the next position."""
+    if _EXTENDED_ID.size > len(data) - position:
+        raise FlpFormatError(f"event at offset {offset}: the extended id after {EXTENDED_ID_ESCAPE} runs past the end")
+    (event_id,) = _EXTENDED_ID.unpack_from(data, position)
+    if not is_extended(event_id):
+        # FL writes ids up to 255 as one byte: this one could not be written back as read.
+        raise FlpFormatError(f"event at offset {offset}: extended id {event_id} is below 256")
+    return event_id, position + _EXTENDED_ID.size
+
+
+def _encode_id(event_id: int) -> bytes:
+    if is_extended(event_id):
+        return bytes((EXTENDED_ID_ESCAPE,)) + _EXTENDED_ID.pack(event_id)
+    return bytes((event_id,))
 
 
 def _read_length(data: bytes, position: int, event_id: int, offset: int) -> Tuple[int, Optional[int], int]:
@@ -238,15 +282,14 @@ def serialize(file: FlpFile) -> bytes:
     """Write the file back. Refuses an event FL would read differently (FlpFormatError)."""
     parts = []
     for index, (event, size) in enumerate(_sized(file.events)):
-        parts.append(bytes((event.id,)))
+        parts.append(_encode_id(event.id))
+        name = format_event_id(event.id)
         if size is None:
             parts.append(_encode_length(len(event.payload), event.length_width or 0))
         elif event.length_width is not None:
-            raise FlpFormatError(f"event {event.id} (#{index}) is fixed-size: it has no length prefix")
+            raise FlpFormatError(f"event {name} (#{index}) is fixed-size: it has no length prefix")
         elif len(event.payload) != size:
-            raise FlpFormatError(
-                f"event {event.id} (#{index}) has a {len(event.payload)}-byte payload, FL reads {size}"
-            )
+            raise FlpFormatError(f"event {name} (#{index}) has a {len(event.payload)}-byte payload, FL reads {size}")
         parts.append(event.payload)
     body = b"".join(parts)
     if len(body) > _MAX_U32:
@@ -264,13 +307,13 @@ def event_offsets(file: FlpFile) -> Tuple[int, ...]:
     for event, size in _sized(file.events):
         offsets.append(position)
         prefix = 0 if size is not None else max(event.length_width or 0, _shortest_length_width(len(event.payload)))
-        position += 1 + prefix + len(event.payload)
+        position += len(_encode_id(event.id)) + prefix + len(event.payload)
     return tuple(offsets)
 
 
 def _sized(events: Iterable[Event]) -> Iterator[Tuple[Event, Optional[int]]]:
     for event in events:
-        yield event, _PAYLOAD_SIZES[event.id]
+        yield event, payload_size(event.id)
 
 
 def _shortest_length_width(value: int) -> int:
@@ -306,36 +349,30 @@ def decode_text(event: Event, version: Optional[Version] = None) -> str:
 def check_structure(file: FlpFile) -> Tuple[str, ...]:
     """Signs that a file which parses was read out of step, as warnings; () when none.
 
-    ``parse`` only knows sizes, so a wrong size rule can still give a file that
-    parses. This checks what every FL file seen has: a version event (199), and
-    right after each 0xAC the "FL Studio <version>" text event (192) naming that
-    version. After a warning, the events that follow can't be trusted. Warnings
-    give event ids, indexes and offsets only, never payload text.
+    ``parse`` only knows sizes, so a stream read out of step can still parse
+    (a stray 0xAC takes the next 4 bytes as an id). This checks what every FL
+    file seen has: a version event (199); every "FL Studio <version>" text event
+    (FL_STUDIO_TEXT_ID) naming that version; and no extended id whose top 4 bits
+    FL gives no payload (EXTENDED_PAYLOAD_SIZES). After a warning, the events
+    that follow can't be trusted. Warnings give event ids, indexes and offsets
+    only, never payload text.
     """
     version_text = next((decode_text(event) for event in file.events if event.id == FL_VERSION_ID), None)
     warnings = [] if version_text is not None else [f"no FL version event ({FL_VERSION_ID})"]
     offsets = event_offsets(file)
     version = fl_version(file)
     for index, event in enumerate(file.events):
-        if event.id != EVENT_0XAC:
-            continue
-        following = file.events[index + 1] if index + 1 < len(file.events) else None
-        problem = _after_0xac(following, version_text, version)
-        if problem:
-            warnings.append(f"event {EVENT_0XAC} (#{index} @{offsets[index]}) {problem}")
+        where = f"event {format_event_id(event.id)} (#{index} @{offsets[index]})"
+        if is_extended(event.id) and event.id >> 28 not in EXTENDED_PAYLOAD_SIZES:
+            warnings.append(f"extended {where} has no payload class (top 4 bits 0x{event.id >> 28:x})")
+        elif event.id == FL_STUDIO_TEXT_ID and not _names_the_version(event, version_text, version):
+            warnings.append(f"{where} is a text that does not name the FL version (event {FL_VERSION_ID})")
     return tuple(warnings)
 
 
-def _after_0xac(following: Optional[Event], version_text: Optional[str], version: Optional[Version]) -> str:
-    expected = f"the 'FL Studio <version>' text event {FL_STUDIO_TEXT_ID}"
-    if following is None:
-        return f"is the last event: {expected} should follow it"
-    if following.id != FL_STUDIO_TEXT_ID:
-        return f"is followed by event {following.id}, not {expected}"
-    text, prefix = decode_text(following, version), "FL Studio " + (version_text or "")
-    if text == prefix or text.startswith(prefix if version_text is None else prefix + "."):
-        return ""
-    return f"is followed by a text event {FL_STUDIO_TEXT_ID} that does not name the FL version (event {FL_VERSION_ID})"
+def _names_the_version(event: Event, version_text: Optional[str], version: Optional[Version]) -> bool:
+    text, prefix = decode_text(event, version), "FL Studio " + (version_text or "")
+    return text == prefix or text.startswith(prefix if version_text is None else prefix + ".")
 
 
 # --- scrubbing personal data ---------------------------------------------------------------

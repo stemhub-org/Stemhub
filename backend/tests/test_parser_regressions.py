@@ -37,7 +37,7 @@ from flp_helpers import (
 )
 from stemhub.dependency_guard import ensure_pyflp_available
 from stemhub.fl_mixer import FlMixer, FlMixerInsert, parse_fl_mixer
-from stemhub.project_model.flp_events import FL_STUDIO_TEXT_ID, EVENT_0XAC, decode_text, parse
+from stemhub.project_model.flp_events import FL_STUDIO_TEXT_ID, decode_text, parse
 
 SLOTS_PER_INSERT = 10
 DEFAULT_DRY_WET = 12800
@@ -141,26 +141,48 @@ def test_every_effect_slot_has_enabled_and_dry_wet(reference_mixer: FlMixer) -> 
     assert [slot.dry_wet for slot in _insert_named(reference_mixer, "Bypassed").slots] == [0]
 
 
-# --- FL 25.2.3+: event 172 carries 3 bytes -------------------------------------------------
+# --- FL 25.2.3+: the extended "FL Studio" text event (0xAC, then id 0xC0000101) ------------
 
 
 @pytest.mark.parametrize("tempo_x1000", [128000, 140000, 120000, 90000])
 def test_fl_25_2_3_project_keeps_its_tempo(tmp_path: Path, tempo_x1000: int) -> None:
-    # A reader taking event 172 as 4 bytes swallows the id of the next event, walks the
-    # "FL Studio" text as 1-byte events, then reads the tempo's id as a payload. What
-    # follows depends on the tempo's bytes: with 128 or 140 BPM it falls back into step
-    # and the file parses without its tempo, as real 25.2.3+ files did; with 120 or 90
-    # BPM the parse fails.
+    # FL writes the "FL Studio" text as 0xAC, the u32 id 0xC0000101, then a LEB128 length and
+    # the text. A reader taking 0xAC as a plain 4-byte event swallows the length's event, walks
+    # the text as 1-byte events, then reads the tempo's id as a payload. What follows depends
+    # on the tempo's bytes: with 128 or 140 BPM it falls back into step and the file parses
+    # without its tempo, as real 25.2.3+ files did; with 120 or 90 BPM the parse fails.
     data = fl2025_file(tempo_x1000)
     events = parse(data).events
-    assert [event.id for event in events] == [FL_VERSION, EVENT_0XAC, FL_STUDIO_TEXT_ID, TEMPO]
-    assert events[1].payload == bytes((1, 1, 0))
+    assert [event.id for event in events] == [FL_VERSION, FL_STUDIO_TEXT_ID, TEMPO]
     path = tmp_path / "fl-25-2-4.flp"
     path.write_bytes(data)
 
     project = _parse_project(path)
 
     assert str(project.version) == "25.2.4.4960"
+    assert project.tempo is not None
+    assert float(project.tempo) == pytest.approx(tempo_x1000 / 1000)
+
+
+@pytest.mark.parametrize("tempo_x1000", [128000, 140000, 120000, 90000])
+def test_an_extended_event_without_data_keeps_the_stream_in_step(tmp_path: Path, tempo_x1000: int) -> None:
+    # An extended id's top 4 bits give its size; with 1 (as with 2, 3, 5...) FL reads no data.
+    # A reader taking 0xAC as 3 bytes then a one-byte id (the fork until it read extended
+    # ids) reads "ac 00 00 00" then event 16 holding the tempo's id, and loses the tempo.
+    # Ids whose top 4 bits are 0, 4, 8 or C don't tell the two apart: their top byte is a
+    # one-byte id of the same size.
+    data = flp_data(
+        var_event(FL_VERSION, ascii_text("26.1.7.5421"))
+        + var_event(FL_STUDIO_TEXT_ID, utf16_text("FL Studio 26.1.7.5421.5421"))
+        + fixed_event(0x10000000, 0, 0)
+        + fixed_event(TEMPO, tempo_x1000, 4)
+    )
+    assert [event.id for event in parse(data).events] == [FL_VERSION, FL_STUDIO_TEXT_ID, 0x10000000, TEMPO]
+    path = tmp_path / "fl-26-extended.flp"
+    path.write_bytes(data)
+
+    project = _parse_project(path)
+
     assert project.tempo is not None
     assert float(project.tempo) == pytest.approx(tempo_x1000 / 1000)
 

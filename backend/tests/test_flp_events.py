@@ -20,16 +20,18 @@ from typing import Optional
 import pytest
 
 from flp_helpers import (
+    COMMENTS,
     CORRUPTED_DIR,
     DATA_PATH,
     EXTENDED_CORPUS,
+    EXTENDED_ID_ESCAPE,
     FAKE_USER,
     FL_STUDIO_TEXT,
     FL_VERSION,
     GOOD_BODY,
     HEADER_SIZE,
     LICENSEE,
-    NEW_IN_25_2_3,
+    NEW_IN_26,
     PLUGIN_DATA,
     REFERENCE,
     SAMPLE_PATH,
@@ -37,8 +39,10 @@ from flp_helpers import (
     TIMESTAMP,
     VALID_FIXTURES,
     ascii_text,
+    event_id_bytes,
     fixed_event,
     fl2025_file,
+    fl2026_file,
     flp_data,
     private_file,
     utf16_text,
@@ -84,9 +88,11 @@ def test_every_local_project_file_has_its_tempo_and_a_sound_structure(path: Opti
     assert TEMPO in [event.id for event in file.events]
     assert version is not None
     assert check_structure(file) == ()
-    for event in file.events:
-        if event.id == NEW_IN_25_2_3:
-            assert version >= (25, 2, 3)  # 0xAC is read the same in every file; only 25.2.3+ has it
+    ids = {event.id for event in file.events}
+    assert (FL_STUDIO_TEXT in ids) == (version >= (25, 2, 3))  # the first extended event
+    if NEW_IN_26 in ids:
+        assert version >= (26,)
+    assert all(event_id <= 0xFF for event_id in ids - {FL_STUDIO_TEXT, NEW_IN_26}), "an unknown extended event"
 
 
 # --- the committed fixtures ----------------------------------------------------------------
@@ -133,55 +139,52 @@ def test_header_values_are_left_to_the_reader(name: str) -> None:
     assert serialize(parse(data)) == data
 
 
-# --- event 0xAC (FL 25.2.3+) ---------------------------------------------------------------
+# --- extended ids: 0xAC then a u32 (FL 25.2.3+) --------------------------------------------
+# FLEngine's event writer writes an id above 255 as the byte 0xAC then the id as a u32, and its
+# reader reads it back that way; the id's top 4 bits then give the payload size.
+
+# The first events of a real FL 25.2.4 file, as saved: the version, then "ac 01 01 00 c0 36":
+# id 0xC0000101 (a text event), length 54, "FL Studio 25.2.4.4960.4960".
+FL_2025_START = bytes.fromhex("c70c32352e322e342e3439363000") + bytes.fromhex("ac010100c036") + utf16_text(
+    "FL Studio 25.2.4.4960.4960"
+)
+# What a real FL 26.1.7 file holds after its (empty) comments: "ac 00 01 00 00" then "00":
+# id 0x100, a 1-byte event, value 0. The timestamps (237) follow.
+FL_2026_AFTER_COMMENTS = bytes.fromhex("c3020000") + bytes.fromhex("ac0001000000") + bytes([TIMESTAMP, 16]) + bytes(16)
 
 
-def test_fl_25_2_3_event_0xac_has_three_bytes_and_the_tempo_follows() -> None:
-    data = flp_data(
-        var_event(FL_VERSION, ascii_text("25.2.4.4960"))
-        + fixed_event(NEW_IN_25_2_3, 0x000101, 3)
-        + fixed_event(TEMPO, 120000, 4)
-    )
+def test_the_fl_studio_text_is_one_extended_text_event() -> None:
+    data = flp_data(FL_2025_START + fixed_event(TEMPO, 128000, 4))
     file = parse(data)
 
-    assert [event.id for event in file.events] == [FL_VERSION, NEW_IN_25_2_3, TEMPO]
-    assert file.events[1].payload == b"\x01\x01\x00"
-    assert file.events[2].int_value == 120000
+    assert [event.id for event in file.events] == [FL_VERSION, FL_STUDIO_TEXT, TEMPO]
+    assert decode_text(file.events[1], fl_version(file)) == "FL Studio 25.2.4.4960.4960"
+    assert file.events[2].int_value == 128000
     assert serialize(file) == data
+    assert data == fl2025_file(128000)
 
 
-def test_the_fl_2025_text_event_follows_0xac() -> None:
-    file = parse(fl2025_file(128000))
+def test_fl_26_writes_extended_event_0x100_after_the_comments() -> None:
+    data = flp_data(FL_2026_AFTER_COMMENTS)
+    file = parse(data)
 
-    assert [event.id for event in file.events] == [FL_VERSION, NEW_IN_25_2_3, FL_STUDIO_TEXT, TEMPO]
-    assert decode_text(file.events[2], fl_version(file)) == "FL Studio 25.2.4.4960.4960"
-    assert file.events[3].int_value == 128000
+    assert [(event.id, event.payload) for event in file.events] == [
+        (COMMENTS, b"\x00\x00"),
+        (NEW_IN_26, b"\x00"),
+        (TIMESTAMP, bytes(16)),
+    ]
+    assert serialize(file) == data
+    assert event_offsets(file) == (HEADER_SIZE, HEADER_SIZE + 4, HEADER_SIZE + 10)
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
-        pytest.param(fixed_event(NEW_IN_25_2_3, 0x000101, 3) + fixed_event(TEMPO, 120000, 4), id="no version event"),
-        pytest.param(
-            var_event(FL_VERSION, ascii_text("25.2.0.5125"))
-            + fixed_event(NEW_IN_25_2_3, 0x000101, 3)
-            + fixed_event(TEMPO, 120000, 4),
-            id="FL 25.2.0",
-        ),
-        pytest.param(
-            var_event(FL_VERSION, ascii_text("12.9.3.321"))
-            + fixed_event(NEW_IN_25_2_3, 0x000101, 3)
-            + fixed_event(TEMPO, 120000, 4),
-            id="FL 12.9.3",
-        ),
-    ],
-)
-def test_event_0xac_has_three_bytes_whatever_the_version(body: bytes) -> None:
-    # No file before 25.2.3 holds a 0xAC, and neither PyFLP nor FLPEdit names it: one rule for all.
-    file = parse(flp_data(body))
+def test_an_fl_2026_file_reads_and_rebuilds() -> None:
+    data = fl2026_file(130000)
+    file = parse(data)
 
-    assert [(event.id, len(event.payload)) for event in file.events][-2:] == [(NEW_IN_25_2_3, 3), (TEMPO, 4)]
-    assert file.events[-1].int_value == 120000
+    assert [event.id for event in file.events] == [FL_VERSION, FL_STUDIO_TEXT, TEMPO, COMMENTS, NEW_IN_26, TIMESTAMP]
+    assert file.events[2].int_value == 130000
+    assert check_structure(file) == ()
+    assert serialize(file) == data
 
 
 @pytest.mark.parametrize(
@@ -193,22 +196,48 @@ def test_event_0xac_has_three_bytes_whatever_the_version(body: bytes) -> None:
         (127, 2),
         (128, 4),
         (TEMPO, 4),
-        (NEW_IN_25_2_3 - 1, 4),
-        (NEW_IN_25_2_3, 3),
-        (NEW_IN_25_2_3 + 1, 4),
+        (EXTENDED_ID_ESCAPE - 1, 4),
+        (EXTENDED_ID_ESCAPE + 1, 4),
         (191, 4),
         (192, None),
         (255, None),
+        # extended ids: the top 4 bits give the size, as for the 0-63/64-127/128-191/192-255 ranges
+        (0x100, 1),
+        (0x0FFFFFFF, 1),
+        (0x40000000, 2),
+        (0x4FFFFFFF, 2),
+        (0x80000000, 4),
+        (0xC0000000, None),
+        (FL_STUDIO_TEXT, None),
+        (0xCFFFFFFF, None),
+        # FL reads no payload for the other top bits; no file seen holds one
+        (0x10000000, 0),
+        (0x7FFFFFFF, 0),
+        (0xFFFFFFFF, 0),
     ],
 )
 def test_payload_size_rules(event_id: int, size: Optional[int]) -> None:
     assert payload_size(event_id) == size
 
 
-@pytest.mark.parametrize("event_id", [256, -1])
-def test_payload_size_refuses_an_id_outside_a_byte(event_id: int) -> None:
+@pytest.mark.parametrize("event_id", [EXTENDED_ID_ESCAPE, -1, 0x100000000])
+def test_payload_size_refuses_the_escape_and_ids_outside_32_bits(event_id: int) -> None:
     with pytest.raises(FlpFormatError):
         payload_size(event_id)
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        pytest.param(bytes([EXTENDED_ID_ESCAPE, 1, 1]), "extended id", id="extended id cut"),
+        pytest.param(bytes([EXTENDED_ID_ESCAPE]) + struct.pack("<I", TEMPO) + bytes(4), "below 256", id="id below 256"),
+        pytest.param(event_id_bytes(0x80000000) + b"\x01\x02", "needs 4", id="extended payload cut"),
+    ],
+)
+def test_malformed_extended_ids_are_refused(body: bytes, message: str) -> None:
+    # FL writes ids up to 255 as one byte, so an escaped one could not be written back as read.
+    with pytest.raises(FlpFormatError, match=message):
+        parse(flp_data(body))
 
 
 # --- checking the structure ----------------------------------------------------------------
@@ -227,33 +256,26 @@ def test_the_committed_fixtures_have_no_structure_warning(path: Path) -> None:
     ("body", "message"),
     [
         pytest.param(
-            var_event(FL_VERSION, ascii_text("25.2.4.4960"))
-            + fixed_event(NEW_IN_25_2_3, 0x000101, 3)
-            + fixed_event(TEMPO, 1, 4),
-            "is followed by event 156",
-            id="0xAC then the tempo",
-        ),
-        pytest.param(
-            var_event(FL_VERSION, ascii_text("25.2.4.4960")) + fixed_event(NEW_IN_25_2_3, 0x000101, 3),
-            "is the last event",
-            id="0xAC last",
+            # what a 3-byte reading of 0xAC assumed: "ac 01 01 00" with no text after it reads
+            # as id 0x9C000101, whose top bits FL gives no payload, and the stream goes astray
+            var_event(FL_VERSION, ascii_text("25.2.4.4960")) + bytes.fromhex("ac010100") + fixed_event(TEMPO, 1, 4),
+            "extended event 0x9c000101",
+            id="stray 0xAC",
         ),
         pytest.param(
             var_event(FL_VERSION, ascii_text("25.2.4.4960"))
-            + fixed_event(NEW_IN_25_2_3, 0x000101, 3)
             + var_event(FL_STUDIO_TEXT, utf16_text("FL Studio 25.2.3.5164.5164")),
             "does not name the FL version",
             id="another version",
         ),
         pytest.param(
             var_event(FL_VERSION, ascii_text("25.2.4.4960"))
-            + fixed_event(NEW_IN_25_2_3, 0x000101, 3)
             + var_event(FL_STUDIO_TEXT, utf16_text("FL Studio 25.2.4.49601")),
             "does not name the FL version",
             id="a longer build number",
         ),
         pytest.param(
-            fixed_event(NEW_IN_25_2_3, 0x000101, 3) + var_event(FL_STUDIO_TEXT, utf16_text(f"Studio of {FAKE_USER}")),
+            var_event(FL_STUDIO_TEXT, utf16_text(f"Studio of {FAKE_USER}")),
             "does not name the FL version",
             id="not the FL Studio text",
         ),
@@ -268,7 +290,7 @@ def test_check_structure_warns_about_a_misread_stream(body: bytes, message: str)
 
 
 def test_without_a_version_event_the_fl_studio_text_still_counts() -> None:
-    body = fixed_event(NEW_IN_25_2_3, 0x000101, 3) + var_event(FL_STUDIO_TEXT, utf16_text("FL Studio 25.2.4.4960.4960"))
+    body = var_event(FL_STUDIO_TEXT, utf16_text("FL Studio 25.2.4.4960.4960"))
 
     assert check_structure(parse(flp_data(body))) == ("no FL version event (199)",)
 
@@ -318,7 +340,8 @@ def test_a_payload_that_outgrows_a_long_length_prefix_widens_it() -> None:
 @pytest.mark.parametrize(
     "build",
     [
-        lambda: Event(256, b""),
+        lambda: Event(EXTENDED_ID_ESCAPE, b"\x00" * 4),
+        lambda: Event(0x100000000, b"\x00"),
         lambda: Event(-1, b""),
         lambda: Event(LICENSEE, b"", length_width=6),
         lambda: FlpHeader(format=0x8000, channel_count=1, ppq=96),
@@ -361,8 +384,9 @@ def test_a_file_takes_any_sequence_of_events_and_keeps_a_tuple() -> None:
     ("events", "message"),
     [
         ((Event(TEMPO, b"\x01\x02\x03"),), "3-byte payload"),
-        ((Event(FL_VERSION, ascii_text("25.2.4.4960")), Event(NEW_IN_25_2_3, b"\x01\x01\x00\x00")), "4-byte payload"),
-        ((Event(FL_VERSION, ascii_text("25.2.0.5125")), Event(NEW_IN_25_2_3, b"\x01\x01\x00\x00")), "4-byte payload"),
+        ((Event(FL_VERSION, ascii_text("26.1.7.5421")), Event(NEW_IN_26, b"\x00\x00")), "2-byte payload"),
+        ((Event(0x10000000, b"\x00"),), "1-byte payload, FL reads 0"),
+        ((Event(0x40000000, b"\x00\x00", length_width=2),), "no length prefix"),
         ((Event(TEMPO, b"\x01\x02\x03\x04", length_width=2),), "no length prefix"),
     ],
 )
@@ -390,7 +414,12 @@ def test_event_offsets_point_at_each_event_id() -> None:
     offsets = event_offsets(file)
 
     assert offsets[0] == HEADER_SIZE
-    assert [data[offset] for offset in offsets] == [event.id for event in file.events]
+    assert [data[offset] for offset in offsets] == [
+        event.id if event.id <= 0xFF else EXTENDED_ID_ESCAPE for event in file.events
+    ]
+    assert [data[offset : offset + 5] for offset in offsets if data[offset] == EXTENDED_ID_ESCAPE] == [
+        event_id_bytes(FL_STUDIO_TEXT)
+    ]
 
 
 # --- refusing malformed files --------------------------------------------------------------
@@ -439,12 +468,12 @@ def test_parse_accepts_any_bytes_like_input() -> None:
 
 
 def test_parse_can_be_held_to_an_event_budget() -> None:
-    data = fl2025_file()  # 4 events
+    data = fl2025_file()  # 3 events
 
-    assert len(parse(data, max_events=4).events) == 4
+    assert len(parse(data, max_events=3).events) == 3
     assert parse(flp_data(b""), max_events=0).events == ()
-    with pytest.raises(FlpFormatError, match="more than 3 events"):
-        parse(data, max_events=3)
+    with pytest.raises(FlpFormatError, match="more than 2 events"):
+        parse(data, max_events=2)
     with pytest.raises(FlpFormatError, match="more than 0 events"):
         parse(data, max_events=0)
 
@@ -486,6 +515,7 @@ FUZZ_INPUTS = [
     pytest.param(_reference_slice(0, 300), id="FL 20.8.4 first events"),
     pytest.param(_reference_slice(-300, None), id="FL 20.8.4 last events"),
     pytest.param(fl2025_file(), id="FL 25.2.4 synthetic"),
+    pytest.param(fl2026_file(), id="FL 26.1.7 synthetic"),
     pytest.param(private_file(), id="private synthetic"),
 ]
 
@@ -557,7 +587,7 @@ def test_diff_finds_a_tempo_change() -> None:
 
     assert len(changes) == 1
     assert changes[0].kind == "replace"
-    assert changes[0].a_indexes == changes[0].b_indexes == (3,)
+    assert changes[0].a_indexes == changes[0].b_indexes == (2,)
 
 
 def test_diff_leaves_out_ignored_events_and_reports_inserted_ones() -> None:

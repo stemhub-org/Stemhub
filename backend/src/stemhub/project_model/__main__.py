@@ -88,7 +88,10 @@ def _add_flp_parser(commands: argparse._SubParsersAction) -> None:
     diff.add_argument("a", type=Path)
     diff.add_argument("b", type=Path)
     diff.add_argument(
-        "--ignore", type=_event_ids, default=frozenset(), help="Event ids to leave out, comma-separated (e.g. 237,167)."
+        "--ignore",
+        type=_event_ids,
+        default=frozenset(),
+        help="Event ids to leave out, comma-separated: decimal, or 0x-prefixed hex for extended ids (e.g. 237,167,0x100).",
     )
     diff.add_argument("--show-private", **private)
 
@@ -103,13 +106,19 @@ def _add_flp_parser(commands: argparse._SubParsersAction) -> None:
     scrub.add_argument("--force", action="store_true", help="Replace the output if it exists (never the input).")
 
 
+def _event_id(text: str) -> int:
+    return int(text[2:], 16) if text[:2].lower() == "0x" else int(text, 10)
+
+
 def _event_ids(text: str) -> FrozenSet[int]:
     try:
-        ids = frozenset(int(part) for part in text.split(",") if part.strip())
+        ids = frozenset(_event_id(part.strip()) for part in text.split(",") if part.strip())
     except ValueError:
-        raise argparse.ArgumentTypeError("expected event ids such as 237,167") from None
-    if not all(0 <= event_id <= 0xFF for event_id in ids):
-        raise argparse.ArgumentTypeError("event ids are 0..255")
+        raise argparse.ArgumentTypeError("expected event ids such as 237,167,0x100") from None
+    if not all(0 <= event_id <= flp_events.MAX_EVENT_ID for event_id in ids):
+        raise argparse.ArgumentTypeError(f"event ids are 0..{flp_events.MAX_EVENT_ID}")
+    if flp_events.EXTENDED_ID_ESCAPE in ids:
+        raise argparse.ArgumentTypeError(f"{flp_events.EXTENDED_ID_ESCAPE} is the extended id escape, not an event id")
     return ids
 
 
@@ -186,7 +195,8 @@ def _flp_diff(args: argparse.Namespace) -> int:
     b_view = _View.of(b, show_private=args.show_private)
     for change in changes:
         _print_change(change, a_view, b_view)
-    ignoring = f" (ignoring {', '.join(map(str, sorted(args.ignore)))})" if args.ignore else ""
+    ignored = ", ".join(map(flp_events.format_event_id, sorted(args.ignore)))
+    ignoring = f" (ignoring {ignored})" if args.ignore else ""
     if not changes and not header_changes:
         print(f"No differences{ignoring}.")
         return 0
@@ -371,7 +381,7 @@ class _View:
 
     def describe(self, index: int) -> str:
         event = self.shown.events[index]
-        head = f"id {event.id:<3}"
+        head = f"id {flp_events.format_event_id(event.id):<3}"
         if flp_events.payload_size(event.id) is not None:
             return f"{head} {len(event.payload)}B  {event.int_value} (0x{event.int_value:x})"
         head = f"{head} len {len(event.payload)}"
