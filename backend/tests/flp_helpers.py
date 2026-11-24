@@ -27,8 +27,9 @@ INSERT_COUNT = 103
 INSERT_OUTPUT = 147
 INSERT_INPUT = 154
 TEMPO = 156
-NEW_IN_25_2_3 = 0xAC
-FL_STUDIO_TEXT = 192
+EXTENDED_ID_ESCAPE = 0xAC  # FL writes an id above 255 as this byte, then the id as a u32
+FL_STUDIO_TEXT = 0xC0000101  # extended text event "FL Studio <version>.<build>", FL 25.2.3+
+NEW_IN_26 = 0x100  # extended 1-byte event, 0 in every FL 26 file seen
 TITLE = 194
 COMMENTS = 195
 SAMPLE_PATH = 196
@@ -62,8 +63,15 @@ def flp_data(body: bytes, *, ppq: int = 96, data_len: Optional[int] = None) -> b
     return b"FLhd" + struct.pack("<IhHH", 6, 0, 1, ppq) + b"FLdt" + struct.pack("<I", size) + body
 
 
+def event_id_bytes(event_id: int) -> bytes:
+    """How FL writes an event id: one byte up to 255, else 0xAC then the id as a u32."""
+    if event_id <= 0xFF:
+        return bytes([event_id])
+    return bytes([EXTENDED_ID_ESCAPE]) + struct.pack("<I", event_id)
+
+
 def fixed_event(event_id: int, value: int, size: int) -> bytes:
-    return bytes([event_id]) + value.to_bytes(size, "little")
+    return event_id_bytes(event_id) + value.to_bytes(size, "little")
 
 
 def var_event(event_id: int, payload: bytes) -> bytes:
@@ -72,7 +80,7 @@ def var_event(event_id: int, payload: bytes) -> bytes:
         prefix.append((length & 0x7F) | (0x80 if length > 0x7F else 0))
         length >>= 7
         if not length:
-            return bytes([event_id]) + bytes(prefix) + payload
+            return event_id_bytes(event_id) + bytes(prefix) + payload
 
 
 def utf16_text(text: str) -> bytes:
@@ -93,12 +101,24 @@ def scrambled(name: str) -> str:
 
 
 def fl2025_file(tempo_bpm_x1000: int = 120000) -> bytes:
-    """What FL 25.2.4 writes first: version, 0xAC (3 bytes), the 'FL Studio' text, tempo."""
+    """What FL 25.2.4 writes first: version, the extended 'FL Studio' text event, tempo."""
     return flp_data(
         var_event(FL_VERSION, ascii_text("25.2.4.4960"))
-        + fixed_event(NEW_IN_25_2_3, 0x000101, 3)
         + var_event(FL_STUDIO_TEXT, utf16_text("FL Studio 25.2.4.4960.4960"))
         + fixed_event(TEMPO, tempo_bpm_x1000, 4)
+    )
+
+
+def fl2026_file(tempo_bpm_x1000: int = 130000) -> bytes:
+    """What FL 26.1.7 writes first, in its order: version, 'FL Studio' text, tempo,
+    the (empty) comments, extended event 0x100, then the timestamps."""
+    return flp_data(
+        var_event(FL_VERSION, ascii_text("26.1.7.5421"))
+        + var_event(FL_STUDIO_TEXT, utf16_text("FL Studio 26.1.7.5421.5421"))
+        + fixed_event(TEMPO, tempo_bpm_x1000, 4)
+        + var_event(COMMENTS, utf16_text(""))
+        + fixed_event(NEW_IN_26, 0, 1)
+        + var_event(TIMESTAMP, bytes(16))
     )
 
 
@@ -112,7 +132,7 @@ def private_file() -> bytes:
     )
     return flp_data(
         var_event(FL_VERSION, ascii_text("25.2.4.4960"))
-        + fixed_event(NEW_IN_25_2_3, 0x000101, 3)
+        + var_event(FL_STUDIO_TEXT, utf16_text("FL Studio 25.2.4.4960.4960"))
         + var_event(LICENSEE, utf16_text(scrambled(FAKE_LICENSEE)))
         + var_event(DATA_PATH, utf16_text(f"/Users/{FAKE_USER}/Music/Projects/"))
         + var_event(SAMPLE_PATH, utf16_text(f"C:\\Users\\{FAKE_USER}\\Samples\\kick.wav"))
@@ -155,15 +175,22 @@ def assert_names_are_gone(names: frozenset, data: bytes) -> None:
 # --- the local corpora (never committed) ---------------------------------------------------
 
 
-def extended_corpus() -> list:
+def extended_corpus(pattern: str = "*.flp", *, required: bool = True) -> list:
+    """Every file matching ``pattern`` under the STEMHUB_EXTENDED_CORPUS folders.
+
+    With ``required``, a corpus holding none gives one None param, which the tests fail on;
+    otherwise they are skipped (bundles are optional in a corpus).
+    """
     roots = [root for root in os.environ.get("STEMHUB_EXTENDED_CORPUS", "").split(os.pathsep) if root]
     if not roots:
         reason = "STEMHUB_EXTENDED_CORPUS is not set"
         return [pytest.param(None, id="no-extended-corpus", marks=pytest.mark.skip(reason=reason))]
-    files = sorted({path for root in roots for path in Path(root).rglob("*.flp")})
+    files = sorted({path for root in roots for path in Path(root).rglob(pattern)})
     if not files:
-        return [pytest.param(None, id="empty-extended-corpus")]
+        marks = () if required else pytest.mark.skip(reason=f"no {pattern} in STEMHUB_EXTENDED_CORPUS")
+        return [pytest.param(None, id="empty-extended-corpus", marks=marks)]
     return [pytest.param(path, id=path.name) for path in files]
 
 
 EXTENDED_CORPUS = extended_corpus()
+EXTENDED_BUNDLES = extended_corpus("*.zip", required=False)  # FL zipped projects

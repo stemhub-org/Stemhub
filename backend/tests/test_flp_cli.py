@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import builtins
+import dataclasses
 import errno
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ from flp_helpers import (
     FAKE_USER,
     FL_VERSION,
     GOOD_BODY,
-    NEW_IN_25_2_3,
+    NEW_IN_26,
     NOTES,
     PLUGIN_DATA,
     TEMPO,
@@ -22,13 +23,14 @@ from flp_helpers import (
     ascii_text,
     fixed_event,
     fl2025_file,
+    fl2026_file,
     flp_data,
     licensee_file,
     private_file,
     utf16_text,
     var_event,
 )
-from stemhub.project_model.flp_events import NOTE_NAME_NOT_SEARCHED, parse, scrub, serialize
+from stemhub.project_model.flp_events import NOTE_NAME_NOT_SEARCHED, Event, parse, scrub, serialize
 
 cli_main = cli_module.main
 
@@ -45,9 +47,20 @@ def test_cli_dump_lists_every_event(tmp_path: Path, capsys: pytest.CaptureFixtur
     assert cli_main(["flp", "dump", str(path)]) == 0
 
     out = capsys.readouterr().out
-    assert "FL 25.2.4.4960" in out and "4 events" in out
+    assert "FL 25.2.4.4960" in out and "3 events" in out
     assert "id 156" in out and "120000" in out
-    assert "'FL Studio 25.2.4.4960.4960'" in out
+    assert "id 0xc0000101" in out and "'FL Studio 25.2.4.4960.4960'" in out
+
+
+def test_cli_dump_shows_extended_ids_in_hex(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = _write(tmp_path, "fl26.flp", fl2026_file(130000))
+
+    assert cli_main(["flp", "dump", str(path)]) == 0
+
+    captured = capsys.readouterr()
+    assert "FL 26.1.7.5421" in captured.out and "6 events" in captured.out
+    assert "id 0x00000100 1B  0 (0x0)" in captured.out
+    assert "warning" not in captured.err
 
 
 def test_cli_dump_hides_private_text_unless_asked(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -66,7 +79,7 @@ def test_cli_dump_hides_private_text_unless_asked(tmp_path: Path, capsys: pytest
 def test_cli_dump_and_diff_warn_about_a_misread_stream(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     odd = flp_data(
         var_event(FL_VERSION, ascii_text("25.2.4.4960"))
-        + fixed_event(NEW_IN_25_2_3, 0x000101, 3)
+        + bytes.fromhex("ac010100")  # a stray 0xAC: read as id 0x9C000101, which has no payload class
         + fixed_event(TEMPO, 1, 4)
     )
     path = _write(tmp_path, "odd.flp", odd)
@@ -76,7 +89,7 @@ def test_cli_dump_and_diff_warn_about_a_misread_stream(tmp_path: Path, capsys: p
     assert cli_main(["flp", "diff", str(path), str(path)]) == 0
     diffed = capsys.readouterr()
 
-    assert "warning" in dumped.err and "event 172" in dumped.err and "warning" not in dumped.out
+    assert "warning" in dumped.err and "0x9c000101" in dumped.err and "warning" not in dumped.out
     assert diffed.err.count("warning") == 2
 
 
@@ -388,8 +401,20 @@ def test_cli_refuses_files_it_cannot_read(
     assert "RIFF" not in capsys.readouterr().err
 
 
-def test_cli_ignore_takes_event_ids_only() -> None:
+@pytest.mark.parametrize("ids", ["tempo", "172", "4294967296", "-1", "0x1g"])
+def test_cli_ignore_takes_event_ids_only(ids: str) -> None:
+    # 172 (0xAC) is the escape that comes before an extended id, never an event id
     with pytest.raises(SystemExit):
-        cli_main(["flp", "diff", "a.flp", "b.flp", "--ignore", "tempo"])
-    with pytest.raises(SystemExit):
-        cli_main(["flp", "diff", "a.flp", "b.flp", "--ignore", "300"])
+        cli_main(["flp", "diff", "a.flp", "b.flp", "--ignore", ids])
+
+
+def test_cli_ignore_takes_extended_ids_in_hex(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    a = _write(tmp_path, "a.flp", fl2026_file(130000))
+    b_file = parse(fl2026_file(130000))
+    flipped = tuple(Event(event.id, b"\x01") if event.id == NEW_IN_26 else event for event in b_file.events)
+    b = _write(tmp_path, "b.flp", serialize(dataclasses.replace(b_file, events=flipped)))
+
+    assert cli_main(["flp", "diff", str(a), str(b)]) == 1
+    capsys.readouterr()
+    assert cli_main(["flp", "diff", str(a), str(b), "--ignore", "0x100"]) == 0
+    assert "ignoring 0x00000100" in capsys.readouterr().out

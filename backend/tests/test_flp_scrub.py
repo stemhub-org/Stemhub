@@ -94,8 +94,10 @@ def test_scrubbing_a_local_project_file_keeps_its_structure(path: Optional[Path]
     if path is None:
         pytest.fail("STEMHUB_EXTENDED_CORPUS is set but holds no .flp file")
     file = parse(path.read_bytes())
+    licensed = any(event.id == LICENSEE and event.payload.strip(b"\x00") for event in file.events)
 
-    assert licensee_names(file)
+    # an unregistered FL saves an empty licensee (every zipped project seen has one)
+    assert bool(licensee_names(file)) == licensed
     _assert_scrubbed(file, scrub_report(file))
 
 
