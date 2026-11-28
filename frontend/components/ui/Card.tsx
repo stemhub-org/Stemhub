@@ -19,17 +19,16 @@ const paddingClasses: Record<NonNullable<CardProps["padding"]>, string> = {
 export const Card = forwardRef<HTMLDivElement, CardProps>(
     ({ interactive = false, padding = "md", className, children, ...rest }, ref) => {
         // cursor-pointer is only warranted when the card is an actual click target —
-        // `interactive` alone (hover glow + group, for child group-hover effects like
-        // icon scale) is also used on purely decorative panels with no onClick.
+        // `interactive` alone (hover border + group, for child group-hover effects) is
+        // also used on purely decorative panels with no onClick.
         const isClickable = Boolean(rest.onClick);
         return (
             <div
                 ref={ref}
                 className={cn(
-                    "rounded-xl bg-background-secondary dark:bg-background-tertiary border border-border-subtle",
+                    "border border-line bg-background-secondary",
                     paddingClasses[padding],
-                    interactive &&
-                        "hover:border-accent/40 hover:bg-gradient-to-br hover:from-background-secondary dark:hover:from-background-tertiary hover:to-accent/5 hover:shadow-[var(--shadow-glow-accent)] transition-all duration-300 group",
+                    interactive && "group transition-colors duration-150 hover:border-border-hover",
                     isClickable && "cursor-pointer",
                     className
                 )}

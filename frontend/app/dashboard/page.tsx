@@ -105,10 +105,10 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex gap-3">
-                        <Button variant="outline" icon={<DownloadCloud size={16} />}>
+                        <Button variant="secondary" icon={<DownloadCloud size={16} />}>
                             Import
                         </Button>
-                        <Button variant="solid" icon={<Plus size={16} />} onClick={() => setShowNewProject(true)}>
+                        <Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowNewProject(true)}>
                             New Project
                         </Button>
                     </div>
@@ -127,7 +127,7 @@ export default function DashboardPage() {
                                 <HardDrive size={16} className="text-accent group-hover:scale-110 transition-transform" />
                                 <span>Storage</span>
                             </div>
-                            <Badge size="md">Active</Badge>
+                            <Badge tone="accent">Active</Badge>
                         </div>
                         <div className="flex items-baseline gap-2">
                             <h3 className="text-3xl font-semibold tracking-tight text-foreground">{projects.length}</h3>
@@ -178,7 +178,7 @@ export default function DashboardPage() {
                     {projects.length === 0 ? (
                         <Card padding="lg" className="text-center">
                             <p className="text-foreground-muted text-sm mb-4">No projects yet. Create your first one!</p>
-                            <Button variant="solid" icon={<Plus size={16} />} onClick={() => setShowNewProject(true)}>
+                            <Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowNewProject(true)}>
                                 New Project
                             </Button>
                         </Card>

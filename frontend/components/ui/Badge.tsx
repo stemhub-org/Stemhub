@@ -4,38 +4,33 @@ import { forwardRef } from "react";
 import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-type BadgeTone = "accent" | "neutral" | "success" | "danger";
-type BadgeSize = "sm" | "md";
+type BadgeTone = "accent" | "neutral" | "inverse" | "danger";
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
     tone?: BadgeTone;
-    size?: BadgeSize;
 }
 
 const toneClasses: Record<BadgeTone, string> = {
-    accent: "bg-accent/10 text-accent border border-accent/20",
-    neutral: "bg-foreground/5 text-foreground-muted border border-border-subtle",
-    success: "bg-green-500/10 text-green-500 border border-green-500/20",
-    danger: "bg-red-500/10 text-red-500 border border-red-500/20",
+    accent: "bg-primary text-primary-foreground border-primary",
+    neutral: "border-line text-foreground-muted",
+    inverse: "bg-foreground text-background border-foreground",
+    danger: "border-signal text-signal-text",
 };
 
-const sizeClasses: Record<BadgeSize, string> = {
-    sm: "text-[10px] px-2 py-0.5 rounded",
-    md: "text-xs px-2 py-1 rounded",
-};
-
-export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
-    ({ tone = "accent", size = "sm", className, children, ...rest }, ref) => {
-        return (
-            <span
-                ref={ref}
-                className={cn("inline-flex items-center font-semibold", toneClasses[tone], sizeClasses[size], className)}
-                {...rest}
-            >
-                {children}
-            </span>
-        );
-    }
-);
+export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(({ tone = "neutral", className, children, ...rest }, ref) => {
+    return (
+        <span
+            ref={ref}
+            className={cn(
+                "inline-flex h-6 max-w-full shrink-0 items-center border px-2 caps-label whitespace-nowrap",
+                toneClasses[tone],
+                className
+            )}
+            {...rest}
+        >
+            <span className="truncate">{children}</span>
+        </span>
+    );
+});
 
 Badge.displayName = "Badge";

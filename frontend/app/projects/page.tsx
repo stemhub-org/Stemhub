@@ -257,7 +257,7 @@ function ProjectOverview({ projectId }: { projectId: string }) {
                                     </div>
                                 </Card>
                                 <Card className="flex flex-wrap items-center gap-3">
-                                    <Badge tone={assets.length > 0 ? "success" : "neutral"}>
+                                    <Badge tone={assets.length > 0 ? "inverse" : "neutral"}>
                                         {formatFileCount(hasVersion, assets.length, assetsLoading, assetsError)}
                                     </Badge>
                                     {latestVersion?.source_daw && (

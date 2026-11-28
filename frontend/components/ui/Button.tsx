@@ -5,66 +5,56 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ButtonVariant = "solid" | "outline" | "ghost" | "icon";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "icon";
 type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: ButtonVariant;
     size?: ButtonSize;
-    pill?: boolean;
     loading?: boolean;
     icon?: ReactNode;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-    solid: "bg-accent text-accent-foreground hover:bg-accent/90 hover:shadow-[var(--shadow-glow-accent)]",
-    outline:
-        "border border-accent/20 bg-accent/10 text-accent hover:bg-accent/20 hover:border-accent/40",
-    ghost: "text-foreground-muted hover:text-foreground hover:bg-foreground/5",
+    primary: "bg-primary text-primary-foreground hover:bg-primary/85",
+    secondary: "border border-foreground text-foreground hover:bg-foreground hover:text-background",
+    ghost: "text-foreground hover:bg-foreground/5",
+    danger: "text-signal-text hover:bg-signal hover:text-ink",
     icon: "text-foreground-muted hover:text-foreground hover:bg-foreground/5",
 };
 
-const sizeClasses: Record<ButtonVariant, Record<ButtonSize, string>> = {
-    solid: { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-8 py-4 text-sm" },
-    outline: { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-8 py-4 text-sm" },
-    ghost: { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-8 py-4 text-sm" },
-    icon: { sm: "h-8 w-8", md: "h-10 w-10", lg: "h-12 w-12" },
+const sizeClasses: Record<ButtonSize, string> = {
+    sm: "h-9 px-3",
+    md: "h-11 px-4",
+    lg: "h-12 px-6",
+};
+
+const iconSizeClasses: Record<ButtonSize, string> = {
+    sm: "h-9 w-9",
+    md: "h-11 w-11",
+    lg: "h-12 w-12",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-    (
-        {
-            variant = "solid",
-            size = "md",
-            pill = false,
-            loading = false,
-            icon,
-            disabled,
-            className,
-            children,
-            ...rest
-        },
-        ref
-    ) => {
-        const isTransitionOnly = variant === "ghost" || variant === "icon";
-
+    ({ variant = "primary", size = "md", loading = false, icon, disabled, className, children, ...rest }, ref) => {
         return (
             <button
                 ref={ref}
                 disabled={disabled || loading}
                 aria-busy={loading || undefined}
                 className={cn(
-                    "inline-flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed",
-                    pill ? "rounded-full" : variant === "icon" ? "rounded-full" : "rounded-lg",
-                    isTransitionOnly ? "transition-colors duration-200" : "transition-all duration-200 ease-brand",
+                    "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap caps-label",
+                    "transition-colors duration-150 active:translate-y-px",
+                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
+                    "disabled:cursor-not-allowed disabled:active:translate-y-0",
+                    !loading && "disabled:opacity-40",
                     variantClasses[variant],
-                    sizeClasses[variant][size],
-                    variant === "icon" && "p-0",
+                    variant === "icon" ? iconSizeClasses[size] : sizeClasses[size],
                     className
                 )}
                 {...rest}
             >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : icon}
+                {loading ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : icon}
                 {children}
             </button>
         );

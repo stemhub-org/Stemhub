@@ -15,9 +15,9 @@ export function branchLabel(branch: ActivityBranch): string {
 }
 
 export function PullRequestStatusBadge({ status }: { status: PullRequestStatus }) {
-    const tone = status === "OPEN" ? "accent" : status === "MERGED" ? "success" : "neutral";
+    const tone = status === "OPEN" ? "accent" : status === "MERGED" ? "inverse" : "neutral";
     return (
-        <Badge tone={tone} size="md">
+        <Badge tone={tone}>
             {status}
         </Badge>
     );

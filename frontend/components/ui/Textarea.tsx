@@ -3,28 +3,21 @@
 import { forwardRef } from "react";
 import type { TextareaHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
+import { fieldClasses } from "./field";
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
     invalid?: boolean;
 }
 
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-    ({ invalid = false, className, ...rest }, ref) => {
-        return (
-            <textarea
-                ref={ref}
-                aria-invalid={invalid || undefined}
-                className={cn(
-                    "w-full rounded-lg border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-muted/50 focus:outline-none focus:ring-1 transition-colors resize-none",
-                    invalid
-                        ? "border-red-500/40 focus:border-red-500/60 focus:ring-red-500/50"
-                        : "border-border-subtle focus:border-accent focus:ring-accent/50",
-                    className
-                )}
-                {...rest}
-            />
-        );
-    }
-);
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({ invalid = false, className, ...rest }, ref) => {
+    return (
+        <textarea
+            ref={ref}
+            aria-invalid={invalid || undefined}
+            className={cn(fieldClasses(invalid), "resize-none py-3", className)}
+            {...rest}
+        />
+    );
+});
 
 Textarea.displayName = "Textarea";

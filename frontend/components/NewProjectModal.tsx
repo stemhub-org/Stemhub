@@ -110,7 +110,7 @@ export default function NewProjectModal({
                                     Cancel
                                 </Button>
                                 <Button
-                                    variant="solid"
+                                    variant="primary"
                                     icon={<Plus size={16} />}
                                     loading={creating}
                                     disabled={!name.trim()}

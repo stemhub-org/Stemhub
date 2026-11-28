@@ -70,7 +70,7 @@ function PullRequestActions({ projectId, pullRequest }: { projectId: string; pul
                 )}
                 {canClose && (
                     <Button
-                        variant="outline"
+                        variant="secondary"
                         disabled={busy}
                         loading={closePullRequest.isPending}
                         onClick={() => closePullRequest.mutate(pullRequest.id)}
